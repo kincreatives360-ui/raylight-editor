@@ -1,0 +1,816 @@
+// src/App.tsx
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Download, X, Sparkles } from 'lucide-react';
+import type { Layer } from './model/types';
+import { createDefaultShot } from './model/defaults';
+import { useProjectStore } from './store/useProjectStore';
+import { usePlayheadStore } from './store/usePlayheadStore';
+import { useSelectionStore } from './store/useSelectionStore';
+import { evaluateProjectAtTime } from './engine/evaluateShot';
+import {
+  parseFigmaSvgToLayers,
+  readImageFileWithThumbnail,
+} from './engine/figmaSvgImporter';
+import { Stage } from './stage/Stage';
+import { LeftPanel } from './panels/LeftPanel/LeftPanel';
+import { RightSidebar } from './panels/Inspector/RightSidebar';
+import { Timeline } from './panels/Timeline/Timeline';
+import { saveProjectToBrowser } from './storage/projectIO';
+import {
+  exportCurrentFrameAsPng,
+  runVideoExportPipeline,
+  estimateExportMetrics,
+  type ExportSettings,
+  type ExportFormat,
+  type ExportResolution,
+  type ExportQuality,
+} from './engine/exporter';
+import { TemplatesModal } from './components/TemplatesModal';
+
+export default function App() {
+  const {
+    project,
+    updateProject,
+    updateShot,
+    addLayerToShot,
+    addMultipleLayersToShot,
+    duplicateLayerInShot,
+    deleteLayerFromShot,
+    restackLayerInShot,
+    recordAnimatedBlockAtPlayhead,
+    createGroupFromLayers,
+    ungroupInShot,
+    undo,
+    redo,
+  } = useProjectStore();
+
+  const {
+    currentTimeMs,
+    isPlaying,
+    loop,
+    setCurrentTimeMs,
+    setIsPlaying,
+    togglePlay,
+  } = usePlayheadStore();
+
+  const {
+    selectedShotId,
+    selectedLayerIds,
+    timelineView,
+    isAnimateMode,
+    selectShot,
+    selectLayer,
+    setSelectedLayerIds,
+    selectBlock,
+    clearLayerSelection,
+    setActiveTool,
+    toggleAnimateMode,
+    setIsCropping,
+  } = useSelectionStore();
+
+  const [audioLabel, setAudioLabel] = useState<string>(
+    'Add some nice very dru..'
+  );
+  const [templatesModalOpen, setTemplatesModalOpen] = useState<boolean>(false);
+  const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
+  const [exportSettings, setExportSettings] = useState<ExportSettings>({
+    format: 'mp4',
+    resolution: '1080p',
+    fps: 60,
+    quality: 'social',
+    scope: 'entire',
+  });
+  const [exporting, setExporting] = useState<boolean>(false);
+  const [exportProgressText, setExportProgressText] = useState<string>('');
+  const [exportPercent, setExportPercent] = useState<number>(0);
+  const exportAbortRef = useRef<AbortController | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const copiedLayersRef = useRef<Layer[]>([]);
+
+  const totalDurationMs = useMemo(() => {
+    const shotMax = project.shots.reduce(
+      (max, s) => Math.max(max, s.startMs + s.durationMs),
+      0
+    );
+    return Math.max(shotMax, 1000);
+  }, [project.shots]);
+
+  const frame = useMemo(
+    () => evaluateProjectAtTime(project, currentTimeMs),
+    [project, currentTimeMs]
+  );
+
+  const activeShot = frame.activeShot;
+  const selectedLayer =
+    selectedLayerIds.length > 0
+      ? activeShot.layers.find((l) => selectedLayerIds.includes(l.id))
+      : undefined;
+
+  const exportMetrics = useMemo(
+    () =>
+      estimateExportMetrics(project, {
+        ...exportSettings,
+        selectedShotId: activeShot.id,
+      }),
+    [project, exportSettings, activeShot.id]
+  );
+
+  useEffect(() => {
+    saveProjectToBrowser(project);
+  }, [project]);
+
+  // Keep selectedShotId in sync with activeShot
+  useEffect(() => {
+    if (activeShot && activeShot.id !== selectedShotId) {
+      selectShot(activeShot.id);
+    }
+  }, [activeShot, selectedShotId, selectShot]);
+
+  // Clamp currentTimeMs if it exceeds totalDurationMs
+  useEffect(() => {
+    if (currentTimeMs > totalDurationMs && totalDurationMs > 0) {
+      setCurrentTimeMs(0);
+    }
+  }, [totalDurationMs, currentTimeMs, setCurrentTimeMs]);
+
+  // 60fps Playback Loop (Supports scene work area looping)
+  useEffect(() => {
+    if (!isPlaying) return;
+    let rafId: number;
+    let lastTime = performance.now();
+
+    const tick = (now: number) => {
+      const dt = now - lastTime;
+      lastTime = now;
+
+      setCurrentTimeMs((prev) => {
+        const next = prev + dt;
+        if (timelineView === 'scene' && activeShot) {
+          const sceneStart = activeShot.startMs;
+          const sceneEnd = activeShot.startMs + activeShot.durationMs;
+          if (next >= sceneEnd) {
+            if (loop) return sceneStart;
+            setIsPlaying(false);
+            return sceneEnd;
+          }
+          return next;
+        }
+        if (next >= totalDurationMs) {
+          if (loop) return 0;
+          setIsPlaying(false);
+          return totalDurationMs;
+        }
+        return next;
+      });
+
+      rafId = requestAnimationFrame(tick);
+    };
+
+    rafId = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafId);
+  }, [
+    isPlaying,
+    loop,
+    totalDurationMs,
+    timelineView,
+    activeShot,
+    setCurrentTimeMs,
+    setIsPlaying,
+  ]);
+
+  // Global Clipboard Paste Listener (Figma SVG, Screenshots, & Copied Layers)
+  useEffect(() => {
+    const handlePaste = async (e: ClipboardEvent) => {
+      const tag = document.activeElement?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+
+      const clipboard = e.clipboardData;
+      if (!clipboard) return;
+
+      const plainText = clipboard.getData('text/plain') || '';
+      if (plainText.trim().startsWith('<svg') || plainText.includes('<svg')) {
+        e.preventDefault();
+        const parsed = parseFigmaSvgToLayers(
+          plainText,
+          activeShot.durationMs,
+          activeShot.layers.length
+        );
+        if (parsed.layers.length > 0) {
+          addMultipleLayersToShot(
+            activeShot.id,
+            parsed.layers,
+            parsed.assets
+          );
+          setSelectedLayerIds(parsed.layers.map((l) => l.id));
+        }
+        return;
+      }
+
+      const items = Array.from(clipboard.items || []);
+      const imageItem = items.find((item) => item.type.startsWith('image/'));
+      if (imageItem) {
+        e.preventDefault();
+        const file = imageItem.getAsFile();
+        if (file) {
+          const assetRecord = await readImageFileWithThumbnail(file);
+          const newLayer = addLayerToShot(activeShot.id, 'image', {
+            name: 'Pasted image',
+            assetId: assetRecord.id,
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            device: undefined,
+          });
+          updateProject(
+            (p) => ({
+              ...p,
+              assets: { ...p.assets, [assetRecord.id]: assetRecord },
+            }),
+            { skipHistory: true }
+          );
+          selectLayer(newLayer.id, false);
+        }
+        return;
+      }
+
+      if (copiedLayersRef.current.length > 0) {
+        e.preventDefault();
+        const clonedLayers: Layer[] = copiedLayersRef.current.map((orig, i) => {
+          const clone: Layer = JSON.parse(JSON.stringify(orig));
+          clone.id = `layer-${orig.kind}-${Date.now()}-${i}`;
+          clone.name = `${orig.name} Copy`;
+          clone.position = {
+            ...orig.position,
+            x: Number((orig.position.x + 0.03).toFixed(4)),
+            y: Number((orig.position.y + 0.03).toFixed(4)),
+          };
+          return clone;
+        });
+        addMultipleLayersToShot(activeShot.id, clonedLayers);
+        setSelectedLayerIds(clonedLayers.map((l) => l.id));
+      }
+    };
+
+    window.addEventListener('paste', handlePaste);
+    return () => window.removeEventListener('paste', handlePaste);
+  }, [
+    activeShot.id,
+    activeShot.durationMs,
+    activeShot.layers.length,
+    addLayerToShot,
+    addMultipleLayersToShot,
+    updateProject,
+    selectLayer,
+    setSelectedLayerIds,
+  ]);
+
+  // Global Studio Keyboard Shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const targetTag = document.activeElement?.tagName;
+      if (
+        targetTag === 'INPUT' ||
+        targetTag === 'TEXTAREA' ||
+        targetTag === 'SELECT'
+      ) {
+        return;
+      }
+
+      const key = e.key.toLowerCase();
+
+      if ((e.metaKey || e.ctrlKey) && key === 'c') {
+        const toCopy = activeShot.layers.filter((l) =>
+          selectedLayerIds.includes(l.id)
+        );
+        if (toCopy.length > 0) {
+          copiedLayersRef.current = JSON.parse(JSON.stringify(toCopy));
+        }
+        return;
+      }
+
+      if (e.shiftKey && !e.metaKey && !e.ctrlKey && key === 'a') {
+        e.preventDefault();
+        toggleAnimateMode();
+        return;
+      }
+
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (key === 'v') {
+          setActiveTool('select');
+          return;
+        }
+        if (key === 'g') {
+          setActiveTool('move');
+          return;
+        }
+        if (key === 'y') {
+          setActiveTool('tilt');
+          return;
+        }
+        if (key === 'h') {
+          setActiveTool('hand');
+          return;
+        }
+        if (key === 't') {
+          setActiveTool('text');
+          return;
+        }
+        if (key === 'i') {
+          setActiveTool('image');
+          return;
+        }
+        if (key === 'r') {
+          setActiveTool('rectangle');
+          return;
+        }
+        if (key === 'o') {
+          setActiveTool('ellipse');
+          return;
+        }
+        if (key === 'l') {
+          setActiveTool('line');
+          return;
+        }
+        if (e.key === 'Escape') {
+          setIsCropping(false);
+          setActiveTool('select');
+          clearLayerSelection();
+          setExportModalOpen(false);
+          return;
+        }
+      }
+
+      if ((e.key === ']' || e.key === '[') && selectedLayer) {
+        e.preventDefault();
+        const isForward = e.key === ']';
+        const isExtreme = e.metaKey || e.ctrlKey;
+        restackLayerInShot(
+          activeShot.id,
+          selectedLayer.id,
+          isForward
+            ? isExtreme
+              ? 'front'
+              : 'forward'
+            : isExtreme
+              ? 'back'
+              : 'backward'
+        );
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && key === 'z') {
+        e.preventDefault();
+        if (e.shiftKey) redo();
+        else undo();
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && key === 'g') {
+        e.preventDefault();
+        if (e.shiftKey) {
+          if (selectedLayer?.groupId) {
+            ungroupInShot(activeShot.id, selectedLayer.groupId);
+          }
+        } else if (selectedLayerIds.length > 0) {
+          createGroupFromLayers(activeShot.id, selectedLayerIds);
+        }
+        return;
+      }
+
+      if ((e.metaKey || e.ctrlKey) && key === 'd') {
+        e.preventDefault();
+        if (selectedLayer) {
+          const dup = duplicateLayerInShot(activeShot.id, selectedLayer.id);
+          if (dup) selectLayer(dup.id);
+        }
+        return;
+      }
+
+      if (
+        (e.key === 'Backspace' || e.key === 'Delete') &&
+        selectedLayer &&
+        activeShot.layers.length > 1
+      ) {
+        e.preventDefault();
+        deleteLayerFromShot(activeShot.id, selectedLayer.id);
+        return;
+      }
+
+      if (e.code === 'Space') {
+        e.preventDefault();
+        togglePlay();
+        return;
+      }
+
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+        e.preventDefault();
+        const step = e.shiftKey ? 0.025 : 0.005;
+        const dx =
+          e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+        const dy =
+          e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+
+        if (isAnimateMode && selectedLayer && !selectedLayer.locked) {
+          const blkId = recordAnimatedBlockAtPlayhead(
+            activeShot.id,
+            selectedLayer.id,
+            'position',
+            { x: dx, y: dy, z: 0 },
+            frame.shotLocalTimeMs,
+            'Nudge'
+          );
+          if (blkId) selectBlock(blkId, selectedLayer.id);
+          return;
+        }
+
+        updateShot(activeShot.id, (s) => ({
+          ...s,
+          layers: s.layers.map((l) =>
+            selectedLayerIds.includes(l.id) && !l.locked
+              ? {
+                ...l,
+                position: {
+                  ...l.position,
+                  x: Number((l.position.x + dx).toFixed(4)),
+                  y: Number((l.position.y + dy).toFixed(4)),
+                },
+              }
+              : l
+          ),
+        }));
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [
+    selectedLayer,
+    selectedLayerIds,
+    activeShot.id,
+    activeShot.layers,
+    isAnimateMode,
+    frame.shotLocalTimeMs,
+    updateShot,
+    restackLayerInShot,
+    recordAnimatedBlockAtPlayhead,
+    createGroupFromLayers,
+    ungroupInShot,
+    duplicateLayerInShot,
+    deleteLayerFromShot,
+    selectLayer,
+    selectBlock,
+    clearLayerSelection,
+    setActiveTool,
+    toggleAnimateMode,
+    setIsCropping,
+    undo,
+    redo,
+    togglePlay,
+  ]);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.name.endsWith('.svg') || file.type === 'image/svg+xml') {
+      const svgText = await file.text();
+      const parsed = parseFigmaSvgToLayers(
+        svgText,
+        activeShot.durationMs,
+        activeShot.layers.length
+      );
+      if (parsed.layers.length > 0) {
+        addMultipleLayersToShot(
+          activeShot.id,
+          parsed.layers,
+          parsed.assets
+        );
+        setSelectedLayerIds(parsed.layers.map((l) => l.id));
+      }
+      e.target.value = '';
+      return;
+    }
+
+    const assetRecord = await readImageFileWithThumbnail(file);
+    updateProject((proj) => ({
+      ...proj,
+      assets: {
+        ...proj.assets,
+        [assetRecord.id]: assetRecord,
+      },
+      shots: proj.shots.map((s) => {
+        if (s.id !== activeShot.id) return s;
+        const targetId =
+          selectedLayer?.kind === 'image'
+            ? selectedLayer.id
+            : s.layers.find((l) => l.kind === 'image')?.id;
+
+        return {
+          ...s,
+          layers: s.layers.map((l) =>
+            l.id === targetId && l.kind === 'image'
+              ? { ...l, assetId: assetRecord.id, name: 'Pasted image' }
+              : l
+          ),
+        };
+      }),
+    }));
+    e.target.value = '';
+  };
+
+  const handleStartExport = async () => {
+    setIsPlaying(false);
+    if (exportSettings.format === 'png') {
+      await exportCurrentFrameAsPng(
+        project,
+        project.name,
+        currentTimeMs,
+        exportSettings.resolution
+      );
+      setExportModalOpen(false);
+      return;
+    }
+
+    const controller = new AbortController();
+    exportAbortRef.current = controller;
+    setExporting(true);
+    setExportPercent(0);
+
+    await runVideoExportPipeline(
+      project,
+      (prog) => {
+        setExportProgressText(prog.statusText);
+        setExportPercent(prog.percent);
+      },
+      {
+        ...exportSettings,
+        selectedShotId: activeShot.id,
+      },
+      controller.signal
+    );
+
+    setExporting(false);
+    exportAbortRef.current = null;
+    if (!controller.signal.aborted) {
+      setTimeout(() => setExportModalOpen(false), 600);
+    }
+  };
+
+  return (
+    <div className="flex h-screen w-screen bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
+      {/* Hidden File Inputs */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*,.svg"
+        onChange={handleImageUpload}
+        className="hidden"
+      />
+      <input
+        ref={audioInputRef}
+        type="file"
+        accept="audio/*"
+        onChange={(e) => {
+          const f = e.target.files?.[0];
+          if (f) setAudioLabel(f.name);
+        }}
+        className="hidden"
+      />
+
+      {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR (File / Assets + Synchronized Scene Mirror) */}
+      <LeftPanel
+        activeShot={activeShot}
+        onUploadClick={() => fileInputRef.current?.click()}
+        audioLabel={audioLabel}
+        onSelectAudioClick={() => audioInputRef.current?.click()}
+      />
+
+      {/* COLUMN 2: CENTER STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
+      <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
+        <Stage
+          project={project}
+          frame={frame}
+          selectedLayerIds={selectedLayerIds}
+          onSelectLayer={(id, multi) => selectLayer(id, multi)}
+          showSafeArea={false}
+          snapEnabled={true}
+          onOpenTemplatesModal={() => setTemplatesModalOpen(true)}
+          onUploadClick={() => fileInputRef.current?.click()}
+        />
+
+        <Timeline
+          activeShot={activeShot}
+          totalDurationMs={totalDurationMs}
+          audioLabel={audioLabel}
+        />
+      </main>
+
+      {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
+      <RightSidebar
+        activeShot={activeShot}
+        selectedLayer={selectedLayer}
+        selectedLayerIds={selectedLayerIds}
+        onSwapImageClick={() => fileInputRef.current?.click()}
+        onOpenExportModal={() => setExportModalOpen(true)}
+      />
+
+      {/* EXPORT / SHARE MODAL */}
+      {exportModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-[#0088ff]/20 border border-[#0088ff]/40 flex items-center justify-center text-[#0088ff]">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Export &amp; Share Video
+                  </h3>
+                  <p className="text-[11px] text-[#a1a1aa]">
+                    Render MP4, Looping GIF, or High-Res PNG
+                  </p>
+                </div>
+              </div>
+              <button
+                disabled={exporting}
+                onClick={() => setExportModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="grid grid-cols-3 gap-2">
+              {(
+                [
+                  { id: 'mp4', label: 'MP4 Video', desc: 'With sound' },
+                  { id: 'gif', label: 'Animated GIF', desc: 'Silent loop' },
+                  { id: 'png', label: 'PNG Still', desc: 'Current frame' },
+                ] as { id: ExportFormat; label: string; desc: string }[]
+              ).map((fmt) => (
+                <button
+                  key={fmt.id}
+                  disabled={exporting}
+                  onClick={() =>
+                    setExportSettings((s) => ({ ...s, format: fmt.id }))
+                  }
+                  className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${exportSettings.format === fmt.id
+                      ? 'bg-[#0088ff]/20 border-[#0088ff] text-white'
+                      : 'bg-[#1c1c1f] border-white/10 text-[#a1a1aa] hover:text-white'
+                    }`}
+                >
+                  <div className="font-semibold text-xs">{fmt.label}</div>
+                  <div className="text-[10px] opacity-70 mt-0.5">
+                    {fmt.desc}
+                  </div>
+                </button>
+              ))}
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <span className="text-[#a1a1aa] block mb-1">Resolution</span>
+                <select
+                  disabled={exporting || exportSettings.format === 'gif'}
+                  value={exportSettings.resolution}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({
+                      ...s,
+                      resolution: e.target.value as ExportResolution,
+                    }))
+                  }
+                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                >
+                  <option value="720p">720p HD</option>
+                  <option value="1080p">1080p Full HD</option>
+                  <option value="4k">4K Ultra HD</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[#a1a1aa] block mb-1">Quality</span>
+                <select
+                  disabled={exporting || exportSettings.format !== 'mp4'}
+                  value={exportSettings.quality}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({
+                      ...s,
+                      quality: e.target.value as ExportQuality,
+                    }))
+                  }
+                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                >
+                  <option value="studio">Studio (Sharpest)</option>
+                  <option value="social">Social Media</option>
+                  <option value="web">Web (Smallest)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono text-[11px] space-y-1 text-[#d4d4d8]">
+              <div className="flex justify-between">
+                <span className="text-[#71717a]">Dimensions:</span>
+                <span>
+                  {exportMetrics.width}&times;{exportMetrics.height}px
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#71717a]">Estimated Size:</span>
+                <span className="text-emerald-400">
+                  ~{exportMetrics.estimatedSizeMb} MB
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-[#71717a]">Estimated Time:</span>
+                <span className="text-[#38bdf8]">
+                  ~{exportMetrics.estimatedTimeSec}s
+                </span>
+              </div>
+            </div>
+
+            {exporting && (
+              <div className="space-y-1.5">
+                <div className="flex justify-between text-[11px] font-mono text-[#38bdf8]">
+                  <span>{exportProgressText}</span>
+                  <span>{exportPercent}%</span>
+                </div>
+                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                  <div
+                    className="h-full bg-[#0088ff] transition-all duration-150"
+                    style={{ width: `${exportPercent}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-center justify-end gap-2 pt-2">
+              <button
+                onClick={() =>
+                  exporting
+                    ? exportAbortRef.current?.abort()
+                    : setExportModalOpen(false)
+                }
+                className="px-4 py-2 rounded-lg bg-[#1c1c1f] hover:bg-[#27272c] text-[#d4d4d8] cursor-pointer"
+              >
+                {exporting ? 'Cancel' : 'Close'}
+              </button>
+              <button
+                disabled={exporting}
+                onClick={handleStartExport}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold cursor-pointer"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>
+                  {exporting
+                    ? 'Rendering...'
+                    : `Export ${exportSettings.format.toUpperCase()}`}
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STARTER PROJECT TEMPLATES MODAL */}
+      <TemplatesModal
+        isOpen={templatesModalOpen}
+        onClose={() => setTemplatesModalOpen(false)}
+        onSelectTemplate={(tmpl) => {
+          updateProject(() => tmpl.createProject());
+          setCurrentTimeMs(0);
+          setTemplatesModalOpen(false);
+        }}
+        onSelectBlank={(ratio) => {
+          updateProject((p) => ({
+            ...p,
+            aspectRatio: ratio,
+            shots: [
+              createDefaultShot({
+                id: `shot-${Date.now()}`,
+                name: 'Scene 1',
+                startMs: 0,
+                durationMs: 4000,
+                lane: 0,
+                framings: [],
+                cameraBlocks: [],
+                transition: {
+                  type: 'crossfade',
+                  durationMs: 500,
+                  easing: { kind: 'preset', name: 'ease-in-out' },
+                },
+                groups: [],
+                layers: [],
+                ...(p.shots[0]?.light ? { light: p.shots[0].light } : {}),
+                ...(p.shots[0]?.effects ? { effects: p.shots[0].effects } : {}),
+                ...(p.shots[0]?.effectsOrder ? { effectsOrder: p.shots[0].effectsOrder } : {}),
+              }),
+            ],
+          }));
+          setCurrentTimeMs(0);
+          setTemplatesModalOpen(false);
+        }}
+      />
+    </div>
+  );
+}
