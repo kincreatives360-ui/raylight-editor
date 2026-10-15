@@ -21,6 +21,7 @@ import {
     createDefaultTextLayer,
     createDefaultShot,
     createDefaultAudio,
+    createDefaultTransition,
 } from '../model/defaults';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { loadProjectFromBrowser } from '../storage/projectIO';
@@ -209,7 +210,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 ? createDefaultImageLayer({
                     name: `Pasted image`,
                     order: nextOrder,
+                    inMs: 0,
                     outMs: targetShot.durationMs,
+                    entrance: createDefaultTransition('none', 0),
+                    exit: createDefaultTransition('none', 0),
                     ...customOverrides,
                 })
                 : kind === 'shape'
@@ -220,13 +224,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                                 : 'Shape'
                             } #${nextOrder + 1}`,
                         order: nextOrder,
+                        inMs: 0,
                         outMs: targetShot.durationMs,
+                        entrance: createDefaultTransition('none', 0),
+                        exit: createDefaultTransition('none', 0),
                         ...customOverrides,
                     })
                     : createDefaultTextLayer({
                         name: `Headline #${nextOrder + 1}`,
                         order: nextOrder,
+                        inMs: 0,
                         outMs: targetShot.durationMs,
+                        entrance: createDefaultTransition('none', 0),
+                        exit: createDefaultTransition('none', 0),
                         ...customOverrides,
                     });
 

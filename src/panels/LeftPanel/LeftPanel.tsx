@@ -9,6 +9,7 @@ import {
     Eye,
     EyeOff,
     Trash2,
+    Copy,
     Image as ImageIcon,
     Square,
     Circle,
@@ -37,6 +38,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 }) => {
     const {
         project,
+        updateProject,
         updateShot,
         updateLayer,
         addLayerToShot,
@@ -45,6 +47,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         createGroupFromLayers,
         updateGroupInShot,
         addShot,
+        duplicateShot,
+        deleteShot,
     } = useProjectStore();
 
     const {
@@ -53,8 +57,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         expandedTimelineLayerIds,
         selectLayer,
         selectLayerRange,
+        setSelectedLayerIds,
         selectShot,
         selectBlock,
+        setInspectorTab,
         setTimelineView,
         toggleTimelineLayerExpanded,
     } = useSelectionStore();
@@ -73,31 +79,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     const [addMenuOpen, setAddMenuOpen] = useState(false);
 
     const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-    const leftTracksRef = useRef<HTMLDivElement | null>(null);
-
-    const handleLeftScroll = () => {
-        if (!leftTracksRef.current) return;
-        window.dispatchEvent(
-            new CustomEvent('timeline-vertical-scroll', {
-                detail: {
-                    scrollTop: leftTracksRef.current.scrollTop,
-                    source: 'leftPanel',
-                },
-            })
-        );
-    };
-
-    useEffect(() => {
-        const handleSync = (e: Event) => {
-            const ce = e as CustomEvent;
-            if (ce.detail?.source === 'timeline' && leftTracksRef.current) {
-                leftTracksRef.current.scrollTop = ce.detail.scrollTop;
-            }
-        };
-        window.addEventListener('timeline-vertical-scroll', handleSync);
-        return () =>
-            window.removeEventListener('timeline-vertical-scroll', handleSync);
-    }, []);
 
     useEffect(() => {
         const primaryId = selectedLayerIds[0];
@@ -146,7 +127,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
-    // Returns the color-coded icon matching the screenshots
     const renderLayerIcon = (layer: Layer, isSelected: boolean) => {
         if (layer.kind === 'image') {
             return (
@@ -188,6 +168,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         const isSelected =
             shot.id === activeShot.id && selectedLayerIds.includes(layer.id);
         const isEditing = editingId === layer.id;
+        const isDragTarget = dragOverId === layer.id;
 
         return (
             <div
@@ -230,6 +211,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                 }}
                 onClick={(e) => {
                     e.stopPropagation();
+                    setInspectorTab('layer');
                     if (shot.id !== activeShot.id) {
                         selectShot(shot.id, layer.id);
                         setCurrentTimeMs(shot.startMs + 100);
@@ -248,9 +230,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     startRename(layer.id, layer.name);
                 }}
                 style={{ paddingLeft: `${12 + indentLevel * 14}px` }}
-                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected || isInsideSelectedContainer
-                    ? 'bg-[#09355c] text-white font-medium'
-                    : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
+                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isDragTarget ? 'border-t border-[#0088ff]' : ''
+                    } ${isSelected || isInsideSelectedContainer
+                        ? 'bg-[#09355c] text-white font-medium'
+                        : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
                     } ${layer.hidden ? 'opacity-40' : ''}`}
             >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -283,6 +266,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             }));
                         }}
                         className="p-1 rounded hover:bg-white/10 text-gray-300 cursor-pointer"
+                        title={layer.hidden ? 'Show Layer' : 'Hide Layer'}
                     >
                         {layer.hidden ? (
                             <EyeOff className="w-3 h-3 text-rose-400" />
@@ -297,6 +281,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 deleteLayerFromShot(shot.id, layer.id);
                             }}
                             className="p-1 rounded hover:bg-rose-500/20 text-gray-300 hover:text-rose-400 cursor-pointer"
+                            title="Delete Layer"
                         >
                             <Trash2 className="w-3 h-3" />
                         </button>
@@ -331,16 +316,42 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     style={{ paddingLeft: `${8 + indentLevel * 12}px` }}
                     onClick={(e) => {
                         e.stopPropagation();
+                        setInspectorTab('layer');
                         selectShot(shot.id);
-                        childLayers.forEach((l, i) => selectLayer(l.id, i > 0));
+                        setSelectedLayerIds(childLayers.map((l) => l.id));
                     }}
                     onDoubleClick={(e) => {
                         e.stopPropagation();
                         startRename(group.id, group.name);
                     }}
+                    onDragOver={(e) => {
+                        e.preventDefault();
+                        setDragOverId(group.id);
+                    }}
+                    onDragLeave={() => {
+                        if (dragOverId === group.id) setDragOverId(null);
+                    }}
+                    onDrop={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setDragOverId(null);
+                        const raw = e.dataTransfer.getData('application/x-raylight-layer');
+                        if (!raw) return;
+                        try {
+                            const parsed = JSON.parse(raw);
+                            if (parsed.shotId === shot.id) {
+                                moveLayerToOrderAndGroup(
+                                    shot.id,
+                                    parsed.layerId,
+                                    null,
+                                    group.id
+                                );
+                            }
+                        } catch { }
+                    }}
                     className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isGroupSelected
-                        ? 'bg-[#0088ff] text-white font-semibold'
-                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                            ? 'bg-[#0088ff] text-white font-semibold'
+                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                         }`}
                 >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -404,23 +415,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
     return (
         <aside className="w-60 border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
-            {/* 1. TOP HEADER: [R Canvas v] + [+] (Matching Screenshot) */}
+            {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
                 <button
                     onClick={() =>
                         setTimelineView(timelineView === 'video' ? 'scene' : 'video')
                     }
                     className="px-2.5 py-1 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/[0.07] flex items-center gap-1.5 text-[11px] font-semibold text-white cursor-pointer transition"
-                    title={
-                        timelineView === 'video'
-                            ? 'Switch to Scene View'
-                            : 'Switch to Full Video View'
-                    }
+                    title="Switch between Full Video Canvas and Scene View"
                 >
-                    <span className="font-bold tracking-tight text-sm leading-none text-[#0088ff]">
+                    <span className="font-bold tracking-tight text-sm leading-none">
                         R
                     </span>
-                    <span>{timelineView === 'video' ? 'Canvas' : 'Scene View'}</span>
+                    <span>Canvas</span>
                     <ChevronDown className="w-3 h-3 text-[#71717a]" />
                 </button>
 
@@ -437,7 +444,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                         <button
                             onClick={() => {
                                 const created = addShot();
-                                selectShot(created.id, created.layers[0]?.id);
+                                selectShot(created.id);
+                                setInspectorTab('shot');
                                 setAddMenuOpen(false);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
@@ -448,6 +456,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'image');
                                 selectLayer(l.id);
+                                setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
@@ -458,6 +467,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'shape');
                                 selectLayer(l.id);
+                                setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
@@ -468,6 +478,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'text');
                                 selectLayer(l.id);
+                                setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
@@ -495,8 +506,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     <button
                         onClick={() => setActiveTab('file')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'file'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                ? 'bg-[#1f1f23] text-white'
+                                : 'text-[#71717a] hover:text-[#d4d4d8]'
                             }`}
                     >
                         File
@@ -504,8 +515,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     <button
                         onClick={() => setActiveTab('assets')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'assets'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                ? 'bg-[#1f1f23] text-white'
+                                : 'text-[#71717a] hover:text-[#d4d4d8]'
                             }`}
                     >
                         Assets
@@ -552,7 +563,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             {/* =================================================================== */}
             {activeTab === 'file' && (
                 <div className="flex-1 flex flex-col min-h-0">
-                    {/* Upper Project Tree */}
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
                         {project.shots.map((shot) => {
                             const isShotActive = shot.id === activeShot.id;
@@ -566,7 +576,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             const rootGroups = shot.groups.filter((g) => !g.parentGroupId);
                             const ungroupedLayers = layersTopDown.filter((l) => !l.groupId);
 
-                            // If Shot is active and no group is selected, style Shot + selected child as a connected blue block (like Screenshot 1)
                             const hasGroupSelected = rootGroups.some((g) => {
                                 const gl = layersTopDown.filter((l) => l.groupId === g.id);
                                 return (
@@ -584,20 +593,43 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             : 'my-0.5'
                                     }
                                 >
-                                    {/* Shot Header Row */}
+                                    {/* Shot Header Row: Clicking selects the Shot itself so RightSidebar shows Shot Settings! */}
                                     <div
                                         onClick={() => {
-                                            selectShot(shot.id, shot.layers[0]?.id);
-                                            setCurrentTimeMs(shot.startMs);
+                                            selectShot(shot.id);
+                                            setInspectorTab('shot');
+                                            setCurrentTimeMs(shot.startMs + 100);
                                         }}
-                                        onDoubleClick={() => {
-                                            selectShot(shot.id, shot.layers[0]?.id);
-                                            setCurrentTimeMs(shot.startMs);
-                                            setTimelineView('scene');
+                                        onDoubleClick={() => startRename(shot.id, shot.name)}
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            setDragOverId(shot.id);
+                                        }}
+                                        onDragLeave={() => {
+                                            if (dragOverId === shot.id) setDragOverId(null);
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            setDragOverId(null);
+                                            const raw = e.dataTransfer.getData(
+                                                'application/x-raylight-layer'
+                                            );
+                                            if (!raw) return;
+                                            try {
+                                                const parsed = JSON.parse(raw);
+                                                if (parsed.shotId === shot.id) {
+                                                    moveLayerToOrderAndGroup(
+                                                        shot.id,
+                                                        parsed.layerId,
+                                                        null,
+                                                        undefined
+                                                    );
+                                                }
+                                            } catch { }
                                         }}
                                         className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isShotActive && !hasGroupSelected
-                                            ? 'bg-[#0088ff] text-white font-semibold'
-                                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                                ? 'bg-[#0088ff] text-white font-semibold'
+                                                : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                             }`}
                                     >
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -619,8 +651,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             </button>
                                             <Hash
                                                 className={`w-3.5 h-3.5 shrink-0 ${isShotActive && !hasGroupSelected
-                                                    ? 'text-white'
-                                                    : 'text-[#0088ff]'
+                                                        ? 'text-white'
+                                                        : 'text-[#0088ff]'
                                                     }`}
                                             />
                                             {isEditingShot ? (
@@ -637,7 +669,42 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                     className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
                                                 />
                                             ) : (
-                                                <span className="truncate">{shot.name}</span>
+                                                <span
+                                                    className="truncate"
+                                                    title="Click to inspect Shot settings (Camera, Light, Background, Effects)"
+                                                >
+                                                    {shot.name}
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                                            <button
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    const copy = duplicateShot(shot.id);
+                                                    if (copy) {
+                                                        selectShot(copy.id);
+                                                        setInspectorTab('shot');
+                                                        setCurrentTimeMs(copy.startMs + 100);
+                                                    }
+                                                }}
+                                                title="Duplicate Shot"
+                                                className="p-1 rounded hover:bg-black/20 cursor-pointer"
+                                            >
+                                                <Copy className="w-3 h-3" />
+                                            </button>
+                                            {project.shots.length > 1 && (
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        deleteShot(shot.id);
+                                                    }}
+                                                    title="Delete Shot"
+                                                    className="p-1 rounded hover:bg-rose-500/40 cursor-pointer"
+                                                >
+                                                    <Trash2 className="w-3 h-3" />
+                                                </button>
                                             )}
                                         </div>
                                     </div>
@@ -668,7 +735,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             );
                         })}
 
-                        {/* Audio Row at bottom of File Tree (Matching Screenshot 1) */}
+                        {/* Audio Row at bottom of File Tree */}
                         <div
                             onClick={onSelectAudioClick}
                             className="h-7 px-3 mt-1 rounded-md flex items-center gap-2 text-[11px] text-[#a1a1aa] hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
@@ -680,21 +747,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     </div>
 
                     {/* =============================================================== */}
-                    {/* LOWER MIRRORED TIMELINE LAYER LIST (Shown in Scene View, Screenshot 2) */}
+                    {/* LOWER MIRRORED TIMELINE LAYER LIST (Shown in Scene View)        */}
                     {/* =============================================================== */}
                     {timelineView === 'scene' && (
                         <div className="h-64 border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0">
-                            {/* Spacer matching Timeline Control Bar (h-8) + Ruler (h-6) = h-14 */}
                             <div className="h-14 border-b border-white/[0.06] px-3 flex items-end pb-1.5 text-[10px] font-mono text-[#71717a] shrink-0">
                                 <span>SCENE TRACKS · {activeShot.name}</span>
                             </div>
 
-                            {/* Layer Rows Level with Timeline Tracks on the Right */}
-                            <div
-                                ref={leftTracksRef}
-                                onScroll={handleLeftScroll}
-                                className="flex-1 overflow-y-auto px-1.5 pt-1 pb-2 space-y-1"
-                            >
+                            <div className="flex-1 overflow-y-auto px-1.5 py-1 space-y-0.5">
                                 {activeShot.layers
                                     .slice()
                                     .sort((a, b) => b.order - a.order)
@@ -711,10 +772,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         return (
                                             <div key={`mirror-${layer.id}`}>
                                                 <div
-                                                    onClick={() => selectLayer(layer.id, false)}
+                                                    onClick={() => {
+                                                        setInspectorTab('layer');
+                                                        selectLayer(layer.id, false);
+                                                    }}
                                                     className={`h-7 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected
-                                                        ? 'bg-[#0088ff] text-white font-semibold'
-                                                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                                            ? 'bg-[#0088ff] text-white font-semibold'
+                                                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -746,8 +810,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                                 toggleTimelineLayerExpanded(layer.id);
                                                             }}
                                                             className={`p-0.5 rounded ${isSelected
-                                                                ? 'text-white'
-                                                                : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
+                                                                    ? 'text-white'
+                                                                    : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
                                                                 }`}
                                                             title="Toggle keyframe blocks"
                                                         >
@@ -756,13 +820,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                     )}
                                                 </div>
 
-                                                {/* Expandable Sub-rows: ♦ Presets & ♦ Position (Matching Screenshot 2!) */}
                                                 {isExpanded && hasAnimItems && (
                                                     <div className="space-y-0.5">
                                                         {(layer.entrance.type !== 'none' ||
                                                             layer.exit.type !== 'none') && (
                                                                 <div
-                                                                    onClick={() => selectLayer(layer.id, false)}
+                                                                    onClick={() => {
+                                                                        setInspectorTab('layer');
+                                                                        selectLayer(layer.id, false);
+                                                                    }}
                                                                     className="h-6 pl-7 pr-2 flex items-center gap-2 text-[10px] text-[#a1a1aa] hover:text-white cursor-pointer"
                                                                 >
                                                                     <span className="w-1.5 h-1.5 rotate-45 bg-[#8b5cf6] shrink-0" />
@@ -822,6 +888,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         rotation: { x: 0, y: 0, z: 0 },
                                         device: undefined,
                                     });
+                                    setInspectorTab('layer');
                                     selectLayer(created.id);
                                 }}
                                 className="p-2 rounded-lg bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition"
@@ -845,6 +912,22 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         {asset.width}&times;{asset.height}
                                     </div>
                                 </div>
+                                {asset.id !== 'asset-sample-dashboard' && (
+                                    <button
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateProject((proj) => {
+                                                const copy = { ...proj.assets };
+                                                delete copy[asset.id];
+                                                return { ...proj, assets: copy };
+                                            });
+                                        }}
+                                        className="p-1 rounded hover:bg-rose-500/20 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                        title="Delete Asset"
+                                    >
+                                        <Trash2 className="w-3 h-3" />
+                                    </button>
+                                )}
                             </div>
                         ))}
                     </div>

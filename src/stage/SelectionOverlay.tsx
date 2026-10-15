@@ -1,5 +1,6 @@
 // src/stage/SelectionOverlay.tsx
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
+import * as THREE from 'three';
 import { Move, RotateCw, Compass, Lock, Crop, Type } from 'lucide-react';
 import type { Shot, TextLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
@@ -10,6 +11,12 @@ import type {
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { computeSmartSnap, type SnapGuideLine } from './Guides';
+import {
+    DEFAULT_CAMERA_Z,
+    DEFAULT_FOCAL_LENGTH,
+    getLayerProjectedCorners,
+    getReferencePlaneDimensions,
+} from './webgl/cameraMath';
 
 interface SelectionOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -19,6 +26,7 @@ interface SelectionOverlayProps {
     snapEnabled: boolean;
     onUpdateGuides: (guides: SnapGuideLine[]) => void;
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
 
 type ResizeHandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
@@ -31,6 +39,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     snapEnabled,
     onUpdateGuides,
     onSelectLayer,
+    cameraRef,
 }) => {
     const {
         updateLayer,
@@ -40,19 +49,15 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         commitDragTransaction,
     } = useProjectStore();
 
-    const {
-        activeTool,
-        isAnimateMode,
-        isCropping,
-        canvasZoom,
-        selectBlock,
-    } = useSelectionStore();
+    const { activeTool, isAnimateMode, isCropping, canvasZoom, selectBlock } =
+        useSelectionStore();
 
+    const overlayRootRef = useRef<HTMLDivElement | null>(null);
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
 
     const activeShot: Shot = frame.activeShot;
     const selectedEvalLayers: EvaluatedLayerWithEffects[] = frame.layers.filter(
-        (l) => selectedLayerIds.includes(l.id) && l.visible
+        (l) => selectedLayerIds.includes(l.id)
     );
 
     if (selectedEvalLayers.length === 0) return null;
@@ -61,25 +66,37 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const { layer } = primaryEval;
     const isLocked = layer.locked;
 
-    // Combine camera zoom and workspace canvasZoom so mouse deltas match screen pixels
-    const cameraZoom = frame.camera.zoom;
-    const effectiveZoom = cameraZoom * canvasZoom;
-    const camOffsetX = -frame.camera.target.x * frameWidth * cameraZoom;
-    const camOffsetY = -frame.camera.target.y * frameHeight * cameraZoom;
+    const aspect = frameWidth / Math.max(frameHeight, 1);
+    const { planeW, planeH } = getReferencePlaneDimensions(
+        aspect,
+        DEFAULT_CAMERA_Z,
+        DEFAULT_FOCAL_LENGTH
+    );
 
-    const boxWidth =
-        Math.max(24, primaryEval.size.width * frameWidth) *
-        primaryEval.scale.x *
-        cameraZoom;
-    const boxHeight =
-        Math.max(24, primaryEval.size.height * frameHeight) *
-        primaryEval.scale.y *
-        cameraZoom;
+    const zoom = Math.max(0.15, frame.camera.zoom || 1);
+    const cameraPose = {
+        position: {
+            x: frame.camera.target.x * planeW,
+            y: -frame.camera.target.y * planeH,
+            z: DEFAULT_CAMERA_Z / zoom + (frame.camera.target.z || 0),
+        },
+        rotation: {
+            x: frame.camera.rotation.x,
+            y: frame.camera.rotation.y,
+            z: frame.camera.rotation.z,
+        },
+        focalLength: frame.camera.focalLength ?? DEFAULT_FOCAL_LENGTH,
+        fov: frame.camera.fovDegrees || 27.0006,
+    };
 
-    const centerX =
-        frameWidth / 2 + primaryEval.position.x * frameWidth * cameraZoom + camOffsetX;
-    const centerY =
-        frameHeight / 2 + primaryEval.position.y * frameHeight * cameraZoom + camOffsetY;
+    const primaryProj = getLayerProjectedCorners(
+        primaryEval,
+        cameraRef?.current,
+        frameWidth,
+        frameHeight,
+        aspect,
+        cameraPose
+    );
 
     const rotXDeg = radToDeg(primaryEval.rotation.x);
     const rotYDeg = radToDeg(primaryEval.rotation.y);
@@ -89,7 +106,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     // 1. DRAG TO MOVE (Supports V Plane-Aware Move, G Screen Move, & Shift+A Rec!)
     // ============================================================================
     const handleStartMove = (e: React.MouseEvent) => {
-        if (activeTool === 'hand') return; // Hand tool pans the canvas instead
+        if (activeTool === 'hand') return;
         if (activeTool === 'tilt') {
             handleStart3DTilt(e);
             return;
@@ -101,7 +118,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const startClientX = e.clientX;
         const startClientY = e.clientY;
 
-        const startPositions: Record<string, { x: number; y: number; z: number }> = {};
+        const startPositions: Record<string, { x: number; y: number; z: number }> =
+            {};
         for (const item of activeShot.layers) {
             if (selectedLayerIds.includes(item.id)) {
                 startPositions[item.id] = {
@@ -127,15 +145,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastDzFrac = 0;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
-            const dxPx = (moveEvent.clientX - startClientX) / effectiveZoom;
-            const dyPx = (moveEvent.clientY - startClientY) / effectiveZoom;
+            const dxPx = (moveEvent.clientX - startClientX) / (canvasZoom * zoom);
+            const dyPx = (moveEvent.clientY - startClientY) / (canvasZoom * zoom);
 
-            let rawDxFrac = dxPx / frameWidth;
-            let rawDyFrac = dyPx / frameHeight;
+            const rawDxFrac = dxPx / frameWidth;
+            const rawDyFrac = dyPx / frameHeight;
             let rawDzFrac = 0;
 
-            // V (Select Tool): Plane-Aware Dragging!
-            // A tilted layer slides along its own 3D plane (adjusting Z depth with X/Y)
             if (activeTool === 'select') {
                 const rx = primaryEval.rotation.x;
                 const ry = primaryEval.rotation.y;
@@ -165,25 +181,20 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             const appliedDeltaY = targetPrimaryY - primaryStart.y;
             const appliedDeltaZ = rawDzFrac;
 
-            // If Shift + A (Animate Mode) is ON, record movement as a Block ending at playhead!
             if (isAnimateMode) {
-                const stepDx = appliedDeltaX - lastDxFrac;
-                const stepDy = appliedDeltaY - lastDyFrac;
-                const stepDz = appliedDeltaZ - lastDzFrac;
+                const stepX = appliedDeltaX - lastDxFrac;
+                const stepY = appliedDeltaY - lastDyFrac;
+                const stepZ = appliedDeltaZ - lastDzFrac;
                 lastDxFrac = appliedDeltaX;
                 lastDyFrac = appliedDeltaY;
                 lastDzFrac = appliedDeltaZ;
 
-                if (
-                    Math.abs(stepDx) > 0.0001 ||
-                    Math.abs(stepDy) > 0.0001 ||
-                    Math.abs(stepDz) > 0.0001
-                ) {
+                if (Math.abs(stepX) > 0.0005 || Math.abs(stepY) > 0.0005) {
                     const blkId = recordAnimatedBlockAtPlayhead(
                         activeShot.id,
                         layer.id,
                         'position',
-                        { x: stepDx, y: stepDy, z: stepDz },
+                        { x: stepX, y: stepY, z: stepZ },
                         frame.shotLocalTimeMs,
                         'Move',
                         { skipHistory: true }
@@ -193,7 +204,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 return;
             }
 
-            // Standard Design Edit: changes how the layer sits at rest
             updateShot(
                 activeShot.id,
                 (s) => ({
@@ -205,10 +215,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                             ...l,
                             position: {
                                 x: Number(
-                                    Math.max(-1.2, Math.min(1.2, initPos.x + appliedDeltaX)).toFixed(4)
+                                    Math.max(-1.5, Math.min(1.5, initPos.x + appliedDeltaX)).toFixed(4)
                                 ),
                                 y: Number(
-                                    Math.max(-1.2, Math.min(1.2, initPos.y + appliedDeltaY)).toFixed(4)
+                                    Math.max(-1.5, Math.min(1.5, initPos.y + appliedDeltaY)).toFixed(4)
                                 ),
                                 z: Number(
                                     Math.max(-2, Math.min(2, initPos.z + appliedDeltaZ)).toFixed(4)
@@ -246,9 +256,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         // On-Canvas Crop Mode for Image Layers
         if (isCropping && layer.kind === 'image') {
             const initCrop = layer.crop || { x: 0, y: 0, width: 1, height: 1 };
+            const boxW = Math.max(40, primaryEval.size.width * frameWidth * canvasZoom);
+            const boxH = Math.max(40, primaryEval.size.height * frameHeight * canvasZoom);
+
             const onCropMove = (moveEvent: MouseEvent) => {
-                const dx = (moveEvent.clientX - startClientX) / (boxWidth * canvasZoom);
-                const dy = (moveEvent.clientY - startClientY) / (boxHeight * canvasZoom);
+                const dx = (moveEvent.clientX - startClientX) / boxW;
+                const dy = (moveEvent.clientY - startClientY) / boxH;
 
                 let nextX = initCrop.x;
                 let nextY = initCrop.y;
@@ -256,14 +269,20 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 let nextH = initCrop.height;
 
                 if (dir.includes('w')) {
-                    nextX = Math.max(0, Math.min(initCrop.x + initCrop.width - 0.1, initCrop.x + dx));
+                    nextX = Math.max(
+                        0,
+                        Math.min(initCrop.x + initCrop.width - 0.1, initCrop.x + dx)
+                    );
                     nextW = initCrop.width - (nextX - initCrop.x);
                 }
                 if (dir.includes('e')) {
                     nextW = Math.max(0.1, Math.min(1 - initCrop.x, initCrop.width + dx));
                 }
                 if (dir.includes('n')) {
-                    nextY = Math.max(0, Math.min(initCrop.y + initCrop.height - 0.1, initCrop.y + dy));
+                    nextY = Math.max(
+                        0,
+                        Math.min(initCrop.y + initCrop.height - 0.1, initCrop.y + dy)
+                    );
                     nextH = initCrop.height - (nextY - initCrop.y);
                 }
                 if (dir.includes('s')) {
@@ -300,21 +319,23 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             return;
         }
 
+        const initialW =
+            layer.kind === 'text' ? (layer as TextLayer).maxWidth : layer.size.width;
+        const initialH =
+            layer.kind === 'text'
+                ? (layer as TextLayer).font.size
+                : layer.size.height;
         const initialPosX = layer.position.x;
         const initialPosY = layer.position.y;
-        const initialW =
-            layer.kind === 'text' ? layer.maxWidth : layer.size.width;
-        const initialH =
-            layer.kind === 'text' ? layer.font.size : layer.size.height;
 
         let lastDW = 0;
         let lastDH = 0;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
             const dxFrac =
-                (moveEvent.clientX - startClientX) / (frameWidth * effectiveZoom);
+                (moveEvent.clientX - startClientX) / (frameWidth * canvasZoom * zoom);
             const dyFrac =
-                (moveEvent.clientY - startClientY) / (frameHeight * effectiveZoom);
+                (moveEvent.clientY - startClientY) / (frameHeight * canvasZoom * zoom);
 
             let nextW = initialW;
             let nextH = initialH;
@@ -322,11 +343,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             let nextPosY = initialPosY;
 
             if (dir.includes('e')) {
-                nextW = Math.max(0.06, initialW + dxFrac);
+                nextW = Math.max(0.04, initialW + dxFrac);
                 nextPosX = initialPosX + (nextW - initialW) / 2;
             }
             if (dir.includes('w')) {
-                nextW = Math.max(0.06, initialW - dxFrac);
+                nextW = Math.max(0.04, initialW - dxFrac);
                 nextPosX = initialPosX - (nextW - initialW) / 2;
             }
             if (dir.includes('s')) {
@@ -383,7 +404,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                             },
                         };
                     }
-
                     return {
                         ...l,
                         size: {
@@ -412,24 +432,37 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     };
 
     // ============================================================================
-    // 3. TOP 2D ROTATION KNOB (Rotate Z)
+    // 3. TOP 2D ROTATION KNOB (Rotate Z - Fixed Stage-Relative Angle!)
     // ============================================================================
     const handleStartRotateZ = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (isLocked) return;
 
+        const rect = overlayRootRef.current?.getBoundingClientRect();
+        if (!rect) return;
+
         beginDragTransaction();
-        const startClientX = e.clientX;
-        const initialZDeg = radToDeg(layer.rotation.z);
+        // Convert projected center from stage-local pixels to screen client pixels
+        const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
+        const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
+
+        const startAngle = Math.atan2(
+            e.clientY - centerClientY,
+            e.clientX - centerClientX
+        );
+        const initialZRad = layer.rotation.z;
         let lastDeltaRad = 0;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
-            const deltaDeg = (moveEvent.clientX - startClientX) * 0.65;
+            const currentAngle = Math.atan2(
+                moveEvent.clientY - centerClientY,
+                moveEvent.clientX - centerClientX
+            );
+            const deltaAngle = currentAngle - startAngle;
 
             if (isAnimateMode) {
-                const totalRad = degToRad(deltaDeg);
-                const stepRad = totalRad - lastDeltaRad;
-                lastDeltaRad = totalRad;
+                const stepRad = deltaAngle - lastDeltaRad;
+                lastDeltaRad = deltaAngle;
                 if (Math.abs(stepRad) > 0.001) {
                     const blkId = recordAnimatedBlockAtPlayhead(
                         activeShot.id,
@@ -445,20 +478,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 return;
             }
 
-            const nextZDeg = Math.max(
-                -180,
-                Math.min(180, Math.round(initialZDeg + deltaDeg))
-            );
-
             updateLayer(
                 activeShot.id,
                 layer.id,
                 (l) => ({
                     ...l,
-                    rotation: {
-                        ...l.rotation,
-                        z: degToRad(nextZDeg),
-                    },
+                    rotation: { ...l.rotation, z: initialZRad + deltaAngle },
                 }),
                 { skipHistory: true }
             );
@@ -475,7 +500,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     };
 
     // ============================================================================
-    // 4. 3D TILT DRAG (Activated by Y Tilt Tool or Center 3D Tilt Pill)
+    // 4. 3D TILT DRAG (Pitch & Yaw - X and Y Rotations + Shift+A Rec!)
     // ============================================================================
     const handleStart3DTilt = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -518,12 +543,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             }
 
             const nextXDeg = Math.max(
-                -80,
-                Math.min(80, Math.round(initialXDeg + deltaPitch))
+                -85,
+                Math.min(85, Math.round(initialXDeg + deltaPitch))
             );
             const nextYDeg = Math.max(
-                -80,
-                Math.min(80, Math.round(initialYDeg + deltaYaw))
+                -85,
+                Math.min(85, Math.round(initialYDeg + deltaYaw))
             );
 
             updateLayer(
@@ -551,251 +576,246 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         window.addEventListener('mouseup', onMouseUp);
     };
 
-    const handles: {
+    const handleItems: {
         dir: ResizeHandleDir;
-        className: string;
+        pos: { x: number; y: number };
         cursor: string;
     }[] = [
-            { dir: 'nw', className: '-top-1.5 -left-1.5', cursor: 'nwse-resize' },
-            {
-                dir: 'n',
-                className: '-top-1.5 left-1/2 -translate-x-1/2',
-                cursor: 'ns-resize',
-            },
-            { dir: 'ne', className: '-top-1.5 -right-1.5', cursor: 'nesw-resize' },
-            {
-                dir: 'e',
-                className: 'top-1/2 -right-1.5 -translate-y-1/2',
-                cursor: 'ew-resize',
-            },
-            { dir: 'se', className: '-bottom-1.5 -right-1.5', cursor: 'nwse-resize' },
-            {
-                dir: 's',
-                className: '-bottom-1.5 left-1/2 -translate-x-1/2',
-                cursor: 'ns-resize',
-            },
-            { dir: 'sw', className: '-bottom-1.5 -left-1.5', cursor: 'nesw-resize' },
-            {
-                dir: 'w',
-                className: 'top-1/2 -left-1.5 -translate-y-1/2',
-                cursor: 'ew-resize',
-            },
+            { dir: 'nw', pos: primaryProj.pNW, cursor: 'nwse-resize' },
+            { dir: 'n', pos: primaryProj.pN, cursor: 'ns-resize' },
+            { dir: 'ne', pos: primaryProj.pNE, cursor: 'nesw-resize' },
+            { dir: 'e', pos: primaryProj.pE, cursor: 'ew-resize' },
+            { dir: 'se', pos: primaryProj.pSE, cursor: 'nwse-resize' },
+            { dir: 's', pos: primaryProj.pS, cursor: 'ns-resize' },
+            { dir: 'sw', pos: primaryProj.pSW, cursor: 'nesw-resize' },
+            { dir: 'w', pos: primaryProj.pW, cursor: 'ew-resize' },
         ];
 
-    // Outline color reflects active mode (Rose = Shift+A Animate Rec, Amber = Crop/Locked, Sky/Indigo = Design)
     const borderColor = isLocked
-        ? '1.5px dashed #f59e0b'
+        ? '#f59e0b'
         : isCropping
-            ? '2px dashed #fbbf24'
+            ? '#fbbf24'
             : isAnimateMode
-                ? '2px solid #f43f5e'
+                ? '#f43f5e'
                 : activeTool === 'tilt'
-                    ? '2px solid #a855f7'
-                    : '2px solid #38bdf8';
+                    ? '#a855f7'
+                    : '#0088ff';
 
     return (
-        <div className="absolute inset-0 pointer-events-none z-30 overflow-visible">
-            {/* Secondary Multi-Selected Layer Outlines */}
-            {selectedEvalLayers.slice(1).map((sec) => {
-                const secW =
-                    Math.max(24, sec.size.width * frameWidth) * sec.scale.x * cameraZoom;
-                const secH =
-                    Math.max(24, sec.size.height * frameHeight) * sec.scale.y * cameraZoom;
-                const secCX =
-                    frameWidth / 2 + sec.position.x * frameWidth * cameraZoom + camOffsetX;
-                const secCY =
-                    frameHeight / 2 + sec.position.y * frameHeight * cameraZoom + camOffsetY;
-                const secRotZ = radToDeg(sec.rotation.z);
+        <div
+            ref={overlayRootRef}
+            className="absolute inset-0 pointer-events-none z-30 overflow-visible select-none"
+        >
+            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+                {selectedEvalLayers.slice(1).map((sec) => {
+                    const secProj = getLayerProjectedCorners(
+                        sec,
+                        cameraRef?.current,
+                        frameWidth,
+                        frameHeight,
+                        aspect,
+                        cameraPose
+                    );
+                    const pts = `${secProj.pNW.x},${secProj.pNW.y} ${secProj.pNE.x},${secProj.pNE.y} ${secProj.pSE.x},${secProj.pSE.y} ${secProj.pSW.x},${secProj.pSW.y}`;
+                    return (
+                        <g key={sec.id}>
+                            <polygon
+                                points={pts}
+                                fill="rgba(0, 136, 255, 0.04)"
+                                stroke="#0088ff"
+                                strokeWidth="1.5"
+                                strokeDasharray="5 3"
+                                className="cursor-move pointer-events-auto"
+                                onMouseDown={handleStartMove}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
+                                }}
+                            />
+                        </g>
+                    );
+                })}
 
-                return (
+                {!isEditingInlineText && (
+                    <g>
+                        {!isLocked && !isCropping && (
+                            <line
+                                x1={primaryProj.pN.x}
+                                y1={primaryProj.pN.y}
+                                x2={primaryProj.pRot.x}
+                                y2={primaryProj.pRot.y}
+                                stroke={borderColor}
+                                strokeWidth="1.5"
+                                strokeDasharray="3 2"
+                            />
+                        )}
+
+                        <polygon
+                            points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
+                            fill="rgba(0, 136, 255, 0.02)"
+                            stroke={borderColor}
+                            strokeWidth="1.75"
+                            strokeDasharray={isLocked || isCropping ? '6 4' : 'none'}
+                            className={`pointer-events-auto ${isLocked
+                                    ? 'cursor-not-allowed'
+                                    : activeTool === 'tilt'
+                                        ? 'cursor-grab'
+                                        : 'cursor-move'
+                                }`}
+                            onMouseDown={handleStartMove}
+                            onDoubleClick={(e) => {
+                                if (layer.kind === 'text') {
+                                    e.stopPropagation();
+                                    setIsEditingInlineText(true);
+                                }
+                            }}
+                        />
+                    </g>
+                )}
+            </svg>
+
+            {/* TOP 2D ROTATION LOLLIPOP KNOB */}
+            {!isLocked && !isCropping && !isEditingInlineText && (
+                <div
+                    style={{
+                        left: `${primaryProj.pRot.x}px`,
+                        top: `${primaryProj.pRot.y}px`,
+                        transform: 'translate(-50%, -50%)',
+                    }}
+                    onMouseDown={handleStartRotateZ}
+                    title="Drag around object to Spin / Rotate (Roll Z)"
+                    className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[#0088ff] hover:bg-[#38bdf8] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition transform hover:scale-110"
+                >
+                    <RotateCw className="w-2.5 h-2.5 text-white" />
+                </div>
+            )}
+
+            {/* 8 RESIZE / CROP HANDLES */}
+            {!isLocked &&
+                !isEditingInlineText &&
+                handleItems.map((h) => (
                     <div
-                        key={sec.id}
-                        onMouseDown={handleStartMove}
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
-                        }}
-                        className="absolute pointer-events-auto cursor-move border-2 border-dashed border-sky-400"
+                        key={h.dir}
+                        onMouseDown={(e) => handleStartResize(e, h.dir)}
                         style={{
-                            width: `${secW}px`,
-                            height: `${secH}px`,
-                            left: `${secCX - secW / 2}px`,
-                            top: `${secCY - secH / 2}px`,
-                            transform: `rotate(${secRotZ}deg)`,
+                            left: `${h.pos.x}px`,
+                            top: `${h.pos.y}px`,
+                            transform: 'translate(-50%, -50%)',
+                            cursor: h.cursor,
                         }}
-                    >
-                        <span className="absolute -top-5 left-0 px-1.5 py-0.5 rounded bg-sky-600 text-white text-[9px] font-mono">
-                            + {sec.name}
-                        </span>
-                    </div>
-                );
-            })}
+                        className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
+                                ? 'bg-amber-400 border-black'
+                                : isAnimateMode
+                                    ? 'bg-rose-500 border-white'
+                                    : 'bg-white border-[#0088ff]'
+                            } hover:scale-125 transition`}
+                    />
+                ))}
 
-            {/* Primary Selected Layer Gizmo Box */}
+            {/* INLINE TEXT EDITOR OR CENTER PILLS */}
             <div
-                onMouseDown={handleStartMove}
-                onDoubleClick={(e) => {
-                    if (layer.kind === 'text') {
-                        e.stopPropagation();
-                        setIsEditingInlineText(true);
-                    }
-                }}
-                className={`absolute pointer-events-auto ${isLocked
-                        ? 'cursor-not-allowed'
-                        : activeTool === 'tilt'
-                            ? 'cursor-grab active:cursor-grabbing'
-                            : 'cursor-move'
-                    }`}
                 style={{
-                    width: `${boxWidth}px`,
-                    height: `${boxHeight}px`,
-                    left: `${centerX - boxWidth / 2}px`,
-                    top: `${centerY - boxHeight / 2}px`,
-                    transform: `rotate(${rotZDeg}deg)`,
-                    border: borderColor,
-                    boxShadow: '0 0 0 1px rgba(0,0,0,0.5)',
+                    left: `${primaryProj.pCenter.x}px`,
+                    top: `${primaryProj.pCenter.y}px`,
+                    transform: 'translate(-50%, -50%)',
                 }}
+                className="absolute flex items-center justify-center pointer-events-auto"
             >
-                {/* Top Lollipop 2D Rotation Handle (Rotate Z) */}
-                {!isLocked && !isCropping && !isEditingInlineText && (
-                    <div className="absolute -top-8 left-1/2 -translate-x-1/2 flex flex-col items-center">
+                {isEditingInlineText && layer.kind === 'text' ? (
+                    <div
+                        className="p-1 z-40"
+                        style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
+                    >
+                        <textarea
+                            autoFocus
+                            value={(layer as TextLayer).content}
+                            onChange={(e) =>
+                                updateLayer(activeShot.id, layer.id, (l) =>
+                                    l.kind === 'text' ? { ...l, content: e.target.value } : l
+                                )
+                            }
+                            onKeyDown={(e) => {
+                                e.stopPropagation();
+                                if (
+                                    e.key === 'Escape' ||
+                                    (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
+                                ) {
+                                    setIsEditingInlineText(false);
+                                }
+                            }}
+                            onBlur={() => setIsEditingInlineText(false)}
+                            className="w-full bg-black/90 border-2 border-[#0088ff] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
+                        />
+                    </div>
+                ) : isLocked ? (
+                    <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[10px] font-mono flex items-center gap-1 shadow-lg">
+                        <Lock className="w-3 h-3" /> Locked
+                    </div>
+                ) : isCropping ? (
+                    <div className="px-2.5 py-1 rounded-full bg-amber-500 text-black text-[10px] font-semibold flex items-center gap-1 shadow-lg">
+                        <Crop className="w-3 h-3" /> Drag Corners to Crop
+                    </div>
+                ) : (
+                    <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition">
+                        {layer.kind === 'text' && (
+                            <button
+                                onMouseDown={(e) => {
+                                    e.stopPropagation();
+                                    setIsEditingInlineText(true);
+                                }}
+                                className="px-2 h-6 rounded-full bg-[#18181b]/90 hover:bg-[#0088ff] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[10px] font-medium text-white transition"
+                            >
+                                <Type className="w-3 h-3" />
+                                <span>Edit</span>
+                            </button>
+                        )}
+
                         <div
-                            onMouseDown={handleStartRotateZ}
-                            title="Drag left/right to spin 2D Roll (Rotate Z)"
-                            className="w-5 h-5 rounded-full bg-sky-500 hover:bg-sky-400 border-2 border-white shadow-md flex items-center justify-center cursor-grab active:cursor-grabbing transition transform hover:scale-110"
+                            onMouseDown={handleStartMove}
+                            title="Drag to move in 3D space"
+                            className="w-6 h-6 rounded-full bg-[#0088ff]/90 hover:bg-[#38bdf8] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition"
                         >
-                            <RotateCw className="w-2.5 h-2.5 text-white" />
+                            <Move className="w-3 h-3 text-white" />
                         </div>
-                        <div className="w-0.5 h-3 bg-sky-400" />
+
+                        <div
+                            onMouseDown={handleStart3DTilt}
+                            title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
+                            className="px-2 h-6 rounded-full bg-[#18181b]/90 hover:bg-purple-600 border border-white/30 shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-medium text-white transition"
+                        >
+                            <Compass className="w-3 h-3" />
+                            <span>Tilt</span>
+                        </div>
                     </div>
                 )}
+            </div>
 
-                {/* Center Gizmo Pills / Inline Text Editor */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    {isEditingInlineText && layer.kind === 'text' ? (
-                        <div className="absolute inset-0 p-1 pointer-events-auto z-40">
-                            <textarea
-                                autoFocus
-                                value={(layer as TextLayer).content}
-                                onChange={(e) =>
-                                    updateLayer(activeShot.id, layer.id, (l) => ({
-                                        ...l,
-                                        content: e.target.value,
-                                    }))
-                                }
-                                onKeyDown={(e) => {
-                                    e.stopPropagation();
-                                    if (
-                                        e.key === 'Escape' ||
-                                        (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
-                                    ) {
-                                        setIsEditingInlineText(false);
-                                    }
-                                }}
-                                onBlur={() => setIsEditingInlineText(false)}
-                                style={{
-                                    fontFamily: (layer as TextLayer).font.family || 'Inter, sans-serif',
-                                    fontSize: `${Math.max(12, (layer as TextLayer).font.size * frameHeight * cameraZoom)}px`,
-                                    fontWeight: (layer as TextLayer).font.weight || 600,
-                                    color: (layer as TextLayer).font.color || '#ffffff',
-                                    textAlign: (layer as TextLayer).font.align || 'center',
-                                    letterSpacing: `${(layer as TextLayer).font.letterSpacing || 0}em`,
-                                }}
-                                className="w-full h-full bg-black/85 border-2 border-sky-400 rounded-lg p-2 text-white resize-none outline-none shadow-2xl leading-normal"
-                            />
-                            <div className="absolute -bottom-6 left-1/2 -translate-x-1/2 text-[9px] font-mono text-sky-300 bg-sky-950/90 px-2 py-0.5 rounded border border-sky-500/40 whitespace-nowrap shadow pointer-events-none">
-                                Press Esc or ⌘+Enter to commit
-                            </div>
-                        </div>
-                    ) : isLocked ? (
-                        <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[10px] font-mono flex items-center gap-1 shadow-lg">
-                            <Lock className="w-3 h-3" /> Locked
-                        </div>
-                    ) : isCropping ? (
-                        <div className="px-2.5 py-1 rounded-full bg-amber-500 text-black text-[10px] font-semibold flex items-center gap-1 shadow-lg">
-                            <Crop className="w-3 h-3" /> Drag Handles to Crop Image
-                        </div>
-                    ) : (
-                        <div className="flex items-center gap-1.5 pointer-events-auto">
-                            {layer.kind === 'text' && (
-                                <button
-                                    onMouseDown={(e) => {
-                                        e.stopPropagation();
-                                        setIsEditingInlineText(true);
-                                    }}
-                                    title="Edit text content (or double-click text box)"
-                                    className="px-2 h-7 rounded-full bg-sky-600/95 hover:bg-sky-500 border border-white/80 shadow-lg flex items-center gap-1 cursor-pointer text-[10px] font-semibold text-white transition transform hover:scale-105"
-                                >
-                                    <Type className="w-3.5 h-3.5" />
-                                    <span>Edit</span>
-                                </button>
-                            )}
-
-                            <div
-                                onMouseDown={handleStartMove}
-                                title={
-                                    activeTool === 'move'
-                                        ? 'Move Tool (G): Drag in flat screen space'
-                                        : 'Select Tool (V): Drag along layer 3D plane'
-                                }
-                                className="w-7 h-7 rounded-full bg-sky-500/90 hover:bg-sky-400 border border-white/80 shadow-lg flex items-center justify-center cursor-move transition transform hover:scale-105"
-                            >
-                                <Move className="w-3.5 h-3.5 text-white" />
-                            </div>
-
-                            <div
-                                onMouseDown={handleStart3DTilt}
-                                title="Drag in any direction to Tilt in 3D (Y)"
-                                className="px-2.5 h-7 rounded-full bg-purple-600/95 hover:bg-purple-500 border border-white/80 shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-semibold text-white transition transform hover:scale-105"
-                            >
-                                <Compass className="w-3.5 h-3.5" />
-                                <span>3D Tilt</span>
-                            </div>
-                        </div>
-                    )}
-                </div>
-
-                {/* 8 Corner & Edge Resize / Crop Handles */}
-                {!isLocked &&
-                    !isEditingInlineText &&
-                    handles.map((h) => (
-                        <div
-                            key={h.dir}
-                            onMouseDown={(e) => handleStartResize(e, h.dir)}
-                            style={{ cursor: h.cursor }}
-                            className={`w-3 h-3 rounded-xs border-2 shadow absolute ${isCropping
-                                    ? 'bg-amber-400 border-black'
-                                    : isAnimateMode
-                                        ? 'bg-rose-500 border-white'
-                                        : 'bg-white border-sky-600'
-                                } ${h.className} hover:scale-125 transition`}
-                        />
-                    ))}
-
-                {/* Bottom HUD Coordinate & Mode Pill */}
-                <div className="absolute -bottom-7 left-1/2 -translate-x-1/2 whitespace-nowrap px-2 py-0.5 rounded bg-black/85 border border-white/15 text-[10px] font-mono text-gray-200 shadow-lg pointer-events-none flex items-center gap-1.5">
+            {/* BOTTOM HUD COORDINATE PILL */}
+            {!isEditingInlineText && (
+                <div
+                    style={{
+                        left: `${primaryProj.pS.x}px`,
+                        top: `${primaryProj.pS.y + 12}px`,
+                        transform: 'translate(-50%, 0)',
+                    }}
+                    className="absolute whitespace-nowrap px-2 py-0.5 rounded-full bg-[#121216]/90 border border-white/10 text-[10px] font-mono text-[#a1a1aa] shadow-xl pointer-events-none flex items-center gap-1.5"
+                >
                     {isAnimateMode && (
                         <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white font-bold">
                             REC ⇧A
                         </span>
                     )}
                     <span>
-                        Pos: ({primaryEval.position.x.toFixed(2)},{' '}
-                        {primaryEval.position.y.toFixed(2)}, Z:{' '}
-                        {primaryEval.position.z.toFixed(2)})
+                        {Math.round(primaryEval.position.x * 1920)},{' '}
+                        {Math.round(primaryEval.position.y * 1080)}, Z:{' '}
+                        {Math.round(primaryEval.position.z * 500)}
                     </span>
-                    <span className="text-gray-500">|</span>
-                    <span className="text-purple-300">
-                        Tilt: {rotXDeg}° / {rotYDeg}° / {rotZDeg}°
+                    <span className="text-[#52525b]">|</span>
+                    <span className="text-[#38bdf8]">
+                        {rotXDeg}° / {rotYDeg}° / {rotZDeg}°
                     </span>
-                    {layer.kind === 'text' && !isEditingInlineText && (
-                        <>
-                            <span className="text-gray-500">|</span>
-                            <span className="text-sky-300">Double-click to edit text</span>
-                        </>
-                    )}
                 </div>
-            </div>
+            )}
         </div>
     );
 };

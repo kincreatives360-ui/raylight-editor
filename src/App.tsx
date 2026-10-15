@@ -1,8 +1,8 @@
 // src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles } from 'lucide-react';
+import { Download, X, Sparkles, LayoutTemplate } from 'lucide-react';
 import type { Layer } from './model/types';
-import { createDefaultShot } from './model/defaults';
+import { degToRad } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
 import { useSelectionStore } from './store/useSelectionStore';
@@ -10,6 +10,7 @@ import { evaluateProjectAtTime } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
   readImageFileWithThumbnail,
+  SAMPLE_FIGMA_SVG,
 } from './engine/figmaSvgImporter';
 import { Stage } from './stage/Stage';
 import { LeftPanel } from './panels/LeftPanel/LeftPanel';
@@ -24,8 +25,8 @@ import {
   type ExportFormat,
   type ExportResolution,
   type ExportQuality,
+  type ExportScope,
 } from './engine/exporter';
-import { TemplatesModal } from './components/TemplatesModal';
 
 export default function App() {
   const {
@@ -40,6 +41,7 @@ export default function App() {
     recordAnimatedBlockAtPlayhead,
     createGroupFromLayers,
     ungroupInShot,
+    resetProject,
     undo,
     redo,
   } = useProjectStore();
@@ -54,15 +56,13 @@ export default function App() {
   } = usePlayheadStore();
 
   const {
-    selectedShotId,
     selectedLayerIds,
-    timelineView,
     isAnimateMode,
-    selectShot,
     selectLayer,
     setSelectedLayerIds,
     selectBlock,
     clearLayerSelection,
+    setInspectorTab,
     setActiveTool,
     toggleAnimateMode,
     setIsCropping,
@@ -89,13 +89,14 @@ export default function App() {
   const audioInputRef = useRef<HTMLInputElement | null>(null);
   const copiedLayersRef = useRef<Layer[]>([]);
 
-  const totalDurationMs = useMemo(() => {
-    const shotMax = project.shots.reduce(
-      (max, s) => Math.max(max, s.startMs + s.durationMs),
-      0
-    );
-    return Math.max(shotMax, 1000);
-  }, [project.shots]);
+  const totalDurationMs = useMemo(
+    () =>
+      project.shots.reduce(
+        (max, s) => Math.max(max, s.startMs + s.durationMs),
+        18000
+      ),
+    [project.shots]
+  );
 
   const frame = useMemo(
     () => evaluateProjectAtTime(project, currentTimeMs),
@@ -103,6 +104,9 @@ export default function App() {
   );
 
   const activeShot = frame.activeShot;
+
+  // IMPORTANT FIX: Do NOT fall back to activeShot.layers[0] when selectedLayerIds is empty!
+  // When selectedLayerIds is empty, selectedLayer is undefined so RightSidebar shows Shot Settings.
   const selectedLayer =
     selectedLayerIds.length > 0
       ? activeShot.layers.find((l) => selectedLayerIds.includes(l.id))
@@ -121,21 +125,7 @@ export default function App() {
     saveProjectToBrowser(project);
   }, [project]);
 
-  // Keep selectedShotId in sync with activeShot
-  useEffect(() => {
-    if (activeShot && activeShot.id !== selectedShotId) {
-      selectShot(activeShot.id);
-    }
-  }, [activeShot, selectedShotId, selectShot]);
-
-  // Clamp currentTimeMs if it exceeds totalDurationMs
-  useEffect(() => {
-    if (currentTimeMs > totalDurationMs && totalDurationMs > 0) {
-      setCurrentTimeMs(0);
-    }
-  }, [totalDurationMs, currentTimeMs, setCurrentTimeMs]);
-
-  // 60fps Playback Loop (Supports scene work area looping)
+  // 60fps Playback Loop
   useEffect(() => {
     if (!isPlaying) return;
     let rafId: number;
@@ -147,16 +137,6 @@ export default function App() {
 
       setCurrentTimeMs((prev) => {
         const next = prev + dt;
-        if (timelineView === 'scene' && activeShot) {
-          const sceneStart = activeShot.startMs;
-          const sceneEnd = activeShot.startMs + activeShot.durationMs;
-          if (next >= sceneEnd) {
-            if (loop) return sceneStart;
-            setIsPlaying(false);
-            return sceneEnd;
-          }
-          return next;
-        }
         if (next >= totalDurationMs) {
           if (loop) return 0;
           setIsPlaying(false);
@@ -170,15 +150,20 @@ export default function App() {
 
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
-  }, [
-    isPlaying,
-    loop,
-    totalDurationMs,
-    timelineView,
-    activeShot,
-    setCurrentTimeMs,
-    setIsPlaying,
-  ]);
+  }, [isPlaying, loop, totalDurationMs, setCurrentTimeMs, setIsPlaying]);
+
+  const handlePasteSampleFigmaSvg = () => {
+    const parsed = parseFigmaSvgToLayers(
+      SAMPLE_FIGMA_SVG,
+      activeShot.durationMs,
+      activeShot.layers.length
+    );
+    if (parsed.layers.length > 0) {
+      addMultipleLayersToShot(activeShot.id, parsed.layers, parsed.assets);
+      setInspectorTab('layer');
+      setSelectedLayerIds(parsed.layers.map((l) => l.id));
+    }
+  };
 
   // Global Clipboard Paste Listener (Figma SVG, Screenshots, & Copied Layers)
   useEffect(() => {
@@ -203,6 +188,7 @@ export default function App() {
             parsed.layers,
             parsed.assets
           );
+          setInspectorTab('layer');
           setSelectedLayerIds(parsed.layers.map((l) => l.id));
         }
         return;
@@ -229,6 +215,7 @@ export default function App() {
             }),
             { skipHistory: true }
           );
+          setInspectorTab('layer');
           selectLayer(newLayer.id, false);
         }
         return;
@@ -248,6 +235,7 @@ export default function App() {
           return clone;
         });
         addMultipleLayersToShot(activeShot.id, clonedLayers);
+        setInspectorTab('layer');
         setSelectedLayerIds(clonedLayers.map((l) => l.id));
       }
     };
@@ -263,6 +251,7 @@ export default function App() {
     updateProject,
     selectLayer,
     setSelectedLayerIds,
+    setInspectorTab,
   ]);
 
   // Global Studio Keyboard Shortcuts
@@ -279,6 +268,31 @@ export default function App() {
 
       const key = e.key.toLowerCase();
 
+      // Cmd/Ctrl + A: Select All Layers in Active Shot
+      if ((e.metaKey || e.ctrlKey) && key === 'a') {
+        e.preventDefault();
+        setInspectorTab('layer');
+        setSelectedLayerIds(activeShot.layers.map((l) => l.id));
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + H: Toggle Hide/Show Selected Layer(s)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && key === 'h') {
+        e.preventDefault();
+        if (selectedLayerIds.length > 0) {
+          updateShot(activeShot.id, (s) => ({
+            ...s,
+            layers: s.layers.map((l) =>
+              selectedLayerIds.includes(l.id)
+                ? { ...l, hidden: !l.hidden }
+                : l
+            ),
+          }));
+        }
+        return;
+      }
+
+      // Cmd/Ctrl + C: Copy Selected Layer(s)
       if ((e.metaKey || e.ctrlKey) && key === 'c') {
         const toCopy = activeShot.layers.filter((l) =>
           selectedLayerIds.includes(l.id)
@@ -289,12 +303,14 @@ export default function App() {
         return;
       }
 
+      // Shift + A: Toggle Live Animate Recording Mode
       if (e.shiftKey && !e.metaKey && !e.ctrlKey && key === 'a') {
         e.preventDefault();
         toggleAnimateMode();
         return;
       }
 
+      // Single-Key Tool Shortcuts (V, G, Y, H, T, I, R, O, L, Escape)
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         if (key === 'v') {
           setActiveTool('select');
@@ -336,11 +352,14 @@ export default function App() {
           setIsCropping(false);
           setActiveTool('select');
           clearLayerSelection();
+          setInspectorTab('shot');
           setExportModalOpen(false);
+          setTemplatesModalOpen(false);
           return;
         }
       }
 
+      // [ and ] (plus Cmd+[ and Cmd+]): Restack Layer Forward / Backward
       if ((e.key === ']' || e.key === '[') && selectedLayer) {
         e.preventDefault();
         const isForward = e.key === ']';
@@ -359,6 +378,7 @@ export default function App() {
         return;
       }
 
+      // Cmd/Ctrl + Z / Cmd/Ctrl + Shift + Z: Undo / Redo
       if ((e.metaKey || e.ctrlKey) && key === 'z') {
         e.preventDefault();
         if (e.shiftKey) redo();
@@ -366,6 +386,7 @@ export default function App() {
         return;
       }
 
+      // Cmd/Ctrl + G / Cmd/Ctrl + Shift + G: Group / Ungroup
       if ((e.metaKey || e.ctrlKey) && key === 'g') {
         e.preventDefault();
         if (e.shiftKey) {
@@ -378,15 +399,20 @@ export default function App() {
         return;
       }
 
+      // Cmd/Ctrl + D: Duplicate Layer
       if ((e.metaKey || e.ctrlKey) && key === 'd') {
         e.preventDefault();
         if (selectedLayer) {
           const dup = duplicateLayerInShot(activeShot.id, selectedLayer.id);
-          if (dup) selectLayer(dup.id);
+          if (dup) {
+            setInspectorTab('layer');
+            selectLayer(dup.id);
+          }
         }
         return;
       }
 
+      // Delete / Backspace: Delete Selected Layer
       if (
         (e.key === 'Backspace' || e.key === 'Delete') &&
         selectedLayer &&
@@ -397,12 +423,14 @@ export default function App() {
         return;
       }
 
+      // Space: Play / Pause
       if (e.code === 'Space') {
         e.preventDefault();
         togglePlay();
         return;
       }
 
+      // Arrow Keys: Nudge Layer (or Record Block if Shift+A Animate Mode is ON)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
         e.preventDefault();
         const step = e.shiftKey ? 0.025 : 0.005;
@@ -459,8 +487,10 @@ export default function App() {
     duplicateLayerInShot,
     deleteLayerFromShot,
     selectLayer,
+    setSelectedLayerIds,
     selectBlock,
     clearLayerSelection,
+    setInspectorTab,
     setActiveTool,
     toggleAnimateMode,
     setIsCropping,
@@ -486,6 +516,7 @@ export default function App() {
           parsed.layers,
           parsed.assets
         );
+        setInspectorTab('layer');
         setSelectedLayerIds(parsed.layers.map((l) => l.id));
       }
       e.target.value = '';
@@ -557,6 +588,70 @@ export default function App() {
     }
   };
 
+  // Applies a starter template preset onto the active shot
+  const handleApplyStarterTemplate = (
+    templateKind: 'iphone-hero' | 'macbook-float' | 'slide-to-answer'
+  ) => {
+    if (templateKind === 'iphone-hero') {
+      resetProject();
+      updateShot(activeShot.id, (s) => ({
+        ...s,
+        layers: s.layers.map((l, idx) =>
+          idx === 0 && l.kind === 'image'
+            ? {
+              ...l,
+              name: 'Pasted image',
+              size: { width: 0.34, height: 0.68 },
+              position: { x: -0.04, y: 0.08, z: 0.2 },
+              rotation: {
+                x: degToRad(-40),
+                y: degToRad(14),
+                z: degToRad(18),
+              },
+              device: {
+                type: 'iphone',
+                color: 'black',
+                gloss: 0.85,
+                lidAngle: 100,
+                screenGlow: 0.5,
+              },
+            }
+            : l
+        ),
+      }));
+    } else if (templateKind === 'macbook-float') {
+      resetProject();
+      updateShot(activeShot.id, (s) => ({
+        ...s,
+        layers: s.layers.map((l, idx) =>
+          idx === 0 && l.kind === 'image'
+            ? {
+              ...l,
+              name: 'MacBook Showcase',
+              size: { width: 0.66, height: 0.54 },
+              position: { x: 0, y: 0.02, z: 0.1 },
+              rotation: {
+                x: degToRad(14),
+                y: degToRad(-22),
+                z: degToRad(0),
+              },
+              device: {
+                type: 'macbook',
+                color: 'silver',
+                gloss: 0.78,
+                lidAngle: 105,
+                screenGlow: 0.4,
+              },
+            }
+            : l
+        ),
+      }));
+    } else {
+      handlePasteSampleFigmaSvg();
+    }
+    setTemplatesModalOpen(false);
+  };
+
   return (
     <div className="flex h-screen w-screen bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
@@ -578,7 +673,7 @@ export default function App() {
         className="hidden"
       />
 
-      {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR (File / Assets + Synchronized Scene Mirror) */}
+      {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
       <LeftPanel
         activeShot={activeShot}
         onUploadClick={() => fileInputRef.current?.click()}
@@ -586,21 +681,24 @@ export default function App() {
         onSelectAudioClick={() => audioInputRef.current?.click()}
       />
 
-      {/* COLUMN 2: CENTER STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
+      {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
       <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
         <Stage
           project={project}
           frame={frame}
           selectedLayerIds={selectedLayerIds}
-          onSelectLayer={(id, multi) => selectLayer(id, multi)}
+          onSelectLayer={(id, multi) => {
+            setInspectorTab('layer');
+            selectLayer(id, multi);
+          }}
           showSafeArea={false}
           snapEnabled={true}
           onOpenTemplatesModal={() => setTemplatesModalOpen(true)}
           onUploadClick={() => fileInputRef.current?.click()}
+          onPasteFigmaSample={handlePasteSampleFigmaSvg}
         />
 
         <Timeline
-          activeShot={activeShot}
           totalDurationMs={totalDurationMs}
           audioLabel={audioLabel}
         />
@@ -614,6 +712,88 @@ export default function App() {
         onSwapImageClick={() => fileInputRef.current?.click()}
         onOpenExportModal={() => setExportModalOpen(true)}
       />
+
+      {/* STARTER TEMPLATES MODAL */}
+      {templatesModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-4 shadow-2xl text-xs">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-[#0088ff]/20 border border-[#0088ff]/40 flex items-center justify-center text-[#0088ff]">
+                  <LayoutTemplate className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-bold text-white">
+                    Starter Templates
+                  </h3>
+                  <p className="text-[11px] text-[#a1a1aa]">
+                    Load a pre-rigged 3D scene with camera &amp; lighting
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setTemplatesModalOpen(false)}
+                className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              <button
+                onClick={() => handleApplyStarterTemplate('iphone-hero')}
+                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
+              >
+                <div>
+                  <div className="font-semibold text-white">
+                    iPhone 3D Hero Tilt (-40°)
+                  </div>
+                  <div className="text-[11px] text-[#71717a] mt-0.5">
+                    Close-up iPhone frame with Dynamic Island &amp; dolly camera
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-[#0088ff]">
+                  Load &rarr;
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleApplyStarterTemplate('macbook-float')}
+                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
+              >
+                <div>
+                  <div className="font-semibold text-white">
+                    MacBook Pro Isometric Showcase
+                  </div>
+                  <div className="text-[11px] text-[#71717a] mt-0.5">
+                    3D aluminum MacBook deck with studio key light sweep
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-[#0088ff]">
+                  Load &rarr;
+                </span>
+              </button>
+
+              <button
+                onClick={() => handleApplyStarterTemplate('slide-to-answer')}
+                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
+              >
+                <div>
+                  <div className="font-semibold text-white">
+                    Multi-Layer Figma Stack
+                  </div>
+                  <div className="text-[11px] text-[#71717a] mt-0.5">
+                    Editable shapes, badge &amp; 3D typography spread in Z depth
+                  </div>
+                </div>
+                <span className="text-[10px] font-mono text-[#0088ff]">
+                  Load &rarr;
+                </span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* EXPORT / SHARE MODAL */}
       {exportModalOpen && (
@@ -689,6 +869,26 @@ export default function App() {
                 </select>
               </div>
               <div>
+                <span className="text-[#a1a1aa] block mb-1">Frame Rate</span>
+                <select
+                  disabled={exporting || exportSettings.format !== 'mp4'}
+                  value={exportSettings.fps}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({
+                      ...s,
+                      fps: Number(e.target.value) as 30 | 60,
+                    }))
+                  }
+                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                >
+                  <option value={60}>60 FPS (Smooth)</option>
+                  <option value={30}>30 FPS (Standard)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
                 <span className="text-[#a1a1aa] block mb-1">Quality</span>
                 <select
                   disabled={exporting || exportSettings.format !== 'mp4'}
@@ -704,6 +904,27 @@ export default function App() {
                   <option value="studio">Studio (Sharpest)</option>
                   <option value="social">Social Media</option>
                   <option value="web">Web (Smallest)</option>
+                </select>
+              </div>
+              <div>
+                <span className="text-[#a1a1aa] block mb-1">Scope</span>
+                <select
+                  disabled={exporting || exportSettings.format === 'png'}
+                  value={exportSettings.scope}
+                  onChange={(e) =>
+                    setExportSettings((s) => ({
+                      ...s,
+                      scope: e.target.value as ExportScope,
+                    }))
+                  }
+                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                >
+                  <option value="entire">
+                    Entire Timeline ({project.shots.length} Shots)
+                  </option>
+                  <option value="shot">
+                    Selected Shot ({activeShot.name})
+                  </option>
                 </select>
               </div>
             </div>
@@ -771,46 +992,6 @@ export default function App() {
           </div>
         </div>
       )}
-
-      {/* STARTER PROJECT TEMPLATES MODAL */}
-      <TemplatesModal
-        isOpen={templatesModalOpen}
-        onClose={() => setTemplatesModalOpen(false)}
-        onSelectTemplate={(tmpl) => {
-          updateProject(() => tmpl.createProject());
-          setCurrentTimeMs(0);
-          setTemplatesModalOpen(false);
-        }}
-        onSelectBlank={(ratio) => {
-          updateProject((p) => ({
-            ...p,
-            aspectRatio: ratio,
-            shots: [
-              createDefaultShot({
-                id: `shot-${Date.now()}`,
-                name: 'Scene 1',
-                startMs: 0,
-                durationMs: 4000,
-                lane: 0,
-                framings: [],
-                cameraBlocks: [],
-                transition: {
-                  type: 'crossfade',
-                  durationMs: 500,
-                  easing: { kind: 'preset', name: 'ease-in-out' },
-                },
-                groups: [],
-                layers: [],
-                ...(p.shots[0]?.light ? { light: p.shots[0].light } : {}),
-                ...(p.shots[0]?.effects ? { effects: p.shots[0].effects } : {}),
-                ...(p.shots[0]?.effectsOrder ? { effectsOrder: p.shots[0].effectsOrder } : {}),
-              }),
-            ],
-          }));
-          setCurrentTimeMs(0);
-          setTemplatesModalOpen(false);
-        }}
-      />
     </div>
   );
 }

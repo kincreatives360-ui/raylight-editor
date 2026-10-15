@@ -1,139 +1,197 @@
 // src/stage/webgl/cameraMath.ts
-// Mathematical formulation for Raylight Camera & Framing Engine
+import * as THREE from 'three';
+import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
 
-export interface Vec3 {
-    x: number;
-    y: number;
-    z: number;
+export interface CameraFraming {
+    id?: string;
+    name?: string;
+    target: { x: number; y: number; z: number };
+    zoom: number;
 }
 
 export interface DefaultCameraConfig {
-    position: Vec3;
-    rotation: Vec3;
-    focalLength: number; // in mm, standard 35mm film gauge (e.g. 50mm)
-}
-
-export interface FramingAnchor {
-    kind?: 'world';
-    world?: Vec3;
-    x?: number;
-    y?: number;
-    z?: number;
-}
-
-export interface CameraFraming {
-    id: string;
-    anchor?: FramingAnchor;
-    zoom?: number;
-    roll?: number; // in degrees
-    orbit?: number;
-    tilt?: number;
-    centerX?: number;
-    centerY?: number;
-    mode?: 'dolly' | 'zoom' | 'dollyzoom';
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
+    focalLength: number;
 }
 
 export interface EvaluatedCameraPose {
-    position: Vec3;
-    rotation: Vec3;
+    position: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
     focalLength: number;
-    fov: number; // in degrees
+    fov: number;
 }
 
-const FILM_GAUGE_HEIGHT = 24; // 35mm full frame sensor height = 24mm
+export const DEFAULT_CAMERA_Z = 2.65;
+export const DEFAULT_FOCAL_LENGTH = 50;
+export const SENSOR_HEIGHT_MM = 24;
 
-/**
- * Converts 35mm focal length (mm) to Vertical Field of View (degrees)
- */
 export function focalLengthToFov(focalLengthMm: number): number {
-    const fl = Math.max(8, Math.min(300, focalLengthMm));
-    return 2 * Math.atan(FILM_GAUGE_HEIGHT / (2 * fl)) * (180 / Math.PI);
+    const safeFocal = Math.max(12, Math.min(200, focalLengthMm || DEFAULT_FOCAL_LENGTH));
+    return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
 }
 
-/**
- * Computes Camera Z distance based on framing zoom and mode (Dolly vs Zoom vs Dollyzoom)
- * Derived directly from Raylight reverse-engineered formulas
- */
-export function calculateCameraZ(
-    framing: CameraFraming,
-    defaultZ: number
-): number {
-    const zoom = (framing.zoom && framing.zoom > 0) ? framing.zoom : 1;
-    const mode = framing.mode ?? 'dolly';
-
-    if (mode === 'zoom') {
-        // Optical Zoom: physical camera position does NOT move in space
-        return defaultZ;
-    }
-    if (mode === 'dollyzoom') {
-        // Vertigo effect: camera translates closer and focal length counter-zooms
-        return defaultZ / (zoom * zoom);
-    }
-    // Physical Dolly: camera physically translates closer along Z axis
-    return defaultZ / zoom;
+export function getReferencePlaneDimensions(
+    aspect: number,
+    cameraZ: number = DEFAULT_CAMERA_Z,
+    focalLength: number = DEFAULT_FOCAL_LENGTH
+): { planeW: number; planeH: number } {
+    const fovRad = (focalLengthToFov(focalLength) * Math.PI) / 180;
+    const planeH = 2 * cameraZ * Math.tan(fovRad / 2);
+    const planeW = planeH * aspect;
+    return { planeW, planeH };
 }
 
-/**
- * Evaluates the full 3D camera pose (position, rotation, focalLength, fov)
- */
 export function evaluateCameraPose(
-    framing: CameraFraming | undefined,
-    defaultConfig: DefaultCameraConfig = {
-        position: { x: 0, y: 0, z: 2.65 },
+    framing?: CameraFraming,
+    defaultCamera: DefaultCameraConfig = {
+        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
         rotation: { x: 0, y: 0, z: 0 },
-        focalLength: 50,
+        focalLength: DEFAULT_FOCAL_LENGTH,
     },
-    viewportAspect: number = 16 / 9
+    aspect: number = 16 / 9
 ): EvaluatedCameraPose {
-    if (!framing) {
-        return {
-            position: { ...defaultConfig.position },
-            rotation: { ...defaultConfig.rotation },
-            focalLength: defaultConfig.focalLength,
-            fov: focalLengthToFov(defaultConfig.focalLength),
-        };
-    }
+    const baseZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
+    const focalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
+    const fov = focalLengthToFov(focalLength);
+    const { planeW, planeH } = getReferencePlaneDimensions(aspect, baseZ, focalLength);
 
-    const zoom = (framing.zoom && framing.zoom > 0) ? framing.zoom : 1;
-    const mode = framing.mode ?? 'dolly';
-    const rollRad = ((framing.roll ?? 0) * Math.PI) / 180;
-
-    const targetZ = calculateCameraZ(framing, defaultConfig.position.z);
-
-    const focalLength =
-        mode === 'zoom'
-            ? defaultConfig.focalLength * zoom
-            : mode === 'dollyzoom'
-                ? defaultConfig.focalLength / zoom
-                : defaultConfig.focalLength;
-
-    // Anchor translation
-    let anchorX = 0;
-    let anchorY = 0;
-    if (framing.anchor?.world) {
-        anchorX = framing.anchor.world.x;
-        anchorY = framing.anchor.world.y;
-    } else if (framing.anchor?.x !== undefined && framing.anchor?.y !== undefined) {
-        anchorX = framing.anchor.x;
-        anchorY = framing.anchor.y;
-    } else if (framing.centerX !== undefined && framing.centerY !== undefined) {
-        const spreadW = 2 * Math.tan((focalLengthToFov(focalLength) * Math.PI) / 360) * Math.abs(targetZ) * viewportAspect;
-        const spreadH = 2 * Math.tan((focalLengthToFov(focalLength) * Math.PI) / 360) * Math.abs(targetZ);
-        anchorX = framing.centerX * spreadW;
-        anchorY = framing.centerY * spreadH;
-    }
-
-    const posX = defaultConfig.position.x + anchorX;
-    const posY = defaultConfig.position.y + anchorY;
+    const zoom = Math.max(0.15, framing?.zoom ?? 1);
+    const targetX = (framing?.target?.x ?? 0) * planeW;
+    // Invert Y because screen/model +Y is down, whereas Three.js +Y is up
+    const targetY = -(framing?.target?.y ?? 0) * planeH;
+    const targetZ = framing?.target?.z ?? 0;
 
     return {
-        position: { x: posX, y: posY, z: targetZ },
+        position: {
+            x: (defaultCamera.position?.x ?? 0) + targetX,
+            y: (defaultCamera.position?.y ?? 0) + targetY,
+            z: baseZ / zoom + targetZ,
+        },
         rotation: {
-            x: defaultConfig.rotation.x,
-            y: defaultConfig.rotation.y,
-            z: defaultConfig.rotation.z + rollRad,
+            x: defaultCamera.rotation?.x ?? 0,
+            y: defaultCamera.rotation?.y ?? 0,
+            z: defaultCamera.rotation?.z ?? 0,
         },
         focalLength,
-        fov: focalLengthToFov(focalLength),
+        fov,
+    };
+}
+
+export function getLayer3DWorldTransform(
+    evalLayer: EvaluatedLayerWithEffects,
+    aspect: number,
+    cameraZ: number = DEFAULT_CAMERA_Z,
+    focalLength: number = DEFAULT_FOCAL_LENGTH
+): {
+    worldX: number;
+    worldY: number;
+    worldZ: number;
+    meshW: number;
+    meshH: number;
+} {
+    const { planeW, planeH } = getReferencePlaneDimensions(aspect, cameraZ, focalLength);
+
+    const meshW = Math.max(0.02, evalLayer.size.width * planeW);
+    const meshH = Math.max(0.02, evalLayer.size.height * planeH);
+
+    const worldX = evalLayer.position.x * planeW;
+    // Invert Y so moving a layer down (+Y in model) moves it down (-Y in Three.js)
+    const worldY = -evalLayer.position.y * planeH;
+    const worldZ = evalLayer.position.z * 0.85;
+
+    return { worldX, worldY, worldZ, meshW, meshH };
+}
+
+export function getLayerProjectedCorners(
+    evalLayer: EvaluatedLayerWithEffects,
+    _camera: THREE.PerspectiveCamera | null | undefined,
+    frameWidth: number,
+    frameHeight: number,
+    aspect: number,
+    cameraPose?: EvaluatedCameraPose
+) {
+    const { worldX, worldY, worldZ, meshW, meshH } = getLayer3DWorldTransform(
+        evalLayer,
+        aspect,
+        DEFAULT_CAMERA_Z,
+        DEFAULT_FOCAL_LENGTH
+    );
+
+    // Build a deterministic PerspectiveCamera matching the exact current frame state
+    const vCam = new THREE.PerspectiveCamera(
+        cameraPose?.fov ?? focalLengthToFov(DEFAULT_FOCAL_LENGTH),
+        aspect,
+        0.05,
+        100
+    );
+
+    if (cameraPose) {
+        vCam.position.set(
+            cameraPose.position.x,
+            cameraPose.position.y,
+            cameraPose.position.z
+        );
+        vCam.rotation.set(
+            cameraPose.rotation.x,
+            cameraPose.rotation.y,
+            cameraPose.rotation.z
+        );
+    } else {
+        vCam.position.set(0, 0, DEFAULT_CAMERA_Z);
+    }
+    vCam.updateMatrixWorld(true);
+    vCam.updateProjectionMatrix();
+
+    const sx = evalLayer.scale?.x ?? 1;
+    const sy = evalLayer.scale?.y ?? 1;
+    const hw = (meshW * sx) / 2;
+    const hh = (meshH * sy) / 2;
+
+    // Match ThreeLayerObject Euler rotation (invert X and Z so screen pitch & roll match 3D)
+    const euler = new THREE.Euler(
+        -evalLayer.rotation.x,
+        evalLayer.rotation.y,
+        -evalLayer.rotation.z,
+        'XYZ'
+    );
+    const centerVec = new THREE.Vector3(worldX, worldY, worldZ);
+
+    const projectLocalPoint = (lx: number, ly: number, lz = 0.016) => {
+        const pt = new THREE.Vector3(lx, ly, lz);
+        pt.applyEuler(euler);
+        pt.add(centerVec);
+        pt.project(vCam);
+        return {
+            x: (pt.x * 0.5 + 0.5) * frameWidth,
+            y: (-pt.y * 0.5 + 0.5) * frameHeight,
+        };
+    };
+
+    const pNW = projectLocalPoint(-hw, hh);
+    const pN = projectLocalPoint(0, hh);
+    const pNE = projectLocalPoint(hw, hh);
+    const pE = projectLocalPoint(hw, 0);
+    const pSE = projectLocalPoint(hw, -hh);
+    const pS = projectLocalPoint(0, -hh);
+    const pSW = projectLocalPoint(-hw, -hh);
+    const pW = projectLocalPoint(-hw, 0);
+    const pCenter = projectLocalPoint(0, 0);
+
+    const rotOffset = Math.max(0.08, Math.abs(hh) * 0.22);
+    const pRot = projectLocalPoint(0, hh + rotOffset);
+
+    return {
+        pNW,
+        pN,
+        pNE,
+        pE,
+        pSE,
+        pS,
+        pSW,
+        pW,
+        pCenter,
+        pRot,
+        corners: [pNW, pNE, pSE, pSW],
     };
 }

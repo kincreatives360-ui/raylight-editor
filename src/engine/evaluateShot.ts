@@ -114,9 +114,11 @@ export function evaluateProjectAtTime(
     const clampedGlobalMs = clamp(globalTimeMs, 0, totalDurationMs);
 
     let activeIndex = project.shots.findIndex(
-        (s) =>
+        (s, idx) =>
             clampedGlobalMs >= s.startMs &&
-            clampedGlobalMs <= s.startMs + s.durationMs
+            (idx === project.shots.length - 1
+                ? clampedGlobalMs <= s.startMs + s.durationMs
+                : clampedGlobalMs < s.startMs + s.durationMs)
     );
     if (activeIndex === -1) {
         activeIndex = Math.max(0, project.shots.length - 1);

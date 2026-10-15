@@ -26,6 +26,7 @@ import {
     Sparkles,
     Image as ImageIcon,
     Square,
+    Film,
 } from 'lucide-react';
 import type {
     Shot,
@@ -66,7 +67,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     onOpenExportModal,
 }) => {
     const { project, updateProject, updateShot, updateLayer } = useProjectStore();
-    const { selectBlock } = useSelectionStore();
+    const { selectBlock, clearLayerSelection } = useSelectionStore();
     const { currentTimeMs } = usePlayheadStore();
 
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
@@ -78,6 +79,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
     const refStageW = 1920;
     const refStageH = 1080;
+
+    // In Raylight: Scene Effects & Background appear when the Scene itself OR its bottom layer is selected
+    const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
+    const isBottomLayerSelected =
+        Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
 
     const handleQuickAlign = (axis: 'x' | 'y', targetVal: number) => {
         updateShot(activeShot.id, (s) => ({
@@ -95,8 +101,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         updateLayer(activeShot.id, selectedLayer.id, (l) => {
             if (l.kind !== 'image') return l;
             if (type === 'none') return { ...l, device: undefined };
+            const defaultSize =
+                type === 'iphone'
+                    ? { width: 0.28, height: 0.58 }
+                    : type === 'ipad'
+                        ? { width: 0.48, height: 0.56 }
+                        : { width: 0.64, height: 0.56 };
             return {
                 ...l,
+                size: defaultSize,
                 device: {
                     type,
                     color: l.device?.color || 'silver',
@@ -126,7 +139,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
         const newBlock: AnimationBlock = {
             id,
-            label: `${property.charAt(0).toUpperCase() + property.slice(1)} animation`,
+            label: `${property.charAt(0).toUpperCase() + property.slice(1)
+                } animation`,
             property,
             startMs: Math.round(shotLocalMs),
             durationMs: 1200,
@@ -172,7 +186,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 <div className="flex items-center gap-2">
                     <button
                         onClick={() => setProjectPopoverOpen((v) => !v)}
-                        title="Project & Scene Settings"
+                        title="Project Settings (Name, Aspect Ratio, FPS)"
                         className={`p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition ${projectPopoverOpen
                                 ? 'text-[#0088ff] bg-white/5'
                                 : 'text-[#a1a1aa] hover:text-white'
@@ -202,11 +216,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 </div>
             </div>
 
-            {/* Quick Project Settings Popover */}
+            {/* Project-Level Settings Popover (Project Name, Aspect Ratio, FPS) */}
             {projectPopoverOpen && (
                 <div className="mx-3 mb-2 p-3 rounded-xl bg-[#16161a] border border-white/10 space-y-2.5 shadow-2xl">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-white">
-                        <span>Project &amp; Scene FX</span>
+                        <span>Project Settings</span>
                         <button
                             onClick={() => setProjectPopoverOpen(false)}
                             className="text-[#71717a] hover:text-white cursor-pointer"
@@ -214,6 +228,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             <X className="w-3.5 h-3.5" />
                         </button>
                     </div>
+                    <input
+                        type="text"
+                        value={project.name}
+                        onChange={(e) =>
+                            updateProject((p) => ({ ...p, name: e.target.value }))
+                        }
+                        className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none"
+                        placeholder="Project Name"
+                    />
                     <div className="grid grid-cols-2 gap-2">
                         <select
                             value={project.aspectRatio}
@@ -231,50 +254,60 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </option>
                             ))}
                         </select>
-                        <input
-                            type="color"
-                            value={
-                                project.background.kind === 'solid'
-                                    ? project.background.color
-                                    : project.background.stops[0]?.color || '#070913'
-                            }
+                        <select
+                            value={project.fps}
                             onChange={(e) =>
                                 updateProject((p) => ({
                                     ...p,
-                                    background: { kind: 'solid', color: e.target.value },
+                                    fps: Number(e.target.value) as 30 | 60,
                                 }))
                             }
-                            className="w-full h-7 rounded bg-transparent cursor-pointer"
-                            title="Stage Background Color"
-                        />
+                            className="bg-[#1c1c1f] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none"
+                        >
+                            <option value={60}>60 FPS</option>
+                            <option value={30}>30 FPS</option>
+                        </select>
                     </div>
                 </div>
             )}
 
-            {/* 2. SUB-HEADER: [Design] | [Animate] Pill Tabs */}
-            <div className="h-9 border-y border-white/[0.07] px-3.5 flex items-center gap-1.5 shrink-0">
-                <button
-                    onClick={() => setMainTab('design')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'design'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
-                        }`}
-                >
-                    Design
-                </button>
-                <button
-                    onClick={() => setMainTab('animate')}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'animate'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
-                        }`}
-                >
-                    Animate
-                </button>
+            {/* 2. SUB-HEADER: [Design] | [Animate] Pill Tabs + Quick Scene Switcher */}
+            <div className="h-9 border-y border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
+                <div className="flex items-center gap-1.5">
+                    <button
+                        onClick={() => setMainTab('design')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'design'
+                                ? 'bg-[#1f1f23] text-white'
+                                : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            }`}
+                    >
+                        Design
+                    </button>
+                    <button
+                        onClick={() => setMainTab('animate')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'animate'
+                                ? 'bg-[#1f1f23] text-white'
+                                : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            }`}
+                    >
+                        Animate
+                    </button>
+                </div>
+
+                {selectedLayer && (
+                    <button
+                        onClick={() => clearLayerSelection()}
+                        title="Inspect current Shot / Scene settings (Camera, Light, Background, Effects)"
+                        className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
+                    >
+                        <Film className="w-3 h-3 text-[#0088ff]" />
+                        <span>{activeShot.name}</span>
+                    </button>
+                )}
             </div>
 
             {/* =================================================================== */}
-            {/* TAB 1: DESIGN (Exact Match to Screenshot 1)                         */}
+            {/* TAB 1: DESIGN (WHEN A LAYER IS SELECTED)                            */}
             {/* =================================================================== */}
             {mainTab === 'design' && selectedLayer && (
                 <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
@@ -342,13 +375,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         </div>
                     )}
 
-                    {/* SECTION 2: POSITION (Alignment, X/Y, Depth & Rotation, 3-Button Bar) */}
+                    {/* SECTION 2: POSITION */}
                     <div className="p-3.5 space-y-3">
                         <div className="text-[11px] font-medium text-[#e4e4e7]">
                             Position
                         </div>
 
-                        {/* Alignment 6-Icon Segmented Bar */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#71717a] block">
                                 Alignment
@@ -399,7 +431,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </div>
                         </div>
 
-                        {/* Position X & Y + Crosshair */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#71717a] block">Position</span>
                             <div className="flex items-center gap-1.5">
@@ -452,7 +483,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </div>
                         </div>
 
-                        {/* Depth & rotation */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#71717a] block">
                                 Depth &amp; rotation
@@ -491,7 +521,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </div>
                         </div>
 
-                        {/* Rotation 3-Icon Bar */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#71717a] block">Rotation</span>
                             <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
@@ -538,7 +567,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         </div>
                     </div>
 
-                    {/* SECTION 3: TILT (X/Y Angles + 3-Button Bar) */}
+                    {/* SECTION 3: TILT */}
                     <div className="p-3.5 space-y-3">
                         <div className="text-[11px] font-medium text-[#e4e4e7]">Tilt</div>
 
@@ -623,7 +652,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         </div>
                     </div>
 
-                    {/* SECTION 4: LAYOUT (W / H Size + Aspect Ratio Lock) */}
+                    {/* SECTION 4: LAYOUT */}
                     <div className="p-3.5 space-y-3">
                         <div className="text-[11px] font-medium text-[#e4e4e7]">Layout</div>
 
@@ -722,7 +751,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         </div>
                     </div>
 
-                    {/* SECTION 5: APPEARANCE (Opacity 100% & Corner Radius 0.00) */}
+                    {/* SECTION 5: APPEARANCE */}
                     <div className="p-3.5 space-y-3">
                         <div className="text-[11px] font-medium text-[#e4e4e7]">
                             Appearance
@@ -783,60 +812,41 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         )}
                     </div>
 
-                    {/* Common Scene Background (Raylight Hierarchy) */}
-                    <BackgroundSection activeShot={activeShot} />
-
-                    {/* Common Scene Post-Processing Stack (Raylight Hierarchy) */}
-                    <SceneEffectsSection activeShot={activeShot} />
-
-                    {/* Export Shot Quick Action */}
-                    <div className="p-3.5">
-                        <button
-                            type="button"
-                            onClick={onOpenExportModal}
-                            className="w-full py-2 px-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/[0.08] text-white font-medium text-xs flex items-center justify-center gap-2 cursor-pointer transition shadow-sm"
-                        >
-                            <Upload className="w-3.5 h-3.5 text-[#0088ff]" />
-                            <span>Export shot</span>
-                        </button>
-                    </div>
+                    {/* Per Raylight Academy: Select the scene itself, or its bottom layer, to show Scene Effects & Background */}
+                    {isBottomLayerSelected && (
+                        <>
+                            <BackgroundSection activeShot={activeShot} />
+                            <SceneEffectsSection activeShot={activeShot} />
+                        </>
+                    )}
                 </div>
             )}
 
-            {/* TAB 1 (SCENE / CANVAS SELECTED): DESIGN HIERARCHY */}
+            {/* =================================================================== */}
+            {/* TAB 1 (SHOT / SCENE SELECTED): SHOT DESIGN HIERARCHY                */}
+            {/* =================================================================== */}
             {mainTab === 'design' && !selectedLayer && (
                 <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                    {/* Scene Summary Header */}
                     <div className="p-3.5 space-y-1">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-semibold text-white">
-                                {activeShot.name || 'Scene 1'}
+                                {activeShot.name || 'Shot 1'}
                             </span>
                             <span className="text-[10px] font-mono text-[#0088ff] bg-[#0088ff]/10 px-1.5 py-0.5 rounded">
                                 {(activeShot.durationMs / 1000).toFixed(2)}s
                             </span>
                         </div>
                         <span className="text-[10px] text-[#71717a] block">
-                            Camera, Lighting &amp; Scene Optics
+                            Shot Camera, Lighting, Background &amp; Scene Effects
                         </span>
                     </div>
 
-                    {/* Camera & Optics */}
                     <CameraSection activeShot={activeShot} />
-
-                    {/* Physical Lighting */}
                     <LightingSection activeShot={activeShot} />
-
-                    {/* Background */}
                     <BackgroundSection activeShot={activeShot} />
-
-                    {/* Post-Processing Effects Stack */}
                     <SceneEffectsSection activeShot={activeShot} />
-
-                    {/* Scene Transitions */}
                     <SceneTransitionSection activeShot={activeShot} />
 
-                    {/* Export Shot Button */}
                     <div className="p-3.5">
                         <button
                             type="button"
@@ -851,11 +861,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             )}
 
             {/* =================================================================== */}
-            {/* TAB 2: ANIMATE (Exact Match to Screenshot 2)                        */}
+            {/* TAB 2: ANIMATE (WHEN A LAYER IS SELECTED)                           */}
             {/* =================================================================== */}
             {mainTab === 'animate' && selectedLayer && (
                 <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                    {/* 1. ANIMATIONS HEADER WITH + PICKER */}
                     <div className="p-3.5 relative">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium text-[#e4e4e7]">
@@ -894,7 +903,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         )}
                     </div>
 
-                    {/* 2. ACTIVE ANIMATION BLOCK CARDS (Matches "Position animation" in Screenshot 2) */}
                     {selectedLayer.blocks.map((blk) => {
                         const isVec = typeof blk.amount === 'object';
                         const isAngle =
@@ -910,13 +918,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     <button
                                         onClick={() => handleDeleteBlock(blk.id)}
                                         className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
-                                        title="Remove animation block"
                                     >
                                         <X className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
-                                {/* Position X / Y / Z 3-Column Inputs */}
                                 <div className="space-y-1.5">
                                     <span className="text-[10px] text-[#71717a] block capitalize">
                                         {blk.property}
@@ -1005,7 +1011,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     )}
                                 </div>
 
-                                {/* Direction [ <- | -> ] Segmented Toggle (Matching Screenshot 2) */}
                                 {isVec && (
                                     <div className="space-y-1.5">
                                         <span className="text-[10px] text-[#71717a] block">
@@ -1048,7 +1053,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     </div>
                                 )}
 
-                                {/* Easing Dropdown + Curve Sliders Button */}
                                 <div className="space-y-1.5">
                                     <span className="text-[10px] text-[#71717a] block">
                                         Easing
@@ -1100,33 +1104,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             <option value="preset:linear">Linear</option>
                                             <option value="bezier">Custom Cubic-Bezier</option>
                                         </select>
-                                        <button
-                                            onClick={() =>
-                                                handleUpdateBlock(blk.id, {
-                                                    easing:
-                                                        blk.easing.kind === 'bezier'
-                                                            ? { kind: 'preset', name: 'ease-in-out' }
-                                                            : {
-                                                                kind: 'bezier',
-                                                                x1: 0.16,
-                                                                y1: 1,
-                                                                x2: 0.3,
-                                                                y2: 1,
-                                                            },
-                                                })
-                                            }
-                                            className="p-1.5 text-[#71717a] hover:text-white cursor-pointer"
-                                            title="Toggle Custom Bezier Handles"
-                                        >
-                                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                                        </button>
                                     </div>
                                 </div>
                             </div>
                         );
                     })}
 
-                    {/* 3. IN SECTION (Matching Screenshot 2: "In +" and "[Fade] [Eye] [-]") */}
+                    {/* IN SECTION */}
                     <div className="p-3.5 space-y-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium text-[#e4e4e7]">In</span>
@@ -1138,7 +1122,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     }))
                                 }
                                 className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                title="Add Entrance Preset"
                             >
                                 <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -1191,13 +1174,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             ...l,
                                             entrance: {
                                                 ...l.entrance,
-                                                durationMs:
-                                                    l.entrance.durationMs === 0 ? 650 : 0,
+                                                durationMs: l.entrance.durationMs === 0 ? 650 : 0,
                                             },
                                         }))
                                     }
                                     className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                    title="Toggle Entrance Visibility"
                                 >
                                     {selectedLayer.entrance.durationMs === 0 ? (
                                         <EyeOff className="w-3.5 h-3.5" />
@@ -1214,7 +1195,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         }))
                                     }
                                     className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                    title="Remove Entrance"
                                 >
                                     <Minus className="w-3.5 h-3.5" />
                                 </button>
@@ -1222,7 +1202,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         )}
                     </div>
 
-                    {/* 4. OUT SECTION ("Out +") */}
+                    {/* OUT SECTION */}
                     <div className="p-3.5 space-y-2.5">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium text-[#e4e4e7]">
@@ -1236,7 +1216,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     }))
                                 }
                                 className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                title="Add Exit Preset"
                             >
                                 <Plus className="w-3.5 h-3.5" />
                             </button>
@@ -1282,7 +1261,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         }))
                                     }
                                     className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                    title="Remove Exit"
                                 >
                                     <Minus className="w-3.5 h-3.5" />
                                 </button>
@@ -1292,10 +1270,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 </div>
             )}
 
-            {/* TAB 2 (SCENE / CANVAS SELECTED): ANIMATE HIERARCHY */}
+            {/* =================================================================== */}
+            {/* TAB 2 (SHOT / SCENE SELECTED): SHOT CAMERA & TRANSITION ANIMATION   */}
+            {/* =================================================================== */}
             {mainTab === 'animate' && !selectedLayer && (
                 <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                    {/* Scene Camera Framing Moves */}
                     <div className="p-3.5 space-y-3">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] font-medium text-[#e4e4e7]">
@@ -1308,7 +1287,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     const f2 = activeShot.framings?.[1]?.id || f1;
                                     const newBlock: CameraBlock = {
                                         id: `cam-blk-${Date.now()}`,
-                                        label: `Camera Move ${(activeShot.cameraBlocks?.length || 0) + 1}`,
+                                        label: `Camera Move ${(activeShot.cameraBlocks?.length || 0) + 1
+                                            }`,
                                         startMs: 200,
                                         durationMs: 2000,
                                         fromFramingId: f1,
@@ -1328,7 +1308,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </button>
                         </div>
 
-                        {(!activeShot.cameraBlocks || activeShot.cameraBlocks.length === 0) ? (
+                        {!activeShot.cameraBlocks ||
+                            activeShot.cameraBlocks.length === 0 ? (
                             <div className="text-[11px] text-[#71717a] py-3 text-center bg-[#141418] rounded-lg border border-white/[0.04]">
                                 No camera moves animated. Click + to add dynamic camera motions!
                             </div>
@@ -1341,7 +1322,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-[11px] font-medium text-white">
-                                                {cb.label}
+                                                {cb.label || 'Camera Move'}
                                             </span>
                                             <button
                                                 type="button"
@@ -1398,7 +1379,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         )}
                     </div>
 
-                    {/* Scene Transition Timing & Curve */}
                     <SceneTransitionSection activeShot={activeShot} />
                 </div>
             )}

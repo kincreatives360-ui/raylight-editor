@@ -32,6 +32,8 @@ import { SelectionOverlay } from './SelectionOverlay';
 import { Guides, type SnapGuideLine } from './Guides';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
+import * as THREE from 'three';
+import { getLayerProjectedCorners } from './webgl/cameraMath';
 
 export const ASPECT_RATIO_CONFIG: Record<
     AspectRatio,
@@ -135,6 +137,7 @@ export const Stage: React.FC<StageProps> = ({
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const stageFrameRef = useRef<HTMLDivElement | null>(null);
+    const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
 
     const [viewportSize, setViewportSize] = useState({ width: 880, height: 540 });
     const [activeGuides, setActiveGuides] = useState<SnapGuideLine[]>([]);
@@ -150,6 +153,12 @@ export const Stage: React.FC<StageProps> = ({
         y: number;
         w: number;
         h: number;
+    } | null>(null);
+    const [marqueeBox, setMarqueeBox] = useState<{
+        startX: number;
+        startY: number;
+        currentX: number;
+        currentY: number;
     } | null>(null);
 
     // Dismiss context menu on click outside or Escape
@@ -355,15 +364,17 @@ export const Stage: React.FC<StageProps> = ({
                 if (activeTool === 'text') {
                     created = addLayerToShot(frame.activeShot.id, 'text', {
                         position: { x: fracX, y: fracY, z: 0.1 },
-                        ...(fracW ? { maxWidth: fracW } : {}),
+                        maxWidth: fracW || 0.45,
+                        inMs: 0,
+                        outMs: frame.activeShot.durationMs,
                     });
                 } else if (activeTool === 'image') {
                     created = addLayerToShot(frame.activeShot.id, 'image', {
                         position: { x: fracX, y: fracY, z: 0 },
-                        rotation: { x: 0, y: 0, z: 0 }, // Drop flat when drawn
-                        ...(fracW && fracH
-                            ? { size: { width: fracW, height: fracH } }
-                            : {}),
+                        rotation: { x: 0, y: 0, z: 0 },
+                        size: { width: fracW || 0.45, height: fracH || 0.3 },
+                        inMs: 0,
+                        outMs: frame.activeShot.durationMs,
                     });
                 } else {
                     const shapeKind =
@@ -375,9 +386,12 @@ export const Stage: React.FC<StageProps> = ({
                     created = addLayerToShot(frame.activeShot.id, 'shape', {
                         shape: shapeKind,
                         position: { x: fracX, y: fracY, z: 0.1 },
-                        ...(fracW && fracH
-                            ? { size: { width: fracW, height: fracH } }
-                            : {}),
+                        size: {
+                            width: fracW || (shapeKind === 'line' ? 0.35 : 0.28),
+                            height: fracH || (shapeKind === 'line' ? 0.015 : 0.18),
+                        },
+                        inMs: 0,
+                        outMs: frame.activeShot.durationMs,
                     });
                 }
 
@@ -390,7 +404,79 @@ export const Stage: React.FC<StageProps> = ({
             return;
         }
 
-        // 3. Clicking empty workspace deselects layers (so right sidebar shows Project settings)
+        // 3. Select Tool (V): Dragging on empty stage frame initiates Marquee Multi-Selection
+        if (activeTool === 'select' && stageFrameRef.current) {
+            const rect = stageFrameRef.current.getBoundingClientRect();
+            if (
+                e.clientX >= rect.left &&
+                e.clientX <= rect.right &&
+                e.clientY >= rect.top &&
+                e.clientY <= rect.bottom
+            ) {
+                const startX = (e.clientX - rect.left) / canvasZoom;
+                const startY = (e.clientY - rect.top) / canvasZoom;
+                const isMulti = e.shiftKey || e.metaKey || e.ctrlKey;
+
+                setMarqueeBox({ startX, startY, currentX: startX, currentY: startY });
+                let latestMarquee = { startX, startY, currentX: startX, currentY: startY };
+
+                const onMove = (moveEv: MouseEvent) => {
+                    const curX = (moveEv.clientX - rect.left) / canvasZoom;
+                    const curY = (moveEv.clientY - rect.top) / canvasZoom;
+                    latestMarquee = { startX, startY, currentX: curX, currentY: curY };
+                    setMarqueeBox({ startX, startY, currentX: curX, currentY: curY });
+                };
+
+                const onUp = () => {
+                    window.removeEventListener('mousemove', onMove);
+                    window.removeEventListener('mouseup', onUp);
+                    setMarqueeBox(null);
+
+                    const left = Math.min(latestMarquee.startX, latestMarquee.currentX);
+                    const right = Math.max(latestMarquee.startX, latestMarquee.currentX);
+                    const top = Math.min(latestMarquee.startY, latestMarquee.currentY);
+                    const bottom = Math.max(latestMarquee.startY, latestMarquee.currentY);
+                    const w = right - left;
+                    const h = bottom - top;
+
+                    if (w < 8 && h < 8) {
+                        if (!isMulti) clearLayerSelection();
+                        return;
+                    }
+
+                    const aspect = frameWidth / Math.max(frameHeight, 1);
+                    const hitLayerIds: string[] = [];
+
+                    for (const l of frame.layers) {
+                        if (!l.visible) continue;
+                        const proj = getLayerProjectedCorners(l, cameraRef.current, frameWidth, frameHeight, aspect);
+                        const inBox =
+                            (proj.pCenter.x >= left && proj.pCenter.x <= right && proj.pCenter.y >= top && proj.pCenter.y <= bottom) ||
+                            proj.corners.some((c) => c.x >= left && c.x <= right && c.y >= top && c.y <= bottom);
+                        if (inBox) {
+                            hitLayerIds.push(l.id);
+                        }
+                    }
+
+                    if (hitLayerIds.length > 0) {
+                        if (isMulti) {
+                            const merged = Array.from(new Set([...selectedLayerIds, ...hitLayerIds]));
+                            setSelectedLayerIds(merged);
+                        } else {
+                            setSelectedLayerIds(hitLayerIds);
+                        }
+                    } else if (!isMulti) {
+                        clearLayerSelection();
+                    }
+                };
+
+                window.addEventListener('mousemove', onMove);
+                window.addEventListener('mouseup', onUp);
+                return;
+            }
+        }
+
+        // 4. Clicking empty workspace deselects layers
         clearLayerSelection();
     };
 
@@ -627,6 +713,7 @@ export const Stage: React.FC<StageProps> = ({
                             selectedLayerIds={selectedLayerIds}
                             onSelectLayer={handleSelectLayerWithDeepSelect}
                             onPointerMissed={() => clearLayerSelection()}
+                            cameraRef={cameraRef}
                         />
                     </div>
 
@@ -723,15 +810,25 @@ export const Stage: React.FC<StageProps> = ({
 
                         {eff.filmGrain.enabled && (
                             <div
-                                className="absolute inset-0 mix-blend-overlay"
+                                className="absolute inset-0 mix-blend-overlay pointer-events-none"
                                 style={{
-                                    opacity: Math.min(0.6, eff.filmGrain.intensity * 3.5),
-                                    backgroundImage:
-                                        'radial-gradient(circle, rgba(255,255,255,0.4) 1px, transparent 1px)',
-                                    backgroundSize: `${3 + (frame.frameNumber % 3)}px ${3 + ((frame.frameNumber + 1) % 3)
-                                        }px`,
+                                    opacity: Math.min(0.35, (eff.filmGrain?.intensity ?? 0.02) * 2.5),
                                 }}
-                            />
+                            >
+                                <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
+                                    <filter id="cinematic-film-grain">
+                                        <feTurbulence
+                                            type="fractalNoise"
+                                            baseFrequency="0.8"
+                                            numOctaves="3"
+                                            stitchTiles="stitch"
+                                            seed={frame.frameNumber % 100}
+                                        />
+                                        <feColorMatrix type="saturate" values="0" />
+                                    </filter>
+                                    <rect width="100%" height="100%" filter="url(#cinematic-film-grain)" />
+                                </svg>
+                            </div>
                         )}
                     </div>
 
@@ -759,7 +856,20 @@ export const Stage: React.FC<StageProps> = ({
                         />
                     )}
 
-                    {/* TOP SURFACE: Crisp 2D Selection Gizmo & Multi-Select Overlay */}
+                    {/* On-Canvas Marquee Box Multi-Selection */}
+                    {marqueeBox && (
+                        <div
+                            className="absolute border-2 border-dashed border-sky-400 bg-sky-500/15 rounded pointer-events-none z-40"
+                            style={{
+                                left: `${Math.min(marqueeBox.startX, marqueeBox.currentX)}px`,
+                                top: `${Math.min(marqueeBox.startY, marqueeBox.currentY)}px`,
+                                width: `${Math.abs(marqueeBox.currentX - marqueeBox.startX)}px`,
+                                height: `${Math.abs(marqueeBox.currentY - marqueeBox.startY)}px`,
+                            }}
+                        />
+                    )}
+
+                    {/* TOP SURFACE: 3D-Aware Selection Gizmo & Multi-Select Overlay */}
                     <SelectionOverlay
                         frame={frame}
                         selectedLayerIds={selectedLayerIds}
@@ -768,6 +878,7 @@ export const Stage: React.FC<StageProps> = ({
                         snapEnabled={snapEnabled}
                         onUpdateGuides={setActiveGuides}
                         onSelectLayer={handleSelectLayerWithDeepSelect}
+                        cameraRef={cameraRef}
                     />
 
                     {/* Scene Key Light Pin: Only visible when actively inspecting Scene & Light Rig */}

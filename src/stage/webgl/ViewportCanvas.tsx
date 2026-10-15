@@ -1,8 +1,12 @@
-import React from 'react';
-import { Canvas } from '@react-three/fiber';
+// src/stage/webgl/ViewportCanvas.tsx
+import React, { useEffect } from 'react';
+import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project } from '../../model/types';
-import type { EvaluatedProjectFrame, EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
+import type {
+    EvaluatedProjectFrame,
+    EvaluatedLayerWithEffects,
+} from '../../engine/evaluateShot';
 import { SceneBackground } from './SceneBackground';
 import { SceneLighting } from './SceneLighting';
 import { ViewportCamera } from './ViewportCamera';
@@ -17,6 +21,19 @@ interface ViewportCanvasProps {
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
 
+const ViewportRenderBridge: React.FC<{
+    frame: EvaluatedProjectFrame;
+    selectedLayerIds: string[];
+}> = ({ frame, selectedLayerIds }) => {
+    const { invalidate } = useThree();
+
+    useEffect(() => {
+        invalidate();
+    }, [frame, selectedLayerIds, invalidate]);
+
+    return null;
+};
+
 export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     project,
     frame,
@@ -27,6 +44,8 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
 }) => {
     const activeShot = frame.activeShot;
     const layers: EvaluatedLayerWithEffects[] = frame.layers;
+    const activeBackground =
+        (activeShot as any)?.background ?? project.background;
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
@@ -38,6 +57,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 gl={{
                     antialias: true,
                     alpha: true,
+                    preserveDrawingBuffer: true,
                     toneMapping: THREE.NoToneMapping,
                     outputColorSpace: THREE.SRGBColorSpace,
                     powerPreference: 'high-performance',
@@ -45,24 +65,33 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 style={{ width: '100%', height: '100%', display: 'block' }}
                 onPointerMissed={onPointerMissed}
             >
-                {/* 1. Camera System */}
+                <ViewportRenderBridge
+                    frame={frame}
+                    selectedLayerIds={selectedLayerIds}
+                />
+
+                {/* 1. Time-Evaluated 3D Camera (Supports Dolly, Zoom & Dolly-Zoom!) */}
                 <ViewportCamera
-                    framing={activeShot?.framings?.[0]}
+                    evaluatedCamera={frame.camera}
                     defaultCamera={{
-                        position: { x: 0, y: 0, z: 2.65 },
-                        rotation: { x: 0, y: 0, z: 0 },
-                        focalLength: (activeShot as any)?.camera?.focalLength ?? 50,
+                        position: project.defaultCamera?.position ?? {
+                            x: 0,
+                            y: 0,
+                            z: 2.65,
+                        },
+                        rotation: project.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                        focalLength: project.defaultCamera?.focalLength ?? 50,
                     }}
                     cameraRef={cameraRef}
                 />
 
-                {/* 2. Physical Scene Lighting */}
+                {/* 2. Physical Scene Lighting with shadows and Kelvin temperature */}
                 <SceneLighting light={activeShot?.light} />
 
-                {/* 3. Infinite Background Plane */}
-                <SceneBackground background={project.background} />
+                {/* 3. Shot-Aware Background Plane */}
+                <SceneBackground background={activeBackground} />
 
-                {/* 4. 3D Scene Objects / Layers */}
+                {/* 4. 3D Scene Objects / Layers with Depth Awareness */}
                 <group name="raylight_layers_root">
                     {layers.map((evalLayer) => (
                         <ThreeLayerObject
