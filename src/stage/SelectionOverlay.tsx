@@ -14,8 +14,8 @@ import { computeSmartSnap, type SnapGuideLine } from './Guides';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
+    evaluateCameraPose,
     getLayerProjectedCorners,
-    getReferencePlaneDimensions,
 } from './webgl/cameraMath';
 
 interface SelectionOverlayProps {
@@ -42,6 +42,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     cameraRef,
 }) => {
     const {
+        project,
         updateLayer,
         updateShot,
         recordAnimatedBlockAtPlayhead,
@@ -67,27 +68,15 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const isLocked = layer.locked;
 
     const aspect = frameWidth / Math.max(frameHeight, 1);
-    const { planeW, planeH } = getReferencePlaneDimensions(
-        aspect,
-        DEFAULT_CAMERA_Z,
-        DEFAULT_FOCAL_LENGTH
-    );
-
-    const zoom = Math.max(0.15, frame.camera.zoom || 1);
-    const cameraPose = {
-        position: {
-            x: frame.camera.target.x * planeW,
-            y: -frame.camera.target.y * planeH,
-            z: DEFAULT_CAMERA_Z / zoom + (frame.camera.target.z || 0),
-        },
-        rotation: {
-            x: frame.camera.rotation.x,
-            y: frame.camera.rotation.y,
-            z: frame.camera.rotation.z,
-        },
-        focalLength: frame.camera.focalLength ?? DEFAULT_FOCAL_LENGTH,
-        fov: frame.camera.fovDegrees || 27.0006,
+    const defaultCamera = project.defaultCamera || {
+        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+        rotation: { x: 0, y: 0, z: 0 },
+        focalLength: DEFAULT_FOCAL_LENGTH,
     };
+    const cameraPose = evaluateCameraPose(frame.camera, defaultCamera, aspect);
+    const refCameraZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
+    const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
+    const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
     const primaryProj = getLayerProjectedCorners(
         primaryEval,
@@ -95,7 +84,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         frameWidth,
         frameHeight,
         aspect,
-        cameraPose
+        cameraPose,
+        refCameraZ,
+        refFocalLength
     );
 
     const rotXDeg = radToDeg(primaryEval.rotation.x);
@@ -451,6 +442,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             e.clientX - centerClientX
         );
         const initialZRad = layer.rotation.z;
+        let prevAngle = startAngle;
+        let accumulatedDelta = 0;
         let lastDeltaRad = 0;
 
         const onMouseMove = (moveEvent: MouseEvent) => {
@@ -458,11 +451,15 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 moveEvent.clientY - centerClientY,
                 moveEvent.clientX - centerClientX
             );
-            const deltaAngle = currentAngle - startAngle;
+            let diff = currentAngle - prevAngle;
+            while (diff > Math.PI) diff -= 2 * Math.PI;
+            while (diff < -Math.PI) diff += 2 * Math.PI;
+            prevAngle = currentAngle;
+            accumulatedDelta += diff;
 
             if (isAnimateMode) {
-                const stepRad = deltaAngle - lastDeltaRad;
-                lastDeltaRad = deltaAngle;
+                const stepRad = accumulatedDelta - lastDeltaRad;
+                lastDeltaRad = accumulatedDelta;
                 if (Math.abs(stepRad) > 0.001) {
                     const blkId = recordAnimatedBlockAtPlayhead(
                         activeShot.id,
@@ -483,7 +480,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 layer.id,
                 (l) => ({
                     ...l,
-                    rotation: { ...l.rotation, z: initialZRad + deltaAngle },
+                    rotation: { ...l.rotation, z: initialZRad + accumulatedDelta },
                 }),
                 { skipHistory: true }
             );
@@ -614,7 +611,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         frameWidth,
                         frameHeight,
                         aspect,
-                        cameraPose
+                        cameraPose,
+                        refCameraZ,
+                        refFocalLength
                     );
                     const pts = `${secProj.pNW.x},${secProj.pNW.y} ${secProj.pNE.x},${secProj.pNE.y} ${secProj.pSE.x},${secProj.pSE.y} ${secProj.pSW.x},${secProj.pSW.y}`;
                     return (

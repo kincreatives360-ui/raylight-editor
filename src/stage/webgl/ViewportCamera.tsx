@@ -6,7 +6,7 @@ import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
-    getReferencePlaneDimensions,
+    evaluateCameraPose,
     type DefaultCameraConfig,
 } from './cameraMath';
 
@@ -28,36 +28,18 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
     const { camera, size, invalidate } = useThree();
     const aspect = size.width / Math.max(size.height, 1);
 
-    const baseZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
-    const focalLength =
-        evaluatedCamera.focalLength ??
-        defaultCamera.focalLength ??
-        DEFAULT_FOCAL_LENGTH;
-
-    const { planeW, planeH } = getReferencePlaneDimensions(
-        aspect,
-        baseZ,
-        DEFAULT_FOCAL_LENGTH
-    );
-
-    const zoom = Math.max(0.15, evaluatedCamera.zoom || 1);
-    const camX =
-        (defaultCamera.position?.x ?? 0) + evaluatedCamera.target.x * planeW;
-    const camY =
-        (defaultCamera.position?.y ?? 0) - evaluatedCamera.target.y * planeH;
-    const camZ = baseZ / zoom + (evaluatedCamera.target.z || 0);
-    const camFov = evaluatedCamera.fovDegrees || 27.0006;
+    const pose = evaluateCameraPose(evaluatedCamera, defaultCamera, aspect);
 
     useLayoutEffect(() => {
         if (camera instanceof THREE.PerspectiveCamera) {
-            camera.position.set(camX, camY, camZ);
+            camera.position.set(pose.position.x, pose.position.y, pose.position.z);
             camera.rotation.set(
-                (defaultCamera.rotation?.x ?? 0) + evaluatedCamera.rotation.x,
-                (defaultCamera.rotation?.y ?? 0) + evaluatedCamera.rotation.y,
-                (defaultCamera.rotation?.z ?? 0) + evaluatedCamera.rotation.z
+                pose.rotation.x,
+                pose.rotation.y,
+                pose.rotation.z
             );
-            if (Math.abs(camera.fov - camFov) > 0.001) {
-                camera.fov = camFov;
+            if (Math.abs(camera.fov - pose.fov) > 0.001) {
+                camera.fov = pose.fov;
             }
             camera.updateMatrixWorld(true);
             camera.updateProjectionMatrix();
@@ -69,23 +51,20 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
         }
     }, [
         camera,
-        camX,
-        camY,
-        camZ,
-        camFov,
-        evaluatedCamera.rotation.x,
-        evaluatedCamera.rotation.y,
-        evaluatedCamera.rotation.z,
-        defaultCamera.rotation?.x,
-        defaultCamera.rotation?.y,
-        defaultCamera.rotation?.z,
+        pose.position.x,
+        pose.position.y,
+        pose.position.z,
+        pose.rotation.x,
+        pose.rotation.y,
+        pose.rotation.z,
+        pose.fov,
         cameraRef,
         invalidate,
     ]);
 
     useEffect(() => {
         invalidate();
-    }, [camX, camY, camZ, camFov, invalidate]);
+    }, [pose.position.x, pose.position.y, pose.position.z, pose.fov, invalidate]);
 
     return null;
 };

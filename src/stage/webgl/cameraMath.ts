@@ -1,6 +1,7 @@
 // src/stage/webgl/cameraMath.ts
 import * as THREE from 'three';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
+import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 
 export interface CameraFraming {
     id?: string;
@@ -43,7 +44,7 @@ export function getReferencePlaneDimensions(
 }
 
 export function evaluateCameraPose(
-    framing?: CameraFraming,
+    evaluatedCamera?: EvaluatedCamera | CameraFraming,
     defaultCamera: DefaultCameraConfig = {
         position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
         rotation: { x: 0, y: 0, z: 0 },
@@ -52,15 +53,33 @@ export function evaluateCameraPose(
     aspect: number = 16 / 9
 ): EvaluatedCameraPose {
     const baseZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
-    const focalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
-    const fov = focalLengthToFov(focalLength);
-    const { planeW, planeH } = getReferencePlaneDimensions(aspect, baseZ, focalLength);
+    const focalLength =
+        (evaluatedCamera as EvaluatedCamera)?.focalLength ??
+        defaultCamera.focalLength ??
+        DEFAULT_FOCAL_LENGTH;
+    const fov =
+        (evaluatedCamera as EvaluatedCamera)?.fovDegrees ?? focalLengthToFov(focalLength);
+    const { planeW, planeH } = getReferencePlaneDimensions(
+        aspect,
+        baseZ,
+        DEFAULT_FOCAL_LENGTH
+    );
 
-    const zoom = Math.max(0.15, framing?.zoom ?? 1);
-    const targetX = (framing?.target?.x ?? 0) * planeW;
+    const zoom = Math.max(0.15, evaluatedCamera?.zoom ?? 1);
+    const targetX = (evaluatedCamera?.target?.x ?? 0) * planeW;
     // Invert Y because screen/model +Y is down, whereas Three.js +Y is up
-    const targetY = -(framing?.target?.y ?? 0) * planeH;
-    const targetZ = framing?.target?.z ?? 0;
+    const targetY = -(evaluatedCamera?.target?.y ?? 0) * planeH;
+    const targetZ = evaluatedCamera?.target?.z ?? 0;
+
+    const rotX =
+        (defaultCamera.rotation?.x ?? 0) +
+        ((evaluatedCamera as EvaluatedCamera)?.rotation?.x ?? 0);
+    const rotY =
+        (defaultCamera.rotation?.y ?? 0) +
+        ((evaluatedCamera as EvaluatedCamera)?.rotation?.y ?? 0);
+    const rotZ =
+        (defaultCamera.rotation?.z ?? 0) +
+        ((evaluatedCamera as EvaluatedCamera)?.rotation?.z ?? 0);
 
     return {
         position: {
@@ -69,9 +88,9 @@ export function evaluateCameraPose(
             z: baseZ / zoom + targetZ,
         },
         rotation: {
-            x: defaultCamera.rotation?.x ?? 0,
-            y: defaultCamera.rotation?.y ?? 0,
-            z: defaultCamera.rotation?.z ?? 0,
+            x: rotX,
+            y: rotY,
+            z: rotZ,
         },
         focalLength,
         fov,
@@ -109,18 +128,20 @@ export function getLayerProjectedCorners(
     frameWidth: number,
     frameHeight: number,
     aspect: number,
-    cameraPose?: EvaluatedCameraPose
+    cameraPose?: EvaluatedCameraPose,
+    refCameraZ: number = DEFAULT_CAMERA_Z,
+    refFocalLength: number = DEFAULT_FOCAL_LENGTH
 ) {
     const { worldX, worldY, worldZ, meshW, meshH } = getLayer3DWorldTransform(
         evalLayer,
         aspect,
-        DEFAULT_CAMERA_Z,
-        DEFAULT_FOCAL_LENGTH
+        refCameraZ,
+        refFocalLength
     );
 
     // Build a deterministic PerspectiveCamera matching the exact current frame state
     const vCam = new THREE.PerspectiveCamera(
-        cameraPose?.fov ?? focalLengthToFov(DEFAULT_FOCAL_LENGTH),
+        cameraPose?.fov ?? focalLengthToFov(refFocalLength),
         aspect,
         0.05,
         100
@@ -138,7 +159,7 @@ export function getLayerProjectedCorners(
             cameraPose.rotation.z
         );
     } else {
-        vCam.position.set(0, 0, DEFAULT_CAMERA_Z);
+        vCam.position.set(0, 0, refCameraZ);
     }
     vCam.updateMatrixWorld(true);
     vCam.updateProjectionMatrix();

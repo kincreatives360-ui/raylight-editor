@@ -498,7 +498,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
                         },
                         filmGrain: {
                             ...createDefaultEffects().filmGrain,
-                            enabled: false,
+                            enabled: true,
                             intensity: 0.04,
                         },
                         chromaticAberration: {

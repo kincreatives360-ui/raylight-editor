@@ -33,7 +33,12 @@ import { Guides, type SnapGuideLine } from './Guides';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
-import { getLayerProjectedCorners } from './webgl/cameraMath';
+import {
+    DEFAULT_CAMERA_Z,
+    DEFAULT_FOCAL_LENGTH,
+    evaluateCameraPose,
+    getLayerProjectedCorners,
+} from './webgl/cameraMath';
 
 export const ASPECT_RATIO_CONFIG: Record<
     AspectRatio,
@@ -445,11 +450,28 @@ export const Stage: React.FC<StageProps> = ({
                     }
 
                     const aspect = frameWidth / Math.max(frameHeight, 1);
+                    const defaultCam = project.defaultCamera || {
+                        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+                        rotation: { x: 0, y: 0, z: 0 },
+                        focalLength: DEFAULT_FOCAL_LENGTH,
+                    };
+                    const cameraPose = evaluateCameraPose(frame.camera, defaultCam, aspect);
+                    const refCameraZ = defaultCam.position?.z ?? DEFAULT_CAMERA_Z;
+                    const refFocalLength = defaultCam.focalLength ?? DEFAULT_FOCAL_LENGTH;
                     const hitLayerIds: string[] = [];
 
                     for (const l of frame.layers) {
                         if (!l.visible) continue;
-                        const proj = getLayerProjectedCorners(l, cameraRef.current, frameWidth, frameHeight, aspect);
+                        const proj = getLayerProjectedCorners(
+                            l,
+                            cameraRef.current,
+                            frameWidth,
+                            frameHeight,
+                            aspect,
+                            cameraPose,
+                            refCameraZ,
+                            refFocalLength
+                        );
                         const inBox =
                             (proj.pCenter.x >= left && proj.pCenter.x <= right && proj.pCenter.y >= top && proj.pCenter.y <= bottom) ||
                             proj.corners.some((c) => c.x >= left && c.x <= right && c.y >= top && c.y <= bottom);

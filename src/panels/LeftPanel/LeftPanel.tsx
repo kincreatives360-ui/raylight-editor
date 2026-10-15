@@ -18,7 +18,7 @@ import {
     Music,
     Activity,
 } from 'lucide-react';
-import type { Shot, Layer, Group } from '../../model/types';
+import type { Shot, Layer, Group, ImageLayer } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -916,6 +916,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                     <button
                                         onClick={(e) => {
                                             e.stopPropagation();
+                                            const isAssetInUse = project.shots.some((shot) =>
+                                                shot.layers.some(
+                                                    (l) => l.kind === 'image' && (l as ImageLayer).assetId === asset.id
+                                                )
+                                            );
+                                            if (isAssetInUse) {
+                                                const confirmed = window.confirm(
+                                                    `Asset "${asset.name}" is currently used in one or more layers. Are you sure you want to delete it?`
+                                                );
+                                                if (!confirmed) return;
+                                            }
                                             updateProject((proj) => {
                                                 const copy = { ...proj.assets };
                                                 delete copy[asset.id];

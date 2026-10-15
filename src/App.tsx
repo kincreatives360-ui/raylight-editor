@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, X, Sparkles, LayoutTemplate } from 'lucide-react';
 import type { Layer } from './model/types';
-import { degToRad } from './model/defaults';
+import { degToRad, DEFAULT_PROJECT } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
 import { useSelectionStore } from './store/useSelectionStore';
@@ -93,7 +93,7 @@ export default function App() {
     () =>
       project.shots.reduce(
         (max, s) => Math.max(max, s.startMs + s.durationMs),
-        18000
+        0
       ),
     [project.shots]
   );
@@ -594,7 +594,9 @@ export default function App() {
   ) => {
     if (templateKind === 'iphone-hero') {
       resetProject();
-      updateShot(activeShot.id, (s) => ({
+      setCurrentTimeMs(0);
+      const targetShotId = DEFAULT_PROJECT.shots[0].id;
+      updateShot(targetShotId, (s) => ({
         ...s,
         layers: s.layers.map((l, idx) =>
           idx === 0 && l.kind === 'image'
@@ -621,7 +623,9 @@ export default function App() {
       }));
     } else if (templateKind === 'macbook-float') {
       resetProject();
-      updateShot(activeShot.id, (s) => ({
+      setCurrentTimeMs(0);
+      const targetShotId = DEFAULT_PROJECT.shots[0].id;
+      updateShot(targetShotId, (s) => ({
         ...s,
         layers: s.layers.map((l, idx) =>
           idx === 0 && l.kind === 'image'
