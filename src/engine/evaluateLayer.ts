@@ -1,317 +1,167 @@
 // src/engine/evaluateLayer.ts
-import type { Layer, Vec3, Transitionish } from '../model/types';
+import type { Layer, Vec3, Size2D } from '../model/types';
 import { evaluateEasing } from './easing';
-
-function clamp(val: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, val));
-}
 
 export interface EvaluatedLayer {
     id: string;
     name: string;
     kind: Layer['kind'];
-    layer: Layer;
+    order: number;
     visible: boolean;
     position: Vec3;
-    rotation: Vec3; // In radians
+    rotation: Vec3;
     scale: Vec3;
-    size: { width: number; height: number };
+    size: Size2D;
     opacity: number;
-    maskSweepProgress: number; // 0 to 1 (1 = fully revealed)
-    shimmerProgress: number;   // 0 to 1 (light sweep across surface)
-    pathRevealProgress: number; // 0 to 1 (1 = fully revealed)
-    counterValue?: number;     // evaluated counter number
-    glowBoost: number;         // extra glow added by animation blocks
-    activeBlockIds: string[];
-    phase: 'before-in' | 'entering' | 'steady' | 'exiting' | 'after-out';
+    cornerRadius: number;
+    extraLayerBlur: number;
+    maskSweepProgress: number;
+    shimmerProgress: number;
+    layer: Layer;
 }
 
-// Helper to apply an Entrance or Exit transition offset
-function applyTransitionOffset(
-    transition: Transitionish,
-    progress: number, // 0 = completely hidden/off-place, 1 = resting at base state
-    pos: Vec3,
-    scale: Vec3,
-    opacity: number,
-    maskSweep: number
-): { opacity: number; maskSweep: number } {
-    const inv = 1 - progress; // How far away from resting state (1 at start of entrance, 0 at end)
-    let nextOpacity = opacity;
-    let nextMask = maskSweep;
-
-    switch (transition.type) {
-        case 'none':
-            break;
-        case 'fade':
-            nextOpacity *= progress;
-            break;
-        case 'slide':
-        case 'slide-up':
-            pos.y += transition.distance * inv;
-            nextOpacity *= progress;
-            break;
-        case 'slide-down':
-            pos.y -= transition.distance * inv;
-            nextOpacity *= progress;
-            break;
-        case 'slide-left':
-            pos.x += transition.distance * inv;
-            nextOpacity *= progress;
-            break;
-        case 'slide-right':
-            pos.x -= transition.distance * inv;
-            nextOpacity *= progress;
-            break;
-        case 'float-out':
-            pos.z -= transition.distance * 2 * inv;
-            pos.y += transition.distance * 0.5 * inv;
-            nextOpacity *= progress;
-            break;
-        case 'scale-out':
-            scale.x *= 0.65 + 0.35 * progress;
-            scale.y *= 0.65 + 0.35 * progress;
-            nextOpacity *= progress;
-            break;
-        case 'mask-sweep':
-            nextMask = Math.min(nextMask, progress);
-            break;
-    }
-
-    return { opacity: nextOpacity, maskSweep: nextMask };
-}
-
-// Pure Function: Layer + shotTimeMs -> Exact EvaluatedLayer State
 export function evaluateLayerAtTime(
     layer: Layer,
-    shotTimeMs: number
+    shotLocalTimeMs: number
 ): EvaluatedLayer {
-    const baseSize =
-        layer.kind === 'text'
-            ? { width: layer.maxWidth, height: layer.font.size * 2 }
-            : { ...layer.size };
+    const withinWindow =
+        !layer.hidden &&
+        shotLocalTimeMs >= layer.inMs &&
+        shotLocalTimeMs <= layer.outMs;
 
-    // Check if shotTimeMs is outside the layer's [inMs, outMs] timeline bar
-    if (layer.hidden || shotTimeMs < layer.inMs || shotTimeMs > layer.outMs) {
-        return {
-            id: layer.id,
-            name: layer.name,
-            kind: layer.kind,
-            layer,
-            visible: false,
-            position: { ...layer.position },
-            rotation: { ...layer.rotation },
-            scale: { ...layer.scale },
-            size: baseSize,
-            opacity: 0,
-            maskSweepProgress: 1,
-            shimmerProgress: 0,
-            pathRevealProgress: 1,
-            counterValue: undefined,
-            glowBoost: 0,
-            activeBlockIds: [],
-            phase: shotTimeMs < layer.inMs ? 'before-in' : 'after-out',
-        };
-    }
-
-    // Start from the layer's Base Recipe numbers
     const position: Vec3 = { ...layer.position };
     const rotation: Vec3 = { ...layer.rotation };
     const scale: Vec3 = { ...layer.scale };
-    const size = { ...baseSize };
+    const size: Size2D =
+        layer.kind === 'text'
+            ? { width: layer.maxWidth, height: layer.font.size * 2.5 }
+            : { ...layer.size };
+
     let opacity = layer.opacity;
+    let cornerRadius = layer.kind !== 'text' ? layer.cornerRadius : 0;
+    let extraLayerBlur = 0;
     let maskSweepProgress = 1;
     let shimmerProgress = 0;
-    let pathRevealProgress = 1;
-    let counterValue: number | undefined = undefined;
-    let glowBoost = 0;
-    let phase: EvaluatedLayer['phase'] = 'steady';
 
-    // 1. Evaluate Entrance Transition(s) - stackable
-    const allEntrances =
-        layer.entrances && layer.entrances.length > 0
-            ? layer.entrances
-            : layer.entrance && layer.entrance.type !== 'none'
-                ? [layer.entrance]
-                : [];
-
-    for (const ent of allEntrances) {
-        if (ent.type === 'none' || ent.durationMs <= 0) continue;
+    // 1. Evaluate Entrance Transition (In)
+    const ent = layer.entrance;
+    if (ent.type !== 'none' && ent.durationMs > 0) {
         const entStart = layer.inMs + (ent.delayMs || 0);
-        const entEnd = entStart + ent.durationMs;
+        const rawP = (shotLocalTimeMs - entStart) / ent.durationMs;
+        if (rawP < 1) {
+            const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ent.easing);
+            const inv = 1 - p;
+            const dist = ent.distance ?? 0.18;
 
-        if (shotTimeMs < entStart) {
-            phase = 'entering';
-            const res = applyTransitionOffset(
-                ent,
-                0,
-                position,
-                scale,
-                opacity,
-                maskSweepProgress
-            );
-            opacity = res.opacity;
-            maskSweepProgress = res.maskSweep;
-        } else if (shotTimeMs <= entEnd) {
-            phase = 'entering';
-            const raw = (shotTimeMs - entStart) / ent.durationMs;
-            const eased = evaluateEasing(raw, ent.easing);
-            const res = applyTransitionOffset(
-                ent,
-                eased,
-                position,
-                scale,
-                opacity,
-                maskSweepProgress
-            );
-            opacity = res.opacity;
-            maskSweepProgress = res.maskSweep;
+            if (ent.type === 'fade') opacity *= p;
+            else if (ent.type === 'slide-up') {
+                opacity *= p;
+                position.y += dist * inv;
+            } else if (ent.type === 'slide-down') {
+                opacity *= p;
+                position.y -= dist * inv;
+            } else if (ent.type === 'slide-left') {
+                opacity *= p;
+                position.x += dist * inv;
+            } else if (ent.type === 'slide-right') {
+                opacity *= p;
+                position.x -= dist * inv;
+            } else if (ent.type === 'float-out') {
+                opacity *= p;
+                position.z -= dist * inv;
+            } else if (ent.type === 'scale-out') {
+                opacity *= p;
+                scale.x *= 0.7 + 0.3 * p;
+                scale.y *= 0.7 + 0.3 * p;
+            } else if (ent.type === 'mask-sweep') {
+                maskSweepProgress = Math.min(maskSweepProgress, p);
+            }
         }
     }
 
-    // 2. Evaluate Stacked Relative ("Amount") Animation Blocks
-    const activeBlockIds: string[] = [];
-    const sortedBlocks = [...layer.blocks].sort((a, b) => a.startMs - b.startMs);
+    // 2. Evaluate Exit Transition (Out)
+    const ext = layer.exit;
+    if (ext.type !== 'none' && ext.durationMs > 0) {
+        const extEnd = layer.outMs - (ext.delayMs || 0);
+        const extStart = extEnd - ext.durationMs;
+        if (shotLocalTimeMs > extStart) {
+            const rawP = (shotLocalTimeMs - extStart) / ext.durationMs;
+            const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ext.easing);
+            const dist = ext.distance ?? 0.16;
 
-    for (const block of sortedBlocks) {
-        if (shotTimeMs < block.startMs) continue;
-
-        const blockEnd = block.startMs + block.durationMs;
-        const isCurrentlyInside =
-            shotTimeMs >= block.startMs && shotTimeMs <= blockEnd;
-        if (isCurrentlyInside) {
-            activeBlockIds.push(block.id);
+            if (ext.type === 'fade') opacity *= 1 - p;
+            else if (ext.type === 'slide-up') {
+                opacity *= 1 - p;
+                position.y -= dist * p;
+            } else if (ext.type === 'slide-down') {
+                opacity *= 1 - p;
+                position.y += dist * p;
+            } else if (ext.type === 'slide-left') {
+                opacity *= 1 - p;
+                position.x -= dist * p;
+            } else if (ext.type === 'slide-right') {
+                opacity *= 1 - p;
+                position.x += dist * p;
+            } else if (ext.type === 'float-out') {
+                opacity *= 1 - p;
+                position.z += dist * p;
+            } else if (ext.type === 'scale-out') {
+                opacity *= 1 - p;
+                scale.x *= 1 - 0.3 * p;
+                scale.y *= 1 - 0.3 * p;
+            } else if (ext.type === 'mask-sweep') {
+                maskSweepProgress = Math.min(maskSweepProgress, 1 - p);
+            }
         }
+    }
 
-        const rawProgress =
-            block.durationMs > 0
-                ? clamp((shotTimeMs - block.startMs) / block.durationMs, 0, 1)
+    // 3. Evaluate Relative Animation Blocks (During)
+    for (const blk of layer.blocks) {
+        if (shotLocalTimeMs < blk.startMs) continue;
+        const rawP =
+            blk.durationMs > 0
+                ? Math.max(0, Math.min(1, (shotLocalTimeMs - blk.startMs) / blk.durationMs))
                 : 1;
-        const eased = evaluateEasing(rawProgress, block.easing);
+        const eased = evaluateEasing(rawP, blk.easing);
 
-        switch (block.property) {
-            case 'position': {
-                if (typeof block.amount === 'object') {
-                    position.x += block.amount.x * eased;
-                    position.y += block.amount.y * eased;
-                    position.z += block.amount.z * eased;
-                }
-                break;
+        if (
+            (blk.property === 'position' || blk.property === 'followPath') &&
+            typeof blk.amount === 'object'
+        ) {
+            position.x += blk.amount.x * eased;
+            position.y += blk.amount.y * eased;
+            position.z += blk.amount.z * eased;
+        } else if (
+            (blk.property === 'rotation' || blk.property === 'tilt') &&
+            typeof blk.amount === 'object'
+        ) {
+            rotation.x += blk.amount.x * eased;
+            rotation.y += blk.amount.y * eased;
+            rotation.z += blk.amount.z * eased;
+        } else if (blk.property === 'scale') {
+            if (typeof blk.amount === 'number') {
+                scale.x += blk.amount * eased;
+                scale.y += blk.amount * eased;
+            } else {
+                scale.x += blk.amount.x * eased;
+                scale.y += blk.amount.y * eased;
             }
-            case 'followPath': {
-                // Curved trajectory rather than plain linear addition
-                if (typeof block.amount === 'object') {
-                    const dx = block.amount.x;
-                    const dy = block.amount.y;
-                    const dz = block.amount.z;
-
-                    // Base travel
-                    const baseX = dx * eased;
-                    const baseY = dy * eased;
-                    const baseZ = dz * eased;
-
-                    // Curvature: smooth arc offset perpendicular to direction
-                    const arc = Math.sin(Math.PI * eased);
-                    const perpX = -dy * 0.45 * arc;
-                    const perpY = dx * 0.45 * arc;
-                    const perpZ = Math.sin(Math.PI * 2 * eased) * 0.1 * arc;
-
-                    position.x += baseX + perpX;
-                    position.y += baseY + perpY;
-                    position.z += baseZ + perpZ;
-                } else if (typeof block.amount === 'number') {
-                    const arc = Math.sin(Math.PI * eased);
-                    position.x += block.amount * eased;
-                    position.y += block.amount * 0.35 * arc;
-                }
-                break;
-            }
-            case 'rotation':
-            case 'tilt': {
-                if (typeof block.amount === 'object') {
-                    rotation.x += block.amount.x * eased;
-                    rotation.y += block.amount.y * eased;
-                    rotation.z += block.amount.z * eased;
-                }
-                break;
-            }
-            case 'scale': {
-                if (typeof block.amount === 'number') {
-                    scale.x += block.amount * eased;
-                    scale.y += block.amount * eased;
-                } else {
-                    scale.x += block.amount.x * eased;
-                    scale.y += block.amount.y * eased;
-                    scale.z += block.amount.z * eased;
-                }
-                break;
-            }
-            case 'size': {
-                if (typeof block.amount === 'object') {
-                    size.width = Math.max(0.01, size.width + block.amount.x * eased);
-                    size.height = Math.max(0.01, size.height + block.amount.y * eased);
-                }
-                break;
-            }
-            case 'opacity': {
-                if (typeof block.amount === 'number') {
-                    opacity = clamp(opacity + block.amount * eased, 0, 1);
-                }
-                break;
-            }
-            case 'maskSweep': {
-                maskSweepProgress = clamp(eased, 0, 1);
-                break;
-            }
-            case 'shimmer': {
-                // Shimmer only sweeps while the playhead is inside the block
-                if (isCurrentlyInside) {
-                    shimmerProgress = eased;
-                }
-                break;
-            }
-            case 'counter': {
-                const delta = typeof block.amount === 'number' ? block.amount : block.amount.x;
-                counterValue = (counterValue ?? 0) + delta * eased;
-                break;
-            }
-            case 'pathReveal': {
-                pathRevealProgress = clamp(eased, 0, 1);
-                break;
-            }
-            case 'glow': {
-                const delta = typeof block.amount === 'number' ? block.amount : block.amount.x;
-                glowBoost += delta * eased;
-                break;
-            }
-        }
-    }
-
-    // 3. Evaluate Exit Transition(s) - stackable
-    const allExits =
-        layer.exits && layer.exits.length > 0
-            ? layer.exits
-            : layer.exit && layer.exit.type !== 'none'
-                ? [layer.exit]
-                : [];
-
-    for (const ext of allExits) {
-        if (ext.type === 'none' || ext.durationMs <= 0) continue;
-        const extStart = Math.max(layer.inMs, layer.outMs - ext.durationMs);
-        if (shotTimeMs >= extStart) {
-            phase = 'exiting';
-            const rawExit = (shotTimeMs - extStart) / ext.durationMs;
-            const easedExit = evaluateEasing(rawExit, ext.easing);
-            const remaining = 1 - easedExit; // Goes from 1 down to 0
-            const res = applyTransitionOffset(
-                ext,
-                remaining,
-                position,
-                scale,
-                opacity,
-                maskSweepProgress
-            );
-            opacity = res.opacity;
-            maskSweepProgress = res.maskSweep;
+        } else if (blk.property === 'size' && typeof blk.amount === 'object') {
+            size.width = Math.max(0.02, size.width + blk.amount.x * eased);
+            size.height = Math.max(0.02, size.height + blk.amount.y * eased);
+        } else if (blk.property === 'opacity' && typeof blk.amount === 'number') {
+            opacity = Math.max(0, Math.min(1, opacity + blk.amount * eased));
+        } else if (
+            blk.property === 'cornerRadius' &&
+            typeof blk.amount === 'number'
+        ) {
+            cornerRadius = Math.max(0, Math.min(0.5, cornerRadius + blk.amount * eased));
+        } else if (blk.property === 'layerBlur' && typeof blk.amount === 'number') {
+            extraLayerBlur = Math.max(0, extraLayerBlur + blk.amount * eased);
+        } else if (blk.property === 'maskSweep' && typeof blk.amount === 'number') {
+            maskSweepProgress = Math.max(0, Math.min(1, eased * blk.amount));
+        } else if (blk.property === 'shimmer') {
+            shimmerProgress = rawP < 1 ? eased : 0;
         }
     }
 
@@ -319,34 +169,17 @@ export function evaluateLayerAtTime(
         id: layer.id,
         name: layer.name,
         kind: layer.kind,
+        order: layer.order,
+        visible: withinWindow && opacity > 0.001,
+        position,
+        rotation,
+        scale,
+        size,
+        opacity: Math.max(0, Math.min(1, opacity)),
+        cornerRadius,
+        extraLayerBlur,
+        maskSweepProgress,
+        shimmerProgress,
         layer,
-        visible: opacity > 0.001,
-        position: {
-            x: Number(position.x.toFixed(5)),
-            y: Number(position.y.toFixed(5)),
-            z: Number(position.z.toFixed(5)),
-        },
-        rotation: {
-            x: Number(rotation.x.toFixed(5)),
-            y: Number(rotation.y.toFixed(5)),
-            z: Number(rotation.z.toFixed(5)),
-        },
-        scale: {
-            x: Number(scale.x.toFixed(4)),
-            y: Number(scale.y.toFixed(4)),
-            z: Number(scale.z.toFixed(4)),
-        },
-        size: {
-            width: Number(size.width.toFixed(4)),
-            height: Number(size.height.toFixed(4)),
-        },
-        opacity: Number(clamp(opacity, 0, 1).toFixed(4)),
-        maskSweepProgress: Number(clamp(maskSweepProgress, 0, 1).toFixed(4)),
-        shimmerProgress: Number(clamp(shimmerProgress, 0, 1).toFixed(4)),
-        pathRevealProgress: Number(clamp(pathRevealProgress, 0, 1).toFixed(4)),
-        counterValue: counterValue !== undefined ? Number(counterValue.toFixed(2)) : undefined,
-        glowBoost: Number(glowBoost.toFixed(3)),
-        activeBlockIds,
-        phase,
     };
 }

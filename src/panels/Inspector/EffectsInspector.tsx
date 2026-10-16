@@ -548,7 +548,7 @@ export const EffectsInspector: React.FC<EffectsInspectorProps> = ({ activeShot }
                         />
                         <ScrubInput
                             label="Blur Samples"
-                            value={mb.samples}
+                            value={mb.samples ?? 8}
                             min={1}
                             max={32}
                             step={1}
@@ -655,7 +655,7 @@ export const EffectsInspector: React.FC<EffectsInspectorProps> = ({ activeShot }
                         <div className="grid grid-cols-2 gap-2">
                             <ScrubInput
                                 label="Left Fade"
-                                value={edgeFade.left}
+                                value={edgeFade.left ?? 0}
                                 min={0}
                                 max={0.5}
                                 step={0.02}
@@ -666,7 +666,7 @@ export const EffectsInspector: React.FC<EffectsInspectorProps> = ({ activeShot }
                             />
                             <ScrubInput
                                 label="Right Fade"
-                                value={edgeFade.right}
+                                value={edgeFade.right ?? 0}
                                 min={0}
                                 max={0.5}
                                 step={0.02}

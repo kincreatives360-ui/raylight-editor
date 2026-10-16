@@ -1794,7 +1794,7 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                         </div>
                         <ScrubInput
                             label="Lens Focal Length"
-                            value={project.defaultCamera.focalLength}
+                            value={project.defaultCamera?.focalLength ?? 50}
                             min={20}
                             max={120}
                             step={1}
@@ -1803,7 +1803,11 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                             onChange={(focalLength) =>
                                 updateProject((p) => ({
                                     ...p,
-                                    defaultCamera: { ...p.defaultCamera, focalLength },
+                                    defaultCamera: {
+                                        position: p.defaultCamera?.position ?? { x: 0, y: 0, z: 2.2 },
+                                        rotation: p.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                                        focalLength,
+                                    },
                                 }))
                             }
                         />

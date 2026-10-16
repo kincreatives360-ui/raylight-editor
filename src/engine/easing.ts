@@ -144,6 +144,9 @@ export function evaluatePreset(name: PresetEasingName, t: number): number {
             if (x < 2.5 / d1) return n1 * (x -= 2.25 / d1) * x + 0.9375;
             return n1 * (x -= 2.625 / d1) * x + 0.984375;
         }
+
+        default:
+            return t;
     }
 }
 
@@ -167,6 +170,8 @@ export function evaluateEasing(progress: number, easing: Easing): number {
                 easing.y2,
                 clamped
             );
+        default:
+            return clamped;
     }
 }
 

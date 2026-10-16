@@ -1,31 +1,17 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-    Play,
-    Pause,
-    Video,
-    Sun,
-    Plus,
-    ChevronRight,
-    ChevronDown,
-    ArrowLeft,
-} from 'lucide-react';
-import type { Shot, Layer, CameraBlock } from '../../model/types';
+import { Play, Pause, Plus } from 'lucide-react';
+import type { Shot, Layer, AnimationBlock, CameraBlock } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { ShotTrack } from './ShotTrack';
-import { CameraBlockItem } from './CameraBlockItem';
-import { BlockItem } from './BlockItem';
 
 interface TimelineProps {
-    activeShot?: Shot;
     totalDurationMs: number;
     audioLabel: string;
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
-    activeShot: activeShotProp,
     totalDurationMs,
     audioLabel,
 }) => {
@@ -33,7 +19,8 @@ export const Timeline: React.FC<TimelineProps> = ({
         project,
         updateShot,
         updateLayer,
-        splitShotAtPlayhead,
+        addShot,
+        addLayerToShot,
         beginDragTransaction,
         commitDragTransaction,
     } = useProjectStore();
@@ -49,62 +36,50 @@ export const Timeline: React.FC<TimelineProps> = ({
         selectedShotId,
         selectedLayerIds,
         selectedBlockId,
+        selectedCameraBlockId,
+        selectedPresetType,
         timelineView,
         timelineZoom,
+        timelineHeightPx,
+        timelineScrollTop,
         expandedTimelineLayerIds,
         selectShot,
         selectLayer,
         selectBlock,
+        selectCameraBlock,
+        selectPreset,
+        setInspectorTab,
         setTimelineView,
         setTimelineZoom,
-        toggleTimelineLayerExpanded,
+        setTimelineHeightPx,
+        setTimelineScrollTop,
     } = useSelectionStore();
 
     const trackRef = useRef<HTMLDivElement | null>(null);
     const [dragging, setDragging] = useState(false);
-    const [timelineHeight, setTimelineHeight] = useState(250);
 
     const activeShot =
-        activeShotProp ??
         project.shots.find((shot) => shot.id === selectedShotId) ??
         project.shots[0];
 
-    const selectedLayer =
-        activeShot?.layers.find((l) => selectedLayerIds.includes(l.id)) ||
-        activeShot?.layers[0];
+    // Sync vertical scroll position with LeftPanel's lower track rack
+    useEffect(() => {
+        const el = trackRef.current;
+        if (el && Math.abs(el.scrollTop - timelineScrollTop) > 1) {
+            el.scrollTop = timelineScrollTop;
+        }
+    }, [timelineScrollTop]);
 
-    // Compute durations & scaling
     const visibleDurationMs =
         timelineView === 'scene' && activeShot
             ? Math.max(4500, activeShot.durationMs + 700)
-            : Math.max(totalDurationMs + 1000, 8000);
+            : Math.max(18000, totalDurationMs + 3500);
 
     const pxPerSecond =
-        timelineView === 'scene' ? 160 * timelineZoom : 50 * timelineZoom;
+        timelineView === 'scene' ? 155 * timelineZoom : 45 * timelineZoom;
     const pxPerMs = pxPerSecond / 1000;
-    const timelineWidth = Math.max(760, visibleDurationMs * pxPerMs + 100);
+    const timelineWidth = Math.max(760, visibleDurationMs * pxPerMs + 60);
 
-    // Dynamic top edge resize handler
-    const handleResizerMouseDown = (e: React.MouseEvent) => {
-        e.preventDefault();
-        const startY = e.clientY;
-        const startH = timelineHeight;
-
-        const onMouseMove = (ev: MouseEvent) => {
-            const deltaY = startY - ev.clientY; // dragging up increases height
-            setTimelineHeight(Math.max(160, Math.min(520, startH + deltaY)));
-        };
-
-        const onMouseUp = () => {
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
-    };
-
-    // Ruler marks matching Raylight
     const rulerMarks = useMemo(() => {
         const stepMs = timelineView === 'scene' ? 1000 : 2000;
         const marks: { timeMs: number; isHalf?: boolean }[] = [];
@@ -116,98 +91,34 @@ export const Timeline: React.FC<TimelineProps> = ({
         return marks;
     }, [visibleDurationMs, timelineView]);
 
-    // Keyboard shortcuts: Q (in), W (out), C / Cmd+B (cut), Shift+Z (fit)
-    useEffect(() => {
-        const onKeyDown = (e: KeyboardEvent) => {
-            const tag = document.activeElement?.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
-            const key = e.key.toLowerCase();
+    // Top Splitter Drag: Expand Timeline Up or Contract Down
+    const handleStartResizeTimelineHeight = (e: React.MouseEvent) => {
+        e.preventDefault();
+        const startY = e.clientY;
+        const startHeight = timelineHeightPx;
 
-            if (e.shiftKey && key === 'z' && !e.metaKey && !e.ctrlKey) {
-                e.preventDefault();
-                setTimelineZoom(1);
-                return;
-            }
-
-            if (
-                (key === 'c' && !e.metaKey && !e.ctrlKey) ||
-                ((e.metaKey || e.ctrlKey) && key === 'b')
-            ) {
-                e.preventDefault();
-                if (activeShot) {
-                    const created = splitShotAtPlayhead(activeShot.id, currentTimeMs);
-                    if (created) selectShot(created.id, created.layers[0]?.id);
-                }
-                return;
-            }
-
-            if (
-                key === 'q' &&
-                !e.metaKey &&
-                !e.ctrlKey &&
-                activeShot &&
-                selectedLayer
-            ) {
-                e.preventDefault();
-                const localMs = Math.max(
-                    0,
-                    Math.min(
-                        selectedLayer.outMs - 100,
-                        Math.round(currentTimeMs - activeShot.startMs)
-                    )
-                );
-                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                    ...l,
-                    inMs: localMs,
-                }));
-            }
-
-            if (
-                key === 'w' &&
-                !e.metaKey &&
-                !e.ctrlKey &&
-                activeShot &&
-                selectedLayer
-            ) {
-                e.preventDefault();
-                const localMs = Math.max(
-                    selectedLayer.inMs + 100,
-                    Math.min(
-                        activeShot.durationMs,
-                        Math.round(currentTimeMs - activeShot.startMs)
-                    )
-                );
-                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                    ...l,
-                    outMs: localMs,
-                }));
-            }
+        const onMove = (ev: MouseEvent) => {
+            const deltaY = startY - ev.clientY;
+            setTimelineHeightPx(startHeight + deltaY);
         };
+        const onUp = () => {
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
 
-        window.addEventListener('keydown', onKeyDown);
-        return () => window.removeEventListener('keydown', onKeyDown);
-    }, [
-        activeShot,
-        selectedLayer,
-        currentTimeMs,
-        splitShotAtPlayhead,
-        selectShot,
-        updateLayer,
-        setTimelineZoom,
-    ]);
+    const clientXToLocalMs = (clientX: number): number => {
+        const el = trackRef.current;
+        if (!el) return 0;
+        const rect = el.getBoundingClientRect();
+        const contentX = clientX - rect.left - 16 + el.scrollLeft;
+        return Math.max(0, Math.round(contentX / pxPerMs / 10) * 10);
+    };
 
     const scrubFromClientX = (clientX: number) => {
-        const el = trackRef.current;
-        if (!el) return;
-        const rect = el.getBoundingClientRect();
-        const paddingLeft =
-            parseFloat(window.getComputedStyle(el).paddingLeft) || 0;
-        const contentX = Math.max(
-            0,
-            clientX - rect.left - paddingLeft + el.scrollLeft
-        );
-        const localMs = contentX / pxPerMs;
-
+        const localMs = clientXToLocalMs(clientX);
         if (timelineView === 'scene' && activeShot) {
             setCurrentTimeMs(
                 activeShot.startMs + Math.min(activeShot.durationMs, localMs)
@@ -216,30 +127,6 @@ export const Timeline: React.FC<TimelineProps> = ({
             setCurrentTimeMs(Math.min(totalDurationMs, localMs));
         }
     };
-
-    const handleTimelineScroll = () => {
-        if (!trackRef.current) return;
-        window.dispatchEvent(
-            new CustomEvent('timeline-vertical-scroll', {
-                detail: {
-                    scrollTop: trackRef.current.scrollTop,
-                    source: 'timeline',
-                },
-            })
-        );
-    };
-
-    useEffect(() => {
-        const handleSync = (e: Event) => {
-            const ce = e as CustomEvent;
-            if (ce.detail?.source === 'leftPanel' && trackRef.current) {
-                trackRef.current.scrollTop = ce.detail.scrollTop;
-            }
-        };
-        window.addEventListener('timeline-vertical-scroll', handleSync);
-        return () =>
-            window.removeEventListener('timeline-vertical-scroll', handleSync);
-    }, []);
 
     const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
@@ -253,7 +140,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         window.addEventListener('mouseup', onUp);
     };
 
-    // Layer Bar Drag in Scene View
+    // 1. Drag / Trim Main Layer Bar
     const startLayerBarDrag = (
         e: React.MouseEvent,
         shot: Shot,
@@ -262,6 +149,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     ) => {
         e.preventDefault();
         e.stopPropagation();
+        setInspectorTab('layer');
         selectLayer(layer.id, false);
         const startX = e.clientX;
         const origIn = layer.inMs;
@@ -305,26 +193,236 @@ export const Timeline: React.FC<TimelineProps> = ({
         window.addEventListener('mouseup', onUp);
     };
 
-    // Add new camera framing block
-    const handleAddCameraMove = () => {
-        if (!activeShot) return;
-        const count = activeShot.cameraBlocks.length;
-        const fromFramingId = activeShot.framings[0]?.id || 'framing-1';
-        const toFramingId = activeShot.framings[1]?.id || activeShot.framings[0]?.id || 'framing-2';
-        const newBlock: CameraBlock = {
-            id: `cam-block-${Date.now()}`,
-            label: `Move ${count + 1}`,
-            startMs: Math.min(activeShot.durationMs - 1000, count * 1500),
-            durationMs: 1200,
-            fromFramingId,
-            toFramingId,
-            mode: 'dolly',
-            easing: { kind: 'preset', name: 'ease-out-expo' },
+    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills!
+    const startPresetDrag = (
+        e: React.MouseEvent,
+        shot: Shot,
+        layer: Layer,
+        which: 'entrance' | 'exit',
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectPreset(which, layer.id);
+
+        const startX = e.clientX;
+        const preset = layer[which];
+        const origDelay = preset.delayMs || 0;
+        const origDur = Math.max(100, preset.durationMs || 500);
+        const layerSpan = Math.max(200, layer.outMs - layer.inMs);
+
+        beginDragTransaction();
+        setDragging(true);
+
+        const onMove = (ev: MouseEvent) => {
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+
+            if (which === 'entrance') {
+                let nextDelay = origDelay;
+                let nextDur = origDur;
+                if (mode === 'move') {
+                    nextDelay = Math.max(
+                        0,
+                        Math.min(layerSpan - origDur, origDelay + deltaMs)
+                    );
+                } else if (mode === 'left') {
+                    nextDelay = Math.max(
+                        0,
+                        Math.min(origDelay + origDur - 80, origDelay + deltaMs)
+                    );
+                    nextDur = origDelay + origDur - nextDelay;
+                } else if (mode === 'right') {
+                    nextDur = Math.max(
+                        80,
+                        Math.min(layerSpan - origDelay, origDur + deltaMs)
+                    );
+                }
+                updateLayer(
+                    shot.id,
+                    layer.id,
+                    (l) => ({
+                        ...l,
+                        entrance: {
+                            ...l.entrance,
+                            delayMs: nextDelay,
+                            durationMs: nextDur,
+                        },
+                    }),
+                    { skipHistory: true }
+                );
+            } else {
+                // For exit: delayMs is distance from layer.outMs backward
+                let nextDelay = origDelay;
+                let nextDur = origDur;
+                if (mode === 'move') {
+                    nextDelay = Math.max(
+                        0,
+                        Math.min(layerSpan - origDur, origDelay - deltaMs)
+                    );
+                } else if (mode === 'left') {
+                    nextDur = Math.max(
+                        80,
+                        Math.min(layerSpan - origDelay, origDur - deltaMs)
+                    );
+                } else if (mode === 'right') {
+                    nextDelay = Math.max(
+                        0,
+                        Math.min(origDelay + origDur - 80, origDelay - deltaMs)
+                    );
+                    nextDur = origDelay + origDur - nextDelay;
+                }
+                updateLayer(
+                    shot.id,
+                    layer.id,
+                    (l) => ({
+                        ...l,
+                        exit: {
+                            ...l.exit,
+                            delayMs: nextDelay,
+                            durationMs: nextDur,
+                        },
+                    }),
+                    { skipHistory: true }
+                );
+            }
         };
-        updateShot(activeShot.id, (s) => ({
-            ...s,
-            cameraBlocks: [...s.cameraBlocks, newBlock],
-        }));
+
+        const onUp = () => {
+            commitDragTransaction();
+            setDragging(false);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
+    // 3. Drag / Trim Animation Block
+    const startBlockDrag = (
+        e: React.MouseEvent,
+        shot: Shot,
+        layer: Layer,
+        block: AnimationBlock,
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectBlock(block.id, layer.id);
+        const startX = e.clientX;
+        const origStart = block.startMs;
+        const origDur = block.durationMs;
+        beginDragTransaction();
+        setDragging(true);
+
+        const onMove = (ev: MouseEvent) => {
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+            let nextStart = origStart;
+            let nextDur = origDur;
+
+            if (mode === 'left') {
+                nextStart = Math.max(
+                    0,
+                    Math.min(origStart + origDur - 80, origStart + deltaMs)
+                );
+                nextDur = origStart + origDur - nextStart;
+            } else if (mode === 'right') {
+                nextDur = Math.max(
+                    80,
+                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
+                );
+            } else {
+                nextStart = Math.max(
+                    0,
+                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
+                );
+            }
+
+            updateLayer(
+                shot.id,
+                layer.id,
+                (l) => ({
+                    ...l,
+                    blocks: l.blocks.map((b) =>
+                        b.id === block.id
+                            ? { ...b, startMs: nextStart, durationMs: nextDur }
+                            : b
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        };
+
+        const onUp = () => {
+            commitDragTransaction();
+            setDragging(false);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
+    // 4. Drag / Trim Camera Block
+    const startCameraBlockDrag = (
+        e: React.MouseEvent,
+        shot: Shot,
+        camBlock: CameraBlock,
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectCameraBlock(camBlock.id);
+        const startX = e.clientX;
+        const origStart = camBlock.startMs;
+        const origDur = camBlock.durationMs;
+        beginDragTransaction();
+        setDragging(true);
+
+        const onMove = (ev: MouseEvent) => {
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+            let nextStart = origStart;
+            let nextDur = origDur;
+
+            if (mode === 'left') {
+                nextStart = Math.max(
+                    0,
+                    Math.min(origStart + origDur - 100, origStart + deltaMs)
+                );
+                nextDur = origStart + origDur - nextStart;
+            } else if (mode === 'right') {
+                nextDur = Math.max(
+                    100,
+                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
+                );
+            } else {
+                nextStart = Math.max(
+                    0,
+                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
+                );
+            }
+
+            updateShot(
+                shot.id,
+                (s) => ({
+                    ...s,
+                    cameraBlocks: s.cameraBlocks.map((cb) =>
+                        cb.id === camBlock.id
+                            ? { ...cb, startMs: nextStart, durationMs: nextDur }
+                            : cb
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        };
+
+        const onUp = () => {
+            commitDragTransaction();
+            setDragging(false);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
     };
 
     const playheadDisplayTimeMs =
@@ -332,71 +430,38 @@ export const Timeline: React.FC<TimelineProps> = ({
             ? Math.max(0, currentTimeMs - activeShot.startMs)
             : currentTimeMs;
 
+    const hasCameraBlocks = (activeShot?.cameraBlocks?.length || 0) > 0;
+    const hasLightBlocks = (activeShot?.lightBlocks?.length || 0) > 0;
+
     return (
         <section
-            style={{ height: `${timelineHeight}px` }}
+            style={{ height: `${timelineHeightPx}px` }}
             className="border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0 select-none relative"
         >
-            {/* 0. RESIZER DRAG HANDLE ON TOP EDGE */}
+            {/* TOP VERTICAL RESIZE SPLITTER HANDLE (Drag up for more layer room, down to compact) */}
             <div
-                onMouseDown={handleResizerMouseDown}
-                title="Drag to resize timeline height"
-                className="group absolute inset-x-0 top-0 z-40 flex h-2.5 -translate-y-1/2 cursor-row-resize touch-none items-center justify-center"
+                onMouseDown={handleStartResizeTimelineHeight}
+                title="Drag up or down to resize timeline height"
+                className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-40 group flex items-center justify-center"
             >
-                <div className="w-12 h-1 rounded-full bg-white/20 group-hover:bg-white/60 transition" />
+                <div className="w-12 h-0.5 rounded-full bg-white/15 group-hover:bg-[#0088ff] transition" />
             </div>
 
-            {/* 1. TOP HEADER & CONTROLS */}
-            <div className="h-9 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.05] bg-[#0d0d10]">
-                {/* Left: Play/Pause, Timecode, and Level Switcher */}
-                <div className="flex items-center gap-3">
-                    <button
-                        onClick={togglePlay}
-                        title="Play / Pause (Space)"
-                        className="w-6 h-6 rounded-md hover:bg-white/10 flex items-center justify-center text-white cursor-pointer transition border border-white/20"
-                    >
-                        {isPlaying ? (
-                            <Pause className="w-3 h-3 fill-current" />
-                        ) : (
-                            <Play className="w-3 h-3 ml-0.5 fill-current" />
-                        )}
-                    </button>
+            {/* 1. TOP CONTROL ROW (h-8 = 32px) */}
+            <div className="h-8 px-4 flex items-center justify-between shrink-0">
+                <button
+                    onClick={togglePlay}
+                    title="Play / Pause (Space)"
+                    className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition"
+                >
+                    {isPlaying ? (
+                        <Pause className="w-2.5 h-2.5" />
+                    ) : (
+                        <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
+                    )}
+                </button>
 
-                    {/* Timecode display */}
-                    <div className="text-[11px] font-mono text-[#a1a1aa] flex items-center gap-1 select-none">
-                        <span className="text-white font-semibold">
-                            {(playheadDisplayTimeMs / 1000).toFixed(2)}s
-                        </span>
-                        <span className="text-[#52525b]">/</span>
-                        <span>
-                            {((timelineView === 'scene' && activeShot
-                                ? activeShot.durationMs
-                                : totalDurationMs) / 1000).toFixed(2)}s
-                        </span>
-                    </div>
-
-                    {/* Level Indicator / Breadcrumb Button */}
-                    <div className="flex items-center gap-1.5 ml-2">
-                        {timelineView === 'scene' && activeShot ? (
-                            <button
-                                onClick={() => setTimelineView('video')}
-                                className="flex items-center gap-1 px-2 py-0.5 rounded-full bg-[#0088ff]/15 border border-[#0088ff]/40 text-[#38bdf8] hover:bg-[#0088ff]/25 text-[10px] font-medium transition cursor-pointer"
-                                title="Click to zoom back out to all shots (or press Shift+Z)"
-                            >
-                                <ArrowLeft className="w-2.5 h-2.5" />
-                                <span>Shot: {activeShot.name}</span>
-                            </button>
-                        ) : (
-                            <span className="px-2 py-0.5 rounded-full bg-white/[0.05] text-white/60 text-[10px] font-medium border border-white/10">
-                                Project Overview
-                            </span>
-                        )}
-                    </div>
-                </div>
-
-                {/* Right: Zoom Slider */}
                 <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-mono text-white/40">Zoom</span>
                     <div className="relative w-24 h-1.5 rounded-full bg-[#27272a] flex items-center">
                         <div
                             className="h-full rounded-full bg-[#0088ff]"
@@ -424,163 +489,216 @@ export const Timeline: React.FC<TimelineProps> = ({
                 </div>
             </div>
 
-            {/* 2. SCROLLABLE TIMELINE RULER & TRACKS */}
+            {/* 2. TIME RULER (h-6 = 24px, Total Header = 56px / h-14 matching LeftPanel!) */}
+            <div
+                onMouseDown={handleRulerMouseDown}
+                className="h-6 border-b border-white/[0.06] px-4 relative overflow-hidden cursor-ew-resize shrink-0"
+            >
+                <div
+                    style={{
+                        width: `${timelineWidth}px`,
+                        transform: `translateX(-${trackRef.current?.scrollLeft || 0}px)`,
+                    }}
+                    className="h-full relative text-[10px] font-mono text-[#71717a] pointer-events-none"
+                >
+                    {rulerMarks.map((m) => (
+                        <div
+                            key={m.timeMs}
+                            className="absolute top-1"
+                            style={{ left: `${m.timeMs * pxPerMs}px` }}
+                        >
+                            {m.isHalf ? (
+                                <span className="text-[#52525b]">&middot;</span>
+                            ) : (
+                                <span>{Math.round(m.timeMs / 1000)}s</span>
+                            )}
+                        </div>
+                    ))}
+                </div>
+            </div>
+
+            {/* 3. SCROLL-SYNCED TRACKS BODY */}
             <div
                 ref={trackRef}
+                onScroll={(e) => setTimelineScrollTop(e.currentTarget.scrollTop)}
                 onMouseDown={handleRulerMouseDown}
-                onScroll={handleTimelineScroll}
-                className={`flex-1 overflow-auto relative px-3 ${
-                    dragging ? 'cursor-grabbing' : 'cursor-pointer'
-                }`}
+                className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
+                    }`}
             >
                 <div
                     style={{ width: `${timelineWidth}px`, minWidth: '100%' }}
-                    className="relative min-h-full pb-6"
+                    className="relative min-h-full"
                 >
-                    {/* Time Ruler */}
-                    <div
-                        data-timeline-ruler=""
-                        className="h-5 shrink-0 border-b border-white/[0.08] relative flex items-center text-[9px] font-mono text-[#71717a] pointer-events-none"
-                    >
-                        {rulerMarks.map((m) => (
-                            <div
-                                key={m.timeMs}
-                                className="absolute top-0 flex h-full flex-col items-start"
-                                style={{ left: `${m.timeMs * pxPerMs}px` }}
-                            >
-                                <div className="h-1.5 w-px bg-white/20" />
-                                {m.isHalf ? (
-                                    <span className="mt-px -translate-x-1/2 text-white/30">&middot;</span>
-                                ) : (
-                                    <span className="mt-px -translate-x-1/2 font-mono text-[9px] text-white/60 tabular-nums">
-                                        {Math.round(m.timeMs / 1000)}s
-                                    </span>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-
                     {/* =============================================================== */}
-                    {/* STATE 1: VIDEO LEVEL (Project Sequential Shots & Audio)         */}
+                    {/* STATE 1: ZOOMED-OUT WHOLE VIDEO VIEW                            */}
                     {/* =============================================================== */}
                     {timelineView === 'video' && (
-                        <ShotTrack
-                            shots={project.shots}
-                            activeShotId={activeShot?.id}
-                            pxPerMs={pxPerMs}
-                            audioLabel={audioLabel}
-                            totalDurationMs={totalDurationMs}
-                            onSelectShot={(id) => {
-                                selectShot(id);
-                                const s = project.shots.find((shot) => shot.id === id);
-                                if (s) setCurrentTimeMs(s.startMs);
-                            }}
-                            onZoomIntoShot={(id) => {
-                                selectShot(id);
-                                const s = project.shots.find((shot) => shot.id === id);
-                                if (s) setCurrentTimeMs(s.startMs);
-                                setTimelineView('scene');
-                            }}
-                        />
+                        <div className="space-y-2 pt-2">
+                            <div
+                                title={audioLabel}
+                                className="h-8 rounded-xl border-[1.5px] border-[#ea580c] bg-gradient-to-b from-[#5c2008]/85 to-[#1f0a03]/90 shadow-inner"
+                                style={{
+                                    width: `${Math.max(480, totalDurationMs * pxPerMs)}px`,
+                                }}
+                            />
+
+                            <div className="h-8 relative flex items-center gap-1">
+                                {project.shots.map((shot) => {
+                                    const isSelected = shot.id === activeShot?.id;
+                                    const width = Math.max(95, shot.durationMs * pxPerMs - 4);
+                                    return (
+                                        <div
+                                            key={shot.id}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                selectShot(shot.id);
+                                                setInspectorTab('shot');
+                                                setCurrentTimeMs(shot.startMs + 100);
+                                            }}
+                                            onDoubleClick={(e) => {
+                                                e.stopPropagation();
+                                                selectShot(shot.id);
+                                                setTimelineView('scene');
+                                            }}
+                                            title={`${shot.name} (Double-click to open scene tracks)`}
+                                            style={{ width: `${width}px` }}
+                                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-pointer relative ${isSelected
+                                                    ? 'border-[#0090ff] bg-gradient-to-b from-[#083c6e]/90 to-[#041d38]/90 text-white shadow-[0_0_12px_rgba(0,144,255,0.25)]'
+                                                    : 'border-[#0284c7]/80 bg-gradient-to-b from-[#062c52]/75 to-[#031529]/85 text-sky-200/80 hover:border-[#38bdf8]'
+                                                }`}
+                                        >
+                                            <span className="truncate">{shot.name}</span>
+                                        </div>
+                                    );
+                                })}
+
+                                {/* Click directly on Timeline after last shot to add a Blank Shot! */}
+                                <button
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        const created = addShot();
+                                        selectShot(created.id);
+                                        setInspectorTab('shot');
+                                    }}
+                                    title="Click to add a new blank Shot here"
+                                    className="h-8 px-3 rounded-xl border border-dashed border-white/15 hover:border-[#0088ff] bg-white/[0.02] hover:bg-[#0088ff]/10 text-[#71717a] hover:text-white flex items-center gap-1 text-[11px] cursor-pointer transition"
+                                >
+                                    <Plus className="w-3.5 h-3.5" />
+                                    <span>Add Shot</span>
+                                </button>
+                            </div>
+                        </div>
                     )}
 
                     {/* =============================================================== */}
-                    {/* STATE 2: SCENE LEVEL (Shot Drilldown: Camera, Light, Layers)    */}
+                    {/* STATE 2: ZOOMED-IN SCENE LAYER VIEW (1-to-1 Aligned with LeftPanel!) */}
                     {/* =============================================================== */}
                     {timelineView === 'scene' && activeShot && (
-                        <div className="relative pt-1 space-y-1">
-                            {/* TRACK 1: CAMERA FRAMING TRACK */}
-                            <div className="space-y-0.5">
-                                <div className="h-6 relative flex items-center bg-white/[0.02] rounded px-1.5 border border-white/[0.04]">
-                                    <div className="w-32 flex items-center gap-1.5 text-[10px] font-medium text-sky-400 shrink-0 pointer-events-none">
-                                        <Video className="w-3 h-3 text-sky-400" />
-                                        <span>Camera Track</span>
-                                    </div>
-
-                                    {/* Camera Blocks Container */}
-                                    <div className="flex-1 relative h-5">
-                                        {activeShot.cameraBlocks.map((block) => {
-                                            const fromName =
-                                                activeShot.framings.find((f) => f.id === block.fromFramingId)?.name || 'Framing A';
-                                            const toName =
-                                                activeShot.framings.find((f) => f.id === block.toFramingId)?.name || 'Framing B';
-                                            return (
-                                                <CameraBlockItem
-                                                    key={block.id}
-                                                    shot={{ ...activeShot, startMs: 0 }}
-                                                    cameraBlock={block}
-                                                    fromFramingName={fromName}
-                                                    toFramingName={toName}
-                                                    pxPerMs={pxPerMs}
-                                                    selected={selectedBlockId === block.id}
-                                                    onSelect={() => selectBlock(block.id)}
-                                                    onUpdate={(patch, skipHistory) => {
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            cameraBlocks: s.cameraBlocks.map((b) =>
-                                                                b.id === block.id ? { ...b, ...patch } : b
-                                                            ),
-                                                        }), { skipHistory });
-                                                    }}
-                                                    onDelete={() => {
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== block.id),
-                                                        }));
-                                                    }}
-                                                    beginDragTransaction={beginDragTransaction}
-                                                    commitDragTransaction={commitDragTransaction}
-                                                />
-                                            );
-                                        })}
-
-                                        {activeShot.cameraBlocks.length === 0 && (
-                                            <button
-                                                onClick={handleAddCameraMove}
-                                                className="h-4 px-2 rounded bg-sky-500/10 hover:bg-sky-500/20 border border-sky-500/30 text-sky-300 text-[9px] font-medium flex items-center gap-1 transition cursor-pointer"
+                        <div className="relative space-y-0.5">
+                            {/* 1. Camera Track Row (h-7 = 28px, ONLY rendered when Camera exists!) */}
+                            {hasCameraBlocks && (
+                                <div
+                                    onMouseDown={(e) => e.stopPropagation()}
+                                    onClick={(e) => {
+                                        if (
+                                            (e.target as HTMLElement).closest('[data-cam-pill]')
+                                        )
+                                            return;
+                                        const clickMs = clientXToLocalMs(e.clientX);
+                                        const camId = `cam-blk-${Date.now()}`;
+                                        updateShot(activeShot.id, (s) => ({
+                                            ...s,
+                                            cameraBlocks: [
+                                                ...s.cameraBlocks,
+                                                {
+                                                    id: camId,
+                                                    label: 'Camera Move',
+                                                    startMs: Math.min(s.durationMs - 400, clickMs),
+                                                    durationMs: Math.min(1500, s.durationMs - clickMs),
+                                                    fromFramingId: s.framings[0]?.id || 'f1',
+                                                    toFramingId: s.framings[1]?.id || 'f2',
+                                                    mode: 'dolly',
+                                                    easing: { kind: 'preset', name: 'linear' },
+                                                    from: {
+                                                        anchorX: 0,
+                                                        anchorY: 0,
+                                                        zoom: 1,
+                                                        roll: 0,
+                                                        orbit: 0,
+                                                        tilt: 0,
+                                                    },
+                                                    to: {
+                                                        anchorX: -0.05,
+                                                        anchorY: 0.02,
+                                                        zoom: 1.15,
+                                                        roll: 0,
+                                                        orbit: 0,
+                                                        tilt: 0,
+                                                    },
+                                                    shake: { from: 0, to: 0 },
+                                                },
+                                            ],
+                                        }));
+                                        selectCameraBlock(camId);
+                                    }}
+                                    className="h-7 relative flex items-center"
+                                >
+                                    {activeShot.cameraBlocks.map((cb) => {
+                                        const isCamSelected = selectedCameraBlockId === cb.id;
+                                        const left = cb.startMs * pxPerMs;
+                                        const width = Math.max(36, cb.durationMs * pxPerMs);
+                                        const modeLabel =
+                                            cb.mode === 'dollyzoom'
+                                                ? 'WARP'
+                                                : cb.mode.toUpperCase();
+                                        return (
+                                            <div
+                                                key={cb.id}
+                                                data-cam-pill="true"
+                                                onMouseDown={(e) =>
+                                                    startCameraBlockDrag(e, activeShot, cb, 'move')
+                                                }
+                                                style={{ left: `${left}px`, width: `${width}px` }}
+                                                className={`absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
+                                                        ? 'border-emerald-300 bg-emerald-700/80 text-white shadow'
+                                                        : 'border-emerald-500/70 bg-emerald-950/80 text-emerald-200 hover:border-emerald-400'
+                                                    }`}
                                             >
-                                                <Plus className="w-2.5 h-2.5" />
-                                                <span>Add Camera Move</span>
-                                            </button>
-                                        )}
-                                    </div>
+                                                <span className="truncate pointer-events-none">
+                                                    {modeLabel} · {cb.from?.zoom ?? 1}x &rarr;{' '}
+                                                    {cb.to?.zoom ?? 1.1}x
+                                                </span>
+                                                <span
+                                                    onMouseDown={(e) =>
+                                                        startCameraBlockDrag(e, activeShot, cb, 'left')
+                                                    }
+                                                    className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-l-full"
+                                                />
+                                                <span
+                                                    onMouseDown={(e) =>
+                                                        startCameraBlockDrag(e, activeShot, cb, 'right')
+                                                    }
+                                                    className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-r-full"
+                                                />
+                                            </div>
+                                        );
+                                    })}
                                 </div>
-                            </div>
+                            )}
 
-                            {/* TRACK 2: LIGHTING RIG TRACK */}
-                            <div className="space-y-0.5">
-                                <div className="h-6 relative flex items-center bg-white/[0.02] rounded px-1.5 border border-white/[0.04]">
-                                    <div className="w-32 flex items-center gap-1.5 text-[10px] font-medium text-amber-400 shrink-0 pointer-events-none">
-                                        <Sun className="w-3 h-3 text-amber-400" />
-                                        <span>Lighting Rig</span>
-                                    </div>
+                            {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
+                            {hasLightBlocks && <div className="h-7 relative flex items-center" />}
 
-                                    {/* Lighting Status Pill */}
-                                    <div
-                                        style={{
-                                            left: '128px',
-                                            width: `${Math.max(48, activeShot.durationMs * pxPerMs)}px`,
-                                        }}
-                                        className="absolute h-4 rounded-full border border-amber-500/30 bg-amber-500/10 flex items-center px-2 text-[9px] font-mono text-amber-200 pointer-events-none"
-                                    >
-                                        <span>
-                                            {activeShot.light?.temperature ?? 6500}K • {Math.round((activeShot.light?.intensity ?? 1) * 100)}%
-                                        </span>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {/* TRACK 3...N: PER-LAYER TRACKS */}
+                            {/* 3. Layer Track Rows (h-7 = 28px) + Indented Sub-rows (h-6 = 24px) */}
                             {activeShot.layers
                                 .slice()
                                 .sort((a, b) => b.order - a.order)
                                 .map((layer) => {
                                     const isSelected = selectedLayerIds.includes(layer.id);
-                                    const isExpanded = expandedTimelineLayerIds.includes(layer.id);
-                                    const hasAnimItems =
-                                        layer.entrance.type !== 'none' ||
-                                        layer.exit.type !== 'none' ||
-                                        layer.blocks.length > 0;
+                                    const isExpanded = expandedTimelineLayerIds.includes(
+                                        layer.id
+                                    );
 
                                     const left = layer.inMs * pxPerMs;
                                     const width = Math.max(
@@ -588,135 +706,264 @@ export const Timeline: React.FC<TimelineProps> = ({
                                         (layer.outMs - layer.inMs) * pxPerMs
                                     );
 
-                                    // Raylight layer pill color styling
                                     const barStyle = isSelected
-                                        ? 'border border-[#38bdf8] bg-gradient-to-r from-[#073b63]/95 via-[#0a4f82]/95 to-[#073b63]/95 shadow-[0_0_8px_rgba(56,189,248,0.3)]'
+                                        ? 'border-[1.5px] border-dashed border-[#38bdf8] bg-gradient-to-r from-[#073b63]/90 via-[#0a4f82]/90 to-[#073b63]/90'
                                         : layer.kind === 'text'
-                                        ? 'border border-[#ec4899]/70 bg-gradient-to-r from-[#70153c]/85 via-[#9d174d]/85 to-[#70153c]/85'
-                                        : layer.kind === 'shape'
-                                        ? 'border border-[#6d28d9]/70 bg-gradient-to-r from-[#261447]/85 to-[#1b0e36]/85'
-                                        : 'border border-[#1d4ed8]/70 bg-gradient-to-r from-[#112236]/85 to-[#0d1929]/85';
+                                            ? 'border-[1.5px] border-[#ec4899] bg-gradient-to-r from-[#70153c]/90 via-[#9d174d]/90 to-[#70153c]/90'
+                                            : layer.kind === 'shape'
+                                                ? 'border-[1.5px] border-[#6d28d9] bg-gradient-to-r from-[#261447]/90 to-[#1b0e36]/90'
+                                                : 'border-[1.5px] border-[#1d4ed8]/70 bg-gradient-to-r from-[#112236]/90 to-[#0d1929]/90';
+
+                                    const entStartMs =
+                                        layer.inMs + (layer.entrance.delayMs || 0);
+                                    const entDurMs = Math.max(80, layer.entrance.durationMs || 500);
+
+                                    const extDurMs = Math.max(80, layer.exit.durationMs || 500);
+                                    const extEndMs = layer.outMs - (layer.exit.delayMs || 0);
+                                    const extStartMs = Math.max(layer.inMs, extEndMs - extDurMs);
 
                                     return (
                                         <div key={layer.id} className="space-y-0.5">
-                                            {/* Layer Row */}
+                                            {/* Main Layer Bar Row (h-7 = 28px — NO duplicate text header above it!) */}
                                             <div className="h-7 relative flex items-center">
-                                                {/* Expand / Collapse toggle for animations */}
-                                                {hasAnimItems && (
-                                                    <button
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            toggleTimelineLayerExpanded(layer.id);
-                                                        }}
-                                                        className="absolute -left-1 z-20 p-0.5 rounded hover:bg-white/10 text-white/50 hover:text-white transition"
-                                                        title={isExpanded ? 'Collapse animations' : 'Expand animations'}
-                                                    >
-                                                        {isExpanded ? (
-                                                            <ChevronDown className="w-3 h-3" />
-                                                        ) : (
-                                                            <ChevronRight className="w-3 h-3" />
-                                                        )}
-                                                    </button>
-                                                )}
-
-                                                {/* Main Timing Pill */}
                                                 <div
                                                     onMouseDown={(e) =>
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        selectLayer(layer.id, false);
-                                                    }}
                                                     style={{ left: `${left}px`, width: `${width}px` }}
-                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition flex items-center justify-between px-2 select-none group ${barStyle}`}
+                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle}`}
                                                 >
-                                                    {/* In-point trim handle */}
-                                                    <div
+                                                    <span
                                                         onMouseDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'in')
                                                         }
-                                                        title="Drag to adjust in-point"
-                                                        className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-10"
-                                                    >
-                                                        <div className="w-1 h-3.5 rounded-full bg-white/70" />
-                                                    </div>
-
-                                                    <span className="text-[10px] font-medium text-white truncate pointer-events-none">
-                                                        {layer.name}
-                                                    </span>
-
-                                                    {/* Out-point trim handle */}
-                                                    <div
+                                                        title="Drag left edge to trim layer In point"
+                                                        className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-l-lg"
+                                                    />
+                                                    <span
                                                         onMouseDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'out')
                                                         }
-                                                        title="Drag to adjust out-point"
-                                                        className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize flex items-center justify-center opacity-0 group-hover:opacity-100 transition z-10"
-                                                    >
-                                                        <div className="w-1 h-3.5 rounded-full bg-white/70" />
-                                                    </div>
+                                                        title="Drag right edge to trim layer Out point"
+                                                        className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-r-lg"
+                                                    />
                                                 </div>
                                             </div>
 
-                                            {/* Sub-rows: Entrance, Exit, and Animation Blocks */}
-                                            {isExpanded && hasAnimItems && (
-                                                <div className="space-y-0.5 pl-4 border-l border-white/[0.06] ml-2">
-                                                    {/* Entrance / Exit preset indicator */}
-                                                    {(layer.entrance.type !== 'none' || layer.exit.type !== 'none') && (
-                                                        <div className="h-5 relative flex items-center">
-                                                            {layer.entrance.type !== 'none' && (
-                                                                <div
-                                                                    style={{
-                                                                        left: `${(layer.inMs + layer.entrance.delayMs) * pxPerMs}px`,
-                                                                        width: `${Math.max(28, layer.entrance.durationMs * pxPerMs)}px`,
-                                                                    }}
-                                                                    className="absolute h-3.5 rounded-full border border-[#8b5cf6] bg-[#341a63]/90 flex items-center px-1 text-[8px] font-medium text-purple-200"
-                                                                    title={`In: ${layer.entrance.type} (${layer.entrance.durationMs}ms)`}
-                                                                >
-                                                                    <span className="truncate">In: {layer.entrance.type}</span>
-                                                                </div>
-                                                            )}
-                                                            {layer.exit.type !== 'none' && (
-                                                                <div
-                                                                    style={{
-                                                                        left: `${Math.max(0, layer.outMs - layer.exit.durationMs) * pxPerMs}px`,
-                                                                        width: `${Math.max(28, layer.exit.durationMs * pxPerMs)}px`,
-                                                                    }}
-                                                                    className="absolute h-3.5 rounded-full border border-pink-500/70 bg-pink-900/80 flex items-center px-1 text-[8px] font-medium text-pink-200"
-                                                                    title={`Out: ${layer.exit.type} (${layer.exit.durationMs}ms)`}
-                                                                >
-                                                                    <span className="truncate">Out: {layer.exit.type}</span>
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                    )}
-
-                                                    {/* Motion Keyframe Blocks */}
-                                                    {layer.blocks.map((blk) => (
-                                                        <div key={blk.id} className="h-5 relative flex items-center">
-                                                            <BlockItem
-                                                                shot={{ ...activeShot, startMs: 0 }}
-                                                                block={blk}
-                                                                pxPerMs={pxPerMs}
-                                                                selected={selectedBlockId === blk.id}
-                                                                onSelect={() => selectBlock(blk.id, layer.id)}
-                                                                onUpdate={(patch, skipHistory) => {
-                                                                    updateLayer(
-                                                                        activeShot.id,
-                                                                        layer.id,
-                                                                        (l) => ({
-                                                                            ...l,
-                                                                            blocks: l.blocks.map((b) =>
-                                                                                b.id === blk.id ? { ...b, ...patch } : b
-                                                                            ),
-                                                                        }),
-                                                                        { skipHistory }
-                                                                    );
+                                            {/* Expanded Sub-rows (h-6 = 24px each, aligned 1-to-1 with LeftPanel!) */}
+                                            {isExpanded && (
+                                                <div className="space-y-0.5">
+                                                    {/* ♦ Presets Row: Movable & Resizable In / Out Pills! */}
+                                                    <div
+                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onClick={(e) => {
+                                                            if (
+                                                                (e.target as HTMLElement).closest(
+                                                                    '[data-preset-pill]'
+                                                                )
+                                                            )
+                                                                return;
+                                                            const clickMs = clientXToLocalMs(e.clientX);
+                                                            const midMs = (layer.inMs + layer.outMs) / 2;
+                                                            if (clickMs <= midMs) {
+                                                                updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                    ...l,
+                                                                    entrance: {
+                                                                        ...l.entrance,
+                                                                        type:
+                                                                            l.entrance.type === 'none'
+                                                                                ? 'fade'
+                                                                                : l.entrance.type,
+                                                                        delayMs: Math.max(0, clickMs - l.inMs),
+                                                                        durationMs: 600,
+                                                                    },
+                                                                }));
+                                                                selectPreset('entrance', layer.id);
+                                                            } else {
+                                                                updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                    ...l,
+                                                                    exit: {
+                                                                        ...l.exit,
+                                                                        type:
+                                                                            l.exit.type === 'none'
+                                                                                ? 'fade'
+                                                                                : l.exit.type,
+                                                                        delayMs: Math.max(0, l.outMs - clickMs),
+                                                                        durationMs: 550,
+                                                                    },
+                                                                }));
+                                                                selectPreset('exit', layer.id);
+                                                            }
+                                                        }}
+                                                        title="Click anywhere on this row to place an In or Out transition"
+                                                        className="h-6 relative flex items-center group"
+                                                    >
+                                                        {/* Movable & Resizable IN Pill */}
+                                                        {layer.entrance.type !== 'none' && (
+                                                            <div
+                                                                data-preset-pill="in"
+                                                                onMouseDown={(e) =>
+                                                                    startPresetDrag(
+                                                                        e,
+                                                                        activeShot,
+                                                                        layer,
+                                                                        'entrance',
+                                                                        'move'
+                                                                    )
+                                                                }
+                                                                style={{
+                                                                    left: `${entStartMs * pxPerMs}px`,
+                                                                    width: `${Math.max(28, entDurMs * pxPerMs)}px`,
                                                                 }}
-                                                                beginDragTransaction={beginDragTransaction}
-                                                                commitDragTransaction={commitDragTransaction}
-                                                            />
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab active:cursor-grabbing transition ${isSelected &&
+                                                                        selectedPresetType === 'entrance'
+                                                                        ? 'border-purple-300 bg-purple-700 text-white shadow'
+                                                                        : 'border-[#8b5cf6] bg-[#341a63]/90 text-purple-200 hover:border-purple-400'
+                                                                    }`}
+                                                            >
+                                                                <span className="truncate pointer-events-none">
+                                                                    In: {layer.entrance.type}
+                                                                </span>
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startPresetDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            'entrance',
+                                                                            'left'
+                                                                        )
+                                                                    }
+                                                                    title="Drag left edge to adjust In delay & length"
+                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
+                                                                />
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startPresetDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            'entrance',
+                                                                            'right'
+                                                                        )
+                                                                    }
+                                                                    title="Drag right edge to resize In duration"
+                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
+                                                                />
+                                                            </div>
+                                                        )}
+
+                                                        {/* Movable & Resizable OUT Pill */}
+                                                        {layer.exit.type !== 'none' && (
+                                                            <div
+                                                                data-preset-pill="out"
+                                                                onMouseDown={(e) =>
+                                                                    startPresetDrag(
+                                                                        e,
+                                                                        activeShot,
+                                                                        layer,
+                                                                        'exit',
+                                                                        'move'
+                                                                    )
+                                                                }
+                                                                style={{
+                                                                    left: `${extStartMs * pxPerMs}px`,
+                                                                    width: `${Math.max(28, extDurMs * pxPerMs)}px`,
+                                                                }}
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
+                                                                        ? 'border-pink-300 bg-pink-700 text-white shadow'
+                                                                        : 'border-[#ec4899] bg-[#591636]/90 text-pink-200 hover:border-pink-400'
+                                                                    }`}
+                                                            >
+                                                                <span className="truncate pointer-events-none">
+                                                                    Out: {layer.exit.type}
+                                                                </span>
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startPresetDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            'exit',
+                                                                            'left'
+                                                                        )
+                                                                    }
+                                                                    title="Drag left edge to resize Out duration"
+                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
+                                                                />
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startPresetDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            'exit',
+                                                                            'right'
+                                                                        )
+                                                                    }
+                                                                    title="Drag right edge to adjust Out end point"
+                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
+                                                                />
+                                                            </div>
+                                                        )}
+                                                    </div>
+
+                                                    {/* ♦ Property Block Sub-rows (h-6 = 24px each) */}
+                                                    {layer.blocks.map((blk) => (
+                                                        <div
+                                                            key={blk.id}
+                                                            className="h-6 relative flex items-center"
+                                                        >
+                                                            <div
+                                                                onMouseDown={(e) =>
+                                                                    startBlockDrag(
+                                                                        e,
+                                                                        activeShot,
+                                                                        layer,
+                                                                        blk,
+                                                                        'move'
+                                                                    )
+                                                                }
+                                                                style={{
+                                                                    left: `${blk.startMs * pxPerMs}px`,
+                                                                    width: `${Math.max(
+                                                                        36,
+                                                                        blk.durationMs * pxPerMs
+                                                                    )}px`,
+                                                                }}
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab transition ${selectedBlockId === blk.id
+                                                                        ? 'border-[#c084fc] bg-[#581c87] text-white'
+                                                                        : 'border-[#7c3aed] bg-[#2a1452]/90 text-purple-200 hover:border-[#a855f7]'
+                                                                    }`}
+                                                            >
+                                                                <span className="truncate pointer-events-none">
+                                                                    {blk.label}
+                                                                </span>
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startBlockDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            blk,
+                                                                            'left'
+                                                                        )
+                                                                    }
+                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
+                                                                />
+                                                                <span
+                                                                    onMouseDown={(e) =>
+                                                                        startBlockDrag(
+                                                                            e,
+                                                                            activeShot,
+                                                                            layer,
+                                                                            blk,
+                                                                            'right'
+                                                                        )
+                                                                    }
+                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
+                                                                />
+                                                            </div>
                                                         </div>
                                                     ))}
                                                 </div>
@@ -725,27 +972,40 @@ export const Timeline: React.FC<TimelineProps> = ({
                                     );
                                 })}
 
-                            {/* Dimmed Right-Hand Step-Out Curtain (Click to step back out to Video view) */}
+                            {/* 4. Click-to-Add Layer Row at Bottom of Timeline */}
                             <div
                                 onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    const clickMs = clientXToLocalMs(e.clientX);
+                                    const created = addLayerToShot(activeShot.id, 'shape', {
+                                        inMs: Math.min(activeShot.durationMs - 400, clickMs),
+                                        outMs: activeShot.durationMs,
+                                    });
+                                    setInspectorTab('layer');
+                                    selectLayer(created.id, false);
+                                }}
+                                title="Click anywhere on this row to add a new Layer starting at that timestamp"
+                                className="h-7 relative flex items-center rounded border border-dashed border-transparent hover:border-white/10 hover:bg-white/[0.02] text-[10px] text-[#52525b] hover:text-[#a1a1aa] px-2 cursor-pointer transition"
+                            >
+                                <span>+ Click at any time position to add Layer</span>
+                            </div>
+
+                            {/* Dimmed Right-Hand Step-Out Curtain */}
+                            <div
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     setTimelineView('video');
                                 }}
-                                title="Click dimmed area to step back out to Whole Project"
+                                title="Click dimmed area to step back out to Whole Video view"
                                 style={{ left: `${activeShot.durationMs * pxPerMs + 8}px` }}
-                                className="absolute top-0 bottom-0 right-0 rounded-l-2xl bg-[#090d12]/85 hover:bg-[#121a24]/90 border-l border-white/10 cursor-pointer transition z-10 flex items-center pl-3"
-                            >
-                                <span className="text-[10px] font-medium text-white/40 hover:text-white/80 transition pointer-events-none">
-                                    ← Click to step out
-                                </span>
-                            </div>
+                                className="absolute top-0 bottom-0 right-0 rounded-l-2xl bg-[#16202a]/80 hover:bg-[#1e2c3a]/85 border-l border-white/10 cursor-pointer transition z-10"
+                            />
                         </div>
                     )}
 
-                    {/* Playhead Needle & Floating Badge */}
+                    {/* Playhead Blue Pill Badge & Vertical Line */}
                     <div
-                        className="pointer-events-none absolute top-1 bottom-0 w-[1.75px] bg-gradient-to-b from-[#0088ff] to-[#0088ff]/20 z-30"
+                        className="absolute top-0 bottom-0 w-[1.5px] bg-[#0088ff] z-30 pointer-events-none"
                         style={{ left: `${playheadDisplayTimeMs * pxPerMs}px` }}
                     >
                         <div className="absolute -left-4 top-0 px-1.5 py-0.2 rounded-full bg-[#0088ff] text-white text-[9px] font-mono font-bold shadow">

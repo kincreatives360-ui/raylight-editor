@@ -1,131 +1,173 @@
 // src/model/defaults.ts
 import type {
   Project,
-  ProjectAudio,
   Shot,
   ImageLayer,
   ShapeLayer,
   TextLayer,
-  Effects,
-  EffectKey,
   Transitionish,
+  SceneEffects,
+  EffectKey,
+  LightRig,
+  ProjectAudio,
 } from './types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
 
-// Convert between human-friendly Degrees and 3D-engine Radians
-export function degToRad(degrees: number): number {
-  return Number(((degrees * Math.PI) / 180).toFixed(6));
+export function createDefaultEffects(): SceneEffects {
+  return JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS));
 }
 
-export function radToDeg(radians: number): number {
-  return Number(((radians * 180) / Math.PI).toFixed(2));
+export function createDefaultAudio(): ProjectAudio {
+  return {
+    clips: [],
+    muted: false,
+    masterVolume: 1.0,
+  };
 }
+
+export const degToRad = (degrees: number): number =>
+  Number(((degrees * Math.PI) / 180).toFixed(6));
+
+export const radToDeg = (radians: number): number =>
+  Number(((radians * 180) / Math.PI).toFixed(1));
+
+export const DEFAULT_TRANSITION_IN: Transitionish = {
+  type: 'fade',
+  durationMs: 650,
+  delayMs: 0,
+  distance: 0.16,
+  easing: { kind: 'preset', name: 'ease-out-expo' },
+};
+
+export const DEFAULT_TRANSITION_OUT: Transitionish = {
+  type: 'none',
+  durationMs: 500,
+  delayMs: 0,
+  distance: 0.14,
+  easing: { kind: 'preset', name: 'ease-in-out' },
+};
+
+export const DEFAULT_LIGHT_RIG: LightRig = {
+  position: { x: -0.28, y: 0.36, z: 0.9 },
+  intensity: 1.2,
+  temperature: 6100,
+  ambience: 0.38,
+};
 
 export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
   'depthOfField',
   'bloom',
-  'vignette',
   'motionBlur',
   'chromaticAberration',
+  'colorGrade',
+  'vignette',
   'filmGrain',
   'ghost',
-  'colorGrade',
   'edgeFade',
   'glitch',
 ];
 
-export function createDefaultTransition(
-  type: Transitionish['type'] = 'none',
-  durationMs = 500
-): Transitionish {
-  return {
-    type,
-    durationMs,
-    delayMs: 0,
-    easing: { kind: 'preset', name: 'ease-out' },
-    distance: 0.12,
-  };
-}
-
-export function createDefaultEffects(): Effects {
-  return {
-    depthOfField: {
-      enabled: true,
-      target: { x: 0, y: 0, z: 0 },
-      focusRange: 0.35,
-      aperture: 4.8,
-      bokehScale: 3.5,
-      bokehShape: 'anamorphic',
-      focalLength: 50,
-      highlightThreshold: 0.75,
-      highlightIntensity: 0.5,
-    },
-    bloom: { enabled: true, intensity: 0.3, threshold: 0.7 },
-    vignette: { enabled: true, intensity: 0.58 },
-    motionBlur: { enabled: false, samples: 8, shutterAngle: 180 },
-    chromaticAberration: { enabled: false, offset: 0.002 },
-    filmGrain: { enabled: false, intensity: 0.02, size: 1.0 },
-    ghost: { enabled: false, opacity: 0.2, offset: 0.01, blur: 4 },
-    colorGrade: {
-      enabled: true,
-      exposure: 1.0,
-      contrast: 1.05,
-      saturation: 1.17,
-    },
-    edgeFade: { enabled: false, top: 0, right: 0, bottom: 0, left: 0 },
-    glitch: { enabled: false, intensity: 0.0 },
-  };
-}
+export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
+  depthOfField: {
+    enabled: true,
+    target: { x: 0, y: 0, z: 0 },
+    focusRange: 0.35,
+    aperture: 2.8,
+    bokehScale: 4.5,
+    bokehShape: 'anamorphic',
+  },
+  bloom: {
+    enabled: true,
+    intensity: 0.35,
+    threshold: 0.75,
+  },
+  vignette: {
+    enabled: true,
+    intensity: 0.42,
+  },
+  motionBlur: {
+    enabled: false,
+    shutterAngle: 180,
+  },
+  chromaticAberration: {
+    enabled: false,
+    offset: 0.002,
+  },
+  filmGrain: {
+    enabled: true,
+    intensity: 0.025,
+    size: 1.2,
+  },
+  ghost: {
+    enabled: false,
+    opacity: 0.25,
+    offset: 0.02,
+    blur: 4,
+  },
+  colorGrade: {
+    enabled: true,
+    exposure: 1.04,
+    contrast: 1.06,
+    saturation: 1.08,
+  },
+  edgeFade: {
+    enabled: false,
+    top: 0.1,
+    bottom: 0.1,
+  },
+  glitch: {
+    enabled: false,
+    intensity: 0.15,
+  },
+};
 
 export function createDefaultImageLayer(
   overrides: Partial<ImageLayer> = {}
 ): ImageLayer {
   return {
     id: `layer-img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name: 'Product Screenshot',
     kind: 'image',
-    assetId: 'asset-sample-dashboard',
+    name: 'Image Layer',
+    order: 0,
     hidden: false,
     locked: false,
-    order: 0,
+    inMs: 0,
+    outMs: 4000,
     position: { x: 0, y: 0, z: 0 },
     rotation: {
-      x: degToRad(-44),
-      y: degToRad(25),
-      z: degToRad(30),
+      x: degToRad(-40),
+      y: degToRad(0),
+      z: degToRad(0),
     },
     scale: { x: 1, y: 1, z: 1 },
     opacity: 1,
     blendMode: 'normal',
-    inMs: 0,
-    outMs: 4000,
-    size: { width: 0.64, height: 0.6 },
-    crop: { x: 0, y: 0, width: 1, height: 1 },
+    assetId: 'asset-sample-dashboard',
+    size: { width: 0.34, height: 0.68 },
     cornerRadius: 0.04,
-    stroke: { color: '#6366f1', width: 0.002, opacity: 0.6 },
     device: {
-      type: 'macbook',
-      color: 'silver',
-      gloss: 0.75,
+      type: 'iphone',
+      color: 'black',
+      gloss: 0.82,
       lidAngle: 100,
-      screenGlow: 0.35,
+      screenGlow: 0.45,
     },
-    entrance: createDefaultTransition('slide-up', 650),
-    exit: createDefaultTransition('fade', 400),
+    entrance: { ...DEFAULT_TRANSITION_IN },
+    exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
     effects: {
       dropShadow: {
         enabled: true,
         color: '#000000',
-        opacity: 0.65,
-        blur: 0.04,
+        opacity: 0.68,
+        blur: 0.045,
         offsetX: 0,
-        offsetY: 0.02,
+        offsetY: 0.024,
       },
       glow: {
         enabled: true,
-        color: '#6366f1',
+        color: '#0088ff',
         intensity: 0.35,
         radius: 0.05,
       },
@@ -141,36 +183,40 @@ export function createDefaultShapeLayer(
 ): ShapeLayer {
   return {
     id: `layer-shp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name: 'Glass Feature Card',
     kind: 'shape',
-    shape: 'rectangle',
+    name: 'Rectangle',
+    order: 1,
     hidden: false,
     locked: false,
-    order: 1,
-    position: { x: 0.2, y: 0.14, z: 0.25 },
-    rotation: { x: 0, y: 0, z: 0 },
-    scale: { x: 1, y: 1, z: 1 },
-    opacity: 0.92,
-    blendMode: 'normal',
     inMs: 0,
     outMs: 4000,
-    size: { width: 0.28, height: 0.18 },
-    fill: { kind: 'solid', color: '#1e1b4b', opacity: 0.85 },
-    stroke: { color: '#a855f7', width: 0.002, opacity: 0.5 },
-    cornerRadius: 0.08,
-    entrance: createDefaultTransition('fade', 300),
-    exit: createDefaultTransition('fade', 350),
+    position: { x: 0, y: 0, z: 0.12 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    opacity: 0.95,
+    blendMode: 'normal',
+    shape: 'rectangle',
+    size: { width: 0.3, height: 0.18 },
+    cornerRadius: 0.05,
+    fill: {
+      kind: 'gradient',
+      angle: 135,
+      stops: [
+        { at: 0, color: '#0284c7' },
+        { at: 1, color: '#1e1b4b' },
+      ],
+    },
+    stroke: {
+      color: '#38bdf8',
+      width: 0.002,
+      opacity: 0.65,
+    },
+    entrance: { ...DEFAULT_TRANSITION_IN },
+    exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
     effects: {
-      dropShadow: {
-        enabled: true,
-        color: '#000000',
-        opacity: 0.5,
-        blur: 0.03,
-        offsetX: 0,
-        offsetY: 0.015,
-      },
-      backdropBlur: 0.02,
+      backdropBlur: 0.025,
+      layerBlur: 0,
     },
     ...overrides,
   };
@@ -181,38 +227,52 @@ export function createDefaultTextLayer(
 ): TextLayer {
   return {
     id: `layer-txt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    name: 'Headline Title',
     kind: 'text',
-    content: 'Cinematic Product Launches',
+    name: 'Headline Text',
+    order: 2,
     hidden: false,
     locked: false,
-    order: 2,
-    position: { x: 0, y: -0.35, z: 0.15 },
+    inMs: 0,
+    outMs: 4000,
+    position: { x: 0, y: 0, z: 0.2 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
     opacity: 1,
     blendMode: 'normal',
-    inMs: 0,
-    outMs: 3900,
+    content: 'slide to answer',
+    maxWidth: 0.55,
+    verticalAlign: 'middle',
     font: {
       family: 'Inter',
-      size: 0.03, // Fractional size from audit
+      size: 0.042,
       weight: 700,
       color: '#ffffff',
       align: 'center',
-      letterSpacing: -0.01,
+      letterSpacing: -0.015,
     },
-    maxWidth: 0.75,
-    verticalAlign: 'middle',
-    entrance: createDefaultTransition('fade', 300),
-    exit: createDefaultTransition('fade', 300),
+    entrance: { ...DEFAULT_TRANSITION_IN },
+    exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
-    effects: {},
+    effects: {
+      dropShadow: {
+        enabled: true,
+        color: '#000000',
+        opacity: 0.75,
+        blur: 0.025,
+        offsetX: 0,
+        offsetY: 0.01,
+      },
+      layerBlur: 0,
+    },
     ...overrides,
   };
 }
 
+// Every new shot created on the timeline is BLANK by default (no Pasted image, no default Camera move)
 export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
+  const f1Id = `framing-1-${Date.now()}`;
+  const f2Id = `framing-2-${Date.now()}`;
+
   return {
     id: `shot-${Date.now()}`,
     name: 'Shot 1',
@@ -223,90 +283,53 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     groups: [],
     framings: [
       {
-        id: 'framing-wide',
+        id: f1Id,
         name: 'Wide Establishing',
         target: { x: 0, y: 0, z: 0 },
         zoom: 1.0,
       },
       {
-        id: 'framing-closeup',
+        id: f2Id,
         name: 'Feature Push-In',
-        target: { x: 0.08, y: 0.04, z: 0.1 },
-        zoom: 1.28,
+        target: { x: -0.05, y: -0.02, z: 0 },
+        zoom: 1.15,
       },
     ],
-    cameraBlocks: [
-      {
-        id: 'cam-block-1',
-        label: 'Wide to Push-In',
-        startMs: 400,
-        durationMs: 3200,
-        fromFramingId: 'framing-wide',
-        toFramingId: 'framing-closeup',
-        mode: 'dolly',
-        easing: { kind: 'preset', name: 'ease-in-out' },
-      },
-    ],
-    focusBlocks: [],
+    cameraBlocks: [],
+    lightBlocks: [],
+    effectBlocks: [],
+    light: { ...DEFAULT_LIGHT_RIG },
+    effects: JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS)),
+    effectsOrder: [...DEFAULT_EFFECTS_ORDER],
     transition: {
       type: 'crossfade',
       durationMs: 500,
       easing: { kind: 'preset', name: 'ease-in-out' },
     },
-    light: {
-      position: { x: -0.35, y: 0.45, z: 1.0 },
-      intensity: 1.2,
-      temperature: 5600,
-      ambience: 0.65,
-    },
-    effects: createDefaultEffects(),
-    effectsOrder: [...DEFAULT_EFFECTS_ORDER],
     ...overrides,
   };
 }
 
-export function createDefaultAudio(): ProjectAudio {
-  return {
-    clips: [
-      {
-        id: 'clip-audio-default-01',
-        name: 'Neon Horizon (Lo-Fi Synthwave)',
-        startMs: 0,
-        durationMs: 7500,
-        offsetMs: 0,
-        volume: 0.8,
-        muted: false,
-      },
-    ],
-    muted: false,
-    masterVolume: 1.0,
-  };
-}
-
-// Starter Project matching the real Raylight project file values
 export const DEFAULT_PROJECT: Project = {
-  schemaVersion: CURRENT_SCHEMA_VERSION,
-  id: 'proj-raylight-sample-01',
-  name: 'Raylight Launch Showcase',
+  id: 'proj-raylight-default',
+  name: 'Raylight Showcase',
+  version: 1,
+  updatedAt: '2026-03-01T00:00:00.000Z',
   aspectRatio: '16:9',
   fps: 60,
   background: {
     kind: 'gradient',
     angle: 135,
     stops: [
-      { at: 0, color: '#070913' },
-      { at: 1, color: '#141829' },
+      { at: 0, color: '#040711' },
+      { at: 0.5, color: '#091536' },
+      { at: 1, color: '#050814' },
     ],
-  },
-  defaultCamera: {
-    position: { x: 0, y: 0, z: 2.2 },
-    rotation: { x: 0, y: 0, z: 0 },
-    focalLength: 50,
   },
   assets: {
     'asset-sample-dashboard': {
       id: 'asset-sample-dashboard',
-      name: 'dashboard-hero.png',
+      name: 'Raylight SaaS Dashboard.png',
       mimeType: 'image/png',
       dataUrl: '',
       width: 1920,
@@ -316,93 +339,30 @@ export const DEFAULT_PROJECT: Project = {
   shots: [
     createDefaultShot({
       id: 'shot-1',
-      name: 'Shot 1: 3D Tilted Hero Reveal',
+      name: 'Shot 1',
       startMs: 0,
       durationMs: 4000,
       lane: 0,
+      cameraBlocks: [], // Camera is NOT added by default!
       layers: [
         createDefaultImageLayer({
           id: 'layer-hero-screenshot',
-          name: 'Hero Tilted Screenshot (-44°, 25°, 30°)',
+          name: 'Hero Screenshot',
           order: 0,
-          rotation: {
-            x: degToRad(-44),
-            y: degToRad(25),
-            z: degToRad(30),
-          },
+          outMs: 4000,
           blocks: [
             {
-              id: 'block-shift-x',
-              label: 'Shift X by -0.19',
+              id: 'blk-position-shift',
+              label: 'Position animation',
               property: 'position',
-              startMs: 600,
-              durationMs: 2200,
-              easing: { kind: 'spring', name: 'gentle' },
-              amount: { x: -0.19, y: 0, z: 0 },
-            },
-            {
-              id: 'block-swing-tilt',
-              label: 'Swing Tilt into View',
-              property: 'tilt',
               startMs: 400,
-              durationMs: 2400,
-              easing: {
-                kind: 'bezier',
-                x1: 0.16,
-                y1: 1,
-                x2: 0.3,
-                y2: 1,
-              },
-              amount: {
-                x: degToRad(18),
-                y: degToRad(-10),
-                z: degToRad(-12),
-              },
+              durationMs: 2800,
+              easing: { kind: 'preset', name: 'ease-in-out' },
+              amount: { x: -0.15, y: 0, z: 0 },
             },
           ],
-        }),
-        createDefaultShapeLayer({
-          id: 'layer-callout-card',
-          name: 'Floating Glass Callout',
-          order: 1,
-        }),
-        createDefaultTextLayer({
-          id: 'layer-hero-headline',
-          name: 'Main Feature Headline',
-          order: 2,
-        }),
-      ],
-    }),
-    createDefaultShot({
-      id: 'shot-2',
-      name: 'Shot 2: Anamorphic Depth of Field',
-      startMs: 4000,
-      durationMs: 3500,
-      lane: 1,
-      effects: createDefaultEffects(), // Uses aperture 4.8, anamorphic, bloom 0.3, vignette 0.58, grain 0.02, saturation 1.17
-      layers: [
-        createDefaultImageLayer({
-          id: 'layer-shot2-iphone',
-          name: 'iPhone Product Close-Up',
-          inMs: 0,
-          outMs: 3500,
-          size: { width: 0.28, height: 0.56 },
-          rotation: {
-            x: degToRad(12),
-            y: degToRad(-20),
-            z: degToRad(4),
-          },
-          device: {
-            type: 'iphone',
-            color: 'black',
-            gloss: 0.88,
-            screenGlow: 0.45,
-          },
         }),
       ],
     }),
   ],
-  audio: createDefaultAudio(),
-  createdAt: '2026-10-13T12:00:00.000Z',
-  updatedAt: '2026-10-13T12:00:00.000Z',
 };

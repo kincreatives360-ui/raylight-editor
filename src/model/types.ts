@@ -1,10 +1,4 @@
 // src/model/types.ts
-// Units:
-// - Time is stored in milliseconds (ms).
-// - Rotations are stored in radians under the hood, and displayed in degrees in the UI.
-// - Sizes and positions are fractions (0 to 1) of the frame so any aspect ratio works.
-
-export type Vec3 = { x: number; y: number; z: number };
 
 export type AspectRatio =
   | '16:9'
@@ -26,57 +20,69 @@ export type BlendMode =
   | 'add'
   | 'difference';
 
+export interface Vec2 {
+  x: number;
+  y: number;
+}
+
+export interface Vec3 {
+  x: number;
+  y: number;
+  z: number;
+}
+
+export interface Size2D {
+  width: number;
+  height: number;
+}
+
+export interface GradientStop {
+  at: number;
+  color: string;
+}
+
 export type Fill =
-  | { kind: 'solid'; color: string; opacity: number }
   | {
-      kind: 'gradient';
-      angle: number;
-      stops: { at: number; color: string }[];
-    };
+    kind: 'solid';
+    color: string;
+    opacity: number;
+  }
+  | {
+    kind: 'gradient';
+    angle: number;
+    stops: GradientStop[];
+  };
 
-export type Stroke = {
-  color: string;
-  width: number; // Fractional width (e.g. 0.002)
-  opacity: number;
-};
-
-export type Shadow = {
-  enabled: boolean;
-  color: string;
-  opacity: number;
-  blur: number;
-  offsetX: number;
-  offsetY: number;
-};
-
-export type Glow = {
-  enabled: boolean;
-  color: string;
-  intensity: number;
-  radius: number;
-};
-
-export type Group = {
-  id: string;
-  name: string;
-  parentGroupId?: string;
-  collapsed: boolean;
-  hidden: boolean;
-  locked: boolean;
-};
+export type Background =
+  | {
+    kind: 'solid';
+    color: string;
+  }
+  | {
+    kind: 'gradient';
+    angle: number;
+    stops: GradientStop[];
+  };
 
 export type PresetEasingName =
   | 'linear'
+  | 'ease'
   | 'ease-in'
   | 'ease-out'
   | 'ease-in-out'
-  | 'ease-in-expo'
-  | 'ease-out-expo'
+  | 'ease-in-quad'
+  | 'ease-out-quad'
+  | 'ease-in-out-quad'
+  | 'ease-in-cubic'
+  | 'ease-out-cubic'
+  | 'ease-in-out-cubic'
   | 'ease-in-back'
   | 'ease-out-back'
   | 'ease-in-out-back'
-  | 'hold'
-  | 'bounce';
+  | 'ease-in-expo'
+  | 'ease-out-expo'
+  | 'bounce'
+  | 'hold';
 
 export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow';
 
@@ -88,7 +94,6 @@ export type Easing =
 export type TransitionType =
   | 'none'
   | 'fade'
-  | 'slide'
   | 'slide-up'
   | 'slide-down'
   | 'slide-left'
@@ -97,157 +102,258 @@ export type TransitionType =
   | 'scale-out'
   | 'mask-sweep';
 
-export type Transitionish = {
-  id?: string;
+export interface Transitionish {
   type: TransitionType;
   durationMs: number;
   delayMs: number;
-  easing: Easing;
   distance: number;
-  direction?: 'up' | 'down' | 'left' | 'right';
-};
+  easing: Easing;
+}
 
 export type AnimationBlockProperty =
   | 'position'
   | 'rotation'
   | 'tilt'
   | 'scale'
-  | 'opacity'
   | 'size'
+  | 'opacity'
+  | 'cornerRadius'
+  | 'layerBlur'
   | 'maskSweep'
   | 'shimmer'
   | 'followPath'
   | 'counter'
-  | 'pathReveal'
-  | 'glow';
+  | 'glow'
+  | 'pathReveal';
 
-export type AnimationBlock = {
+export interface AnimationBlock {
   id: string;
   label: string;
   property: AnimationBlockProperty;
-  startMs: number; // Relative to shot start
+  startMs: number;
   durationMs: number;
   easing: Easing;
-  amount: Vec3 | number; // How much to change (delta), not a fixed end value
-};
+  amount: Vec3 | number;
+}
 
-export type LayerBase = {
-  id: string;
-  name: string;
-  hidden: boolean;
-  locked: boolean;
-  groupId?: string;
-  order: number; // Stacking order in the layer list
-  position: Vec3;
-  rotation: Vec3; // Stored in radians
-  scale: Vec3;
-  opacity: number; // 0 to 1
-  blendMode: BlendMode;
-  inMs: number; // When it appears (relative to shot start)
-  outMs: number; // When it disappears
-  entrance: Transitionish;
-  exit: Transitionish;
-  entrances?: Transitionish[];
-  exits?: Transitionish[];
-  blocks: AnimationBlock[];
-  effects: {
-    dropShadow?: Shadow;
-    glow?: Glow;
-    layerBlur?: number;
-    backdropBlur?: number;
-  };
-};
+export interface DropShadowEffect {
+  enabled: boolean;
+  color: string;
+  opacity: number;
+  blur: number;
+  offsetX: number;
+  offsetY: number;
+}
 
-export type DeviceFrame = {
+export interface GlowEffect {
+  enabled: boolean;
+  color: string;
+  intensity: number;
+  radius: number;
+}
+
+export interface LayerEffects {
+  dropShadow?: DropShadowEffect;
+  glow?: GlowEffect;
+  layerBlur?: number;
+  backdropBlur?: number;
+}
+
+export interface DeviceFrame {
   type: 'iphone' | 'ipad' | 'macbook' | 'browser';
   color: 'silver' | 'black';
   gloss: number;
   lidAngle?: number;
   screenGlow?: number;
-};
+}
 
-export type ImageLayer = LayerBase & {
+export interface LayerBase {
+  id: string;
+  name: string;
+  order: number;
+  groupId?: string;
+  hidden: boolean;
+  locked: boolean;
+  inMs: number;
+  outMs: number;
+  position: Vec3;
+  rotation: Vec3;
+  scale: Vec3;
+  opacity: number;
+  blendMode: BlendMode;
+  entrance: Transitionish;
+  entrances?: (Transitionish & { id?: string })[];
+  exit: Transitionish;
+  blocks: AnimationBlock[];
+  effects: LayerEffects;
+}
+
+export interface ImageLayer extends LayerBase {
   kind: 'image';
-  assetId: string; // Points to a saved image by ID
-  size: { width: number; height: number }; // Fractional (0 to 1)
+  assetId: string;
+  size: Size2D;
+  cornerRadius: number;
   crop?: { x: number; y: number; width: number; height: number };
-  cornerRadius: number; // 0 to 1
-  stroke?: Stroke;
+  stroke?: { color: string; width: number; opacity: number };
   device?: DeviceFrame;
-};
+}
 
-export type ShapeLayer = LayerBase & {
+export interface ShapeLayer extends LayerBase {
   kind: 'shape';
   shape: 'rectangle' | 'ellipse' | 'line' | 'arrow';
-  size: { width: number; height: number }; // Fractional (0 to 1)
+  size: Size2D;
+  cornerRadius: number;
   fill: Fill;
-  stroke?: Stroke;
-  cornerRadius: number; // 0 to 1
-};
+  stroke?: { color: string; width: number; opacity: number };
+}
 
-export type TextLayer = LayerBase & {
+export interface TextLayer extends LayerBase {
   kind: 'text';
   content: string;
+  maxWidth: number;
+  verticalAlign?: 'top' | 'middle' | 'bottom';
   font: {
     family: string;
-    size: number; // Fractional (e.g. 0.03)
+    size: number;
     weight: number;
     color: string;
     align: 'left' | 'center' | 'right';
     letterSpacing: number;
   };
-  maxWidth: number;
-  verticalAlign: 'top' | 'middle' | 'bottom';
-};
+}
 
 export type Layer = ImageLayer | ShapeLayer | TextLayer;
 
-export type Framing = {
+export interface Group {
+  id: string;
+  name: string;
+  parentGroupId?: string;
+  collapsed: boolean;
+  hidden: boolean;
+  locked: boolean;
+}
+
+export interface Framing {
   id: string;
   name: string;
   target: Vec3;
   zoom: number;
-};
+  roll?: number;  // degrees
+  orbit?: number; // degrees (yaw)
+  tilt?: number;  // degrees (pitch)
+}
 
-export type CameraBlock = {
+export interface CameraKeyframeEndpoint {
+  anchorX: number; // fractional X (-1 to 1, shown as px in UI)
+  anchorY: number; // fractional Y (-1 to 1, shown as px in UI)
+  zoom: number;    // e.g. 1.0x, 1.1x
+  roll: number;    // degrees
+  orbit: number;   // degrees
+  tilt: number;    // degrees
+}
+
+export interface CameraBlock {
   id: string;
   label?: string;
   startMs: number;
   durationMs: number;
   fromFramingId: string;
   toFramingId: string;
-  mode: 'dolly' | 'zoom' | 'dollyzoom';
+  mode: 'dolly' | 'zoom' | 'dollyzoom'; // 'dollyzoom' = 'Warp' in Raylight UI
   easing: Easing;
-};
+  from?: CameraKeyframeEndpoint;
+  to?: CameraKeyframeEndpoint;
+  shake?: {
+    from: number; // 0 to 100%
+    to: number;   // 0 to 100%
+  };
+}
 
-export type FocusBlock = {
+export interface LightAnimationBlock {
   id: string;
-  label?: string;
+  label: string;
   startMs: number;
   durationMs: number;
-  fromZ: number;
-  toZ: number;
+  fromX: number;
+  fromY: number;
+  toX: number;
+  toY: number;
+  fromIntensity: number;
+  toIntensity: number;
   easing: Easing;
-};
+}
 
-export type Effects = {
+export interface SceneEffectAnimationBlock {
+  id: string;
+  label: string;
+  effectKey: EffectKey;
+  startMs: number;
+  durationMs: number;
+  fromValue: number;
+  toValue: number;
+  easing: Easing;
+}
+
+export interface LightRig {
+  position: Vec3;
+  intensity: number;
+  temperature: number;
+  ambience: number;
+}
+
+export type EffectKey =
+  | 'depthOfField'
+  | 'bloom'
+  | 'vignette'
+  | 'motionBlur'
+  | 'chromaticAberration'
+  | 'filmGrain'
+  | 'ghost'
+  | 'colorGrade'
+  | 'edgeFade'
+  | 'glitch';
+
+export interface SceneEffects {
   depthOfField: {
     enabled: boolean;
     target: Vec3;
     focusRange: number;
     aperture: number;
     bokehScale: number;
-    bokehShape: 'spherical' | 'anamorphic' | 'vintage' | 'portrait';
-    focalLength: number;
-    highlightThreshold: number;
-    highlightIntensity: number;
+    bokehShape: 'anamorphic' | 'spherical' | 'vintage' | 'portrait';
+    focalLength?: number;
+    highlightThreshold?: number;
+    highlightIntensity?: number;
   };
-  bloom: { enabled: boolean; intensity: number; threshold: number };
-  vignette: { enabled: boolean; intensity: number };
-  motionBlur: { enabled: boolean; samples: number; shutterAngle: number };
-  chromaticAberration: { enabled: boolean; offset: number };
-  filmGrain: { enabled: boolean; intensity: number; size: number };
-  ghost: { enabled: boolean; opacity: number; offset: number; blur: number };
+  bloom: {
+    enabled: boolean;
+    intensity: number;
+    threshold: number;
+  };
+  vignette: {
+    enabled: boolean;
+    intensity: number;
+  };
+  motionBlur: {
+    enabled: boolean;
+    samples?: number;
+    shutterAngle: number;
+  };
+  chromaticAberration: {
+    enabled: boolean;
+    offset: number;
+  };
+  filmGrain: {
+    enabled: boolean;
+    intensity: number;
+    size: number;
+  };
+  ghost: {
+    enabled: boolean;
+    opacity: number;
+    offset: number;
+    blur: number;
+  };
   colorGrade: {
     enabled: boolean;
     exposure: number;
@@ -257,52 +363,55 @@ export type Effects = {
   edgeFade: {
     enabled: boolean;
     top: number;
-    right: number;
     bottom: number;
-    left: number;
+    left?: number;
+    right?: number;
   };
-  glitch: { enabled: boolean; intensity: number };
-};
+  glitch: {
+    enabled: boolean;
+    intensity: number;
+  };
+}
 
-export type EffectKey = keyof Effects;
+export interface ShotTransition {
+  type: 'cut' | 'crossfade' | 'push' | 'slide';
+  durationMs: number;
+  easing: Easing;
+}
 
-export type Shot = {
+export interface Shot {
   id: string;
   name: string;
   startMs: number;
   durationMs: number;
-  lane: number; // 0 to 7
+  lane: number;
+  background?: Background;
   layers: Layer[];
   groups: Group[];
   framings: Framing[];
   cameraBlocks: CameraBlock[];
-  focusBlocks?: FocusBlock[];
-  transition: {
-    type: 'cut' | 'crossfade' | 'push' | 'slide';
-    durationMs: number;
-    easing: Easing;
-  };
-  light: {
-    position: Vec3;
-    intensity: number;
-    temperature: number;
-    ambience: number;
-  };
-  effects: Effects;
+  lightBlocks?: LightAnimationBlock[];
+  effectBlocks?: SceneEffectAnimationBlock[];
+  light: LightRig;
+  effects: SceneEffects;
   effectsOrder: EffectKey[];
-};
+  transition: ShotTransition;
+  focusBlocks?: FocusBlock[];
+}
 
-export type AssetRecord = {
+export type Effects = SceneEffects;
+
+export interface FocusBlock {
   id: string;
-  name: string;
-  mimeType: string;
-  dataUrl: string;
-  thumbUrl?: string;
-  width: number;
-  height: number;
-};
+  label?: string;
+  startMs: number;
+  durationMs: number;
+  fromZ: number;
+  toZ: number;
+  easing: Easing;
+}
 
-export type AudioClip = {
+export interface AudioClip {
   id: string;
   name: string;
   assetId?: string;
@@ -312,35 +421,40 @@ export type AudioClip = {
   offsetMs: number;
   volume: number;
   muted: boolean;
-};
+}
 
-export type ProjectAudio = {
+export interface ProjectAudio {
   clips: AudioClip[];
   muted: boolean;
   masterVolume: number;
-};
+}
 
-export type Project = {
-  schemaVersion: number;
+export interface AssetRecord {
   id: string;
   name: string;
+  mimeType: string;
+  dataUrl: string;
+  thumbUrl?: string;
+  width: number;
+  height: number;
+}
+
+export interface Project {
+  id: string;
+  name: string;
+  version?: number;
+  schemaVersion?: number;
+  updatedAt: string;
+  createdAt?: string;
   aspectRatio: AspectRatio;
   fps: 30 | 60;
-  background:
-    | { kind: 'solid'; color: string }
-    | {
-        kind: 'gradient';
-        angle: number;
-        stops: { at: number; color: string }[];
-      };
-  defaultCamera: {
+  background: Background;
+  defaultCamera?: {
     position: Vec3;
     rotation: Vec3;
     focalLength: number;
   };
-  shots: Shot[];
   assets: Record<string, AssetRecord>;
+  shots: Shot[];
   audio?: ProjectAudio;
-  createdAt: string;
-  updatedAt: string;
-};
+}

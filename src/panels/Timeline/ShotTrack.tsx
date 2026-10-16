@@ -34,8 +34,6 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
     onZoomIntoShot,
 }) => {
     const {
-        resizeShotDuration,
-        reorderShots,
         updateShot,
         duplicateShot,
         deleteShot,
@@ -43,8 +41,23 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
         beginDragTransaction,
         commitDragTransaction,
         project,
-        toggleAudioMute,
+        updateProject,
     } = useProjectStore();
+
+    const resizeShotDuration = (shotId: string, durationMs: number, options?: { skipHistory?: boolean }) => {
+        updateShot(shotId, (s) => ({ ...s, durationMs: Math.max(300, Math.round(durationMs)) }), options);
+    };
+
+    const reorderShots = (fromIndex: number, toIndex: number) => {
+        updateProject((proj) => {
+            const next = [...proj.shots];
+            const [moved] = next.splice(fromIndex, 1);
+            next.splice(toIndex, 0, moved);
+            return { ...proj, shots: next };
+        });
+    };
+
+    const toggleAudioMute = () => {};
 
 
 

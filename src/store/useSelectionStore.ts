@@ -10,25 +10,30 @@ export type InspectorTab =
     | 'effects';
 
 export type CanvasTool =
-    | 'select'    // V: Plane-aware move
-    | 'move'      // G: Screen-space move
-    | 'tilt'      // Y: 3D Tilt drag
-    | 'hand'      // H: Pan workspace
-    | 'text'      // T: Draw/place Text layer
-    | 'image'     // I: Draw/place Image layer
-    | 'rectangle' // R: Draw/place Rectangle shape
-    | 'ellipse'   // O: Draw/place Ellipse shape
-    | 'line';     // L: Draw/place Line shape
+    | 'select'
+    | 'move'
+    | 'tilt'
+    | 'hand'
+    | 'text'
+    | 'image'
+    | 'rectangle'
+    | 'ellipse'
+    | 'line';
 
 interface SelectionStore {
     selectedShotId: string;
     selectedLayerIds: string[];
     selectedBlockId: string | null;
+    selectedCameraBlockId: string | null;
+    selectedLightBlockId: string | null;
+    selectedPresetType: 'entrance' | 'exit' | null;
     inspectorTab: InspectorTab;
 
-    // Timeline synchronized state (Zoomed-out 'video' vs Zoomed-in 'scene')
+    // Timeline synchronized state
     timelineView: 'video' | 'scene';
     timelineZoom: number;
+    timelineHeightPx: number;
+    timelineScrollTop: number;
     expandedTimelineLayerIds: string[];
 
     activeTool: CanvasTool;
@@ -44,10 +49,15 @@ interface SelectionStore {
     setSelectedLayerIds: (layerIds: string[]) => void;
     clearLayerSelection: () => void;
     selectBlock: (blockId: string | null, layerId?: string) => void;
+    selectCameraBlock: (cameraBlockId: string | null) => void;
+    selectLightBlock: (lightBlockId: string | null) => void;
+    selectPreset: (preset: 'entrance' | 'exit' | null, layerId?: string) => void;
     setInspectorTab: (tab: InspectorTab) => void;
 
     setTimelineView: (view: 'video' | 'scene') => void;
     setTimelineZoom: (zoom: number) => void;
+    setTimelineHeightPx: (heightPx: number) => void;
+    setTimelineScrollTop: (scrollTop: number) => void;
     toggleTimelineLayerExpanded: (layerId: string) => void;
 
     setActiveTool: (tool: CanvasTool) => void;
@@ -68,10 +78,15 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedShotId: 'shot-1',
     selectedLayerIds: ['layer-hero-screenshot'],
     selectedBlockId: null,
+    selectedCameraBlockId: null,
+    selectedLightBlockId: null,
+    selectedPresetType: null,
     inspectorTab: 'layer',
 
     timelineView: 'video',
     timelineZoom: 1,
+    timelineHeightPx: 248,
+    timelineScrollTop: 0,
     expandedTimelineLayerIds: ['layer-hero-screenshot', 'layer-headline-text'],
 
     activeTool: 'select',
@@ -86,6 +101,9 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedShotId: shotId,
             selectedLayerIds: defaultLayerId ? [defaultLayerId] : [],
             selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
             isCropping: false,
         }),
 
@@ -95,6 +113,9 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 return {
                     selectedLayerIds: [layerId],
                     selectedBlockId: null,
+                    selectedCameraBlockId: null,
+                    selectedLightBlockId: null,
+                    selectedPresetType: null,
                     isCropping: false,
                 };
             }
@@ -104,6 +125,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 : [...state.selectedLayerIds, layerId];
             return {
                 selectedLayerIds: nextIds.length > 0 ? nextIds : [layerId],
+                selectedCameraBlockId: null,
+                selectedLightBlockId: null,
                 isCropping: false,
             };
         }),
@@ -123,25 +146,68 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             const high = Math.max(startIdx, endIdx);
             return {
                 selectedLayerIds: orderedLayerIds.slice(low, high + 1),
+                selectedCameraBlockId: null,
+                selectedLightBlockId: null,
                 isCropping: false,
             };
         }),
 
     setSelectedLayerIds: (selectedLayerIds) =>
-        set({ selectedLayerIds, isCropping: false }),
+        set({
+            selectedLayerIds,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            isCropping: false,
+        }),
 
     clearLayerSelection: () =>
         set({
             selectedLayerIds: [],
             selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
             isCropping: false,
         }),
 
     selectBlock: (blockId, layerId) =>
         set((state) => ({
             selectedBlockId: blockId,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
             selectedLayerIds: layerId ? [layerId] : state.selectedLayerIds,
             inspectorTab: blockId ? 'blocks' : state.inspectorTab,
+        })),
+
+    selectCameraBlock: (cameraBlockId) =>
+        set({
+            selectedCameraBlockId: cameraBlockId,
+            selectedBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
+            selectedLayerIds: [],
+            inspectorTab: 'camera',
+        }),
+
+    selectLightBlock: (lightBlockId) =>
+        set({
+            selectedLightBlockId: lightBlockId,
+            selectedCameraBlockId: null,
+            selectedBlockId: null,
+            selectedPresetType: null,
+            selectedLayerIds: [],
+            inspectorTab: 'shot',
+        }),
+
+    selectPreset: (preset, layerId) =>
+        set((state) => ({
+            selectedPresetType: preset,
+            selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedLayerIds: layerId ? [layerId] : state.selectedLayerIds,
+            inspectorTab: 'transitions',
         })),
 
     setInspectorTab: (inspectorTab) => set({ inspectorTab }),
@@ -162,6 +228,13 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             timelineZoom,
             timelineView: timelineZoom > 1.25 ? 'scene' : 'video',
         }),
+
+    setTimelineHeightPx: (heightPx) =>
+        set({
+            timelineHeightPx: Math.max(150, Math.min(560, Math.round(heightPx))),
+        }),
+
+    setTimelineScrollTop: (timelineScrollTop) => set({ timelineScrollTop }),
 
     toggleTimelineLayerExpanded: (layerId) =>
         set((state) => {
@@ -205,7 +278,3 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             canvasPan: { x: 0, y: 0 },
         }),
 }));
-
-if (typeof window !== 'undefined') {
-    (window as any).__selectionStore = useSelectionStore;
-}

@@ -1,143 +1,138 @@
 // src/engine/evaluateCamera.ts
-import type { Shot, Project, Vec3, Framing } from '../model/types';
+import type { Shot } from '../model/types';
+import { degToRad } from '../model/defaults';
 import { evaluateEasing } from './easing';
 
-function clamp(val: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, val));
-}
-
 export interface EvaluatedCamera {
-    position: Vec3;
-    rotation: Vec3;
-    target: Vec3;
+    target: { x: number; y: number; z: number };
+    rotation: { x: number; y: number; z: number };
     zoom: number;
-    focalLength: number; // mm (e.g., 50mm standard lens)
-    fovDegrees: number;  // Computed vertical Field of View for 3D stage
-    mode: 'static' | 'dolly' | 'zoom' | 'dollyzoom';
-    activeBlockId: string | null;
-    fromFramingName: string;
-    toFramingName: string;
+    fovDegrees: number;
+    focalLength: number;
+    activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom';
 }
 
-// Pure Function: Shot + defaultCamera + shotTimeMs -> Exact EvaluatedCamera
-export function evaluateCameraAtTime(
+const BASE_FOV_DEGREES = 27.0006;
+
+function lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+}
+
+export function evaluateShotCameraAtTime(
     shot: Shot,
-    defaultCamera: Project['defaultCamera'],
-    shotTimeMs: number
+    shotLocalTimeMs: number
 ): EvaluatedCamera {
-    const fallbackFraming: Framing = shot.framings[0] || {
-        id: 'framing-default',
-        name: 'Default Framing',
+    const defaultFraming = shot.framings[0] || {
+        id: 'default',
+        name: 'Default',
         target: { x: 0, y: 0, z: 0 },
-        zoom: 1.0,
+        zoom: 1,
+        roll: 0,
+        orbit: 0,
+        tilt: 0,
     };
 
-    let target: Vec3 = { ...fallbackFraming.target };
-    let zoom = fallbackFraming.zoom;
-    let mode: EvaluatedCamera['mode'] = 'static';
-    let activeBlockId: string | null = null;
-    let fromFramingName = fallbackFraming.name;
-    let toFramingName = fallbackFraming.name;
+    let targetX = defaultFraming.target.x;
+    let targetY = defaultFraming.target.y;
+    let targetZ = defaultFraming.target.z;
+    let zoom = defaultFraming.zoom;
+    let rotX = degToRad(defaultFraming.tilt ?? 0);
+    let rotY = degToRad(defaultFraming.orbit ?? 0);
+    let rotZ = degToRad(defaultFraming.roll ?? 0);
+    let fovDegrees = BASE_FOV_DEGREES;
+    let focalLength = 50;
+    let activeMode: EvaluatedCamera['activeMode'] = 'static';
 
-    const sortedBlocks = [...shot.cameraBlocks].sort(
+    const sortedBlocks = [...(shot.cameraBlocks || [])].sort(
         (a, b) => a.startMs - b.startMs
     );
 
     for (const block of sortedBlocks) {
-        const fromF =
-            shot.framings.find((f) => f.id === block.fromFramingId) ||
-            fallbackFraming;
-        const toF =
-            shot.framings.find((f) => f.id === block.toFramingId) || fallbackFraming;
+        const fromFraming =
+            shot.framings.find((f) => f.id === block.fromFramingId) || defaultFraming;
+        const toFraming =
+            shot.framings.find((f) => f.id === block.toFramingId) || fromFraming;
 
-        const endMs = block.startMs + block.durationMs;
+        const fromEndpoint = block.from || {
+            anchorX: fromFraming.target.x,
+            anchorY: fromFraming.target.y,
+            zoom: fromFraming.zoom,
+            roll: fromFraming.roll ?? 0,
+            orbit: fromFraming.orbit ?? 0,
+            tilt: fromFraming.tilt ?? 0,
+        };
 
-        if (shotTimeMs < block.startMs) {
-            // Before the first camera block starts, hold its starting framing
-            if (block === sortedBlocks[0]) {
-                target = { ...fromF.target };
-                zoom = fromF.zoom;
-                fromFramingName = fromF.name;
-                toFramingName = fromF.name;
-            }
+        const toEndpoint = block.to || {
+            anchorX: toFraming.target.x,
+            anchorY: toFraming.target.y,
+            zoom: toFraming.zoom,
+            roll: toFraming.roll ?? 0,
+            orbit: toFraming.orbit ?? 0,
+            tilt: toFraming.tilt ?? 0,
+        };
+
+        if (shotLocalTimeMs < block.startMs) {
             break;
         }
 
-        if (shotTimeMs >= endMs) {
-            // After block finishes, hold its destination framing until a later block takes over
-            target = { ...toF.target };
-            zoom = toF.zoom;
-            mode = block.mode;
-            fromFramingName = fromF.name;
-            toFramingName = toF.name;
+        const rawProgress =
+            block.durationMs > 0
+                ? Math.max(
+                    0,
+                    Math.min(1, (shotLocalTimeMs - block.startMs) / block.durationMs)
+                )
+                : 1;
+
+        const eased = evaluateEasing(rawProgress, block.easing);
+
+        targetX = lerp(fromEndpoint.anchorX, toEndpoint.anchorX, eased);
+        targetY = lerp(fromEndpoint.anchorY, toEndpoint.anchorY, eased);
+        targetZ = lerp(fromFraming.target.z, toFraming.target.z, eased);
+        zoom = Math.max(0.15, lerp(fromEndpoint.zoom, toEndpoint.zoom, eased));
+
+        rotX = degToRad(lerp(fromEndpoint.tilt, toEndpoint.tilt, eased));
+        rotY = degToRad(lerp(fromEndpoint.orbit, toEndpoint.orbit, eased));
+        rotZ = degToRad(lerp(fromEndpoint.roll, toEndpoint.roll, eased));
+        activeMode = block.mode;
+
+        if (block.mode === 'zoom') {
+            // Lens Zoom: changes focal length without 3D parallax shift
+            fovDegrees = BASE_FOV_DEGREES / zoom;
+            focalLength = 50 * zoom;
+        } else if (block.mode === 'dollyzoom') {
+            // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
+            fovDegrees = Math.max(
+                10,
+                Math.min(95, BASE_FOV_DEGREES * (zoom / Math.max(0.2, fromEndpoint.zoom)))
+            );
+            focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
         } else {
-            // Currently inside this Camera Block
-            const raw =
-                block.durationMs > 0
-                    ? clamp((shotTimeMs - block.startMs) / block.durationMs, 0, 1)
-                    : 1;
-            const eased = evaluateEasing(raw, block.easing);
+            // Dolly: physical 3D camera push with constant 50mm lens
+            fovDegrees = BASE_FOV_DEGREES;
+            focalLength = 50;
+        }
 
-            target = {
-                x: fromF.target.x + (toF.target.x - fromF.target.x) * eased,
-                y: fromF.target.y + (toF.target.y - fromF.target.y) * eased,
-                z: fromF.target.z + (toF.target.z - fromF.target.z) * eased,
-            };
-            zoom = fromF.zoom + (toF.zoom - fromF.zoom) * eased;
-            mode = block.mode;
-            activeBlockId = block.id;
-            fromFramingName = fromF.name;
-            toFramingName = toF.name;
-            break;
+        // Apply deterministic handheld Camera Shake if configured on the block
+        const shakeFrom = block.shake?.from ?? 0;
+        const shakeTo = block.shake?.to ?? 0;
+        const currentShakePct = lerp(shakeFrom, shakeTo, eased);
+        if (currentShakePct > 0) {
+            const amp = (currentShakePct / 100) * 0.045;
+            const tSec = shotLocalTimeMs * 0.001;
+            targetX +=
+                (Math.sin(tSec * 17.3) * 0.6 + Math.cos(tSec * 31.7) * 0.4) * amp;
+            targetY +=
+                (Math.cos(tSec * 19.1) * 0.6 + Math.sin(tSec * 27.5) * 0.4) * amp;
+            rotZ += Math.sin(tSec * 14.2) * amp * 0.35;
         }
     }
-
-    // Compute physical 3D Camera Position & Focal Length based on mode:
-    // - 'dolly': Physically moves camera Z closer/farther while keeping lens focalLength steady
-    // - 'zoom': Keeps camera Z steady while increasing lens focalLength (telephoto compression)
-    // - 'dollyzoom': Pulls camera Z back while zooming lens in (Vertigo counter-scale effect)
-    const baseZ = defaultCamera.position.z;
-    const baseFocal = defaultCamera.focalLength;
-
-    let cameraZ = baseZ;
-    let focalLength = baseFocal;
-
-    const safeZoom = Math.max(0.2, zoom);
-
-    if (mode === 'dolly' || mode === 'static') {
-        cameraZ = baseZ / safeZoom;
-        focalLength = baseFocal;
-    } else if (mode === 'zoom') {
-        cameraZ = baseZ;
-        focalLength = baseFocal * safeZoom;
-    } else if (mode === 'dollyzoom') {
-        // Vertigo effect: foreground stays same size while background perspective warps
-        cameraZ = baseZ * safeZoom;
-        focalLength = baseFocal * safeZoom * safeZoom;
-    }
-
-    // Convert 35mm sensor height (24mm) + focalLength to vertical FOV in degrees
-    const fovRadians = 2 * Math.atan(24 / (2 * Math.max(10, focalLength)));
-    const fovDegrees = (fovRadians * 180) / Math.PI;
 
     return {
-        position: {
-            x: Number((defaultCamera.position.x + target.x).toFixed(4)),
-            y: Number((defaultCamera.position.y + target.y).toFixed(4)),
-            z: Number(cameraZ.toFixed(4)),
-        },
-        rotation: { ...defaultCamera.rotation },
-        target: {
-            x: Number(target.x.toFixed(4)),
-            y: Number(target.y.toFixed(4)),
-            z: Number(target.z.toFixed(4)),
-        },
-        zoom: Number(safeZoom.toFixed(4)),
-        focalLength: Number(focalLength.toFixed(2)),
-        fovDegrees: Number(fovDegrees.toFixed(2)),
-        mode,
-        activeBlockId,
-        fromFramingName,
-        toFramingName,
+        target: { x: targetX, y: targetY, z: targetZ },
+        rotation: { x: rotX, y: rotY, z: rotZ },
+        zoom,
+        fovDegrees,
+        focalLength,
+        activeMode,
     };
 }

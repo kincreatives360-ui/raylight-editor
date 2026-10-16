@@ -30,7 +30,7 @@ export function calculateLayerDofBlurPx(
 
     const outOfFocusDist = distanceToFocus - halfFocusZone;
     // Circle of Confusion scaled by aperture, bokehScale, and focalLength
-    const lensFactor = dof.focalLength / 50;
+    const lensFactor = (dof.focalLength ?? 50) / 50;
     const rawBlur =
         outOfFocusDist * dof.aperture * dof.bokehScale * lensFactor * 1.6;
 

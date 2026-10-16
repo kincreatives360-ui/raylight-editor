@@ -1,35 +1,36 @@
 // src/panels/Inspector/sections/CameraSection.tsx
 import React from 'react';
-import { Camera, Crosshair, RotateCcw } from 'lucide-react';
-import type { Shot } from '../../../model/types';
+import { RotateCcw, Plus } from 'lucide-react';
+import type { Shot, Framing } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 
 interface CameraSectionProps {
     activeShot: Shot;
 }
 
-const FOCAL_PRESETS = [
-    { label: '24mm', value: 24 },
-    { label: '35mm', value: 35 },
-    { label: '50mm', value: 50 },
-    { label: '85mm', value: 85 },
-];
-
 export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
     const { updateShot } = useProjectStore();
+    const { selectCameraBlock, setTimelineView } = useSelectionStore();
 
-    const activeFraming = activeShot.framings?.[0];
-    const cameraTarget = activeFraming?.target || { x: 0, y: 0, z: 0 };
-    const cameraZoom = activeFraming?.zoom ?? 1;
-    const focalLength = (activeShot as any)?.camera?.focalLength ?? 50;
+    const primaryFraming: Framing = activeShot.framings[0] || {
+        id: 'framing-wide',
+        name: 'Wide Establishing',
+        target: { x: 0, y: 0, z: 0 },
+        zoom: 1,
+    };
 
-    const updateFraming = (patch: { target?: { x: number; y: number; z: number }; zoom?: number }) => {
+    const updatePrimaryFraming = (patch: Partial<Framing>) => {
         updateShot(activeShot.id, (s) => {
-            const framings = s.framings && s.framings.length > 0 ? s.framings : [{ id: 'f0', name: 'Main Framing', target: { x: 0, y: 0, z: 0 }, zoom: 1 }];
+            if (s.framings.length === 0) {
+                return { ...s, framings: [{ ...primaryFraming, ...patch }] };
+            }
             return {
                 ...s,
-                framings: framings.map((f, i) => (i === 0 ? { ...f, ...patch } : f)),
+                framings: s.framings.map((f, idx) =>
+                    idx === 0 ? { ...f, ...patch } : f
+                ),
             };
         });
     };
@@ -37,106 +38,112 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
     return (
         <div className="p-3.5 space-y-3">
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                    <Camera className="w-3.5 h-3.5 text-emerald-400" />
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                        Camera &amp; Optics
-                    </span>
-                </div>
-                <span className="text-[10px] font-mono text-[#0088ff] bg-[#0088ff]/10 px-1.5 py-0.5 rounded">
-                    {focalLength}mm
-                </span>
-            </div>
-
-            {/* Focal Length Presets Bar */}
-            <div className="space-y-1.5">
-                <span className="text-[10px] text-[#71717a] block">Focal Length</span>
-                <div className="grid grid-cols-4 gap-1">
-                    {FOCAL_PRESETS.map(({ label, value }) => (
-                        <button
-                            key={value}
-                            type="button"
-                            onClick={() =>
-                                updateShot(activeShot.id, (s) => ({
-                                    ...s,
-                                    camera: { ...(s as any).camera, focalLength: value },
-                                }))
-                            }
-                            className={`h-6 rounded text-[10px] font-mono font-medium transition cursor-pointer border ${
-                                focalLength === value
-                                    ? 'bg-[#0088ff] text-white border-sky-400 shadow-sm'
-                                    : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:bg-white/10 hover:text-white'
-                            }`}
-                        >
-                            {label}
-                        </button>
-                    ))}
-                </div>
-            </div>
-
-            {/* Camera Target Position (X, Y) */}
-            <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[#71717a]">Center Target</span>
+                <span className="text-[11px] font-medium text-[#e4e4e7]">Camera</span>
+                <div className="flex items-center gap-1">
                     <button
                         type="button"
-                        onClick={() => updateFraming({ target: { x: 0, y: 0, z: cameraTarget.z } })}
-                        title="Center Camera Target (0, 0)"
-                        className="text-[#71717a] hover:text-white cursor-pointer"
+                        onClick={() =>
+                            updatePrimaryFraming({
+                                target: { x: 0, y: 0, z: 0 },
+                                zoom: 1,
+                            })
+                        }
+                        title="Reset Shot Camera to Center (1.0x)"
+                        className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
                     >
-                        <Crosshair className="w-3 h-3" />
+                        <RotateCcw className="w-3.5 h-3.5" />
                     </button>
-                </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                    <ScrubInput
-                        label="X"
-                        value={cameraTarget.x}
-                        min={-2}
-                        max={2}
-                        step={0.02}
-                        decimals={2}
-                        onChange={(x) =>
-                            updateFraming({ target: { ...cameraTarget, x } })
-                        }
-                    />
-                    <ScrubInput
-                        label="Y"
-                        value={cameraTarget.y}
-                        min={-2}
-                        max={2}
-                        step={0.02}
-                        decimals={2}
-                        onChange={(y) =>
-                            updateFraming({ target: { ...cameraTarget, y } })
-                        }
-                    />
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const camId = `cam-blk-${Date.now()}`;
+                            updateShot(activeShot.id, (s) => ({
+                                ...s,
+                                cameraBlocks: [
+                                    ...(s.cameraBlocks || []),
+                                    {
+                                        id: camId,
+                                        label: 'Camera Move',
+                                        startMs: 0,
+                                        durationMs: s.durationMs,
+                                        fromFramingId: s.framings[0]?.id || 'f1',
+                                        toFramingId: s.framings[1]?.id || 'f2',
+                                        mode: 'dolly',
+                                        easing: { kind: 'preset', name: 'linear' },
+                                        from: {
+                                            anchorX: primaryFraming.target.x,
+                                            anchorY: primaryFraming.target.y,
+                                            zoom: primaryFraming.zoom,
+                                            roll: 0,
+                                            orbit: 0,
+                                            tilt: 0,
+                                        },
+                                        to: {
+                                            anchorX: primaryFraming.target.x - 0.05,
+                                            anchorY: primaryFraming.target.y + 0.02,
+                                            zoom: Number((primaryFraming.zoom * 1.15).toFixed(2)),
+                                            roll: 0,
+                                            orbit: 0,
+                                            tilt: 0,
+                                        },
+                                        shake: { from: 0, to: 0 },
+                                    },
+                                ],
+                            }));
+                            selectCameraBlock(camId);
+                            setTimelineView('scene');
+                        }}
+                        title="Add Camera Move to Timeline"
+                        className="p-1 rounded hover:bg-white/10 text-[#0088ff] cursor-pointer"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                    </button>
                 </div>
             </div>
 
-            {/* Camera Zoom Multiplier */}
-            <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
-                    <span className="text-[10px] text-[#71717a]">Zoom Framing</span>
-                    <button
-                        type="button"
-                        onClick={() => updateFraming({ zoom: 1.0 })}
-                        title="Reset Zoom to 1.0x"
-                        className="text-[#71717a] hover:text-white cursor-pointer"
-                    >
-                        <RotateCcw className="w-3 h-3" />
-                    </button>
-                </div>
+            <div className="grid grid-cols-2 gap-1.5">
                 <ScrubInput
-                    label="Zoom"
-                    value={cameraZoom}
-                    min={0.2}
-                    max={5.0}
-                    step={0.05}
-                    decimals={2}
-                    unit="x"
-                    onChange={(zoom) => updateFraming({ zoom })}
+                    label="X"
+                    value={Math.round(primaryFraming.target.x * 1920)}
+                    min={-2400}
+                    max={2400}
+                    step={10}
+                    onChange={(pxX) =>
+                        updatePrimaryFraming({
+                            target: {
+                                ...primaryFraming.target,
+                                x: Number((pxX / 1920).toFixed(4)),
+                            },
+                        })
+                    }
+                />
+                <ScrubInput
+                    label="Y"
+                    value={Math.round(primaryFraming.target.y * 1080)}
+                    min={-2400}
+                    max={2400}
+                    step={10}
+                    onChange={(pxY) =>
+                        updatePrimaryFraming({
+                            target: {
+                                ...primaryFraming.target,
+                                y: Number((pxY / 1080).toFixed(4)),
+                            },
+                        })
+                    }
                 />
             </div>
+
+            <ScrubInput
+                label="Zoom"
+                value={primaryFraming.zoom}
+                min={0.25}
+                max={4}
+                step={0.05}
+                decimals={2}
+                unit="x"
+                onChange={(zoom) => updatePrimaryFraming({ zoom })}
+            />
         </div>
     );
 };

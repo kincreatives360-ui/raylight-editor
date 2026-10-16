@@ -2,8 +2,6 @@
 import { create } from 'zustand';
 import type {
     Project,
-    ProjectAudio,
-    AudioClip,
     Shot,
     Layer,
     Group,
@@ -20,8 +18,6 @@ import {
     createDefaultShapeLayer,
     createDefaultTextLayer,
     createDefaultShot,
-    createDefaultAudio,
-    createDefaultTransition,
 } from '../model/defaults';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { loadProjectFromBrowser } from '../storage/projectIO';
@@ -123,22 +119,6 @@ interface ProjectStore {
     duplicateShot: (shotId: string) => Shot | null;
     deleteShot: (shotId: string) => void;
     splitShotAtPlayhead: (shotId: string, globalTimeMs: number) => Shot | null;
-    splitShot: (shotId: string, globalTimeMs: number) => Shot | null;
-    resizeShotDuration: (
-        shotId: string,
-        durationMs: number,
-        options?: { skipHistory?: boolean }
-    ) => void;
-    reorderShots: (fromIndex: number, toIndex: number) => void;
-
-    updateAudio: (
-        updater: (audio: ProjectAudio) => ProjectAudio,
-        options?: { skipHistory?: boolean }
-    ) => void;
-    addAudioClip: (clip: AudioClip) => void;
-    updateAudioClip: (clipId: string, updater: (clip: AudioClip) => AudioClip) => void;
-    deleteAudioClip: (clipId: string) => void;
-    toggleAudioMute: () => void;
 
     beginDragTransaction: () => void;
     commitDragTransaction: () => void;
@@ -208,12 +188,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const newLayer: Layer =
             kind === 'image'
                 ? createDefaultImageLayer({
-                    name: `Pasted image`,
+                    name: `Image ${nextOrder + 1}`,
                     order: nextOrder,
-                    inMs: 0,
                     outMs: targetShot.durationMs,
-                    entrance: createDefaultTransition('none', 0),
-                    exit: createDefaultTransition('none', 0),
                     ...customOverrides,
                 })
                 : kind === 'shape'
@@ -221,22 +198,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                         name: `${customOverrides.shape
                                 ? customOverrides.shape.charAt(0).toUpperCase() +
                                 customOverrides.shape.slice(1)
-                                : 'Shape'
-                            } #${nextOrder + 1}`,
+                                : 'Rectangle'
+                            } ${nextOrder + 1}`,
                         order: nextOrder,
-                        inMs: 0,
                         outMs: targetShot.durationMs,
-                        entrance: createDefaultTransition('none', 0),
-                        exit: createDefaultTransition('none', 0),
                         ...customOverrides,
                     })
                     : createDefaultTextLayer({
-                        name: `Headline #${nextOrder + 1}`,
+                        name: `Text ${nextOrder + 1}`,
                         order: nextOrder,
-                        inMs: 0,
                         outMs: targetShot.durationMs,
-                        entrance: createDefaultTransition('none', 0),
-                        exit: createDefaultTransition('none', 0),
                         ...customOverrides,
                     });
 
@@ -541,6 +512,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         });
     },
 
+    // Every new shot created is completely BLANK (no default layers, no default camera move)
     addShot: () => {
         const state = get();
         const count = state.project.shots.length;
@@ -549,13 +521,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             name: `Shot ${count + 1}`,
             durationMs: 3500,
             lane: count % 8,
-            layers: [
-                createDefaultImageLayer({
-                    name: `Pasted image`,
-                    order: 0,
-                    outMs: 3500,
-                }),
-            ],
+            layers: [],
+            cameraBlocks: [],
         });
 
         get().updateProject((proj) => ({
@@ -646,43 +613,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         return secondShot;
     },
 
-    splitShot: (shotId, globalTimeMs) => get().splitShotAtPlayhead(shotId, globalTimeMs),
-    resizeShotDuration: (shotId, durationMs, options) => {
-        const safeDuration = Math.max(300, Math.round(durationMs));
-        get().updateProject(
-            (proj) => {
-                const nextShots = proj.shots.map((s) =>
-                    s.id === shotId ? { ...s, durationMs: safeDuration } : s
-                );
-                return {
-                    ...proj,
-                    shots: recalculateShotStartTimes(nextShots),
-                };
-            },
-            options
-        );
-    },
-    reorderShots: (fromIndex, toIndex) => {
-        get().updateProject((proj) => {
-            if (
-                fromIndex < 0 ||
-                fromIndex >= proj.shots.length ||
-                toIndex < 0 ||
-                toIndex >= proj.shots.length ||
-                fromIndex === toIndex
-            ) {
-                return proj;
-            }
-            const nextShots = [...proj.shots];
-            const [moved] = nextShots.splice(fromIndex, 1);
-            nextShots.splice(toIndex, 0, moved);
-            return {
-                ...proj,
-                shots: recalculateShotStartTimes(nextShots),
-            };
-        });
-    },
-
     beginDragTransaction: () =>
         set((state) => {
             if (state.dragSnapshot !== null) return state;
@@ -730,49 +660,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 validation: validateProject(next),
             };
         }),
-
-    updateAudio: (updater, options) =>
-        set((state) => {
-            const currentAudio = state.project.audio || createDefaultAudio();
-            const updatedAudio = updater(currentAudio);
-            const updatedProject = {
-                ...state.project,
-                audio: updatedAudio,
-                updatedAt: new Date().toISOString(),
-            };
-            return {
-                project: updatedProject,
-                past: options?.skipHistory
-                    ? state.past
-                    : [...state.past.slice(-MAX_HISTORY_STEPS), state.project],
-                future: options?.skipHistory ? state.future : [],
-                validation: validateProject(updatedProject),
-            };
-        }),
-
-    addAudioClip: (clip) =>
-        get().updateAudio((audio) => ({
-            ...audio,
-            clips: [...audio.clips, clip],
-        })),
-
-    updateAudioClip: (clipId, updater) =>
-        get().updateAudio((audio) => ({
-            ...audio,
-            clips: audio.clips.map((c) => (c.id === clipId ? updater(c) : c)),
-        })),
-
-    deleteAudioClip: (clipId) =>
-        get().updateAudio((audio) => ({
-            ...audio,
-            clips: audio.clips.filter((c) => c.id !== clipId),
-        })),
-
-    toggleAudioMute: () =>
-        get().updateAudio((audio) => ({
-            ...audio,
-            muted: !audio.muted,
-        })),
 
     resetProject: () =>
         set({

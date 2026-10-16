@@ -1,201 +1,203 @@
 // src/engine/evaluateShot.ts
-import type { Project, Shot, Group } from '../model/types';
+import type { Project, Shot, LightRig, SceneEffects } from '../model/types';
 import { evaluateEasing } from './easing';
 import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
-import { evaluateCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
+import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
     evaluateEffectsAtTime,
     calculateLayerDofBlurPx,
     type EvaluatedEffects,
 } from './evaluateEffects';
 
-function clamp(val: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, val));
-}
-
-// Checks if a group or any of its parent groups are hidden
-function isGroupHierarchyHidden(
-    groupId: string | undefined,
-    groups: Group[]
-): boolean {
-    let currentId = groupId;
-    const visited = new Set<string>();
-    while (currentId && !visited.has(currentId)) {
-        visited.add(currentId);
-        const grp = groups.find((g) => g.id === currentId);
-        if (!grp) break;
-        if (grp.hidden) return true;
-        currentId = grp.parentGroupId;
-    }
-    return false;
-}
-
 export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
     dofBlurPx: number;
     totalBlurPx: number;
 }
 
-export interface EvaluatedShotFrame {
-    shot: Shot;
-    localTimeMs: number;
-    camera: EvaluatedCamera;
-    effects: EvaluatedEffects;
-    layers: EvaluatedLayerWithEffects[];
-}
-
 export interface EvaluatedProjectFrame {
     globalTimeMs: number;
-    shotLocalTimeMs: number;
     frameNumber: number;
     activeShot: Shot;
+    shotIndex: number;
+    shotLocalTimeMs: number;
+    shotProgress: number;
+    camera: EvaluatedCamera;
+    layers: EvaluatedLayerWithEffects[];
+    effects: EvaluatedEffects;
     shotTransition: {
+        isTransitioning: boolean;
         type: Shot['transition']['type'];
         progress: number;
-        outgoingFrame?: EvaluatedShotFrame;
-    };
-    camera: EvaluatedCamera;
-    effects: EvaluatedEffects;
-    layers: EvaluatedLayerWithEffects[];
-}
-
-/**
- * Pure evaluator for a single scene at a specific local timestamp.
- */
-export function evaluateSingleShot(
-    shot: Shot,
-    localTimeMs: number,
-    defaultCamera: Project['defaultCamera'],
-    frameNumber: number
-): EvaluatedShotFrame {
-    const clampedLocalMs = clamp(localTimeMs, 0, shot.durationMs);
-    const camera = evaluateCameraAtTime(shot, defaultCamera, clampedLocalMs);
-    const effects = evaluateEffectsAtTime(shot, frameNumber, clampedLocalMs);
-    const sortedLayers = [...shot.layers].sort((a, b) => a.order - b.order);
-
-    const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
-        const groupHidden = isGroupHierarchyHidden(layer.groupId, shot.groups);
-        const effectiveLayer = groupHidden ? { ...layer, hidden: true } : layer;
-
-        const evaluated = evaluateLayerAtTime(effectiveLayer, clampedLocalMs);
-        const dofBlurPx = calculateLayerDofBlurPx(
-            evaluated.position.z,
-            effects.state.depthOfField
-        );
-        const ownLayerBlurPx = (layer.effects.layerBlur || 0) * 100;
-
-        return {
-            ...evaluated,
-            dofBlurPx,
-            totalBlurPx: Number((dofBlurPx + ownLayerBlurPx).toFixed(2)),
-        };
-    });
-
-    return {
-        shot,
-        localTimeMs: clampedLocalMs,
-        camera,
-        effects,
-        layers,
+        outgoingFrame?: EvaluatedProjectFrame;
     };
 }
 
-/**
- * Master Project Evaluator: returns the active scene frame and any outgoing scene frame
- * during scene-to-scene transition windows (Crossfade, Slide, Push).
- */
+function lerp(a: number, b: number, t: number): number {
+    return a + (b - a) * t;
+}
+
 export function evaluateProjectAtTime(
     project: Project,
     globalTimeMs: number
 ): EvaluatedProjectFrame {
-    const totalDurationMs = project.shots.reduce(
-        (max, s) => Math.max(max, s.startMs + s.durationMs),
-        1000
-    );
-    const clampedGlobalMs = clamp(globalTimeMs, 0, totalDurationMs);
-
-    let activeIndex = project.shots.findIndex(
-        (s, idx) =>
-            clampedGlobalMs >= s.startMs &&
-            (idx === project.shots.length - 1
-                ? clampedGlobalMs <= s.startMs + s.durationMs
-                : clampedGlobalMs < s.startMs + s.durationMs)
-    );
-    if (activeIndex === -1) {
-        activeIndex = Math.max(0, project.shots.length - 1);
-    }
-    const activeShot = project.shots[activeIndex];
-
-    const shotLocalTimeMs = clamp(
-        clampedGlobalMs - activeShot.startMs,
-        0,
-        activeShot.durationMs
-    );
-
+    const clampedGlobalMs = Math.max(0, globalTimeMs);
     const frameNumber = Math.floor((clampedGlobalMs / 1000) * project.fps);
 
-    let transitionProgress = 1;
-    let outgoingFrame: EvaluatedShotFrame | undefined = undefined;
+    let shotIndex = project.shots.findIndex(
+        (s) =>
+            clampedGlobalMs >= s.startMs &&
+            clampedGlobalMs <= s.startMs + s.durationMs
+    );
 
-    if (
-        activeIndex > 0 &&
-        activeShot.transition.type !== 'cut' &&
-        activeShot.transition.durationMs > 0 &&
-        shotLocalTimeMs < activeShot.transition.durationMs
-    ) {
-        const raw = shotLocalTimeMs / activeShot.transition.durationMs;
-        transitionProgress = evaluateEasing(raw, activeShot.transition.easing);
+    if (shotIndex === -1) {
+        shotIndex = project.shots.length - 1;
+    }
 
-        const outgoingShot = project.shots[activeIndex - 1];
-        if (outgoingShot) {
-            // Outgoing scene local time is near its completion during the transition overlap
-            const outgoingLocalTimeMs = clamp(
-                outgoingShot.durationMs - (activeShot.transition.durationMs - shotLocalTimeMs),
-                0,
-                outgoingShot.durationMs
-            );
-            outgoingFrame = evaluateSingleShot(
-                outgoingShot,
-                outgoingLocalTimeMs,
-                project.defaultCamera,
-                frameNumber
-            );
+    const baseShot = project.shots[shotIndex] || project.shots[0];
+    const shotLocalTimeMs = Math.max(
+        0,
+        Math.min(baseShot.durationMs, clampedGlobalMs - baseShot.startMs)
+    );
+    const shotProgress =
+        baseShot.durationMs > 0 ? shotLocalTimeMs / baseShot.durationMs : 0;
+
+    // 1. Evaluate Animated Light Blocks on the Timeline (if any)
+    const evaluatedLight: LightRig = {
+        ...baseShot.light,
+        position: { ...baseShot.light.position },
+    };
+    for (const lb of baseShot.lightBlocks || []) {
+        if (shotLocalTimeMs < lb.startMs) continue;
+        const rawP =
+            lb.durationMs > 0
+                ? Math.max(0, Math.min(1, (shotLocalTimeMs - lb.startMs) / lb.durationMs))
+                : 1;
+        const eased = evaluateEasing(rawP, lb.easing);
+        evaluatedLight.position.x = Number(
+            lerp(lb.fromX, lb.toX, eased).toFixed(3)
+        );
+        evaluatedLight.position.y = Number(
+            lerp(lb.fromY, lb.toY, eased).toFixed(3)
+        );
+        evaluatedLight.intensity = Number(
+            lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2)
+        );
+    }
+
+    // 2. Evaluate Animated Scene Effect Blocks on the Timeline (if any)
+    const evaluatedEffectsConfig: SceneEffects = JSON.parse(
+        JSON.stringify(baseShot.effects)
+    );
+    for (const eb of baseShot.effectBlocks || []) {
+        if (shotLocalTimeMs < eb.startMs) continue;
+        const rawP =
+            eb.durationMs > 0
+                ? Math.max(0, Math.min(1, (shotLocalTimeMs - eb.startMs) / eb.durationMs))
+                : 1;
+        const eased = evaluateEasing(rawP, eb.easing);
+        const val = lerp(eb.fromValue, eb.toValue, eased);
+
+        if (eb.effectKey === 'depthOfField') {
+            evaluatedEffectsConfig.depthOfField.enabled = true;
+            evaluatedEffectsConfig.depthOfField.target.z = val;
+        } else if (eb.effectKey === 'bloom') {
+            evaluatedEffectsConfig.bloom.enabled = true;
+            evaluatedEffectsConfig.bloom.intensity = Math.max(0, val);
+        } else if (eb.effectKey === 'vignette') {
+            evaluatedEffectsConfig.vignette.enabled = true;
+            evaluatedEffectsConfig.vignette.intensity = Math.max(0, Math.min(1, val));
+        } else if (eb.effectKey === 'filmGrain') {
+            evaluatedEffectsConfig.filmGrain.enabled = true;
+            evaluatedEffectsConfig.filmGrain.intensity = Math.max(0, val);
+        } else if (eb.effectKey === 'chromaticAberration') {
+            evaluatedEffectsConfig.chromaticAberration.enabled = true;
+            evaluatedEffectsConfig.chromaticAberration.offset = Math.max(0, val);
+        } else if (eb.effectKey === 'glitch') {
+            evaluatedEffectsConfig.glitch.enabled = true;
+            evaluatedEffectsConfig.glitch.intensity = Math.max(0, val);
+        } else if (eb.effectKey === 'colorGrade') {
+            evaluatedEffectsConfig.colorGrade.enabled = true;
+            evaluatedEffectsConfig.colorGrade.exposure = Math.max(0.2, val);
         }
     }
 
-    const currentShotEvaluated = evaluateSingleShot(
-        activeShot,
-        shotLocalTimeMs,
-        project.defaultCamera,
-        frameNumber
+    const activeShot: Shot = {
+        ...baseShot,
+        light: evaluatedLight,
+        effects: evaluatedEffectsConfig,
+    };
+
+    // 3. Evaluate Camera Rig
+    const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs);
+
+    // 4. Evaluate Scene Effects Rack
+    const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
+
+    // 5. Evaluate All Layers (Ignoring hidden groups)
+    const hiddenGroupIds = new Set(
+        activeShot.groups.filter((g) => g.hidden).map((g) => g.id)
     );
+
+    const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
+
+    const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
+        const isGroupHidden = Boolean(
+            layer.groupId && hiddenGroupIds.has(layer.groupId)
+        );
+        const effectiveLayer = layer;
+
+        const evalLayer = evaluateLayerAtTime(
+            isGroupHidden ? { ...effectiveLayer, hidden: true } : effectiveLayer,
+            shotLocalTimeMs
+        );
+
+        const dofBlurPx = calculateLayerDofBlurPx(
+            evalLayer.position.z,
+            activeShot.effects.depthOfField
+        );
+        const manualBlurPx =
+            (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
+
+        return {
+            ...evalLayer,
+            layer:
+                layer.kind !== 'text'
+                    ? { ...layer, cornerRadius: evalLayer.cornerRadius }
+                    : layer,
+            dofBlurPx,
+            totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
+        };
+    });
+
+    // 6. Evaluate Shot-to-Shot Transition
+    const trans = activeShot.transition;
+    const isInTransitionWindow =
+        trans.type !== 'cut' &&
+        trans.durationMs > 0 &&
+        shotLocalTimeMs >= activeShot.durationMs - trans.durationMs;
+
+    const rawTransProgress = isInTransitionWindow
+        ? (shotLocalTimeMs - (activeShot.durationMs - trans.durationMs)) /
+        trans.durationMs
+        : 0;
 
     return {
         globalTimeMs: clampedGlobalMs,
-        shotLocalTimeMs,
         frameNumber,
         activeShot,
+        shotIndex,
+        shotLocalTimeMs,
+        shotProgress,
+        camera,
+        layers,
+        effects,
         shotTransition: {
-            type: activeShot.transition.type,
-            progress: Number(transitionProgress.toFixed(4)),
-            outgoingFrame,
+            isTransitioning: isInTransitionWindow,
+            type: trans.type,
+            progress: evaluateEasing(
+                Math.max(0, Math.min(1, rawTransProgress)),
+                trans.easing
+            ),
         },
-        camera: currentShotEvaluated.camera,
-        effects: currentShotEvaluated.effects,
-        layers: currentShotEvaluated.layers,
     };
-}
-
-export function verifyDeterministicEvaluator(project: Project): {
-    passed: boolean;
-    testedTimestampsMs: number[];
-} {
-    const testedTimestampsMs = [0, 250, 1200, 2500, 4200];
-    for (const t of testedTimestampsMs) {
-        const firstRun = JSON.stringify(evaluateProjectAtTime(project, t));
-        const secondRun = JSON.stringify(evaluateProjectAtTime(project, t));
-        if (firstRun !== secondRun) {
-            return { passed: false, testedTimestampsMs };
-        }
-    }
-    return { passed: true, testedTimestampsMs };
 }
