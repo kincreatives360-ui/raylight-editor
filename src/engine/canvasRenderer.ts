@@ -21,12 +21,28 @@ import { kelvinToRgb } from '../stage/Stage';
 const imageElementCache = new Map<string, HTMLImageElement>();
 
 export async function preloadProjectImages(project: Project): Promise<void> {
-    const urls = Object.values(project.assets)
-        .map((a) => a.dataUrl)
-        .filter(Boolean);
+    const urls = new Set<string>();
+
+    for (const a of Object.values(project.assets || {})) {
+        if (a?.dataUrl) urls.add(a.dataUrl);
+    }
+
+    if (project.background?.kind === 'image' && project.background.assetId) {
+        const bgAsset = project.assets?.[project.background.assetId];
+        if (bgAsset?.dataUrl) urls.add(bgAsset.dataUrl);
+    }
+
+    if (project.shots) {
+        for (const shot of project.shots) {
+            if (shot.background?.kind === 'image' && shot.background.assetId) {
+                const shotBgAsset = project.assets?.[shot.background.assetId];
+                if (shotBgAsset?.dataUrl) urls.add(shotBgAsset.dataUrl);
+            }
+        }
+    }
 
     await Promise.all(
-        urls.map(
+        Array.from(urls).map(
             (url) =>
                 new Promise<void>((resolve) => {
                     if (imageElementCache.has(url)) {
@@ -694,7 +710,26 @@ export function renderProjectFrameToCanvas(
         if (asset?.dataUrl) {
             const img = imageElementCache.get(asset.dataUrl);
             if (img && img.complete) {
-                ctx.drawImage(img, 0, 0, canvasW, canvasH);
+                const imgW = img.naturalWidth || img.width;
+                const imgH = img.naturalHeight || img.height;
+                if (imgW > 0 && imgH > 0) {
+                    const canvasAspect = canvasW / canvasH;
+                    const imgAspect = imgW / imgH;
+                    let sx = 0;
+                    let sy = 0;
+                    let sw = imgW;
+                    let sh = imgH;
+                    if (imgAspect > canvasAspect) {
+                        sw = imgH * canvasAspect;
+                        sx = (imgW - sw) / 2;
+                    } else {
+                        sh = imgW / canvasAspect;
+                        sy = (imgH - sh) / 2;
+                    }
+                    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+                } else {
+                    ctx.drawImage(img, 0, 0, canvasW, canvasH);
+                }
             } else {
                 ctx.fillStyle = '#0a0a0c';
                 ctx.fillRect(0, 0, canvasW, canvasH);

@@ -80,8 +80,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
     };
 
+    useEffect(() => {
+        if (draggingSquare) return;
+        setHexDraft(color);
+        setHsv(hexToHsv(color));
+    }, [color, draggingSquare]);
 
-useEffect(() => {
+    useEffect(() => {
         if (!open) return;
         const updatePosition = () => {
             const rect = anchorRef.current?.getBoundingClientRect();

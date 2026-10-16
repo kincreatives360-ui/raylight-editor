@@ -21,6 +21,7 @@ export const Size2DSchema = z.object({
 export const GradientStopSchema = z.object({
   at: z.number().min(0).max(1),
   color: z.string(),
+  opacity: z.number().min(0).max(1).optional(),
 });
 
 export const FillSchema = z.discriminatedUnion('kind', [
@@ -45,6 +46,8 @@ export const BackgroundSchema = z.discriminatedUnion('kind', [
     kind: z.literal('gradient'),
     angle: z.number(),
     stops: z.array(GradientStopSchema).min(2),
+    source: z.enum(['color', 'shader']).optional(),
+    gradientType: z.enum(['linear', 'radial']).optional(),
   }),
   z.object({
     kind: z.literal('image'),

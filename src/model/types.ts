@@ -40,6 +40,7 @@ export interface Size2D {
 export interface GradientStop {
   at: number;
   color: string;
+  opacity?: number;
 }
 
 export type Fill =
@@ -69,6 +70,8 @@ export type Background =
     kind: 'gradient';
     angle: number;
     stops: GradientStop[];
+    source?: 'color' | 'shader';
+    gradientType?: 'linear' | 'radial';
   }
   | {
     kind: 'image';
@@ -480,7 +483,7 @@ export interface Project {
 
 /** Resolve the effective background for a shot (project vs shot override). */
 export function resolveShotBackground(project: Project, shot: Shot): Background {
-  if (shot.useProjectBackground !== false) {
+  if (shot.useProjectBackground === true) {
     return project.background;
   }
   return shot.background ?? project.background;

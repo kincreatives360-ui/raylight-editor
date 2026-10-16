@@ -1,5 +1,5 @@
 // src/panels/Inspector/sections/BackgroundSection.tsx
-import React, { useRef } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { Palette, Image as ImageIcon } from 'lucide-react';
 import type { Background, Shot } from '../../../model/types';
 import { RAYLIGHT_COLOR_PALETTE, resolveShotBackground } from '../../../model/types';
@@ -33,6 +33,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     const effectiveBg = resolveShotBackground(project, activeShot);
     const uiKind = bgToUiKind(effectiveBg);
     const currentColor = solidColorOf(effectiveBg);
+    const [colorDraft, setColorDraft] = useState(currentColor);
+
+    useEffect(() => {
+        setColorDraft(currentColor);
+    }, [currentColor]);
 
     /** Write background either to project (when Use project) or to the shot override. */
     const setBackground = (next: Background) => {
@@ -73,14 +78,18 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         if (kind === 'color') {
             setBackground({ kind: 'solid', color: currentColor });
         } else if (kind === 'shader') {
-            setBackground({
-                kind: 'gradient',
-                angle: 135,
-                stops: [
-                    { at: 0, color: currentColor },
-                    { at: 1, color: '#000000' },
-                ],
-            });
+            if (effectiveBg.kind === 'gradient') {
+                setBackground(effectiveBg);
+            } else {
+                setBackground({
+                    kind: 'gradient',
+                    angle: 135,
+                    stops: [
+                        { at: 0, color: currentColor },
+                        { at: 1, color: '#000000' },
+                    ],
+                });
+            }
         } else {
             // image — keep existing assetId if already image, else empty
             const assetId =
@@ -192,18 +201,24 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             <span className="text-[10px] text-[#71717a] font-medium">HEX</span>
                             <input
                                 type="text"
-                                value={currentColor}
+                                value={colorDraft}
                                 onChange={(e) => {
-                                    let v = e.target.value.trim();
+                                    const raw = e.target.value;
+                                    setColorDraft(raw);
+                                    let v = raw.trim();
                                     if (!v.startsWith('#')) v = `#${v}`;
-                                    if (/^#[0-9a-fA-F]{3,8}$/.test(v)) handleSetColor(v);
-                                    else handleSetColor(v); // allow typing
-                                }}
-                                onBlur={(e) => {
-                                    let v = e.target.value.trim();
-                                    if (!v.startsWith('#')) v = `#${v}`;
-                                    if (/^#[0-9a-fA-F]{6}$/.test(v) || /^#[0-9a-fA-F]{3}$/.test(v)) {
+                                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
                                         handleSetColor(v);
+                                    }
+                                }}
+                                onBlur={() => {
+                                    let v = colorDraft.trim();
+                                    if (!v.startsWith('#')) v = `#${v}`;
+                                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
+                                        handleSetColor(v);
+                                        setColorDraft(v);
+                                    } else {
+                                        setColorDraft(currentColor);
                                     }
                                 }}
                                 className="flex-1 bg-transparent text-[11px] font-mono text-white outline-none"

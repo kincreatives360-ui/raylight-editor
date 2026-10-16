@@ -39,10 +39,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
                 tex.colorSpace = THREE.SRGBColorSpace;
                 tex.minFilter = THREE.LinearFilter;
                 tex.magFilter = THREE.LinearFilter;
-                setImageTexture((prev) => {
-                    prev?.dispose();
-                    return tex;
-                });
+                setImageTexture(tex);
             },
             undefined,
             () => {
@@ -53,6 +50,13 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
             cancelled = true;
         };
     }, [background, assets]);
+
+    // Dispose imageTexture when it changes or on unmount
+    useEffect(() => {
+        return () => {
+            imageTexture?.dispose();
+        };
+    }, [imageTexture]);
 
     // Generate solid / gradient canvas texture
     const canvasTexture = useMemo(() => {

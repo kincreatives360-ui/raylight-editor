@@ -1,5 +1,5 @@
 // src/panels/Inspector/RightSidebar.tsx
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     AlignLeft,
     AlignCenterHorizontal,
@@ -163,6 +163,16 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
     const fontInputRef = useRef<HTMLInputElement>(null);
     const projectBgFileRef = useRef<HTMLInputElement>(null);
+
+    const [bgColorDraft, setBgColorDraft] = useState(
+        project.background.kind === 'solid' ? project.background.color : '#000000'
+    );
+
+    useEffect(() => {
+        if (project.background.kind === 'solid') {
+            setBgColorDraft(project.background.color);
+        }
+    }, [project.background]);
 
     const refStageW = 1920;
     const refStageH = 1080;
@@ -758,14 +768,31 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
                                 <input
                                     type="text"
-                                    value={project.background.color}
+                                    value={bgColorDraft}
                                     onChange={(e) => {
-                                        let v = e.target.value.trim();
+                                        const raw = e.target.value;
+                                        setBgColorDraft(raw);
+                                        let v = raw.trim();
                                         if (!v.startsWith('#')) v = `#${v}`;
-                                        updateProject((p) => ({
-                                            ...p,
-                                            background: { kind: 'solid', color: v },
-                                        }));
+                                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: { kind: 'solid', color: v },
+                                            }));
+                                        }
+                                    }}
+                                    onBlur={() => {
+                                        let v = bgColorDraft.trim();
+                                        if (!v.startsWith('#')) v = `#${v}`;
+                                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: { kind: 'solid', color: v },
+                                            }));
+                                            setBgColorDraft(v);
+                                        } else if (project.background.kind === 'solid') {
+                                            setBgColorDraft(project.background.color);
+                                        }
                                     }}
                                     className="flex-1 h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] font-mono text-white outline-none"
                                     spellCheck={false}
@@ -1338,15 +1365,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             <span className="text-[10px] text-[#71717a]">Size</span>
                                             <ScrubInput
                                                 label="A"
-                                                value={selectedLayer.font.size}
+                                                value={Math.round(selectedLayer.font.size * refStageH)}
                                                 min={8}
                                                 max={300}
                                                 step={1}
                                                 unit="px"
-                                                onChange={(size) =>
+                                                onChange={(sizePx) =>
                                                     updateLayer(activeShot.id, selectedLayer.id, (l) =>
                                                         l.kind === 'text'
-                                                            ? { ...l, font: { ...l.font, size } }
+                                                            ? { ...l, font: { ...l.font, size: sizePx / refStageH } }
                                                             : l
                                                     )
                                                 }
