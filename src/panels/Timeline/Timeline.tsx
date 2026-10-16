@@ -1,7 +1,7 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Plus } from 'lucide-react';
-import type { Shot, Layer, AnimationBlock, CameraBlock } from '../../model/types';
+import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -37,6 +37,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         selectedLayerIds,
         selectedBlockId,
         selectedCameraBlockId,
+        selectedLightBlockId,
         selectedPresetType,
         timelineView,
         timelineZoom,
@@ -47,6 +48,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         selectLayer,
         selectBlock,
         selectCameraBlock,
+        selectLightBlock,
         selectPreset,
         setInspectorTab,
         setTimelineView,
@@ -425,6 +427,69 @@ export const Timeline: React.FC<TimelineProps> = ({
         window.addEventListener('mouseup', onUp);
     };
 
+    // 5. Drag / Trim Light Block
+    const startLightBlockDrag = (
+        e: React.MouseEvent,
+        shot: Shot,
+        lightBlock: LightAnimationBlock,
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        e.preventDefault();
+        e.stopPropagation();
+        selectLightBlock(lightBlock.id);
+        const startX = e.clientX;
+        const origStart = lightBlock.startMs;
+        const origDur = lightBlock.durationMs;
+        beginDragTransaction();
+        setDragging(true);
+
+        const onMove = (ev: MouseEvent) => {
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+            let nextStart = origStart;
+            let nextDur = origDur;
+
+            if (mode === 'left') {
+                nextStart = Math.max(
+                    0,
+                    Math.min(origStart + origDur - 100, origStart + deltaMs)
+                );
+                nextDur = origStart + origDur - nextStart;
+            } else if (mode === 'right') {
+                nextDur = Math.max(
+                    100,
+                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
+                );
+            } else {
+                nextStart = Math.max(
+                    0,
+                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
+                );
+            }
+
+            updateShot(
+                shot.id,
+                (s) => ({
+                    ...s,
+                    lightBlocks: (s.lightBlocks || []).map((lb) =>
+                        lb.id === lightBlock.id
+                            ? { ...lb, startMs: nextStart, durationMs: nextDur }
+                            : lb
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        };
+
+        const onUp = () => {
+            commitDragTransaction();
+            setDragging(false);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
     const playheadDisplayTimeMs =
         timelineView === 'scene' && activeShot
             ? Math.max(0, currentTimeMs - activeShot.startMs)
@@ -607,15 +672,18 @@ export const Timeline: React.FC<TimelineProps> = ({
                                             return;
                                         const clickMs = clientXToLocalMs(e.clientX);
                                         const camId = `cam-blk-${Date.now()}`;
-                                        updateShot(activeShot.id, (s) => ({
-                                            ...s,
-                                            cameraBlocks: [
-                                                ...s.cameraBlocks,
-                                                {
-                                                    id: camId,
-                                                    label: 'Camera Move',
-                                                    startMs: Math.min(s.durationMs - 400, clickMs),
-                                                    durationMs: Math.min(1500, s.durationMs - clickMs),
+                                        updateShot(activeShot.id, (s) => {
+                                            const startMs = Math.max(0, Math.min(Math.max(0, s.durationMs - 100), clickMs));
+                                            const durationMs = Math.max(100, Math.min(1500, s.durationMs - startMs));
+                                            return {
+                                                ...s,
+                                                cameraBlocks: [
+                                                    ...s.cameraBlocks,
+                                                    {
+                                                        id: camId,
+                                                        label: 'Camera Move',
+                                                        startMs,
+                                                        durationMs,
                                                     fromFramingId: s.framings[0]?.id || 'f1',
                                                     toFramingId: s.framings[1]?.id || 'f2',
                                                     mode: 'dolly',
@@ -639,9 +707,10 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                     shake: { from: 0, to: 0 },
                                                 },
                                             ],
-                                        }));
-                                        selectCameraBlock(camId);
-                                    }}
+                                        };
+                                    });
+                                    selectCameraBlock(camId);
+                                }}
                                     className="h-7 relative flex items-center"
                                 >
                                     {activeShot.cameraBlocks.map((cb) => {
@@ -688,7 +757,68 @@ export const Timeline: React.FC<TimelineProps> = ({
                             )}
 
                             {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
-                            {hasLightBlocks && <div className="h-7 relative flex items-center" />}
+                            {hasLightBlocks && (
+                                <div className="h-7 relative flex items-center">
+                                    {(activeShot.lightBlocks || []).map((lb) => {
+                                        const isLightSelected = selectedLightBlockId === lb.id;
+                                        const left = lb.startMs * pxPerMs;
+                                        const width = Math.max(36, lb.durationMs * pxPerMs);
+                                        return (
+                                            <div
+                                                key={lb.id}
+                                                data-light-pill="true"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    selectLightBlock(lb.id);
+                                                    setInspectorTab('shot');
+                                                }}
+                                                onMouseDown={(e) =>
+                                                    startLightBlockDrag(e, activeShot, lb, 'move')
+                                                }
+                                                style={{ left: `${left}px`, width: `${width}px` }}
+                                                className={`group/light absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
+                                                        ? 'border-amber-300 bg-amber-600/80 text-white shadow'
+                                                        : 'border-amber-500/70 bg-amber-950/80 text-amber-200 hover:border-amber-400'
+                                                    }`}
+                                            >
+                                                <span className="truncate pointer-events-none">
+                                                    {lb.label || 'Light Sweep'}
+                                                </span>
+                                                <button
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        updateShot(activeShot.id, (s) => ({
+                                                            ...s,
+                                                            lightBlocks: (s.lightBlocks || []).filter(
+                                                                (b) => b.id !== lb.id
+                                                            ),
+                                                        }));
+                                                        if (selectedLightBlockId === lb.id) {
+                                                            selectLightBlock(null);
+                                                        }
+                                                    }}
+                                                    title="Delete light block"
+                                                    className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1"
+                                                >
+                                                    &times;
+                                                </button>
+                                                <span
+                                                    onMouseDown={(e) =>
+                                                        startLightBlockDrag(e, activeShot, lb, 'left')
+                                                    }
+                                                    className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-l-full"
+                                                />
+                                                <span
+                                                    onMouseDown={(e) =>
+                                                        startLightBlockDrag(e, activeShot, lb, 'right')
+                                                    }
+                                                    className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-r-full"
+                                                />
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                            )}
 
                             {/* 3. Layer Track Rows (h-7 = 28px) + Indented Sub-rows (h-6 = 24px) */}
                             {activeShot.layers

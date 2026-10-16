@@ -24,7 +24,7 @@ import { loadProjectFromBrowser } from '../storage/projectIO';
 
 const MAX_HISTORY_STEPS = 50;
 
-function recalculateShotStartTimes(shots: Shot[]): Shot[] {
+export function recalculateShotStartTimes(shots: Shot[]): Shot[] {
     let runningMs = 0;
     return shots.map((shot, idx) => {
         const updated = {

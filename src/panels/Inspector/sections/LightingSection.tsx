@@ -14,8 +14,11 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
     activeShot,
 }) => {
     const { updateShot } = useProjectStore();
-    const { setTimelineView } = useSelectionStore();
+    const { selectedLightBlockId, selectLightBlock, setTimelineView } = useSelectionStore();
     const { light } = activeShot;
+    const selectedLightBlock = (activeShot.lightBlocks || []).find(
+        (b) => b.id === selectedLightBlockId
+    );
 
     return (
         <div className="p-3.5 space-y-3">
@@ -24,12 +27,13 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 <button
                     type="button"
                     onClick={() => {
+                        const newLightId = `light-blk-${Date.now()}`;
                         updateShot(activeShot.id, (s) => ({
                             ...s,
                             lightBlocks: [
                                 ...(s.lightBlocks || []),
                                 {
-                                    id: `light-blk-${Date.now()}`,
+                                    id: newLightId,
                                     label: 'Light Sweep',
                                     startMs: 0,
                                     durationMs: s.durationMs,
@@ -43,6 +47,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                                 },
                             ],
                         }));
+                        selectLightBlock(newLightId);
                         setTimelineView('scene');
                     }}
                     title="Animate Light Sweep on Timeline"
@@ -126,6 +131,183 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                     }
                 />
             </div>
+
+            {selectedLightBlock && (
+                <div className="pt-2 border-t border-white/[0.08] space-y-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] font-medium text-amber-300">
+                            {selectedLightBlock.label || 'Light Sweep Block'}
+                        </span>
+                        <button
+                            type="button"
+                            onClick={() => {
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).filter(
+                                        (b) => b.id !== selectedLightBlock.id
+                                    ),
+                                }));
+                                selectLightBlock(null);
+                            }}
+                            className="text-[10px] text-rose-400 hover:text-rose-300 cursor-pointer"
+                        >
+                            Delete
+                        </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <ScrubInput
+                            label="🕒"
+                            value={selectedLightBlock.startMs}
+                            min={0}
+                            max={activeShot.durationMs - 100}
+                            step={20}
+                            unit=" ms"
+                            onChange={(startMs) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id ? { ...b, startMs } : b
+                                    ),
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="⏱"
+                            value={selectedLightBlock.durationMs}
+                            min={100}
+                            max={activeShot.durationMs}
+                            step={20}
+                            unit=" ms"
+                            onChange={(durationMs) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id ? { ...b, durationMs } : b
+                                    ),
+                                }))
+                            }
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <ScrubInput
+                            label="From X"
+                            value={Math.round(selectedLightBlock.fromX * 100)}
+                            min={-100}
+                            max={100}
+                            step={2}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, fromX: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="To X"
+                            value={Math.round(selectedLightBlock.toX * 100)}
+                            min={-100}
+                            max={100}
+                            step={2}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, toX: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <ScrubInput
+                            label="From Y"
+                            value={Math.round(selectedLightBlock.fromY * 100)}
+                            min={-100}
+                            max={100}
+                            step={2}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, fromY: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="To Y"
+                            value={Math.round(selectedLightBlock.toY * 100)}
+                            min={-100}
+                            max={100}
+                            step={2}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, toY: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-1.5">
+                        <ScrubInput
+                            label="From Int"
+                            value={Math.round(selectedLightBlock.fromIntensity * 100)}
+                            min={0}
+                            max={250}
+                            step={5}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, fromIntensity: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="To Int"
+                            value={Math.round(selectedLightBlock.toIntensity * 100)}
+                            min={0}
+                            max={250}
+                            step={5}
+                            unit="%"
+                            onChange={(val) =>
+                                updateShot(activeShot.id, (s) => ({
+                                    ...s,
+                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                        b.id === selectedLightBlock.id
+                                            ? { ...b, toIntensity: Number((val / 100).toFixed(2)) }
+                                            : b
+                                    ),
+                                }))
+                            }
+                        />
+                    </div>
+                </div>
+            )}
         </div>
     );
 };

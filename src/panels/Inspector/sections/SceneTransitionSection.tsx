@@ -22,15 +22,20 @@ export const SceneTransitionSection: React.FC<SceneTransitionSectionProps> = ({
                 </span>
                 <select
                     value={transition.type}
-                    onChange={(e) =>
+                    onChange={(e) => {
+                        const nextType = e.target.value as Shot['transition']['type'];
                         updateShot(activeShot.id, (s) => ({
                             ...s,
                             transition: {
                                 ...s.transition,
-                                type: e.target.value as Shot['transition']['type'],
+                                type: nextType,
+                                durationMs:
+                                    nextType === 'cut'
+                                        ? 0
+                                        : Math.max(300, s.transition.durationMs || 500),
                             },
-                        }))
-                    }
+                        }));
+                    }}
                     className="h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer capitalize"
                 >
                     <option value="cut">Hard Cut</option>

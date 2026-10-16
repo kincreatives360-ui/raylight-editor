@@ -157,7 +157,7 @@ export function evaluateLayerAtTime(
         ) {
             cornerRadius = Math.max(0, Math.min(0.5, cornerRadius + blk.amount * eased));
         } else if (blk.property === 'layerBlur' && typeof blk.amount === 'number') {
-            extraLayerBlur = Math.max(0, extraLayerBlur + blk.amount * eased);
+            extraLayerBlur = Math.max(0, extraLayerBlur + blk.amount * 100 * eased);
         } else if (blk.property === 'maskSweep' && typeof blk.amount === 'number') {
             maskSweepProgress = Math.max(0, Math.min(1, eased * blk.amount));
         } else if (blk.property === 'shimmer') {

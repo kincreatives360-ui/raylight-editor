@@ -1,4 +1,5 @@
-// src/model/types.ts
+import type { PresetEasingName, AnimationBlockProperty } from './schema';
+export type { PresetEasingName, AnimationBlockProperty };
 
 export type AspectRatio =
   | '16:9'
@@ -64,25 +65,6 @@ export type Background =
     stops: GradientStop[];
   };
 
-export type PresetEasingName =
-  | 'linear'
-  | 'ease'
-  | 'ease-in'
-  | 'ease-out'
-  | 'ease-in-out'
-  | 'ease-in-quad'
-  | 'ease-out-quad'
-  | 'ease-in-out-quad'
-  | 'ease-in-cubic'
-  | 'ease-out-cubic'
-  | 'ease-in-out-cubic'
-  | 'ease-in-back'
-  | 'ease-out-back'
-  | 'ease-in-out-back'
-  | 'ease-in-expo'
-  | 'ease-out-expo'
-  | 'bounce'
-  | 'hold';
 
 export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow';
 
@@ -110,21 +92,6 @@ export interface Transitionish {
   easing: Easing;
 }
 
-export type AnimationBlockProperty =
-  | 'position'
-  | 'rotation'
-  | 'tilt'
-  | 'scale'
-  | 'size'
-  | 'opacity'
-  | 'cornerRadius'
-  | 'layerBlur'
-  | 'maskSweep'
-  | 'shimmer'
-  | 'followPath'
-  | 'counter'
-  | 'glow'
-  | 'pathReveal';
 
 export interface AnimationBlock {
   id: string;

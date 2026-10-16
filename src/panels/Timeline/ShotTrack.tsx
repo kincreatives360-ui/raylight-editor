@@ -12,7 +12,7 @@ import {
     Trash2,
 } from 'lucide-react';
 import type { Shot } from '../../model/types';
-import { useProjectStore } from '../../store/useProjectStore';
+import { useProjectStore, recalculateShotStartTimes } from '../../store/useProjectStore';
 
 interface ShotTrackProps {
     shots: Shot[];
@@ -45,7 +45,17 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
     } = useProjectStore();
 
     const resizeShotDuration = (shotId: string, durationMs: number, options?: { skipHistory?: boolean }) => {
-        updateShot(shotId, (s) => ({ ...s, durationMs: Math.max(300, Math.round(durationMs)) }), options);
+        updateProject((proj) => {
+            const nextShots = proj.shots.map((s) =>
+                s.id === shotId
+                    ? { ...s, durationMs: Math.max(300, Math.round(durationMs)) }
+                    : s
+            );
+            return {
+                ...proj,
+                shots: recalculateShotStartTimes(nextShots),
+            };
+        }, options);
     };
 
     const reorderShots = (fromIndex: number, toIndex: number) => {
@@ -53,11 +63,21 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
             const next = [...proj.shots];
             const [moved] = next.splice(fromIndex, 1);
             next.splice(toIndex, 0, moved);
-            return { ...proj, shots: next };
+            return {
+                ...proj,
+                shots: recalculateShotStartTimes(next),
+            };
         });
     };
 
-    const toggleAudioMute = () => {};
+    const toggleAudioMute = () => {
+        updateProject((proj) => ({
+            ...proj,
+            audio: proj.audio
+                ? { ...proj.audio, muted: !proj.audio.muted }
+                : { clips: [], muted: true, masterVolume: 1.0 },
+        }));
+    };
 
 
 

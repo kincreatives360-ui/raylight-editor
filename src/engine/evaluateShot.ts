@@ -50,7 +50,15 @@ export function evaluateProjectAtTime(
     );
 
     if (shotIndex === -1) {
-        shotIndex = project.shots.length - 1;
+        let latestIdx = -1;
+        for (let i = 0; i < project.shots.length; i++) {
+            if (project.shots[i].startMs <= clampedGlobalMs) {
+                if (latestIdx === -1 || project.shots[i].startMs >= project.shots[latestIdx].startMs) {
+                    latestIdx = i;
+                }
+            }
+        }
+        shotIndex = latestIdx !== -1 ? latestIdx : 0;
     }
 
     const baseShot = project.shots[shotIndex] || project.shots[0];
@@ -118,6 +126,16 @@ export function evaluateProjectAtTime(
         } else if (eb.effectKey === 'colorGrade') {
             evaluatedEffectsConfig.colorGrade.enabled = true;
             evaluatedEffectsConfig.colorGrade.exposure = Math.max(0.2, val);
+        } else if (eb.effectKey === 'motionBlur') {
+            evaluatedEffectsConfig.motionBlur.enabled = true;
+            evaluatedEffectsConfig.motionBlur.shutterAngle = Math.max(0, val);
+        } else if (eb.effectKey === 'ghost') {
+            evaluatedEffectsConfig.ghost.enabled = true;
+            evaluatedEffectsConfig.ghost.opacity = Math.max(0, Math.min(1, val));
+        } else if (eb.effectKey === 'edgeFade') {
+            evaluatedEffectsConfig.edgeFade.enabled = true;
+            evaluatedEffectsConfig.edgeFade.top = Math.max(0, Math.min(1, val));
+            evaluatedEffectsConfig.edgeFade.bottom = Math.max(0, Math.min(1, val));
         }
     }
 
@@ -133,17 +151,29 @@ export function evaluateProjectAtTime(
     // 4. Evaluate Scene Effects Rack
     const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
 
-    // 5. Evaluate All Layers (Ignoring hidden groups)
-    const hiddenGroupIds = new Set(
-        activeShot.groups.filter((g) => g.hidden).map((g) => g.id)
-    );
+    // 5. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
+    const groupById = new Map(activeShot.groups.map((g) => [g.id, g]));
+
+    const isLayerGroupHidden = (groupId?: string): boolean => {
+        if (!groupId) return false;
+        let currentId: string | undefined = groupId;
+        const visited = new Set<string>();
+
+        while (currentId) {
+            if (visited.has(currentId)) break;
+            visited.add(currentId);
+            const group = groupById.get(currentId);
+            if (!group) break;
+            if (group.hidden) return true;
+            currentId = group.parentGroupId;
+        }
+        return false;
+    };
 
     const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
 
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
-        const isGroupHidden = Boolean(
-            layer.groupId && hiddenGroupIds.has(layer.groupId)
-        );
+        const isGroupHidden = isLayerGroupHidden(layer.groupId);
         const effectiveLayer = layer;
 
         const evalLayer = evaluateLayerAtTime(

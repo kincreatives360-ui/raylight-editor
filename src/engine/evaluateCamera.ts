@@ -47,7 +47,8 @@ export function evaluateShotCameraAtTime(
         (a, b) => a.startMs - b.startMs
     );
 
-    for (const block of sortedBlocks) {
+    for (let i = 0; i < sortedBlocks.length; i++) {
+        const block = sortedBlocks[i];
         const fromFraming =
             shot.framings.find((f) => f.id === block.fromFramingId) || defaultFraming;
         const toFraming =
@@ -72,6 +73,29 @@ export function evaluateShotCameraAtTime(
         };
 
         if (shotLocalTimeMs < block.startMs) {
+            if (i === 0) {
+                targetX = fromEndpoint.anchorX;
+                targetY = fromEndpoint.anchorY;
+                targetZ = fromFraming.target.z;
+                zoom = Math.max(0.15, fromEndpoint.zoom);
+                rotX = degToRad(fromEndpoint.tilt);
+                rotY = degToRad(fromEndpoint.orbit);
+                rotZ = degToRad(fromEndpoint.roll);
+                activeMode = block.mode;
+                if (block.mode === 'zoom') {
+                    fovDegrees = BASE_FOV_DEGREES / zoom;
+                    focalLength = 50 * zoom;
+                } else if (block.mode === 'dollyzoom') {
+                    fovDegrees = Math.max(
+                        10,
+                        Math.min(95, BASE_FOV_DEGREES * (zoom / Math.max(0.2, fromEndpoint.zoom)))
+                    );
+                    focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+                } else {
+                    fovDegrees = BASE_FOV_DEGREES;
+                    focalLength = 50;
+                }
+            }
             break;
         }
 

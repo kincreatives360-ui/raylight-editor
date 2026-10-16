@@ -60,11 +60,16 @@ export const PresetEasingNameSchema = z.enum([
   'ease-in-cubic',
   'ease-out-cubic',
   'ease-in-out-cubic',
+  'ease-in-back',
   'ease-out-back',
+  'ease-in-out-back',
+  'ease-in-expo',
   'ease-out-expo',
   'bounce',
   'hold',
 ]);
+
+export type PresetEasingName = z.infer<typeof PresetEasingNameSchema>;
 
 export const SpringEasingNameSchema = z.enum([
   'gentle',
@@ -123,7 +128,12 @@ export const AnimationBlockPropertySchema = z.enum([
   'maskSweep',
   'shimmer',
   'followPath',
+  'counter',
+  'glow',
+  'pathReveal',
 ]);
+
+export type AnimationBlockProperty = z.infer<typeof AnimationBlockPropertySchema>;
 
 export const AnimationBlockSchema = z.object({
   id: z.string(),
@@ -183,6 +193,7 @@ const LayerBaseSchema = z.object({
   opacity: z.number().min(0).max(1),
   blendMode: BlendModeSchema,
   entrance: TransitionishSchema,
+  entrances: z.array(TransitionishSchema.extend({ id: z.string().optional() })).optional(),
   exit: TransitionishSchema,
   blocks: z.array(AnimationBlockSchema),
   effects: LayerEffectsSchema,
@@ -340,6 +351,16 @@ export const SceneEffectAnimationBlockSchema = z.object({
   easing: EasingSchema,
 });
 
+export const FocusBlockSchema = z.object({
+  id: z.string(),
+  label: z.string().optional(),
+  startMs: z.number().min(0),
+  durationMs: z.number().min(10),
+  fromZ: z.number(),
+  toZ: z.number(),
+  easing: EasingSchema,
+});
+
 export const ShotSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -351,6 +372,7 @@ export const ShotSchema = z.object({
   groups: z.array(GroupSchema),
   framings: z.array(FramingSchema),
   cameraBlocks: z.array(CameraBlockSchema),
+  focusBlocks: z.array(FocusBlockSchema).optional(),
   lightBlocks: z.array(LightAnimationBlockSchema).optional(),
   effectBlocks: z.array(SceneEffectAnimationBlockSchema).optional(),
   light: z.object({
@@ -367,6 +389,9 @@ export const ShotSchema = z.object({
       aperture: z.number(),
       bokehScale: z.number(),
       bokehShape: z.enum(['anamorphic', 'spherical', 'vintage', 'portrait']),
+      focalLength: z.number().optional(),
+      highlightThreshold: z.number().optional(),
+      highlightIntensity: z.number().optional(),
     }),
     bloom: z.object({
       enabled: z.boolean(),
@@ -380,6 +405,7 @@ export const ShotSchema = z.object({
     motionBlur: z.object({
       enabled: z.boolean(),
       shutterAngle: z.number(),
+      samples: z.number().optional(),
     }),
     chromaticAberration: z.object({
       enabled: z.boolean(),
@@ -406,6 +432,8 @@ export const ShotSchema = z.object({
       enabled: z.boolean(),
       top: z.number(),
       bottom: z.number(),
+      left: z.number().optional(),
+      right: z.number().optional(),
     }),
     glitch: z.object({
       enabled: z.boolean(),
@@ -420,11 +448,31 @@ export const ShotSchema = z.object({
   }),
 });
 
+export const AudioClipSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  assetId: z.string().optional(),
+  dataUrl: z.string().optional(),
+  startMs: z.number().min(0),
+  durationMs: z.number().min(0),
+  offsetMs: z.number().min(0),
+  volume: z.number().min(0).max(1),
+  muted: z.boolean(),
+});
+
+export const ProjectAudioSchema = z.object({
+  clips: z.array(AudioClipSchema),
+  muted: z.boolean(),
+  masterVolume: z.number().min(0).max(1),
+});
+
 export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
-  version: z.number(),
+  version: z.number().optional(),
+  schemaVersion: z.number().optional(),
   updatedAt: z.string(),
+  createdAt: z.string().optional(),
   aspectRatio: z.enum([
     '16:9',
     '4:3',
@@ -458,14 +506,96 @@ export const ProjectSchema = z.object({
     })
   ),
   shots: z.array(ShotSchema).min(1),
+  audio: ProjectAudioSchema.optional(),
 });
 
 export type ValidationResult =
   | { success: true; data: Project }
   | { success: false; errors: string[] };
 
+function migrateLegacyProject(raw: unknown): unknown {
+  if (!raw || typeof raw !== 'object') return raw;
+  const project = JSON.parse(JSON.stringify(raw));
+
+  if (project.version == null && project.schemaVersion != null) {
+    project.version = project.schemaVersion;
+  }
+  if (project.schemaVersion == null && project.version != null) {
+    project.schemaVersion = project.version;
+  }
+
+  if (Array.isArray(project.shots)) {
+    for (const shot of project.shots) {
+      if (typeof shot.durationMs === 'number') {
+        shot.durationMs = Math.max(200, shot.durationMs);
+      }
+
+      if (Array.isArray(shot.cameraBlocks)) {
+        for (const cb of shot.cameraBlocks) {
+          if (typeof cb.durationMs === 'number') {
+            cb.durationMs = Math.max(50, cb.durationMs);
+          }
+        }
+      }
+
+      if (Array.isArray(shot.focusBlocks)) {
+        for (const fb of shot.focusBlocks) {
+          if (typeof fb.durationMs === 'number') {
+            fb.durationMs = Math.max(10, fb.durationMs);
+          }
+        }
+      }
+
+      if (Array.isArray(shot.effectBlocks)) {
+        for (const eb of shot.effectBlocks) {
+          if (typeof eb.durationMs === 'number') {
+            eb.durationMs = Math.max(50, eb.durationMs);
+          }
+        }
+      }
+
+      if (Array.isArray(shot.lightBlocks)) {
+        for (const lb of shot.lightBlocks) {
+          if (typeof lb.durationMs === 'number') {
+            lb.durationMs = Math.max(50, lb.durationMs);
+          }
+        }
+      }
+
+      if (Array.isArray(shot.layers)) {
+        for (const layer of shot.layers) {
+          if (layer.entrance && layer.entrance.type === 'slide') {
+            layer.entrance.type = 'slide-up';
+          }
+          if (layer.exit && layer.exit.type === 'slide') {
+            layer.exit.type = 'slide-right';
+          }
+          if (Array.isArray(layer.entrances)) {
+            for (const ent of layer.entrances) {
+              if (ent && ent.type === 'slide') {
+                ent.type = 'slide-up';
+              }
+            }
+          }
+
+          if (Array.isArray(layer.blocks)) {
+            for (const blk of layer.blocks) {
+              if (typeof blk.durationMs === 'number') {
+                blk.durationMs = Math.max(10, blk.durationMs);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return project;
+}
+
 export function validateProject(raw: unknown): ValidationResult {
-  const parsed = ProjectSchema.safeParse(raw);
+  const migrated = migrateLegacyProject(raw);
+  const parsed = ProjectSchema.safeParse(migrated);
   if (parsed.success) {
     return { success: true, data: parsed.data as Project };
   }
