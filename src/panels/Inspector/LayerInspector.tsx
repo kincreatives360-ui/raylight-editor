@@ -680,7 +680,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                                     <span className="text-gray-400">Stroke Color</span>
                                                     <div className="flex items-center gap-2">
                                                         <ColorField
-                                                            
                                                             value={selectedLayer.stroke.color}
                                                             onChange={(e) => {
                                                                 const color = e.target.value;
@@ -869,7 +868,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                                     <span className="text-gray-400">Fill Color</span>
                                                     <div className="flex items-center gap-2">
                                                         <ColorField
-                                                            
                                                             value={selectedLayer.fill.color}
                                                             onChange={(e) => {
                                                                 const color = e.target.value;
@@ -986,7 +984,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                                             className="flex items-center gap-1.5 bg-white/5 p-1 rounded border border-white/10"
                                                         >
                                                             <ColorField
-                                                                
                                                                 value={stop.color}
                                                                 onChange={(e) => {
                                                                     const color = e.target.value;
@@ -1113,7 +1110,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                                     <span className="text-gray-400">Stroke Color</span>
                                                     <div className="flex items-center gap-2">
                                                         <ColorField
-                                                            
                                                             value={selectedLayer.stroke.color}
                                                             onChange={(e) => {
                                                                 const color = e.target.value;
@@ -1203,7 +1199,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                         <span className="text-gray-400">Text Color</span>
                                         <div className="flex items-center gap-2">
                                             <ColorField
-                                                
                                                 value={selectedLayer.font.color}
                                                 onChange={(e) => {
                                                     const color = e.target.value;
@@ -1492,7 +1487,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                             <span className="text-gray-400">Shadow Color</span>
                                             <div className="flex items-center gap-2">
                                                 <ColorField
-                                                    
                                                     value={selectedLayer.effects.dropShadow.color}
                                                     onChange={(e) => {
                                                         const color = e.target.value;
@@ -1634,7 +1628,6 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                             <span className="text-gray-400">Glow Color</span>
                                             <div className="flex items-center gap-2">
                                                 <ColorField
-                                                    
                                                     value={selectedLayer.effects.glow.color}
                                                     onChange={(e) => {
                                                         const color = e.target.value;

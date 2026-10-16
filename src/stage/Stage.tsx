@@ -22,14 +22,15 @@ import {
     Circle,
     Layers,
 } from 'lucide-react';
-import type { AspectRatio, Project } from '../model/types';
+import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
 import { SelectionOverlay } from './SelectionOverlay';
-import { Guides, type SnapGuideLine } from './Guides';
+import { Guides } from './Guides';
+import { ASPECT_RATIO_CONFIG, type SnapGuideLine } from './stageUtils';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
@@ -39,56 +40,6 @@ import {
     evaluateCameraPose,
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
-
-export const ASPECT_RATIO_CONFIG: Record<
-    AspectRatio,
-    { widthRatio: number; heightRatio: number; label: string }
-> = {
-    '16:9': { widthRatio: 16, heightRatio: 9, label: '16:9 Widescreen' },
-    '4:3': { widthRatio: 4, heightRatio: 3, label: '4:3 Classic' },
-    '3:2': { widthRatio: 3, heightRatio: 2, label: '3:2 Presentation' },
-    '21:9': { widthRatio: 21, heightRatio: 9, label: '21:9 Ultrawide' },
-    '1:1': { widthRatio: 1, heightRatio: 1, label: '1:1 Square' },
-    '9:16': { widthRatio: 9, heightRatio: 16, label: '9:16 Vertical' },
-    '3:4': { widthRatio: 3, heightRatio: 4, label: '3:4 Portrait' },
-    '2:3': { widthRatio: 2, heightRatio: 3, label: '2:3 Social' },
-    '4:5': { widthRatio: 4, heightRatio: 5, label: '4:5 Feed' },
-};
-
-export function kelvinToRgb(
-    kelvin: number,
-    alpha = 1
-): { r: number; g: number; b: number; css: string } {
-    const temp = Math.max(1000, Math.min(15000, kelvin)) / 100;
-    let r: number;
-    let g: number;
-    let b: number;
-
-    if (temp <= 66) {
-        r = 255;
-        g = 99.4708025861 * Math.log(temp) - 161.1195681661;
-        b =
-            temp <= 19
-                ? 0
-                : 138.5177312231 * Math.log(temp - 10) - 305.0447927307;
-    } else {
-        r = 329.698727446 * Math.pow(temp - 60, -0.1332047592);
-        g = 288.1221695283 * Math.pow(temp - 60, -0.0755148492);
-        b = 255;
-    }
-
-    const clampByte = (n: number) => Math.round(Math.max(0, Math.min(255, n)));
-    const rByte = clampByte(r);
-    const gByte = clampByte(g);
-    const bByte = clampByte(b);
-
-    return {
-        r: rByte,
-        g: gByte,
-        b: bByte,
-        css: `rgba(${rByte}, ${gByte}, ${bByte}, ${alpha})`,
-    };
-}
 
 interface StageProps {
     project: Project;
@@ -117,6 +68,8 @@ export const Stage: React.FC<StageProps> = ({
         updateLayer,
         createGroupFromLayers,
         ungroupInShot,
+        beginDragTransaction,
+        commitDragTransaction,
     } = useProjectStore();
     const {
         activeTool,
@@ -266,6 +219,31 @@ export const Stage: React.FC<StageProps> = ({
         if (Math.hypot(x, y) < 8) return;
         const angle = (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
         setGradientEditorAngle(Number(angle.toFixed(1)));
+    };
+
+    const handleGradientAnglePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+        event.preventDefault();
+        beginDragTransaction();
+        updateGradientAngleFromPointer(event);
+        event.currentTarget.setPointerCapture(event.pointerId);
+    };
+
+    const handleGradientAnglePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+        if (event.buttons === 1) updateGradientAngleFromPointer(event);
+    };
+
+    const handleGradientAnglePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        commitDragTransaction();
+    };
+
+    const handleGradientAnglePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+        }
+        commitDragTransaction();
     };
     const colorGradeCss = eff.colorGrade.enabled
         ? `brightness(${eff.colorGrade.exposure}) contrast(${eff.colorGrade.contrast}) saturate(${eff.colorGrade.saturation})`
@@ -816,20 +794,10 @@ export const Stage: React.FC<StageProps> = ({
                             aria-label="Drag to set gradient direction"
                             className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none"
                             viewBox={`0 0 ${frameWidth} ${frameHeight}`}
-                            onPointerDown={(event) => {
-                                event.preventDefault();
-                                updateGradientAngleFromPointer(event);
-                                event.currentTarget.setPointerCapture(event.pointerId);
-                            }}
-                            onPointerMove={(event) => {
-                                if (event.buttons === 1) updateGradientAngleFromPointer(event);
-                            }}
-                            onPointerUp={(event) => {
-                                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-                            }}
-                            onPointerCancel={(event) => {
-                                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
-                            }}
+                            onPointerDown={handleGradientAnglePointerDown}
+                            onPointerMove={handleGradientAnglePointerMove}
+                            onPointerUp={handleGradientAnglePointerUp}
+                            onPointerCancel={handleGradientAnglePointerCancel}
                         >
                             {(() => {
                                 const radians = gradientEditorAngle * Math.PI / 180;

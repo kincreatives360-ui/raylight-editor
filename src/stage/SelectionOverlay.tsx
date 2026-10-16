@@ -10,7 +10,7 @@ import type {
 } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
-import { computeSmartSnap, type SnapGuideLine } from './Guides';
+import { computeSmartSnap, type SnapGuideLine } from './stageUtils';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
@@ -39,7 +39,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     snapEnabled,
     onUpdateGuides,
     onSelectLayer,
-    cameraRef,
+    cameraRef: _cameraRef,
 }) => {
     const {
         project,
@@ -80,7 +80,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryProj = getLayerProjectedCorners(
         primaryEval,
-        cameraRef?.current,
+        null,
         frameWidth,
         frameHeight,
         aspect,
@@ -607,7 +607,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 {selectedEvalLayers.slice(1).map((sec) => {
                     const secProj = getLayerProjectedCorners(
                         sec,
-                        cameraRef?.current,
+                        null,
                         frameWidth,
                         frameHeight,
                         aspect,

@@ -52,7 +52,7 @@ import { degToRad, radToDeg } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
-import { ASPECT_RATIO_CONFIG } from '../../stage/Stage';
+import { ASPECT_RATIO_CONFIG } from '../../stage/stageUtils';
 import { ScrubInput } from '../../ui/ScrubInput';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { BackgroundSection } from './sections/BackgroundSection';

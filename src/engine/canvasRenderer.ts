@@ -17,7 +17,7 @@ import type {
 } from './evaluateShot';
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
-import { kelvinToRgb } from '../stage/Stage';
+import { kelvinToRgb } from '../stage/stageUtils';
 
 const imageElementCache = new Map<string, HTMLImageElement>();
 

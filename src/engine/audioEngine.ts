@@ -219,7 +219,9 @@ export function syncAudioPlayback(
                             try {
                                 source.stop();
                                 source.disconnect();
-                            } catch { }
+                            } catch {
+                                // Source might already be stopped or disconnected
+                            }
                         },
                     });
                 }
@@ -247,7 +249,9 @@ export function stopAudioPlayback(): void {
     for (const src of activeSources) {
         try {
             src.stop();
-        } catch { }
+        } catch {
+            // Source might already have finished playing
+        }
     }
     activeSources = [];
 }
@@ -307,11 +311,15 @@ function startProceduralSynth(
                     try {
                         osc.stop();
                         osc.disconnect();
-                    } catch { }
+                    } catch {
+                        // Oscillator already stopped or disconnected
+                    }
                 });
                 try {
                     synthGain.disconnect();
-                } catch { }
+                } catch {
+                    // Gain node already disconnected
+                }
             },
         };
     } catch {

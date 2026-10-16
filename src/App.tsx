@@ -725,7 +725,14 @@ export default function App() {
           </button>
         </div>
         <div className="flex items-center gap-3">
-          <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white" title="Project settings">
+          <button
+            onClick={() => {
+              clearLayerSelection();
+              setInspectorTab('shot');
+            }}
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white"
+            title="Project settings"
+          >
             <SlidersHorizontal className="h-4 w-4" />
           </button>
           <button onClick={() => setExportModalOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white" title="Export / share">

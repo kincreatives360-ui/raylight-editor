@@ -33,8 +33,15 @@ export function loadProjectFromBrowser(): Project | null {
             // background. Do not overwrite the background of projects with layers.
             const isUntouchedBlankProject =
                 project.name === 'Untitled project' &&
-                project.shots.length > 0 &&
-                project.shots.every((shot) => shot.layers.length === 0) &&
+                project.aspectRatio === '16:9' &&
+                project.fps === 60 &&
+                Object.keys(project.assets ?? {}).length === 0 &&
+                (project.audio?.clips?.length ?? 0) === 0 &&
+                project.shots.length === 1 &&
+                project.shots[0].layers.length === 0 &&
+                (project.shots[0].cameraBlocks?.length ?? 0) === 0 &&
+                (project.shots[0].lightBlocks?.length ?? 0) === 0 &&
+                (project.shots[0].effectBlocks?.length ?? 0) === 0 &&
                 project.background.kind === 'solid' &&
                 project.background.color.toUpperCase() ===
                 LEGACY_DEFAULT_CANVAS_BACKGROUND;

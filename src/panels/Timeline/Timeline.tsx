@@ -55,6 +55,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
     } = useSelectionStore();
 
     const trackRef = useRef<HTMLDivElement | null>(null);
+    const [scrollLeft, setScrollLeft] = useState(0);
     const [dragging, setDragging] = useState(false);
     const [hoverTimeMs, setHoverTimeMs] = useState<number | null>(null);
 
@@ -560,7 +561,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                 <div
                     style={{
                         width: `${timelineWidth}px`,
-                        transform: `translateX(-${trackRef.current?.scrollLeft || 0}px)`,
+                        transform: `translateX(-${scrollLeft}px)`,
                     }}
                     className="h-full relative text-[10px] font-mono text-[#71717a] pointer-events-none"
                 >
@@ -583,7 +584,10 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
             {/* 3. SCROLL-SYNCED TRACKS BODY */}
             <div
                 ref={trackRef}
-                onScroll={(e) => setTimelineScrollTop(e.currentTarget.scrollTop)}
+                onScroll={(e) => {
+                    setTimelineScrollTop(e.currentTarget.scrollTop);
+                    setScrollLeft(e.currentTarget.scrollLeft);
+                }}
                 onMouseMove={(e) => setHoverTimeMs(clientXToLocalMs(e.clientX))}
                 onMouseLeave={() => setHoverTimeMs(null)}
                 onMouseDown={handleRulerMouseDown}

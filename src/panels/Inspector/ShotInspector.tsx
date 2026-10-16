@@ -217,7 +217,6 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
                             <span className="text-gray-400">Background Color</span>
                             <div className="flex items-center gap-2">
                                 <ColorField
-                                    
                                     value={background.color}
                                     onChange={(e) => handleSetSolid(e.target.value)}
                                     className="w-7 h-5 rounded cursor-pointer bg-transparent border border-white/20"
@@ -299,7 +298,6 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
                                         className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg border border-white/10"
                                     >
                                         <ColorField
-                                            
                                             value={stop.color}
                                             onChange={(e) => handleUpdateStopColor(index, e.target.value)}
                                             className="w-6 h-5 rounded cursor-pointer bg-transparent border border-white/20 shrink-0"

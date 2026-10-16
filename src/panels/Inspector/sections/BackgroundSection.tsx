@@ -1,4 +1,5 @@
 import { ColorField, ColorPicker } from '../ColorPicker';
+import { saveImageAsset } from '../imageAssetHelper';
 // src/panels/Inspector/sections/BackgroundSection.tsx
 import React, { useRef, useState, useEffect } from 'react';
 import { Palette, Image as ImageIcon } from 'lucide-react';
@@ -101,34 +102,12 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
     const handlePickImage = (file: File | null) => {
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = reader.result as string;
-            const assetId = `bg-asset-${Date.now()}`;
-            const image = new Image();
-            const save = (width: number, height: number) => {
-                // Store as project asset so Viewport / exporter can resolve it
-                updateProject((p) => ({
-                    ...p,
-                    assets: {
-                        ...p.assets,
-                        [assetId]: {
-                            id: assetId,
-                            name: file.name,
-                            mimeType: file.type || 'image/png',
-                            dataUrl,
-                            width,
-                            height,
-                        },
-                    },
-                }));
-                setBackground({ kind: 'image', assetId });
-            };
-            image.onload = () => save(image.naturalWidth, image.naturalHeight);
-            image.onerror = () => save(0, 0);
-            image.src = dataUrl;
-        };
-        reader.readAsDataURL(file);
+        saveImageAsset({
+            file,
+            assetId: `bg-asset-${Date.now()}`,
+            updateProject,
+            onSave: (assetId) => setBackground({ kind: 'image', assetId }),
+        });
     };
 
     const assetPreview =

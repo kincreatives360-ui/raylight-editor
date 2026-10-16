@@ -227,7 +227,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 layer.groupId
                             );
                         }
-                    } catch { }
+                    } catch {
+                        // Ignore invalid drag-and-drop payload
+                    }
                 }}
                 onClick={(e) => {
                     e.stopPropagation();

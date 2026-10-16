@@ -2,7 +2,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
-import { kelvinToRgb } from '../Stage';
+import { kelvinToRgb } from '../stageUtils';
 import type { Shot } from '../../model/types';
 
 interface SceneLightingProps {
@@ -25,12 +25,13 @@ const AreaLightItem: React.FC<{
     height: number;
 }> = ({ position, intensity, color, width, height }) => {
     const lightRef = useRef<THREE.RectAreaLight>(null);
+    const [posX, posY, posZ] = position;
 
     useLayoutEffect(() => {
         if (lightRef.current) {
             lightRef.current.lookAt(0, 0, 0);
         }
-    }, [position[0], position[1], position[2]]);
+    }, [posX, posY, posZ]);
 
     return (
         <rectAreaLight

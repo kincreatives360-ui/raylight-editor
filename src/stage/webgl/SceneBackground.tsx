@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import type { Background } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { calculateCoverCrop, hexToRgba } from '../../engine/canvasRenderer';
-import { ASPECT_RATIO_CONFIG } from '../Stage';
+import { ASPECT_RATIO_CONFIG } from '../stageUtils';
 
 interface SceneBackgroundProps {
     background: Background;
@@ -18,6 +18,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     const project = useProjectStore((s) => s.project);
     const assets = project.assets;
     const [imageTexture, setImageTexture] = useState<THREE.Texture | null>(null);
+    const texRef = React.useRef<THREE.Texture | null>(null);
 
     const spec = ASPECT_RATIO_CONFIG[project.aspectRatio] ?? { widthRatio: 16, heightRatio: 9 };
     const targetAspect = spec.widthRatio / spec.heightRatio;
@@ -51,6 +52,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
                     tex.repeat.set(crop.uRepeat, crop.vRepeat);
                     tex.offset.set(crop.uOffset, crop.vOffset);
                 }
+                texRef.current = tex;
                 setImageTexture(tex);
             },
             undefined,
@@ -65,13 +67,14 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
 
     // Keep crop UVs in sync if targetAspect or texture changes
     useEffect(() => {
-        if (!imageTexture) return;
-        const img = imageTexture.image as HTMLImageElement | undefined;
+        const tex = texRef.current;
+        if (!tex) return;
+        const img = tex.image as HTMLImageElement | undefined;
         if (img && img.width && img.height) {
             const crop = calculateCoverCrop(img.width, img.height, targetAspect);
-            imageTexture.repeat.set(crop.uRepeat, crop.vRepeat);
-            imageTexture.offset.set(crop.uOffset, crop.vOffset);
-            imageTexture.needsUpdate = true;
+            tex.repeat.set(crop.uRepeat, crop.vRepeat);
+            tex.offset.set(crop.uOffset, crop.vOffset);
+            tex.needsUpdate = true;
         }
     }, [imageTexture, targetAspect]);
 

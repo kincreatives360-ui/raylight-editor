@@ -5,7 +5,7 @@ import {
     preloadProjectImages,
     renderProjectFrameToCanvas,
 } from './canvasRenderer';
-import { ASPECT_RATIO_CONFIG } from '../stage/Stage';
+import { ASPECT_RATIO_CONFIG } from '../stage/stageUtils';
 
 export type ExportFormat = 'mp4' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';

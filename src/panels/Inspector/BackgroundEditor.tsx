@@ -1,11 +1,11 @@
-import { ColorField } from './ColorPicker';
+import { ColorField, ColorPicker, type GradientValue } from './ColorPicker';
 import React, { useEffect, useRef } from 'react';
 import { Image as ImageIcon, Palette } from 'lucide-react';
 import type { Background, GradientStop, Shot } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { ColorPicker, type GradientValue } from './ColorPicker';
+import { saveImageAsset } from './imageAssetHelper';
 
 type BackgroundType = 'color' | 'image' | 'shader';
 interface BackgroundEditorProps { scope: 'project' | 'shot'; activeShot?: Shot; }
@@ -89,20 +89,12 @@ export const BackgroundEditor: React.FC<BackgroundEditorProps> = ({ scope, activ
 
     const pickImage = (file: File | undefined) => {
         if (!file || !file.type.startsWith('image/')) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = String(reader.result ?? '');
-            const assetId = `background-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-            const image = new Image();
-            const save = (width: number, height: number) => {
-                updateProject((current) => ({ ...current, assets: { ...current.assets, [assetId]: { id: assetId, name: file.name, mimeType: file.type || 'image/png', dataUrl, width, height } } }));
-                setBackground({ kind: 'image', assetId });
-            };
-            image.onload = () => save(image.naturalWidth, image.naturalHeight);
-            image.onerror = () => save(0, 0);
-            image.src = dataUrl;
-        };
-        reader.readAsDataURL(file);
+        saveImageAsset({
+            file,
+            assetId: `background-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+            updateProject,
+            onSave: (assetId) => setBackground({ kind: 'image', assetId }),
+        });
     };
 
     const setShaderStop = (index: number, stopPatch: Partial<GradientStop>) => {
