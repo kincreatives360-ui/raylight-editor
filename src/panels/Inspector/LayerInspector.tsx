@@ -750,9 +750,9 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                 <label className="block text-[10px] text-gray-400">Mask source layer</label>
                                 <select value={selectedLayer.maskLayerId || ''} onChange={(e) => updateLayer(activeShot.id, selectedLayer.id, (l) => ({ ...l, maskLayerId: e.target.value || undefined }))} className="w-full rounded-md bg-[#11131b] border border-white/10 px-2 py-1.5 text-[11px] text-white">
                                     <option value="">No mask</option>
-                                    {activeShot.layers.filter((layer) => layer.id !== selectedLayer.id).map((layer) => <option key={layer.id} value={layer.id}>{layer.name} ({layer.kind})</option>)}
+                                    {activeShot.layers.filter((layer) => layer.id !== selectedLayer.id && layer.kind === 'shape').map((layer) => <option key={layer.id} value={layer.id}>{layer.name} ({layer.kind})</option>)}
                                 </select>
-                                <p className="text-[9px] leading-relaxed text-gray-500">Choose a shape or image as the mask source. Mask links are saved with the project and can be reassigned at any time.</p>
+                                <p className="text-[9px] leading-relaxed text-gray-500">Choose a shape layer as the mask source. Mask links are saved with the project and can be reassigned at any time.</p>
                             </div>
 
                             {/* 2B. SHAPE LAYER INSPECTOR */}

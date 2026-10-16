@@ -19,6 +19,8 @@ import {
     Activity,
     Video,
     Sun,
+    Volume2,
+    VolumeX,
 } from 'lucide-react';
 import type { Shot, Layer, Group } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -40,6 +42,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 }) => {
     const {
         project,
+        updateProject,
         updateShot,
         updateLayer,
         addLayerToShot,
@@ -797,6 +800,40 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 }
                                 className="flex-1 overflow-y-auto px-1.5 py-1 space-y-0.5"
                             >
+                                {/* 0. Media Track Row (Matching Timeline Media row when audio/video clips exist!) */}
+                                {(project.audio?.clips?.length || 0) > 0 && (
+                                    <div
+                                        className="h-7 mb-2 px-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center justify-between text-[11px] text-slate-400"
+                                    >
+                                        <div className="flex items-center gap-1.5 truncate">
+                                            <Music className="w-3.5 h-3.5 shrink-0 text-sky-400" />
+                                            <span className="truncate">Media</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateProject((p) => ({
+                                                    ...p,
+                                                    audio: {
+                                                        clips: p.audio?.clips || [],
+                                                        muted: !p.audio?.muted,
+                                                        masterVolume: p.audio?.masterVolume ?? 1,
+                                                    },
+                                                }));
+                                            }}
+                                            title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
+                                            className="p-1 hover:text-white cursor-pointer"
+                                        >
+                                            {project.audio?.muted ? (
+                                                <VolumeX className="w-3 h-3 text-rose-400" />
+                                            ) : (
+                                                <Volume2 className="w-3 h-3 text-slate-300" />
+                                            )}
+                                        </button>
+                                    </div>
+                                )}
+
                                 {/* 1. Camera Track Row (ONLY shown when Camera is added!) */}
                                 {hasCameraBlocks && (
                                     <div

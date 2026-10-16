@@ -13,7 +13,7 @@ interface LightingSectionProps {
 export const LightingSection: React.FC<LightingSectionProps> = ({
     activeShot,
 }) => {
-    const { updateShot } = useProjectStore();
+    const { updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
     const { selectedLightBlockId, selectLightBlock, setTimelineView } = useSelectionStore();
     const { light } = activeShot;
     const selectedLightBlock = (activeShot.lightBlocks || []).find(
@@ -36,7 +36,81 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
             {(activeShot.light.sources || []).map((source) => <div key={source.id} className="rounded-lg border border-white/10 p-2 space-y-2">
                 <div className="flex items-center justify-between text-[10px] text-white"><span>{source.name} · {source.type}</span><div className="flex gap-2"><input aria-label={`${source.name} color`} type="color" value={source.color} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, color: e.target.value } : l) } }))} /><button type="button" className="text-rose-300" onClick={() => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).filter((l) => l.id !== source.id) } }))}>Remove</button></div></div>
                 <label className="flex items-center gap-2 text-[10px] text-gray-300"><input type="checkbox" checked={source.enabled} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, enabled: e.target.checked } : l) } }))}/> Enabled</label>
-                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
+                <div className="space-y-1">
+                    <span className="text-[9px] text-gray-400">Position</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <label className="text-[9px] text-gray-400">
+                            X:
+                            <input
+                                type="number"
+                                step="0.05"
+                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
+                                value={source.position?.x ?? 0}
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateShot(activeShot.id, (shot) => ({
+                                        ...shot,
+                                        light: {
+                                            ...shot.light,
+                                            sources: (shot.light.sources || []).map((l) =>
+                                                l.id === source.id
+                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), x: val } }
+                                                    : l
+                                            ),
+                                        },
+                                    }));
+                                }}
+                            />
+                        </label>
+                        <label className="text-[9px] text-gray-400">
+                            Y:
+                            <input
+                                type="number"
+                                step="0.05"
+                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
+                                value={source.position?.y ?? 0}
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateShot(activeShot.id, (shot) => ({
+                                        ...shot,
+                                        light: {
+                                            ...shot.light,
+                                            sources: (shot.light.sources || []).map((l) =>
+                                                l.id === source.id
+                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), y: val } }
+                                                    : l
+                                            ),
+                                        },
+                                    }));
+                                }}
+                            />
+                        </label>
+                        <label className="text-[9px] text-gray-400">
+                            Z:
+                            <input
+                                type="number"
+                                step="0.05"
+                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
+                                value={source.position?.z ?? 0}
+                                onChange={(e) => {
+                                    const val = Number(e.target.value);
+                                    updateShot(activeShot.id, (shot) => ({
+                                        ...shot,
+                                        light: {
+                                            ...shot.light,
+                                            sources: (shot.light.sources || []).map((l) =>
+                                                l.id === source.id
+                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), z: val } }
+                                                    : l
+                                            ),
+                                        },
+                                    }));
+                                }}
+                            />
+                        </label>
+                    </div>
+                </div>
+                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onPointerDown={() => beginDragTransaction()} onPointerUp={() => commitDragTransaction()} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
             </div>)}
 
         <div className="p-3.5 space-y-3">

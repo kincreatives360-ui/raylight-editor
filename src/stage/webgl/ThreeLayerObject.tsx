@@ -390,16 +390,51 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     ctx.stroke();
                 }
             } else if (shapeL.shape === 'line' || shapeL.shape === 'arrow') {
-                ctx.strokeStyle =
+                const shaftColor =
                     shapeL.stroke?.color ||
                     (shapeL.fill.kind === 'solid' ? shapeL.fill.color : '#a855f7');
-                ctx.lineWidth = Math.max(6, canvasH * 0.18);
+                const shaftWidth = Math.max(6, canvasH * 0.18);
+                ctx.strokeStyle = shaftColor;
+                ctx.lineWidth = shaftWidth;
                 ctx.lineCap = 'round';
                 ctx.beginPath();
                 ctx.moveTo(pad, canvasH / 2);
                 ctx.lineTo(canvasW - pad, canvasH / 2);
                 ctx.stroke();
-                if (shapeL.shape === 'arrow') { ctx.beginPath(); ctx.moveTo(canvasW - pad, canvasH / 2); ctx.lineTo(canvasW - pad - strokePx * 3, canvasH / 2 - strokePx * 2); ctx.lineTo(canvasW - pad - strokePx * 3, canvasH / 2 + strokePx * 2); ctx.closePath(); ctx.fillStyle = shapeL.stroke?.color || '#ffffff'; ctx.fill(); }
+                if (shapeL.shape === 'arrow') {
+                    const arrowSize = Math.max(shaftWidth * 2.2, strokePx * 3);
+                    ctx.beginPath();
+                    ctx.moveTo(canvasW - pad, canvasH / 2);
+                    ctx.lineTo(canvasW - pad - arrowSize, canvasH / 2 - arrowSize * 0.65);
+                    ctx.lineTo(canvasW - pad - arrowSize, canvasH / 2 + arrowSize * 0.65);
+                    ctx.closePath();
+                    ctx.fillStyle = shaftColor;
+                    ctx.fill();
+                }
+            } else if (shapeL.shape === 'polygon') {
+                const points = shapeL.points?.length
+                    ? shapeL.points
+                    : [
+                          { x: 0.5, y: 0 },
+                          { x: 1, y: 0.5 },
+                          { x: 0.5, y: 1 },
+                          { x: 0, y: 0.5 },
+                      ];
+                ctx.beginPath();
+                points.forEach((pt, i) => {
+                    const x = pt.x * canvasW;
+                    const y = pt.y * canvasH;
+                    if (i === 0) ctx.moveTo(x, y);
+                    else ctx.lineTo(x, y);
+                });
+                ctx.closePath();
+                ctx.fill();
+                if (shapeL.stroke && strokePx > 0) {
+                    ctx.globalAlpha = shapeL.stroke.opacity ?? 1;
+                    ctx.strokeStyle = shapeL.stroke.color;
+                    ctx.lineWidth = strokePx;
+                    ctx.stroke();
+                }
             } else {
                 const r = Math.round(
                     (shapeL.cornerRadius ?? 0.04) * Math.min(canvasW, canvasH) * 0.5

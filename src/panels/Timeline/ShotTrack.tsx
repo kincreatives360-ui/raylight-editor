@@ -7,6 +7,8 @@ import {
     Plus,
     Copy,
     Trash2,
+    Volume2,
+    VolumeX,
 } from 'lucide-react';
 import type { Shot } from '../../model/types';
 import { useProjectStore, recalculateShotStartTimes } from '../../store/useProjectStore';
@@ -36,6 +38,7 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
         beginDragTransaction,
         commitDragTransaction,
         updateProject,
+        project,
     } = useProjectStore();
 
     const resizeShotDuration = (shotId: string, durationMs: number, options?: { skipHistory?: boolean }) => {
@@ -184,6 +187,48 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
 
     return (
         <div className="space-y-2 pt-2">
+            {(project.audio?.clips?.length || 0) > 0 && (
+                <div
+                    className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center justify-between px-2"
+                    style={{ width: `${Math.max(400, totalDurationMs * pxPerMs)}px` }}
+                    aria-label="Imported media timeline"
+                >
+                    <div className="flex items-center gap-1.5">
+                        <span className="text-[9px] uppercase tracking-wide text-slate-500">Media</span>
+                        <span className="text-[10px] text-slate-300">
+                            {project.audio?.clips.length} clip{project.audio?.clips.length === 1 ? '' : 's'}
+                        </span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            updateProject((p) => ({
+                                ...p,
+                                audio: {
+                                    clips: p.audio?.clips || [],
+                                    muted: !p.audio?.muted,
+                                    masterVolume: p.audio?.masterVolume ?? 1,
+                                },
+                            }));
+                        }}
+                        title={project.audio?.muted ? 'Unmute audio' : 'Mute audio'}
+                        className="text-[10px] text-slate-400 hover:text-white flex items-center gap-1 cursor-pointer"
+                    >
+                        {project.audio?.muted ? (
+                            <>
+                                <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                                <span>Unmute</span>
+                            </>
+                        ) : (
+                            <>
+                                <Volume2 className="w-3.5 h-3.5 text-slate-300" />
+                                <span>Mute</span>
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
             {/* Sequential Shots Track */}
             <div className="h-8 relative flex items-center">
                 {shots.map((shot, idx) => {

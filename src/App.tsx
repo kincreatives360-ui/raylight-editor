@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Download, X, Sparkles } from 'lucide-react';
 import type { Layer } from './model/types';
+import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
 import { useSelectionStore } from './store/useSelectionStore';
@@ -516,7 +517,45 @@ export default function App() {
       const addVideoClip = (durationMs: number) => {
         const assetId = `video-${Date.now()}`;
         const asset = { id: assetId, name: file.name, mimeType: file.type, dataUrl, width: 1920, height: 1080 };
-        updateProject((p) => ({ ...p, assets: { ...p.assets, [assetId]: asset }, audio: { clips: [...(p.audio?.clips || []), { id: assetId, name: file.name, assetId, dataUrl, startMs: currentTimeMs, durationMs: Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000, offsetMs: 0, volume: 1, muted: true }], muted: p.audio?.muted || false, masterVolume: p.audio?.masterVolume ?? 1 } }));
+        const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
+        const clipEnd = currentTimeMs + clipDuration;
+        updateProject((p) => {
+          const currentTotal = p.shots.reduce((max, s) => Math.max(max, s.startMs + s.durationMs), 0);
+          let nextShots = p.shots;
+          if (clipEnd > currentTotal) {
+            if (nextShots.length === 0) {
+              nextShots = [createDefaultShot({ durationMs: clipEnd })];
+            } else {
+              const lastIdx = nextShots.length - 1;
+              nextShots = nextShots.map((s, idx) =>
+                idx === lastIdx ? { ...s, durationMs: clipEnd - s.startMs } : s
+              );
+            }
+          }
+          return {
+            ...p,
+            shots: nextShots,
+            assets: { ...p.assets, [assetId]: asset },
+            audio: {
+              clips: [
+                ...(p.audio?.clips || []),
+                {
+                  id: assetId,
+                  name: file.name,
+                  assetId,
+                  dataUrl,
+                  startMs: currentTimeMs,
+                  durationMs: clipDuration,
+                  offsetMs: 0,
+                  volume: 1,
+                  muted: true,
+                },
+              ],
+              muted: p.audio?.muted || false,
+              masterVolume: p.audio?.masterVolume ?? 1,
+            },
+          };
+        });
         setAudioLabel(file.name); e.target.value = '';
       };
       video.addEventListener('loadedmetadata', () => addVideoClip(video.duration * 1000), { once: true });
@@ -561,7 +600,13 @@ export default function App() {
         position: { x: 0, y: 0, z: 0.1 },
         rotation: { x: 0, y: 0, z: 0 },
         size: { width: Math.min(0.85, assetRecord.width / Math.max(1, assetRecord.height) * 0.42), height: 0.72 },
-        inMs: Math.max(0, currentTimeMs - activeShot.startMs),
+        inMs: Math.max(
+          0,
+          Math.min(
+            Math.max(0, activeShot.durationMs - 1),
+            currentTimeMs - activeShot.startMs
+          )
+        ),
         outMs: activeShot.durationMs,
       });
       selectLayer(newLayer.id, false);
@@ -625,13 +670,47 @@ export default function App() {
         onChange={(e) => {
           const f = e.target.files?.[0];
           if (f) {
+            e.target.value = '';
             const reader = new FileReader();
             reader.onload = () => {
               const dataUrl = String(reader.result || '');
               const audio = new Audio(dataUrl);
               const addClip = (durationMs: number) => {
-                const clip = { id: `audio-${Date.now()}`, name: f.name, dataUrl, startMs: currentTimeMs, durationMs: Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000, offsetMs: 0, volume: 1, muted: false };
-                updateProject((p) => ({ ...p, audio: { clips: [...(p.audio?.clips || []), clip], muted: p.audio?.muted || false, masterVolume: p.audio?.masterVolume ?? 1 } }));
+                const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
+                const clipEnd = currentTimeMs + clipDuration;
+                const clip = {
+                  id: `audio-${Date.now()}`,
+                  name: f.name,
+                  dataUrl,
+                  startMs: currentTimeMs,
+                  durationMs: clipDuration,
+                  offsetMs: 0,
+                  volume: 1,
+                  muted: false,
+                };
+                updateProject((p) => {
+                  const currentTotal = p.shots.reduce((max, s) => Math.max(max, s.startMs + s.durationMs), 0);
+                  let nextShots = p.shots;
+                  if (clipEnd > currentTotal) {
+                    if (nextShots.length === 0) {
+                      nextShots = [createDefaultShot({ durationMs: clipEnd })];
+                    } else {
+                      const lastIdx = nextShots.length - 1;
+                      nextShots = nextShots.map((s, idx) =>
+                        idx === lastIdx ? { ...s, durationMs: clipEnd - s.startMs } : s
+                      );
+                    }
+                  }
+                  return {
+                    ...p,
+                    shots: nextShots,
+                    audio: {
+                      clips: [...(p.audio?.clips || []), clip],
+                      muted: p.audio?.muted || false,
+                      masterVolume: p.audio?.masterVolume ?? 1,
+                    },
+                  };
+                });
                 setAudioLabel(f.name);
               };
               audio.addEventListener('loadedmetadata', () => addClip(audio.duration * 1000), { once: true });

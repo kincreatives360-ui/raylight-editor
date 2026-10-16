@@ -18,7 +18,7 @@ This package replaces the source files in the supplied project and includes the 
 1. Make a backup of your current project folder.
 2. Extract this ZIP.
 3. Copy the extracted project files over the matching files in your existing project folder, allowing the updated files to replace the old ones.
-4. Keep your existing `package.json` and `package-lock.json` (they are included and unchanged except for normal project metadata if any).
+4. Copy or merge the updated `package.json` and refresh `package-lock.json`, so the added `@tailwindcss/vite` and `tailwindcss` dependencies are installed.
 5. Run `npm install`, then `npm run dev`.
 
 Imported video currently appears as a timeline media clip; synchronized video-texture playback inside the canvas is not yet implemented. Audio playback is synchronized to the playhead.

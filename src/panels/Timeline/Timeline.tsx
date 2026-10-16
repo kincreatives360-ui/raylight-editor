@@ -1,6 +1,6 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus } from 'lucide-react';
+import { Play, Pause, Plus, Volume2, VolumeX } from 'lucide-react';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -13,6 +13,7 @@ interface TimelineProps {
 export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
     const {
         project,
+        updateProject,
         updateShot,
         updateLayer,
         addShot,
@@ -594,14 +595,85 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     className="relative min-h-full"
                 >
                     {(project.audio?.clips?.length || 0) > 0 && (
-                        <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06]" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
-                            <span className="absolute left-1 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
+                        <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
+                            <span className="absolute left-2 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
+                            <button
+                                type="button"
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    updateProject((p) => ({
+                                        ...p,
+                                        audio: {
+                                            clips: p.audio?.clips || [],
+                                            muted: !p.audio?.muted,
+                                            masterVolume: p.audio?.masterVolume ?? 1,
+                                        },
+                                    }));
+                                }}
+                                title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
+                                className="absolute right-2 top-1 text-[10px] text-slate-400 hover:text-white z-10 flex items-center gap-1 cursor-pointer"
+                            >
+                                {project.audio?.muted ? (
+                                    <VolumeX className="w-3.5 h-3.5 text-rose-400" />
+                                ) : (
+                                    <Volume2 className="w-3.5 h-3.5 text-slate-300" />
+                                )}
+                            </button>
                             {(project.audio?.clips || []).map((clip) => {
-                                const sceneStart = timelineView === 'scene' && activeShot ? activeShot.startMs : 0;
-                                const left = Math.max(0, clip.startMs - sceneStart) * pxPerMs;
+                                const clipStart = clip.startMs;
+                                const clipEnd = clip.startMs + clip.durationMs;
+                                if (timelineView === 'scene' && activeShot) {
+                                    const shotStart = activeShot.startMs;
+                                    const shotEnd = activeShot.startMs + activeShot.durationMs;
+                                    if (clipEnd <= shotStart || clipStart >= shotEnd) return null;
+                                    const visibleStart = Math.max(clipStart, shotStart);
+                                    const visibleEnd = Math.min(clipEnd, shotEnd);
+                                    const left = (visibleStart - shotStart) * pxPerMs;
+                                    const width = Math.max(18, (visibleEnd - visibleStart) * pxPerMs);
+                                    return (
+                                        <button
+                                            key={clip.id}
+                                            type="button"
+                                            title={`${clip.name} · click to seek`}
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                setCurrentTimeMs(visibleStart);
+                                            }}
+                                            style={{ left: `${left}px`, width: `${width}px` }}
+                                            className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate cursor-pointer ${
+                                                clip.muted || project.audio?.muted
+                                                    ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
+                                                    : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
+                                            }`}
+                                        >
+                                            {clip.name}
+                                        </button>
+                                    );
+                                }
+                                const left = Math.max(0, clipStart) * pxPerMs;
                                 const width = Math.max(18, clip.durationMs * pxPerMs);
-                                if (timelineView === 'scene' && activeShot && (clip.startMs + clip.durationMs < activeShot.startMs || clip.startMs > activeShot.startMs + activeShot.durationMs)) return null;
-                                return <button key={clip.id} type="button" title={`${clip.name} · click to seek`} onClick={(e) => { e.stopPropagation(); setCurrentTimeMs(Math.max(0, clip.startMs)); }} style={{ left: `${left}px`, width: `${width}px` }} className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate ${clip.muted ? 'border-slate-500/50 bg-slate-700/70 text-slate-200' : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'}`}>{clip.name}</button>;
+                                return (
+                                    <button
+                                        key={clip.id}
+                                        type="button"
+                                        title={`${clip.name} · click to seek`}
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            setCurrentTimeMs(Math.max(0, clipStart));
+                                        }}
+                                        style={{ left: `${left}px`, width: `${width}px` }}
+                                        className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate cursor-pointer ${
+                                            clip.muted || project.audio?.muted
+                                                ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
+                                                : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
+                                        }`}
+                                    >
+                                        {clip.name}
+                                    </button>
+                                );
                             })}
                         </div>
                     )}

@@ -113,7 +113,6 @@ export const Stage: React.FC<StageProps> = ({
 }) => {
     const {
         addLayerToShot,
-        updateShot,
         updateProject,
         addMultipleLayersToShot,
         deleteLayerFromShot,
@@ -298,10 +297,12 @@ export const Stage: React.FC<StageProps> = ({
             setDrawBox({ x: startX, y: startY, w: 0, h: 0 });
 
             let latestBox = { x: startX, y: startY, w: 0, h: 0 };
+            const strokePoints: { x: number; y: number }[] = [{ x: startX, y: startY }];
 
             const onMove = (moveEv: MouseEvent) => {
                 const curX = (moveEv.clientX - rect.left) / canvasZoom;
                 const curY = (moveEv.clientY - rect.top) / canvasZoom;
+                strokePoints.push({ x: curX, y: curY });
                 latestBox = {
                     x: Math.min(startX, curX),
                     y: Math.min(startY, curY),
@@ -350,13 +351,41 @@ export const Stage: React.FC<StageProps> = ({
                         outMs: frame.activeShot.durationMs,
                     });
                 } else if (activeTool === 'pen') {
+                    const xs = strokePoints.map((pt) => pt.x);
+                    const ys = strokePoints.map((pt) => pt.y);
+                    const minX = Math.min(...xs);
+                    const maxX = Math.max(...xs);
+                    const minY = Math.min(...ys);
+                    const maxY = Math.max(...ys);
+                    const boxW = Math.max(1, maxX - minX);
+                    const boxH = Math.max(1, maxY - minY);
+                    const penDraggedEnough = boxW > 16 || boxH > 16;
+                    const penCenterX = minX + boxW / 2;
+                    const penCenterY = minY + boxH / 2;
+                    const penFracX = Number((penCenterX / frameWidth - 0.5).toFixed(4));
+                    const penFracY = Number((penCenterY / frameHeight - 0.5).toFixed(4));
+                    const penFracW = penDraggedEnough
+                        ? Number(Math.max(0.08, boxW / frameWidth).toFixed(4))
+                        : 0.28;
+                    const penFracH = penDraggedEnough
+                        ? Number(Math.max(0.04, boxH / frameHeight).toFixed(4))
+                        : 0.18;
+
+                    const normalizedPoints = strokePoints.length > 1
+                        ? strokePoints.map((pt) => ({
+                            x: Number(Math.max(0, Math.min(1, (pt.x - minX) / boxW)).toFixed(3)),
+                            y: Number(Math.max(0, Math.min(1, (pt.y - minY) / boxH)).toFixed(3)),
+                        }))
+                        : [{ x: 0, y: 0 }, { x: 1, y: 0.25 }, { x: 0.7, y: 1 }];
+
                     created = addLayerToShot(frame.activeShot.id, 'shape', {
                         shape: 'polygon',
                         name: 'Pen path',
-                        position: { x: fracX, y: fracY, z: 0.1 },
-                        size: { width: fracW || 0.28, height: fracH || 0.18 },
-                        points: [{ x: 0, y: 0 }, { x: 1, y: 0.25 }, { x: 0.7, y: 1 }],
-                        inMs: 0, outMs: frame.activeShot.durationMs,
+                        position: { x: penFracX, y: penFracY, z: 0.1 },
+                        size: { width: penFracW, height: penFracH },
+                        points: normalizedPoints,
+                        inMs: 0,
+                        outMs: frame.activeShot.durationMs,
                     });
                 } else {
                     const shapeKind = activeTool === 'ellipse' ? 'ellipse' : activeTool === 'line' ? 'line' : activeTool === 'arrow' ? 'arrow' : activeTool === 'polygon' ? 'polygon' : 'rectangle';
@@ -739,7 +768,7 @@ export const Stage: React.FC<StageProps> = ({
                                         Empty Canvas
                                     </h3>
                                     <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-                                        Import an image or video, paste vector frames from Figma, or draw your first shape.
+                                        Import an image, paste vector frames from Figma, or draw your first shape (videos are added to the timeline).
                                     </p>
                                 </div>
 

@@ -78,12 +78,21 @@ export const BlockInspector: React.FC<BlockInspectorProps> = ({
             initialAmount = { x: 0.15, y: 0, z: 0 };
         }
 
+        const layerDuration = Math.max(0, selectedLayer.outMs - selectedLayer.inMs);
+        if (layerDuration <= 0) return;
+        const desiredDuration = 1200;
+        const durationMs = Math.min(desiredDuration, layerDuration);
+        const startMs = Math.max(
+            selectedLayer.inMs,
+            Math.min(selectedLayer.inMs + 200, selectedLayer.outMs - durationMs)
+        );
+
         const newBlock: AnimationBlock = {
             id: newId,
             label: `${presetProperty.charAt(0).toUpperCase() + presetProperty.slice(1)} Block`,
             property: presetProperty,
-            startMs: Math.min(selectedLayer.outMs, selectedLayer.inMs + 200),
-            durationMs: Math.max(100, Math.min(1200, selectedLayer.outMs - Math.min(selectedLayer.outMs, selectedLayer.inMs + 200))),
+            startMs,
+            durationMs,
             easing: { kind: 'preset', name: 'ease-out' },
             amount: initialAmount,
         };
