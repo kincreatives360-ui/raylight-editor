@@ -21,6 +21,24 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
     );
 
     return (
+        <div className="space-y-3">
+            <div className="flex items-center justify-between gap-2">
+                <span className="text-[11px] font-semibold text-white">Light Sources</span>
+                <select aria-label="Add light source type" className="rounded-md bg-[#18181b] border border-white/10 px-2 py-1 text-[10px] text-white" defaultValue="" onChange={(e) => {
+                    if (!e.target.value) return;
+                    const type = e.target.value as import('../../../model/types').LightSourceType;
+                    updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: [...(shot.light.sources || []), { id: `light-${Date.now()}`, name: `${type[0].toUpperCase()}${type.slice(1)} Light`, type, enabled: true, position: { ...shot.light.position }, intensity: 1, color: '#ffffff', temperature: 6100, distance: 8, angle: Math.PI / 5, penumbra: 0.35, width: 2, height: 2 }] } }));
+                    e.currentTarget.value = ''; 
+                }}>
+                    <option value="">+ Add light source…</option><option value="point">Point light</option><option value="directional">Directional light</option><option value="spot">Spot light</option><option value="area">Area light</option><option value="ambient">Ambient light</option>
+                </select>
+            </div>
+            {(activeShot.light.sources || []).map((source) => <div key={source.id} className="rounded-lg border border-white/10 p-2 space-y-2">
+                <div className="flex items-center justify-between text-[10px] text-white"><span>{source.name} · {source.type}</span><div className="flex gap-2"><input aria-label={`${source.name} color`} type="color" value={source.color} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, color: e.target.value } : l) } }))} /><button type="button" className="text-rose-300" onClick={() => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).filter((l) => l.id !== source.id) } }))}>Remove</button></div></div>
+                <label className="flex items-center gap-2 text-[10px] text-gray-300"><input type="checkbox" checked={source.enabled} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, enabled: e.target.checked } : l) } }))}/> Enabled</label>
+                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
+            </div>)}
+
         <div className="p-3.5 space-y-3">
             <div className="flex items-center justify-between">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Lighting</span>
@@ -308,6 +326,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                     </div>
                 </div>
             )}
+        </div>
         </div>
     );
 };

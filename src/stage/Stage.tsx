@@ -97,7 +97,6 @@ interface StageProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     showSafeArea?: boolean;
     snapEnabled?: boolean;
-    onOpenTemplatesModal?: () => void;
     onUploadClick?: () => void;
     onPasteFigmaSample?: () => void;
 }
@@ -109,7 +108,6 @@ export const Stage: React.FC<StageProps> = ({
     onSelectLayer,
     showSafeArea = true,
     snapEnabled = true,
-    onOpenTemplatesModal,
     onUploadClick,
     onPasteFigmaSample,
 }) => {
@@ -128,7 +126,6 @@ export const Stage: React.FC<StageProps> = ({
     const {
         activeTool,
         isAnimateMode,
-        inspectorTab,
         canvasZoom,
         canvasPan,
         selectLayer,
@@ -181,32 +178,7 @@ export const Stage: React.FC<StageProps> = ({
         };
     }, [contextMenu]);
 
-    const handleLightPinMouseDown = (e: React.MouseEvent) => {
-        e.stopPropagation();
-        e.preventDefault();
-        const frameRect = stageFrameRef.current?.getBoundingClientRect();
-        if (!frameRect) return;
 
-        const onMove = (moveEv: MouseEvent) => {
-            const relX = (moveEv.clientX - frameRect.left) / frameRect.width;
-            const relY = (moveEv.clientY - frameRect.top) / frameRect.height;
-            const posX = Math.max(-1, Math.min(1, Number((relX - 0.5).toFixed(2))));
-            const posY = Math.max(-1, Math.min(1, Number((0.5 - relY).toFixed(2))));
-            updateShot(frame.activeShot.id, (shot) => ({
-                ...shot,
-                light: {
-                    ...shot.light,
-                    position: { ...shot.light.position, x: posX, y: posY },
-                },
-            }));
-        };
-        const onUp = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
-        };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-    };
 
     useEffect(() => {
         const el = containerRef.current;
@@ -280,16 +252,12 @@ export const Stage: React.FC<StageProps> = ({
         frameHeight = Math.round(frameWidth / targetAspect);
     }
 
-    const { light } = frame.activeShot;
-    const lightScreenX = (0.5 + light.position.x) * 100;
-    const lightScreenY = (0.5 - light.position.y) * 100;
-
     const eff = frame.effects.state;
     const colorGradeCss = eff.colorGrade.enabled
         ? `brightness(${eff.colorGrade.exposure}) contrast(${eff.colorGrade.contrast}) saturate(${eff.colorGrade.saturation})`
         : undefined;
 
-    const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line'].includes(
+    const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
 
@@ -381,13 +349,17 @@ export const Stage: React.FC<StageProps> = ({
                         inMs: 0,
                         outMs: frame.activeShot.durationMs,
                     });
+                } else if (activeTool === 'pen') {
+                    created = addLayerToShot(frame.activeShot.id, 'shape', {
+                        shape: 'polygon',
+                        name: 'Pen path',
+                        position: { x: fracX, y: fracY, z: 0.1 },
+                        size: { width: fracW || 0.28, height: fracH || 0.18 },
+                        points: [{ x: 0, y: 0 }, { x: 1, y: 0.25 }, { x: 0.7, y: 1 }],
+                        inMs: 0, outMs: frame.activeShot.durationMs,
+                    });
                 } else {
-                    const shapeKind =
-                        activeTool === 'ellipse'
-                            ? 'ellipse'
-                            : activeTool === 'line'
-                                ? 'line'
-                                : 'rectangle';
+                    const shapeKind = activeTool === 'ellipse' ? 'ellipse' : activeTool === 'line' ? 'line' : activeTool === 'arrow' ? 'arrow' : activeTool === 'polygon' ? 'polygon' : 'rectangle';
                     created = addLayerToShot(frame.activeShot.id, 'shape', {
                         shape: shapeKind,
                         position: { x: fracX, y: fracY, z: 0.1 },
@@ -767,20 +739,11 @@ export const Stage: React.FC<StageProps> = ({
                                         Empty Canvas
                                     </h3>
                                     <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-                                        Drop a screenshot or video, paste vector frames from Figma (<kbd className="px-1.5 py-0.5 rounded bg-white/10 text-gray-300 font-mono text-[10px]">⌘V</kbd>), or start with a pre-built template.
+                                        Import an image or video, paste vector frames from Figma, or draw your first shape.
                                     </p>
                                 </div>
 
                                 <div className="w-full flex flex-col gap-2 pt-1">
-                                    <button
-                                        type="button"
-                                        onClick={() => onOpenTemplatesModal?.()}
-                                        className="w-full py-2 px-3 rounded-xl bg-gradient-to-r from-sky-500 to-indigo-600 hover:from-sky-400 hover:to-indigo-500 text-white font-semibold text-xs flex items-center justify-center gap-2 cursor-pointer shadow-md shadow-sky-500/20 transition"
-                                    >
-                                        <Sparkles className="w-4 h-4 text-sky-200" />
-                                        <span>Browse Starter Templates</span>
-                                    </button>
-
                                     <div className="grid grid-cols-2 gap-2">
                                         <button
                                             type="button"
@@ -902,25 +865,6 @@ export const Stage: React.FC<StageProps> = ({
                         onSelectLayer={handleSelectLayerWithDeepSelect}
                         cameraRef={cameraRef}
                     />
-
-                    {/* Scene Key Light Pin: Only visible when actively inspecting Scene & Light Rig */}
-                    {inspectorTab === 'shot' && (
-                        <div
-                            onMouseDown={handleLightPinMouseDown}
-                            className="w-4 h-4 -ml-2 -mt-2 rounded-full border-2 border-white shadow-xl cursor-grab active:cursor-grabbing absolute z-30 flex items-center justify-center group"
-                            style={{
-                                left: `${lightScreenX}%`,
-                                top: `${lightScreenY}%`,
-                                backgroundColor: kelvinToRgb(light.temperature, 1).css,
-                                boxShadow: `0 0 16px ${kelvinToRgb(light.temperature, 1).css}`,
-                            }}
-                            title={`Key Light: (${light.position.x.toFixed(2)}, ${light.position.y.toFixed(2)}) · Drag to reposition light rig`}
-                        >
-                            <span className="opacity-0 group-hover:opacity-100 transition absolute top-5 px-1.5 py-0.5 rounded bg-black/85 text-[9px] font-mono text-white whitespace-nowrap pointer-events-none border border-white/10 shadow-lg">
-                                Key Light ({light.position.x.toFixed(2)}, {light.position.y.toFixed(2)})
-                            </span>
-                        </div>
-                    )}
                 </div>
             </div>
 

@@ -605,7 +605,11 @@ function drawLayerOnCanvas(
                 baseH,
                 1
             );
-            drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radiusPx);
+            if (shpLayer.shape === 'polygon') {
+                const points = shpLayer.points?.length ? shpLayer.points : [{x:0.5,y:0},{x:1,y:0.5},{x:0.5,y:1},{x:0,y:0.5}];
+                ctx.beginPath(); points.forEach((pt, i) => { const x = (pt.x - 0.5) * baseW; const y = (pt.y - 0.5) * baseH; if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.closePath();
+            } else if (shpLayer.shape === 'ellipse') { ctx.beginPath(); ctx.ellipse(0, 0, baseW / 2, baseH / 2, 0, 0, Math.PI * 2); }
+            else drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radiusPx);
             ctx.fill();
 
             if (shpLayer.stroke && shpLayer.stroke.width > 0) {

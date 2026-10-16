@@ -399,6 +399,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 ctx.moveTo(pad, canvasH / 2);
                 ctx.lineTo(canvasW - pad, canvasH / 2);
                 ctx.stroke();
+                if (shapeL.shape === 'arrow') { ctx.beginPath(); ctx.moveTo(canvasW - pad, canvasH / 2); ctx.lineTo(canvasW - pad - strokePx * 3, canvasH / 2 - strokePx * 2); ctx.lineTo(canvasW - pad - strokePx * 3, canvasH / 2 + strokePx * 2); ctx.closePath(); ctx.fillStyle = shapeL.stroke?.color || '#ffffff'; ctx.fill(); }
             } else {
                 const r = Math.round(
                     (shapeL.cornerRadius ?? 0.04) * Math.min(canvasW, canvasH) * 0.5
@@ -416,6 +417,39 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             ctx.restore();
         }
 
+        // Alpha-mask compositing: shape layers can mask any image, text, or shape layer.
+        // The mask is evaluated in the target layer's local UV space so it stays attached
+        // while the target moves/animates. Only visible shape geometry is used as alpha.
+        if (layer.maskLayerId) {
+            const mask = project.shots.flatMap((shot) => shot.layers).find((candidate) => candidate.id === layer.maskLayerId);
+            if (mask?.kind === 'shape') {
+                const maskCtx = canvas.getContext('2d');
+                if (maskCtx) {
+                    maskCtx.save();
+                    maskCtx.globalCompositeOperation = 'destination-in';
+                    maskCtx.globalAlpha = 1;
+                    maskCtx.fillStyle = '#fff';
+                    maskCtx.strokeStyle = '#fff';
+                    maskCtx.lineWidth = Math.max(6, canvasH * 0.18);
+                    maskCtx.beginPath();
+                    if (mask.shape === 'ellipse') {
+                        maskCtx.ellipse(canvasW / 2, canvasH / 2, canvasW / 2, canvasH / 2, 0, 0, Math.PI * 2);
+                    } else if (mask.shape === 'line' || mask.shape === 'arrow') {
+                        maskCtx.moveTo(0, canvasH / 2); maskCtx.lineTo(canvasW, canvasH / 2);
+                        if (mask.shape === 'arrow') { maskCtx.moveTo(canvasW, canvasH / 2); maskCtx.lineTo(canvasW * 0.82, canvasH * 0.32); maskCtx.moveTo(canvasW, canvasH / 2); maskCtx.lineTo(canvasW * 0.82, canvasH * 0.68); }
+                    } else if (mask.shape === 'polygon') {
+                        const points = mask.points?.length ? mask.points : [{x:0.5,y:0},{x:1,y:0.5},{x:0.5,y:1},{x:0,y:0.5}];
+                        points.forEach((pt, i) => { const x = pt.x * canvasW; const y = pt.y * canvasH; if (i === 0) maskCtx.moveTo(x,y); else maskCtx.lineTo(x,y); }); maskCtx.closePath();
+                    } else {
+                        const r = Math.max(0, (mask.cornerRadius || 0) * Math.min(canvasW, canvasH) * 0.5);
+                        maskCtx.roundRect(0, 0, canvasW, canvasH, r);
+                    }
+                    if (mask.shape === 'line' || mask.shape === 'arrow') maskCtx.stroke(); else maskCtx.fill();
+                    maskCtx.restore();
+                }
+            }
+        }
+
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearFilter;
@@ -424,6 +458,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         return tex;
     }, [
         layer,
+        project,
         loadedImg,
         totalBlurPx,
         meshW,

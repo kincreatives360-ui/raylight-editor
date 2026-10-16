@@ -197,6 +197,7 @@ const LayerBaseSchema = z.object({
   exit: TransitionishSchema,
   blocks: z.array(AnimationBlockSchema),
   effects: LayerEffectsSchema,
+  maskLayerId: z.string().optional(),
 });
 
 export const ImageLayerSchema = LayerBaseSchema.extend({
@@ -232,7 +233,8 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
 
 export const ShapeLayerSchema = LayerBaseSchema.extend({
   kind: z.literal('shape'),
-  shape: z.enum(['rectangle', 'ellipse', 'line', 'arrow']),
+  shape: z.enum(['rectangle', 'ellipse', 'line', 'arrow', 'polygon']),
+  points: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
   size: Size2DSchema,
   cornerRadius: z.number().min(0).max(0.5),
   fill: FillSchema,
@@ -380,6 +382,11 @@ export const ShotSchema = z.object({
     intensity: z.number().min(0),
     temperature: z.number().min(1000).max(15000),
     ambience: z.number().min(0).max(1),
+    sources: z.array(z.object({
+      id: z.string(), name: z.string(), type: z.enum(['directional', 'point', 'spot', 'area', 'ambient']), enabled: z.boolean(),
+      position: Vec3Schema, intensity: z.number().min(0), color: z.string(), temperature: z.number().min(1000).max(15000),
+      distance: z.number().optional(), angle: z.number().optional(), penumbra: z.number().min(0).max(1).optional(), width: z.number().optional(), height: z.number().optional(),
+    })).optional(),
   }),
   effects: z.object({
     depthOfField: z.object({

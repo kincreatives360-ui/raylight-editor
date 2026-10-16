@@ -5,9 +5,6 @@ import {
     ArrowRight,
     ArrowLeftRight,
     Plus,
-    Volume2,
-    VolumeX,
-    Music,
     Copy,
     Trash2,
 } from 'lucide-react';
@@ -18,7 +15,6 @@ interface ShotTrackProps {
     shots: Shot[];
     activeShotId?: string;
     pxPerMs: number;
-    audioLabel: string;
     totalDurationMs: number;
     onSelectShot: (shotId: string) => void;
     onZoomIntoShot: (shotId: string) => void;
@@ -28,7 +24,6 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
     shots,
     activeShotId,
     pxPerMs,
-    audioLabel,
     totalDurationMs,
     onSelectShot,
     onZoomIntoShot,
@@ -40,7 +35,6 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
         addShot,
         beginDragTransaction,
         commitDragTransaction,
-        project,
         updateProject,
     } = useProjectStore();
 
@@ -69,16 +63,6 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
             };
         });
     };
-
-    const toggleAudioMute = () => {
-        updateProject((proj) => ({
-            ...proj,
-            audio: proj.audio
-                ? { ...proj.audio, muted: !proj.audio.muted }
-                : { clips: [], muted: true, masterVolume: 1.0 },
-        }));
-    };
-
 
 
     const dragRef = useRef<{
@@ -200,40 +184,7 @@ export const ShotTrack: React.FC<ShotTrackProps> = ({
 
     return (
         <div className="space-y-2 pt-2">
-            {/* ROW 1: Audio Track Pill */}
-            <div className="h-7 relative flex items-center">
-                <div
-                    onMouseDown={(e) => e.stopPropagation()}
-                    title={`${audioLabel} (Audio Track)`}
-                    className="h-7 rounded-lg border border-[#ea580c]/60 bg-gradient-to-r from-[#5c2008]/85 via-[#431505]/80 to-[#1f0a03]/90 shadow-sm flex items-center justify-between px-2.5 group transition"
-                    style={{
-                        position: 'absolute',
-                        left: 0,
-                        width: `${Math.max(80, totalDurationMs * pxPerMs)}px`,
-                    }}
-                >
-                    <div className="flex items-center gap-1.5 truncate pointer-events-none">
-                        <Music className="w-3 h-3 text-orange-400 shrink-0" />
-                        <span className="text-[10px] font-medium text-orange-200 truncate">
-                            {audioLabel}
-                        </span>
-                    </div>
-
-                    <button
-                        onClick={toggleAudioMute}
-                        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-orange-500/20 text-orange-300 transition"
-                        title={project.audio?.muted ? 'Unmute Audio' : 'Mute Audio'}
-                    >
-                        {project.audio?.muted ? (
-                            <VolumeX className="w-3 h-3" />
-                        ) : (
-                            <Volume2 className="w-3 h-3" />
-                        )}
-                    </button>
-                </div>
-            </div>
-
-            {/* ROW 2: Sequential Shots Track */}
+            {/* Sequential Shots Track */}
             <div className="h-8 relative flex items-center">
                 {shots.map((shot, idx) => {
                     const isSelected = shot.id === activeShotId;

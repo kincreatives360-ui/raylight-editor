@@ -1,8 +1,7 @@
 // src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles, LayoutTemplate } from 'lucide-react';
+import { Download, X, Sparkles } from 'lucide-react';
 import type { Layer } from './model/types';
-import { degToRad, DEFAULT_PROJECT } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
 import { useSelectionStore } from './store/useSelectionStore';
@@ -12,6 +11,7 @@ import {
   readImageFileWithThumbnail,
   SAMPLE_FIGMA_SVG,
 } from './engine/figmaSvgImporter';
+import { decodeAudioFromDataUrl, syncAudioPlayback, stopAudioPlayback } from './engine/audioEngine';
 import { Stage } from './stage/Stage';
 import { LeftPanel } from './panels/LeftPanel/LeftPanel';
 import { RightSidebar } from './panels/Inspector/RightSidebar';
@@ -41,7 +41,6 @@ export default function App() {
     recordAnimatedBlockAtPlayhead,
     createGroupFromLayers,
     ungroupInShot,
-    resetProject,
     undo,
     redo,
   } = useProjectStore();
@@ -68,10 +67,7 @@ export default function App() {
     setIsCropping,
   } = useSelectionStore();
 
-  const [audioLabel, setAudioLabel] = useState<string>(
-    'Add some nice very dru..'
-  );
-  const [templatesModalOpen, setTemplatesModalOpen] = useState<boolean>(false);
+  const [audioLabel, setAudioLabel] = useState<string>('');
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     format: 'mp4',
@@ -124,6 +120,19 @@ export default function App() {
   useEffect(() => {
     saveProjectToBrowser(project);
   }, [project]);
+
+  // Decode imported audio assets and keep WebAudio playback synchronized with the active playhead.
+  useEffect(() => {
+    for (const clip of project.audio?.clips || []) {
+      if (clip.dataUrl && !clip.muted) void decodeAudioFromDataUrl(clip.dataUrl);
+    }
+  }, [project.audio?.clips]);
+
+  useEffect(() => {
+    syncAudioPlayback(project.audio, isPlaying, currentTimeMs);
+  }, [project.audio, isPlaying, currentTimeMs]);
+
+  useEffect(() => () => stopAudioPlayback(), []);
 
   // 60fps Playback Loop
   useEffect(() => {
@@ -344,17 +353,15 @@ export default function App() {
           setActiveTool('ellipse');
           return;
         }
-        if (key === 'l') {
-          setActiveTool('line');
-          return;
-        }
+        if (key === 'l') { setActiveTool('line'); return; }
+        if (key === 'a') { setActiveTool('arrow'); return; }
+        if (key === 'p') { setActiveTool('pen'); return; }
         if (e.key === 'Escape') {
           setIsCropping(false);
           setActiveTool('select');
           clearLayerSelection();
           setInspectorTab('shot');
           setExportModalOpen(false);
-          setTemplatesModalOpen(false);
           return;
         }
       }
@@ -503,6 +510,19 @@ export default function App() {
     const file = e.target.files?.[0];
     if (!file) return;
 
+    if (file.type.startsWith('video/')) {
+      const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '')); reader.onerror = reject; reader.readAsDataURL(file); });
+      const video = document.createElement('video'); video.preload = 'metadata'; video.src = dataUrl;
+      const addVideoClip = (durationMs: number) => {
+        const assetId = `video-${Date.now()}`;
+        const asset = { id: assetId, name: file.name, mimeType: file.type, dataUrl, width: 1920, height: 1080 };
+        updateProject((p) => ({ ...p, assets: { ...p.assets, [assetId]: asset }, audio: { clips: [...(p.audio?.clips || []), { id: assetId, name: file.name, assetId, dataUrl, startMs: currentTimeMs, durationMs: Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000, offsetMs: 0, volume: 1, muted: true }], muted: p.audio?.muted || false, masterVolume: p.audio?.masterVolume ?? 1 } }));
+        setAudioLabel(file.name); e.target.value = '';
+      };
+      video.addEventListener('loadedmetadata', () => addVideoClip(video.duration * 1000), { once: true });
+      video.addEventListener('error', () => addVideoClip(10000), { once: true });
+      return;
+    }
     if (file.name.endsWith('.svg') || file.type === 'image/svg+xml') {
       const svgText = await file.text();
       const parsed = parseFigmaSvgToLayers(
@@ -524,29 +544,29 @@ export default function App() {
     }
 
     const assetRecord = await readImageFileWithThumbnail(file);
-    updateProject((proj) => ({
-      ...proj,
-      assets: {
-        ...proj.assets,
-        [assetRecord.id]: assetRecord,
-      },
-      shots: proj.shots.map((s) => {
-        if (s.id !== activeShot.id) return s;
-        const targetId =
-          selectedLayer?.kind === 'image'
-            ? selectedLayer.id
-            : s.layers.find((l) => l.kind === 'image')?.id;
-
-        return {
-          ...s,
-          layers: s.layers.map((l) =>
-            l.id === targetId && l.kind === 'image'
-              ? { ...l, assetId: assetRecord.id, name: 'Pasted image' }
-              : l
-          ),
-        };
-      }),
-    }));
+    updateProject((proj) => ({ ...proj, assets: { ...proj.assets, [assetRecord.id]: assetRecord } }), { skipHistory: true });
+    if (selectedLayer?.kind === 'image') {
+      updateProject((proj) => ({
+        ...proj,
+        shots: proj.shots.map((shot) => shot.id !== activeShot.id ? shot : ({
+          ...shot,
+          layers: shot.layers.map((layer) => layer.id === selectedLayer.id && layer.kind === 'image' ? { ...layer, assetId: assetRecord.id, name: file.name } : layer),
+        })),
+      }));
+      selectLayer(selectedLayer.id, false);
+    } else {
+      const newLayer = addLayerToShot(activeShot.id, 'image', {
+        name: file.name,
+        assetId: assetRecord.id,
+        position: { x: 0, y: 0, z: 0.1 },
+        rotation: { x: 0, y: 0, z: 0 },
+        size: { width: Math.min(0.85, assetRecord.width / Math.max(1, assetRecord.height) * 0.42), height: 0.72 },
+        inMs: Math.max(0, currentTimeMs - activeShot.startMs),
+        outMs: activeShot.durationMs,
+      });
+      selectLayer(newLayer.id, false);
+    }
+    setInspectorTab('layer');
     e.target.value = '';
   };
 
@@ -588,81 +608,13 @@ export default function App() {
     }
   };
 
-  // Applies a starter template preset onto the active shot
-  const handleApplyStarterTemplate = (
-    templateKind: 'iphone-hero' | 'macbook-float' | 'slide-to-answer'
-  ) => {
-    if (templateKind === 'iphone-hero') {
-      resetProject();
-      setCurrentTimeMs(0);
-      const targetShotId = DEFAULT_PROJECT.shots[0].id;
-      updateShot(targetShotId, (s) => ({
-        ...s,
-        layers: s.layers.map((l, idx) =>
-          idx === 0 && l.kind === 'image'
-            ? {
-              ...l,
-              name: 'Pasted image',
-              size: { width: 0.34, height: 0.68 },
-              position: { x: -0.04, y: 0.08, z: 0.2 },
-              rotation: {
-                x: degToRad(-40),
-                y: degToRad(14),
-                z: degToRad(18),
-              },
-              device: {
-                type: 'iphone',
-                color: 'black',
-                gloss: 0.85,
-                lidAngle: 100,
-                screenGlow: 0.5,
-              },
-            }
-            : l
-        ),
-      }));
-    } else if (templateKind === 'macbook-float') {
-      resetProject();
-      setCurrentTimeMs(0);
-      const targetShotId = DEFAULT_PROJECT.shots[0].id;
-      updateShot(targetShotId, (s) => ({
-        ...s,
-        layers: s.layers.map((l, idx) =>
-          idx === 0 && l.kind === 'image'
-            ? {
-              ...l,
-              name: 'MacBook Showcase',
-              size: { width: 0.66, height: 0.54 },
-              position: { x: 0, y: 0.02, z: 0.1 },
-              rotation: {
-                x: degToRad(14),
-                y: degToRad(-22),
-                z: degToRad(0),
-              },
-              device: {
-                type: 'macbook',
-                color: 'silver',
-                gloss: 0.78,
-                lidAngle: 105,
-                screenGlow: 0.4,
-              },
-            }
-            : l
-        ),
-      }));
-    } else {
-      handlePasteSampleFigmaSvg();
-    }
-    setTemplatesModalOpen(false);
-  };
-
   return (
     <div className="flex h-screen w-screen bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
         type="file"
-        accept="image/*,.svg"
+        accept="image/*,video/*,.svg"
         onChange={handleImageUpload}
         className="hidden"
       />
@@ -672,7 +624,21 @@ export default function App() {
         accept="audio/*"
         onChange={(e) => {
           const f = e.target.files?.[0];
-          if (f) setAudioLabel(f.name);
+          if (f) {
+            const reader = new FileReader();
+            reader.onload = () => {
+              const dataUrl = String(reader.result || '');
+              const audio = new Audio(dataUrl);
+              const addClip = (durationMs: number) => {
+                const clip = { id: `audio-${Date.now()}`, name: f.name, dataUrl, startMs: currentTimeMs, durationMs: Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000, offsetMs: 0, volume: 1, muted: false };
+                updateProject((p) => ({ ...p, audio: { clips: [...(p.audio?.clips || []), clip], muted: p.audio?.muted || false, masterVolume: p.audio?.masterVolume ?? 1 } }));
+                setAudioLabel(f.name);
+              };
+              audio.addEventListener('loadedmetadata', () => addClip(audio.duration * 1000), { once: true });
+              audio.addEventListener('error', () => addClip(10000), { once: true });
+            };
+            reader.readAsDataURL(f);
+          }
         }}
         className="hidden"
       />
@@ -697,15 +663,11 @@ export default function App() {
           }}
           showSafeArea={false}
           snapEnabled={true}
-          onOpenTemplatesModal={() => setTemplatesModalOpen(true)}
           onUploadClick={() => fileInputRef.current?.click()}
           onPasteFigmaSample={handlePasteSampleFigmaSvg}
         />
 
-        <Timeline
-          totalDurationMs={totalDurationMs}
-          audioLabel={audioLabel}
-        />
+        <Timeline totalDurationMs={totalDurationMs} />
       </main>
 
       {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
@@ -716,88 +678,6 @@ export default function App() {
         onSwapImageClick={() => fileInputRef.current?.click()}
         onOpenExportModal={() => setExportModalOpen(true)}
       />
-
-      {/* STARTER TEMPLATES MODAL */}
-      {templatesModalOpen && (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-4 shadow-2xl text-xs">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-xl bg-[#0088ff]/20 border border-[#0088ff]/40 flex items-center justify-center text-[#0088ff]">
-                  <LayoutTemplate className="w-4 h-4" />
-                </div>
-                <div>
-                  <h3 className="text-sm font-bold text-white">
-                    Starter Templates
-                  </h3>
-                  <p className="text-[11px] text-[#a1a1aa]">
-                    Load a pre-rigged 3D scene with camera &amp; lighting
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setTemplatesModalOpen(false)}
-                className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <div className="space-y-2">
-              <button
-                onClick={() => handleApplyStarterTemplate('iphone-hero')}
-                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
-              >
-                <div>
-                  <div className="font-semibold text-white">
-                    iPhone 3D Hero Tilt (-40°)
-                  </div>
-                  <div className="text-[11px] text-[#71717a] mt-0.5">
-                    Close-up iPhone frame with Dynamic Island &amp; dolly camera
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-[#0088ff]">
-                  Load &rarr;
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleApplyStarterTemplate('macbook-float')}
-                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
-              >
-                <div>
-                  <div className="font-semibold text-white">
-                    MacBook Pro Isometric Showcase
-                  </div>
-                  <div className="text-[11px] text-[#71717a] mt-0.5">
-                    3D aluminum MacBook deck with studio key light sweep
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-[#0088ff]">
-                  Load &rarr;
-                </span>
-              </button>
-
-              <button
-                onClick={() => handleApplyStarterTemplate('slide-to-answer')}
-                className="w-full p-3 rounded-xl bg-[#1c1c1f] hover:bg-[#252529] border border-white/10 text-left flex items-center justify-between cursor-pointer transition"
-              >
-                <div>
-                  <div className="font-semibold text-white">
-                    Multi-Layer Figma Stack
-                  </div>
-                  <div className="text-[11px] text-[#71717a] mt-0.5">
-                    Editable shapes, badge &amp; 3D typography spread in Z depth
-                  </div>
-                </div>
-                <span className="text-[10px] font-mono text-[#0088ff]">
-                  Load &rarr;
-                </span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* EXPORT / SHARE MODAL */}
       {exportModalOpen && (

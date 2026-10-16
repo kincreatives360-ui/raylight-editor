@@ -744,6 +744,17 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                 </>
                             )}
 
+                            {/* Layer masking: assign any other layer as this layer's alpha-mask source. */}
+                            <div className="p-3 rounded-xl bg-sky-950/20 border border-sky-500/25 space-y-2">
+                                <div className="font-semibold text-sky-200 text-[11px]">Masking</div>
+                                <label className="block text-[10px] text-gray-400">Mask source layer</label>
+                                <select value={selectedLayer.maskLayerId || ''} onChange={(e) => updateLayer(activeShot.id, selectedLayer.id, (l) => ({ ...l, maskLayerId: e.target.value || undefined }))} className="w-full rounded-md bg-[#11131b] border border-white/10 px-2 py-1.5 text-[11px] text-white">
+                                    <option value="">No mask</option>
+                                    {activeShot.layers.filter((layer) => layer.id !== selectedLayer.id).map((layer) => <option key={layer.id} value={layer.id}>{layer.name} ({layer.kind})</option>)}
+                                </select>
+                                <p className="text-[9px] leading-relaxed text-gray-500">Choose a shape or image as the mask source. Mask links are saved with the project and can be reassigned at any time.</p>
+                            </div>
+
                             {/* 2B. SHAPE LAYER INSPECTOR */}
                             {selectedLayer.kind === 'shape' && (
                                 <div className="p-3 rounded-xl bg-purple-950/20 border border-purple-500/30 space-y-3">
@@ -754,7 +765,7 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
 
                                     <div className="grid grid-cols-2 gap-1.5">
                                         {(
-                                            ['rectangle', 'ellipse', 'line', 'arrow'] as Array<
+                                            ['rectangle', 'ellipse', 'line', 'arrow', 'polygon'] as Array<
                                                 ShapeLayer['shape']
                                             >
                                         ).map((shp) => (

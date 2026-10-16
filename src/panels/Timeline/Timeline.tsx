@@ -8,13 +8,9 @@ import { useSelectionStore } from '../../store/useSelectionStore';
 
 interface TimelineProps {
     totalDurationMs: number;
-    audioLabel: string;
 }
 
-export const Timeline: React.FC<TimelineProps> = ({
-    totalDurationMs,
-    audioLabel,
-}) => {
+export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
     const {
         project,
         updateShot,
@@ -59,6 +55,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
     const trackRef = useRef<HTMLDivElement | null>(null);
     const [dragging, setDragging] = useState(false);
+    const [hoverTimeMs, setHoverTimeMs] = useState<number | null>(null);
 
     const activeShot =
         project.shots.find((shot) => shot.id === selectedShotId) ??
@@ -586,6 +583,8 @@ export const Timeline: React.FC<TimelineProps> = ({
             <div
                 ref={trackRef}
                 onScroll={(e) => setTimelineScrollTop(e.currentTarget.scrollTop)}
+                onMouseMove={(e) => setHoverTimeMs(clientXToLocalMs(e.clientX))}
+                onMouseLeave={() => setHoverTimeMs(null)}
                 onMouseDown={handleRulerMouseDown}
                 className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
                     }`}
@@ -594,19 +593,23 @@ export const Timeline: React.FC<TimelineProps> = ({
                     style={{ width: `${timelineWidth}px`, minWidth: '100%' }}
                     className="relative min-h-full"
                 >
+                    {(project.audio?.clips?.length || 0) > 0 && (
+                        <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06]" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
+                            <span className="absolute left-1 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
+                            {(project.audio?.clips || []).map((clip) => {
+                                const sceneStart = timelineView === 'scene' && activeShot ? activeShot.startMs : 0;
+                                const left = Math.max(0, clip.startMs - sceneStart) * pxPerMs;
+                                const width = Math.max(18, clip.durationMs * pxPerMs);
+                                if (timelineView === 'scene' && activeShot && (clip.startMs + clip.durationMs < activeShot.startMs || clip.startMs > activeShot.startMs + activeShot.durationMs)) return null;
+                                return <button key={clip.id} type="button" title={`${clip.name} · click to seek`} onClick={(e) => { e.stopPropagation(); setCurrentTimeMs(Math.max(0, clip.startMs)); }} style={{ left: `${left}px`, width: `${width}px` }} className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate ${clip.muted ? 'border-slate-500/50 bg-slate-700/70 text-slate-200' : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'}`}>{clip.name}</button>;
+                            })}
+                        </div>
+                    )}
                     {/* =============================================================== */}
                     {/* STATE 1: ZOOMED-OUT WHOLE VIDEO VIEW                            */}
                     {/* =============================================================== */}
                     {timelineView === 'video' && (
                         <div className="space-y-2 pt-2">
-                            <div
-                                title={audioLabel}
-                                className="h-8 rounded-xl border-[1.5px] border-[#ea580c] bg-gradient-to-b from-[#5c2008]/85 to-[#1f0a03]/90 shadow-inner"
-                                style={{
-                                    width: `${Math.max(480, totalDurationMs * pxPerMs)}px`,
-                                }}
-                            />
-
                             <div className="h-8 relative flex items-center gap-1">
                                 {project.shots.map((shot) => {
                                     const isSelected = shot.id === activeShot?.id;
@@ -1133,7 +1136,15 @@ export const Timeline: React.FC<TimelineProps> = ({
                         </div>
                     )}
 
-                    {/* Playhead Blue Pill Badge & Vertical Line */}
+                    {/* Hover ghost playhead follows the cursor independently of the active playhead. */}
+                    {hoverTimeMs !== null && (
+                        <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${hoverTimeMs * pxPerMs}px` }}>
+                            <div className="absolute top-0 bottom-0 w-px bg-white/70 shadow-[0_0_5px_rgba(255,255,255,.35)]" />
+                            <div className="absolute -left-5 top-4 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-mono text-black shadow">{(hoverTimeMs / 1000).toFixed(2)}s</div>
+                        </div>
+                    )}
+
+                    {/* Active blue playhead moves only when scrubbed or playing. */}
                     <div
                         className="absolute top-0 bottom-0 w-[1.5px] bg-[#0088ff] z-30 pointer-events-none"
                         style={{ left: `${playheadDisplayTimeMs * pxPerMs}px` }}

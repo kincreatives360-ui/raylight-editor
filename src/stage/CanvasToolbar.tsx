@@ -18,6 +18,9 @@ import {
     Check,
     ChevronDown,
     Hand,
+    Pen,
+    Pentagon,
+    ArrowRight,
 } from 'lucide-react';
 import type { Layer } from '../model/types';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
@@ -53,7 +56,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const isShapeActive =
         activeTool === 'ellipse' ||
         activeTool === 'rectangle' ||
-        activeTool === 'line';
+        activeTool === 'line' || activeTool === 'arrow' || activeTool === 'polygon';
 
     return (
         <div
@@ -161,7 +164,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     <button
                         onClick={() =>
                             setActiveTool(
-                                activeTool === 'rectangle' || activeTool === 'line'
+                                activeTool === 'rectangle' || activeTool === 'line' || activeTool === 'arrow' || activeTool === 'polygon'
                                     ? activeTool
                                     : 'ellipse'
                             )
@@ -172,13 +175,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                 : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
                             }`}
                     >
-                        {activeTool === 'rectangle' ? (
-                            <Square className="w-3.5 h-3.5" />
-                        ) : activeTool === 'line' ? (
-                            <Minus className="w-3.5 h-3.5" />
-                        ) : (
-                            <Circle className="w-3.5 h-3.5" />
-                        )}
+                        {activeTool === 'rectangle' ? <Square className="w-3.5 h-3.5" /> : activeTool === 'line' ? <Minus className="w-3.5 h-3.5" /> : activeTool === 'arrow' ? <ArrowRight className="w-3.5 h-3.5" /> : activeTool === 'polygon' ? <Pentagon className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
                     </button>
                     <button
                         onClick={() => {
@@ -197,6 +194,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                     { id: 'ellipse', label: 'Oval / Ellipse', key: 'O' },
                                     { id: 'rectangle', label: 'Rectangle', key: 'R' },
                                     { id: 'line', label: 'Line', key: 'L' },
+                                    { id: 'arrow', label: 'Arrow', key: 'A' },
+                                    { id: 'polygon', label: 'Polygon', key: 'P' },
                                 ] as { id: CanvasTool; label: string; key: string }[]
                             ).map((item) => (
                                 <button
@@ -219,6 +218,15 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         </div>
                     )}
                 </div>
+
+                {/* Pen tool (P) for drawing editable vector paths */}
+                <button
+                    onClick={() => setActiveTool('pen')}
+                    title="Pen Tool - create editable vector paths"
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${activeTool === 'pen' ? 'bg-[#0088ff] text-white' : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'}`}
+                >
+                    <Pen className="w-3.5 h-3.5" />
+                </button>
 
                 {/* 4. Text Tool (T) */}
                 <button

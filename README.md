@@ -73,3 +73,15 @@ export default defineConfig([
 ])
 
 ```
+
+
+## Parity fixes in this replacement build
+
+- The initial project is now an empty, editable project with one blank shot and no bundled demo assets or starter templates. Existing saved projects are still loaded from browser storage.
+- Timeline now has an independent cursor-following ghost playhead and a blue active playhead; shots remain clickable/selectable. Imported audio and video files are represented as media clips in the timeline.
+- The floating canvas toolbar includes Pen, Rectangle, Polygon, Line, and Arrow tools.
+- Lighting supports multiple independently enabled Point, Directional, Spot, Area, and Ambient sources with editable color and intensity. The old on-canvas light dot is removed; use Lighting controls to position lights.
+- Newly added layer animation blocks start relative to the selected layer's in-point and are bounded to its out-point.
+- Shape/image layers expose mask-source assignment; shape masks are composited as alpha masks in the WebGL layer texture. Shape fills, strokes, and layer effects remain editable.
+
+Note: imported video is currently a timeline media clip, not a fully time-synchronized video-texture layer in the canvas renderer.

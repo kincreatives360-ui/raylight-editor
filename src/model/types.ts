@@ -153,6 +153,8 @@ export interface LayerBase {
   exit: Transitionish;
   blocks: AnimationBlock[];
   effects: LayerEffects;
+  /** Optional alpha-mask source layer ID. */
+  maskLayerId?: string;
 }
 
 export interface ImageLayer extends LayerBase {
@@ -167,7 +169,10 @@ export interface ImageLayer extends LayerBase {
 
 export interface ShapeLayer extends LayerBase {
   kind: 'shape';
-  shape: 'rectangle' | 'ellipse' | 'line' | 'arrow';
+  shape: 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'polygon';
+  /** Optional shape path points in normalized layer-local coordinates. */
+  points?: Vec2[];
+  /** Optional layer effects used by the canvas renderer. */
   size: Size2D;
   cornerRadius: number;
   fill: Fill;
@@ -261,11 +266,31 @@ export interface SceneEffectAnimationBlock {
   easing: Easing;
 }
 
+export type LightSourceType = 'directional' | 'point' | 'spot' | 'area' | 'ambient';
+
+export interface SceneLight {
+  id: string;
+  name: string;
+  type: LightSourceType;
+  enabled: boolean;
+  position: Vec3;
+  intensity: number;
+  color: string;
+  temperature: number;
+  distance?: number;
+  angle?: number;
+  penumbra?: number;
+  width?: number;
+  height?: number;
+}
+
 export interface LightRig {
   position: Vec3;
   intensity: number;
   temperature: number;
   ambience: number;
+  /** Multiple independently editable light sources; legacy fields remain supported. */
+  sources?: SceneLight[];
 }
 
 export type EffectKey =

@@ -18,7 +18,10 @@ export type CanvasTool =
     | 'image'
     | 'rectangle'
     | 'ellipse'
-    | 'line';
+    | 'line'
+    | 'arrow'
+    | 'polygon'
+    | 'pen';
 
 interface SelectionStore {
     selectedShotId: string;
@@ -76,7 +79,7 @@ interface SelectionStore {
 
 export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedShotId: 'shot-1',
-    selectedLayerIds: ['layer-hero-screenshot'],
+    selectedLayerIds: [],
     selectedBlockId: null,
     selectedCameraBlockId: null,
     selectedLightBlockId: null,
@@ -87,7 +90,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     timelineZoom: 1,
     timelineHeightPx: 248,
     timelineScrollTop: 0,
-    expandedTimelineLayerIds: ['layer-hero-screenshot', 'layer-headline-text'],
+    expandedTimelineLayerIds: [],
 
     activeTool: 'select',
     isAnimateMode: false,

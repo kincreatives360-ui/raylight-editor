@@ -82,8 +82,8 @@ export const BlockInspector: React.FC<BlockInspectorProps> = ({
             id: newId,
             label: `${presetProperty.charAt(0).toUpperCase() + presetProperty.slice(1)} Block`,
             property: presetProperty,
-            startMs: 200,
-            durationMs: 1200,
+            startMs: Math.min(selectedLayer.outMs, selectedLayer.inMs + 200),
+            durationMs: Math.max(100, Math.min(1200, selectedLayer.outMs - Math.min(selectedLayer.outMs, selectedLayer.inMs + 200))),
             easing: { kind: 'preset', name: 'ease-out' },
             amount: initialAmount,
         };
