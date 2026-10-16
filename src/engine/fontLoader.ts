@@ -104,7 +104,7 @@ export async function loadCustomFontFile(file: File): Promise<string> {
     const buffer = await file.arrayBuffer();
     const fontFace = new FontFace(rawName, buffer);
     const loadedFace = await fontFace.load();
-    document.fonts.add(loadedFace);
+    (document.fonts as unknown as Set<FontFace>).add(loadedFace);
     loadedFonts.add(rawName.toLowerCase());
     return rawName;
 }

@@ -371,12 +371,68 @@ export const Stage: React.FC<StageProps> = ({
                         ? Number(Math.max(0.04, boxH / frameHeight).toFixed(4))
                         : 0.18;
 
-                    const normalizedPoints = strokePoints.length > 1
+                    const strokeScale = Math.max(boxW, boxH);
+                    let normalizedPoints = strokePoints.length > 1
                         ? strokePoints.map((pt) => ({
                             x: Number(Math.max(0, Math.min(1, (pt.x - minX) / boxW)).toFixed(3)),
                             y: Number(Math.max(0, Math.min(1, (pt.y - minY) / boxH)).toFixed(3)),
                         }))
                         : [{ x: 0, y: 0 }, { x: 1, y: 0.25 }, { x: 0.7, y: 1 }];
+
+                    let polygonArea = 0;
+                    if (strokePoints.length >= 3) {
+                        let pixelArea = 0;
+                        for (let i = 0; i < strokePoints.length; i++) {
+                            const j = (i + 1) % strokePoints.length;
+                            pixelArea += strokePoints[i].x * strokePoints[j].y - strokePoints[j].x * strokePoints[i].y;
+                        }
+                        polygonArea = Math.abs(pixelArea) / (2 * strokeScale * strokeScale);
+                    }
+
+                    if (strokePoints.length === 2) {
+                        const p0 = normalizedPoints[0];
+                        const p1 = normalizedPoints[1];
+                        const dx = p1.x - p0.x;
+                        const dy = p1.y - p0.y;
+                        const len = Math.hypot(dx, dy) || 1;
+                        const nx = (-dy / len) * 0.12;
+                        const ny = (dx / len) * 0.12;
+                        normalizedPoints = [
+                            { x: Number(Math.max(0, Math.min(1, p0.x + nx)).toFixed(3)), y: Number(Math.max(0, Math.min(1, p0.y + ny)).toFixed(3)) },
+                            { x: Number(Math.max(0, Math.min(1, p1.x + nx)).toFixed(3)), y: Number(Math.max(0, Math.min(1, p1.y + ny)).toFixed(3)) },
+                            { x: Number(Math.max(0, Math.min(1, p1.x - nx)).toFixed(3)), y: Number(Math.max(0, Math.min(1, p1.y - ny)).toFixed(3)) },
+                            { x: Number(Math.max(0, Math.min(1, p0.x - nx)).toFixed(3)), y: Number(Math.max(0, Math.min(1, p0.y - ny)).toFixed(3)) },
+                        ];
+                    } else if (strokePoints.length >= 3 && (polygonArea < 0.02 || Math.min(boxW, boxH) < 12)) {
+                        const uniformBase = strokePoints.map((pt) => ({
+                            x: boxW < 12
+                                ? 0.5 + (pt.x - penCenterX) / strokeScale
+                                : (pt.x - minX) / boxW,
+                            y: boxH < 12
+                                ? 0.5 + (pt.y - penCenterY) / strokeScale
+                                : (pt.y - minY) / boxH,
+                        }));
+                        const pStart = uniformBase[0];
+                        const pEnd = uniformBase[uniformBase.length - 1];
+                        const dx = pEnd.x - pStart.x;
+                        const dy = pEnd.y - pStart.y;
+                        const len = Math.hypot(dx, dy) || 1;
+                        if (len < 0.01) {
+                            normalizedPoints = [{ x: 0, y: 0 }, { x: 1, y: 0.25 }, { x: 0.7, y: 1 }];
+                        } else {
+                            const nx = (-dy / len) * 0.1;
+                            const ny = (dx / len) * 0.1;
+                            const forward = uniformBase.map((p) => ({
+                                x: Number(Math.max(0, Math.min(1, p.x + nx)).toFixed(3)),
+                                y: Number(Math.max(0, Math.min(1, p.y + ny)).toFixed(3)),
+                            }));
+                            const backward = uniformBase.slice().reverse().map((p) => ({
+                                x: Number(Math.max(0, Math.min(1, p.x - nx)).toFixed(3)),
+                                y: Number(Math.max(0, Math.min(1, p.y - ny)).toFixed(3)),
+                            }));
+                            normalizedPoints = [...forward, ...backward];
+                        }
+                    }
 
                     created = addLayerToShot(frame.activeShot.id, 'shape', {
                         shape: 'polygon',

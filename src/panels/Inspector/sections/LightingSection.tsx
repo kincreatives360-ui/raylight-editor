@@ -110,7 +110,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                         </label>
                     </div>
                 </div>
-                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onPointerDown={() => beginDragTransaction()} onPointerUp={() => commitDragTransaction()} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
+                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onPointerDown={() => beginDragTransaction()} onPointerUp={() => commitDragTransaction()} onPointerCancel={() => commitDragTransaction()} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
             </div>)}
 
         <div className="p-3.5 space-y-3">

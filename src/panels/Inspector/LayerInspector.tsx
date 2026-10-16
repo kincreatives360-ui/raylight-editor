@@ -117,7 +117,7 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
             const buffer = await file.arrayBuffer();
             const fontFace = new FontFace(fontName, buffer);
             const loaded = await fontFace.load();
-            document.fonts.add(loaded);
+            (document.fonts as unknown as Set<FontFace>).add(loaded);
             setCustomFonts((prev) => (prev.includes(fontName) ? prev : [...prev, fontName]));
             updateLayer(activeShot.id, selectedLayer.id, (l) =>
                 l.kind === 'text' ? { ...l, font: { ...l.font, family: fontName } } : l
@@ -750,7 +750,7 @@ export const LayerInspector: React.FC<LayerInspectorProps> = ({
                                 <label className="block text-[10px] text-gray-400">Mask source layer</label>
                                 <select value={selectedLayer.maskLayerId || ''} onChange={(e) => updateLayer(activeShot.id, selectedLayer.id, (l) => ({ ...l, maskLayerId: e.target.value || undefined }))} className="w-full rounded-md bg-[#11131b] border border-white/10 px-2 py-1.5 text-[11px] text-white">
                                     <option value="">No mask</option>
-                                    {activeShot.layers.filter((layer) => layer.id !== selectedLayer.id && layer.kind === 'shape').map((layer) => <option key={layer.id} value={layer.id}>{layer.name} ({layer.kind})</option>)}
+                                    {activeShot.layers.filter((layer) => layer.id !== selectedLayer.id && (layer.kind === 'shape' || layer.id === selectedLayer.maskLayerId)).map((layer) => <option key={layer.id} value={layer.id}>{layer.name} ({layer.kind})</option>)}
                                 </select>
                                 <p className="text-[9px] leading-relaxed text-gray-500">Choose a shape layer as the mask source. Mask links are saved with the project and can be reassigned at any time.</p>
                             </div>

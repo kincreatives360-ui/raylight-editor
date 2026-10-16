@@ -420,10 +420,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                           { x: 0.5, y: 1 },
                           { x: 0, y: 0.5 },
                       ];
+                const inset = shapeL.stroke && strokePx > 0 ? strokePx / 2 : 0;
+                const drawW = canvasW - inset * 2;
+                const drawH = canvasH - inset * 2;
                 ctx.beginPath();
                 points.forEach((pt, i) => {
-                    const x = pt.x * canvasW;
-                    const y = pt.y * canvasH;
+                    const x = inset + pt.x * drawW;
+                    const y = inset + pt.y * drawH;
                     if (i === 0) ctx.moveTo(x, y);
                     else ctx.lineTo(x, y);
                 });
