@@ -46,6 +46,10 @@ export const BackgroundSchema = z.discriminatedUnion('kind', [
     angle: z.number(),
     stops: z.array(GradientStopSchema).min(2),
   }),
+  z.object({
+    kind: z.literal('image'),
+    assetId: z.string(),
+  }),
 ]);
 
 export const PresetEasingNameSchema = z.enum([
@@ -369,6 +373,8 @@ export const ShotSchema = z.object({
   startMs: z.number().min(0),
   durationMs: z.number().min(200),
   lane: z.number().int().min(0).max(7),
+  /** When true (default), inherit project.background. When false, use shot.background. */
+  useProjectBackground: z.boolean().optional(),
   background: BackgroundSchema.optional(),
   layers: z.array(LayerSchema),
   groups: z.array(GroupSchema),

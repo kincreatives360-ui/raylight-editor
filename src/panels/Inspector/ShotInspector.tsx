@@ -75,13 +75,14 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
 
     const handleSetGradientMode = () => {
         if (background.kind === 'gradient') return;
+        const startColor = background.kind === 'solid' ? background.color : '#0f172a';
         updateProject((p) => ({
             ...p,
             background: {
                 kind: 'gradient',
                 angle: 135,
                 stops: [
-                    { at: 0, color: background.color || '#0f172a' },
+                    { at: 0, color: startColor },
                     { at: 1, color: '#020617' },
                 ],
             },
@@ -90,7 +91,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
 
     const handleSetSolidMode = () => {
         if (background.kind === 'solid') return;
-        const initialColor = background.stops[0]?.color || '#07080d';
+        const initialColor =
+            background.kind === 'gradient' ? background.stops[0]?.color || '#07080d' : '#07080d';
         updateProject((p) => ({
             ...p,
             background: { kind: 'solid', color: initialColor },

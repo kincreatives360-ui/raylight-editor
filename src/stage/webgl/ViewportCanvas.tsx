@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project } from '../../model/types';
+import { resolveShotBackground } from '../../model/types';
 import type {
     EvaluatedProjectFrame,
     EvaluatedLayerWithEffects,
@@ -44,8 +45,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
 }) => {
     const activeShot = frame.activeShot;
     const layers: EvaluatedLayerWithEffects[] = frame.layers;
-    const activeBackground =
-        (activeShot as any)?.background ?? project.background;
+    const activeBackground = resolveShotBackground(project, activeShot);
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">

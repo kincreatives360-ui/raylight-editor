@@ -8,6 +8,7 @@ import type {
     Fill,
     LayerBase,
 } from '../model/types';
+import { resolveShotBackground } from '../model/types';
 import { radToDeg } from '../model/defaults';
 import type {
     EvaluatedProjectFrame,
@@ -606,8 +607,8 @@ function drawLayerOnCanvas(
                 1
             );
             if (shpLayer.shape === 'polygon') {
-                const points = shpLayer.points?.length ? shpLayer.points : [{x:0.5,y:0},{x:1,y:0.5},{x:0.5,y:1},{x:0,y:0.5}];
-                ctx.beginPath(); points.forEach((pt, i) => { const x = (pt.x - 0.5) * baseW; const y = (pt.y - 0.5) * baseH; if (i === 0) ctx.moveTo(x,y); else ctx.lineTo(x,y); }); ctx.closePath();
+                const points = shpLayer.points?.length ? shpLayer.points : [{ x: 0.5, y: 0 }, { x: 1, y: 0.5 }, { x: 0.5, y: 1 }, { x: 0, y: 0.5 }];
+                ctx.beginPath(); points.forEach((pt, i) => { const x = (pt.x - 0.5) * baseW; const y = (pt.y - 0.5) * baseH; if (i === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y); }); ctx.closePath();
             } else if (shpLayer.shape === 'ellipse') { ctx.beginPath(); ctx.ellipse(0, 0, baseW / 2, baseH / 2, 0, 0, Math.PI * 2); }
             else drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radiusPx);
             ctx.fill();
@@ -670,23 +671,42 @@ export function renderProjectFrameToCanvas(
     ctx.save();
     ctx.clearRect(0, 0, canvasW, canvasH);
 
-    // 1. Background (Solid or Angled Gradient)
-    if (project.background.kind === 'solid') {
-        ctx.fillStyle = project.background.color;
-    } else {
+    // 1. Background (project or per-shot override via useProjectBackground)
+    const bg = resolveShotBackground(project, frame.activeShot);
+    if (bg.kind === 'solid') {
+        ctx.fillStyle = bg.color;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+    } else if (bg.kind === 'gradient') {
         ctx.fillStyle = createCanvasFillStyle(
             ctx,
             {
                 kind: 'gradient',
-                angle: project.background.angle,
-                stops: project.background.stops,
+                angle: bg.angle,
+                stops: bg.stops,
             },
             canvasW,
             canvasH,
             1
         );
+        ctx.fillRect(0, 0, canvasW, canvasH);
+    } else if (bg.kind === 'image') {
+        const asset = project.assets[bg.assetId];
+        if (asset?.dataUrl) {
+            const img = imageElementCache.get(asset.dataUrl);
+            if (img && img.complete) {
+                ctx.drawImage(img, 0, 0, canvasW, canvasH);
+            } else {
+                ctx.fillStyle = '#0a0a0c';
+                ctx.fillRect(0, 0, canvasW, canvasH);
+            }
+        } else {
+            ctx.fillStyle = '#0a0a0c';
+            ctx.fillRect(0, 0, canvasW, canvasH);
+        }
+    } else {
+        ctx.fillStyle = '#0a0a0c';
+        ctx.fillRect(0, 0, canvasW, canvasH);
     }
-    ctx.fillRect(0, 0, canvasW, canvasH);
 
     // 2. Scene Key Light & Ambient Fill
     const { light } = frame.activeShot;

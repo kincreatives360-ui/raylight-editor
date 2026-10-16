@@ -215,22 +215,9 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     setInspectorTab: (inspectorTab) => set({ inspectorTab }),
 
-    setTimelineView: (timelineView) =>
-        set((state) => ({
-            timelineView,
-            timelineZoom:
-                timelineView === 'scene' && state.timelineZoom < 1.3
-                    ? 1.6
-                    : timelineView === 'video'
-                        ? 1.0
-                        : state.timelineZoom,
-        })),
+    setTimelineView: (timelineView) => set({ timelineView }),
 
-    setTimelineZoom: (timelineZoom) =>
-        set({
-            timelineZoom,
-            timelineView: timelineZoom > 1.25 ? 'scene' : 'video',
-        }),
+    setTimelineZoom: (timelineZoom) => set({ timelineZoom }),
 
     setTimelineHeightPx: (heightPx) =>
         set({

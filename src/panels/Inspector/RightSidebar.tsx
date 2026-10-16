@@ -399,8 +399,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         onClick={() => setProjectPopoverOpen((v) => !v)}
                         title="Project Settings"
                         className={`p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition ${projectPopoverOpen
-                                ? 'text-[#0088ff] bg-white/5'
-                                : 'text-[#a1a1aa] hover:text-white'
+                            ? 'text-[#0088ff] bg-white/5'
+                            : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
                         <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -430,7 +430,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {projectPopoverOpen && (
                 <div className="mx-3 mb-2 p-3 rounded-xl bg-[#16161a] border border-white/10 space-y-2.5 shadow-2xl">
                     <div className="flex items-center justify-between text-[11px] font-semibold text-white">
-                        <span>Project Settings</span>
+                        <span>Project</span>
                         <button
                             onClick={() => setProjectPopoverOpen(false)}
                             className="text-[#71717a] hover:text-white cursor-pointer"
@@ -438,15 +438,23 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             <X className="w-3.5 h-3.5" />
                         </button>
                     </div>
-                    <input
-                        type="text"
-                        value={project.name}
-                        onChange={(e) =>
-                            updateProject((p) => ({ ...p, name: e.target.value }))
-                        }
-                        className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
+
+                    {/* Name */}
+                    <div className="space-y-1">
+                        <span className="text-[10px] text-[#71717a]">Name</span>
+                        <input
+                            type="text"
+                            value={project.name}
+                            onChange={(e) =>
+                                updateProject((p) => ({ ...p, name: e.target.value }))
+                            }
+                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none"
+                        />
+                    </div>
+
+                    {/* Aspect Ratio */}
+                    <div className="space-y-1">
+                        <span className="text-[10px] text-[#71717a]">Aspect Ratio</span>
                         <select
                             value={project.aspectRatio}
                             onChange={(e) =>
@@ -455,14 +463,176 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     aspectRatio: e.target.value as AspectRatio,
                                 }))
                             }
-                            className="bg-[#1c1c1f] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none"
+                            className="w-full h-7 bg-[#1c1c1f] border border-white/10 rounded-lg px-2 text-[11px] text-white outline-none"
                         >
                             {(Object.keys(ASPECT_RATIO_CONFIG) as AspectRatio[]).map((r) => (
                                 <option key={r} value={r}>
-                                    {r}
+                                    {r === '16:9'
+                                        ? 'Landscape 16:9'
+                                        : r === '9:16'
+                                            ? 'Portrait 9:16'
+                                            : r}
                                 </option>
                             ))}
                         </select>
+                    </div>
+
+                    {/* Lens (focal length) */}
+                    <div className="space-y-1">
+                        <span className="text-[10px] text-[#71717a]">Lens</span>
+                        <div className="flex items-center h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 gap-1.5">
+                            <span className="text-[10px] text-[#71717a]">F</span>
+                            <input
+                                type="number"
+                                min={14}
+                                max={200}
+                                value={project.defaultCamera?.focalLength ?? 50}
+                                onChange={(e) => {
+                                    const mm = Number(e.target.value) || 50;
+                                    updateProject((p) => ({
+                                        ...p,
+                                        defaultCamera: {
+                                            position: p.defaultCamera?.position ?? { x: 0, y: 0, z: 2.65 },
+                                            rotation: p.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                                            focalLength: mm,
+                                        },
+                                    }));
+                                }}
+                                className="flex-1 bg-transparent text-[11px] text-white outline-none"
+                            />
+                            <span className="text-[10px] text-[#71717a]">mm</span>
+                        </div>
+                    </div>
+
+                    {/* Background type + color */}
+                    <div className="space-y-1.5">
+                        <span className="text-[10px] text-[#71717a]">Background</span>
+                        <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
+                            {(
+                                [
+                                    { key: 'solid', label: 'Color' },
+                                    { key: 'image', label: 'Image' },
+                                    { key: 'gradient', label: 'Shader' },
+                                ] as const
+                            ).map(({ key, label }) => (
+                                <button
+                                    key={key}
+                                    type="button"
+                                    onClick={() => {
+                                        if (key === 'solid') {
+                                            const color =
+                                                project.background.kind === 'solid'
+                                                    ? project.background.color
+                                                    : project.background.kind === 'gradient'
+                                                        ? project.background.stops[0]?.color ?? '#000000'
+                                                        : '#000000';
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: { kind: 'solid', color },
+                                            }));
+                                        } else if (key === 'gradient') {
+                                            const color =
+                                                project.background.kind === 'solid'
+                                                    ? project.background.color
+                                                    : '#0a0a0c';
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: {
+                                                    kind: 'gradient',
+                                                    angle: 135,
+                                                    stops: [
+                                                        { at: 0, color },
+                                                        { at: 1, color: '#000000' },
+                                                    ],
+                                                },
+                                            }));
+                                        } else {
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: {
+                                                    kind: 'image',
+                                                    assetId:
+                                                        p.background.kind === 'image'
+                                                            ? p.background.assetId
+                                                            : '',
+                                                },
+                                            }));
+                                        }
+                                    }}
+                                    className={`flex-1 px-2 py-1 rounded-md text-[10px] font-medium transition cursor-pointer ${(key === 'solid' && project.background.kind === 'solid') ||
+                                        (key === 'gradient' && project.background.kind === 'gradient') ||
+                                        (key === 'image' && project.background.kind === 'image')
+                                        ? 'bg-[#2a2a2e] text-white shadow-sm'
+                                        : 'text-[#71717a] hover:text-white'
+                                        }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {project.background.kind === 'solid' && (
+                            <div className="flex items-center gap-2 pt-0.5">
+                                <div className="relative shrink-0">
+                                    <input
+                                        type="color"
+                                        value={project.background.color}
+                                        onChange={(e) =>
+                                            updateProject((p) => ({
+                                                ...p,
+                                                background: { kind: 'solid', color: e.target.value },
+                                            }))
+                                        }
+                                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
+                                    />
+                                    <div
+                                        className="w-7 h-7 rounded-lg border border-white/10"
+                                        style={{ backgroundColor: project.background.color }}
+                                    />
+                                </div>
+                                <input
+                                    type="text"
+                                    value={project.background.color}
+                                    onChange={(e) => {
+                                        let v = e.target.value.trim();
+                                        if (!v.startsWith('#')) v = `#${v}`;
+                                        updateProject((p) => ({
+                                            ...p,
+                                            background: { kind: 'solid', color: v },
+                                        }));
+                                    }}
+                                    className="flex-1 h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] font-mono text-white outline-none"
+                                    spellCheck={false}
+                                />
+                            </div>
+                        )}
+
+                        {project.background.kind === 'gradient' && (
+                            <div className="flex items-center gap-2 pt-0.5">
+                                <input
+                                    type="color"
+                                    value={project.background.stops[0]?.color ?? '#0a0a0c'}
+                                    onChange={(e) => {
+                                        const col = e.target.value;
+                                        updateProject((p) => {
+                                            if (p.background.kind !== 'gradient') return p;
+                                            const stops = [...p.background.stops];
+                                            stops[0] = { ...stops[0], at: 0, color: col };
+                                            return {
+                                                ...p,
+                                                background: { ...p.background, stops },
+                                            };
+                                        });
+                                    }}
+                                    className="w-7 h-7 rounded-lg border border-white/10 cursor-pointer"
+                                />
+                                <span className="text-[10px] text-[#71717a]">Shader gradient</span>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* FPS */}
+                    <div className="grid grid-cols-2 gap-2">
                         <select
                             value={project.fps}
                             onChange={(e) =>
@@ -536,8 +706,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         }))
                                     }
                                     className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${activeCameraBlock.mode === m.id
-                                            ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
-                                            : 'text-[#a1a1aa] hover:text-white'
+                                        ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
+                                        : 'text-[#a1a1aa] hover:text-white'
                                         }`}
                                 >
                                     {m.label}
@@ -697,8 +867,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             <button
                                 onClick={() => setMainTab('design')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'design'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#71717a] hover:text-[#d4d4d8]'
                                     }`}
                             >
                                 Design
@@ -706,8 +876,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             <button
                                 onClick={() => setMainTab('animate')}
                                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'animate'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#71717a] hover:text-[#d4d4d8]'
                                     }`}
                             >
                                 Animate
@@ -783,8 +953,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         setSwapMenuOpen(false);
                                                     }}
                                                     className={`w-full px-2 py-1 rounded text-left capitalize cursor-pointer ${(selectedLayer.device?.type || 'none') === dev
-                                                            ? 'bg-[#0088ff] text-white'
-                                                            : 'text-[#d4d4d8] hover:bg-white/5'
+                                                        ? 'bg-[#0088ff] text-white'
+                                                        : 'text-[#d4d4d8] hover:bg-white/5'
                                                         }`}
                                                 >
                                                     {dev === 'none'
@@ -1133,8 +1303,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             <button
                                                 onClick={() => setAspectLocked((v) => !v)}
                                                 className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer ${aspectLocked
-                                                        ? 'bg-[#1c1c1f] text-white'
-                                                        : 'text-[#71717a] hover:text-white'
+                                                    ? 'bg-[#1c1c1f] text-white'
+                                                    : 'text-[#71717a] hover:text-white'
                                                     }`}
                                             >
                                                 {aspectLocked ? (
@@ -1455,8 +1625,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             })
                                                         }
                                                         className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as any).x <= 0
-                                                                ? 'bg-[#27272c] text-white'
-                                                                : 'text-[#71717a] hover:text-white'
+                                                            ? 'bg-[#27272c] text-white'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
                                                     >
                                                         <ArrowLeft className="w-3.5 h-3.5" />
@@ -1471,8 +1641,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             })
                                                         }
                                                         className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as any).x > 0
-                                                                ? 'bg-[#27272c] text-white'
-                                                                : 'text-[#71717a] hover:text-white'
+                                                            ? 'bg-[#27272c] text-white'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
                                                     >
                                                         <ArrowRight className="w-3.5 h-3.5" />

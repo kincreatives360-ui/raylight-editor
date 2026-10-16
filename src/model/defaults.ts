@@ -269,6 +269,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     startMs: 0,
     durationMs: 4000,
     lane: 0,
+    useProjectBackground: true,
     layers: [],
     groups: [],
     framings: [

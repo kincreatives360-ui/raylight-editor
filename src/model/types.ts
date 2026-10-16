@@ -54,6 +54,12 @@ export type Fill =
     stops: GradientStop[];
   };
 
+/**
+ * Scene / stage background.
+ * - solid  → "Color" in Raylight UI
+ * - gradient → "Shader" (procedural gradient) in Raylight UI
+ * - image  → "Image" in Raylight UI
+ */
 export type Background =
   | {
     kind: 'solid';
@@ -63,8 +69,23 @@ export type Background =
     kind: 'gradient';
     angle: number;
     stops: GradientStop[];
+  }
+  | {
+    kind: 'image';
+    assetId: string;
   };
 
+/** Raylight.app-style quick color swatches (bottom row of the color picker). */
+export const RAYLIGHT_COLOR_PALETTE: string[] = [
+  '#ffffff',
+  '#a1a1aa',
+  '#3b82f6',
+  '#22d3ee',
+  '#22c55e',
+  '#eab308',
+  '#ec4899',
+  '#ef4444',
+];
 
 export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow';
 
@@ -377,6 +398,12 @@ export interface Shot {
   startMs: number;
   durationMs: number;
   lane: number;
+  /**
+   * When true (default), this shot inherits `project.background`.
+   * When false, uses `shot.background` (falls back to project if unset).
+   */
+  useProjectBackground?: boolean;
+  /** Per-shot background override (used only when useProjectBackground is false). */
   background?: Background;
   layers: Layer[];
   groups: Group[];
@@ -449,4 +476,12 @@ export interface Project {
   assets: Record<string, AssetRecord>;
   shots: Shot[];
   audio?: ProjectAudio;
+}
+
+/** Resolve the effective background for a shot (project vs shot override). */
+export function resolveShotBackground(project: Project, shot: Shot): Background {
+  if (shot.useProjectBackground !== false) {
+    return project.background;
+  }
+  return shot.background ?? project.background;
 }
