@@ -104,7 +104,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         if (!file) return;
         saveImageAsset({
             file,
-            assetId: `bg-asset-${Date.now()}`,
+            assetId: `bg-asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
             updateProject,
             onSave: (assetId) => setBackground({ kind: 'image', assetId }),
         });

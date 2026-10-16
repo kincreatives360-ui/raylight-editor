@@ -26,11 +26,13 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     // Load image background texture when kind === 'image'
     useEffect(() => {
         if (background.kind !== 'image' || !background.assetId) {
+            texRef.current = null;
             setImageTexture(null);
             return;
         }
         const asset = assets[background.assetId];
         if (!asset?.dataUrl) {
+            texRef.current = null;
             setImageTexture(null);
             return;
         }
@@ -57,7 +59,10 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
             },
             undefined,
             () => {
-                if (!cancelled) setImageTexture(null);
+                if (!cancelled) {
+                    texRef.current = null;
+                    setImageTexture(null);
+                }
             }
         );
         return () => {
@@ -68,7 +73,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     // Keep crop UVs in sync if targetAspect or texture changes
     useEffect(() => {
         const tex = texRef.current;
-        if (!tex) return;
+        if (!tex || tex !== imageTexture) return;
         const img = tex.image as HTMLImageElement | undefined;
         if (img && img.width && img.height) {
             const crop = calculateCoverCrop(img.width, img.height, targetAspect);
@@ -81,6 +86,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     // Dispose imageTexture when it changes or on unmount
     useEffect(() => {
         return () => {
+            texRef.current = null;
             imageTexture?.dispose();
         };
     }, [imageTexture]);

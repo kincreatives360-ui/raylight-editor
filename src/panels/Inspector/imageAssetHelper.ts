@@ -16,7 +16,7 @@ export function saveImageAsset({
     file,
     updateProject,
     onSave,
-    assetId = `bg-asset-${Date.now()}`,
+    assetId = `bg-asset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
 }: SaveImageAssetOptions): void {
     const reader = new FileReader();
     reader.onload = () => {
@@ -40,7 +40,9 @@ export function saveImageAsset({
             onSave?.(assetId);
         };
         image.onload = () => save(image.naturalWidth, image.naturalHeight);
-        image.onerror = () => save(0, 0);
+        image.onerror = () => {
+            // Decoding failed: skip saving and avoid invoking onSave
+        };
         image.src = dataUrl;
     };
     reader.readAsDataURL(file);
