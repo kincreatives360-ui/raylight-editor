@@ -67,6 +67,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
     const squareRef = useRef<HTMLDivElement>(null);
+    const hexInputRef = useRef<HTMLInputElement>(null);
     const [open, setOpen] = useState(false);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
     const [hexDraft, setHexDraft] = useState(color);
@@ -82,7 +83,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
     useEffect(() => {
         if (draggingSquare) return;
-        setHexDraft(color);
+        if (document.activeElement !== hexInputRef.current) {
+            setHexDraft(color);
+        }
         setHsv(hexToHsv(color));
     }, [color, draggingSquare]);
 
@@ -186,7 +189,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         <span className="text-lg leading-none text-[#8b8b95]">♢</span>
                         <span className="h-5 w-5 rounded-full border border-white/10" style={{ backgroundColor: hexDraft }} />
                         <span className="font-medium">HEX</span>
-                        <input aria-label="Hex color" value={hexDraft.replace(/^#/, '').toUpperCase()} onChange={(event) => {
+                        <input ref={hexInputRef} aria-label="Hex color" value={hexDraft.replace(/^#/, '').toUpperCase()} onChange={(event) => {
                             const raw = event.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
                             setHexDraft(`#${raw}`);
                             if (raw.length === 3 || raw.length === 6) commitHex(raw);

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { Image as ImageIcon, Palette } from 'lucide-react';
 import type { Background, GradientStop, Shot } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
@@ -24,8 +24,8 @@ export const BackgroundEditor: React.FC<BackgroundEditorProps> = ({ scope, activ
     const [gradientEditor, setGradientEditor] = useState<{ active: boolean; angle: number }>({ active: false, angle: 0 });
     const gradientEditorActive = gradientEditor.active;
     const gradientEditorAngle = gradientEditor.angle;
-    const setGradientEditorActive = (active: boolean, angle?: number) => setGradientEditor((prev) => ({ active, angle: angle ?? prev.angle }));
-    const setGradientEditorAngle = (angle: number) => setGradientEditor((prev) => ({ ...prev, angle }));
+    const setGradientEditorActive = useCallback((active: boolean, angle?: number) => setGradientEditor((prev) => ({ active, angle: angle ?? prev.angle })), []);
+    const setGradientEditorAngle = useCallback((angle: number) => setGradientEditor((prev) => ({ ...prev, angle })), []);
     const isShot = scope === 'shot';
     const useProject = !isShot || activeShot?.useProjectBackground !== false;
     const background = isShot && activeShot ? resolveShotBackground(project, activeShot) : project.background;

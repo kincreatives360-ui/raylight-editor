@@ -75,7 +75,10 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
 
     const handleSetGradientMode = () => {
         if (background.kind === 'gradient') return;
-        const color = background.kind === 'solid' ? background.color : '#0f172a';
+        const color =
+            background.kind === 'solid'
+                ? background.color || '#0f172a'
+                : '#0f172a';
         updateProject((p) => ({
             ...p,
             background: {

@@ -9,6 +9,7 @@ import type {
     ImageLayer,
 } from '../../model/types';
 import { getLayer3DWorldTransform } from './cameraMath';
+import { hexToRgba } from '../../engine/canvasRenderer';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -350,18 +351,28 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 ctx.fillStyle = shapeL.fill.color || '#6366f1';
                 ctx.globalAlpha = shapeL.fill.opacity ?? 1;
             } else {
-                const rad = (((shapeL.fill.angle ?? 135) - 90) * Math.PI) / 180;
+                const fillAny = shapeL.fill as any;
+                const isRadial = fillAny.gradientType === 'radial';
                 const cx = canvasW / 2;
                 const cy = canvasH / 2;
                 const len = Math.hypot(canvasW, canvasH) / 2;
-                const grad = ctx.createLinearGradient(
-                    cx - Math.cos(rad) * len,
-                    cy - Math.sin(rad) * len,
-                    cx + Math.cos(rad) * len,
-                    cy + Math.sin(rad) * len
-                );
+                let grad: CanvasGradient;
+                if (isRadial) {
+                    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
+                } else {
+                    const rad = (((shapeL.fill.angle ?? 135) - 90) * Math.PI) / 180;
+                    grad = ctx.createLinearGradient(
+                        cx - Math.cos(rad) * len,
+                        cy - Math.sin(rad) * len,
+                        cx + Math.cos(rad) * len,
+                        cy + Math.sin(rad) * len
+                    );
+                }
                 for (const st of shapeL.fill.stops || []) {
-                    grad.addColorStop(Math.max(0, Math.min(1, st.at)), st.color);
+                    grad.addColorStop(
+                        Math.max(0, Math.min(1, st.at)),
+                        hexToRgba(st.color, st.opacity ?? 1)
+                    );
                 }
                 ctx.fillStyle = grad;
             }

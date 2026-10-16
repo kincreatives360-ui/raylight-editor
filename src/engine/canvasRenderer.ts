@@ -6,6 +6,7 @@ import type {
     ShapeLayer,
     TextLayer,
     Fill,
+    Background,
     LayerBase,
 } from '../model/types';
 import { resolveShotBackground } from '../model/types';
@@ -62,7 +63,7 @@ export async function preloadProjectImages(project: Project): Promise<void> {
     );
 }
 
-function hexToRgba(hex: string, alpha: number): string {
+export function hexToRgba(hex: string, alpha: number): string {
     const clean = hex.replace('#', '');
     const full =
         clean.length === 3
@@ -71,11 +72,49 @@ function hexToRgba(hex: string, alpha: number): string {
                 .map((c) => c + c)
                 .join('')
             : clean.padEnd(6, '0');
-    const num = parseInt(full.slice(0, 6), 16);
+    const num = parseInt(full.slice(0, 6), 16) || 0;
     const r = (num >> 16) & 255;
     const g = (num >> 8) & 255;
     const b = num & 255;
     return `rgba(${r}, ${g}, ${b}, ${Math.max(0, Math.min(1, alpha)).toFixed(3)})`;
+}
+
+export interface CoverCropCoordinates {
+    sx: number;
+    sy: number;
+    sw: number;
+    sh: number;
+    uOffset: number;
+    vOffset: number;
+    uRepeat: number;
+    vRepeat: number;
+}
+
+export function calculateCoverCrop(
+    imgW: number,
+    imgH: number,
+    targetAspect: number
+): CoverCropCoordinates {
+    const imgAspect = imgW / imgH;
+    let sx = 0;
+    let sy = 0;
+    let sw = imgW;
+    let sh = imgH;
+
+    if (imgAspect > targetAspect) {
+        sw = imgH * targetAspect;
+        sx = (imgW - sw) / 2;
+    } else {
+        sh = imgW / targetAspect;
+        sy = (imgH - sh) / 2;
+    }
+
+    const uRepeat = sw / imgW;
+    const vRepeat = sh / imgH;
+    const uOffset = sx / imgW;
+    const vOffset = (imgH - (sy + sh)) / imgH;
+
+    return { sx, sy, sw, sh, uOffset, vOffset, uRepeat, vRepeat };
 }
 
 function drawRoundedRectPath(
@@ -92,9 +131,9 @@ function drawRoundedRectPath(
     ctx.closePath();
 }
 
-function createCanvasFillStyle(
+export function createCanvasFillStyle(
     ctx: CanvasRenderingContext2D,
-    fill: Fill,
+    fill: Fill | (Extract<Background, { kind: 'gradient' }>),
     w: number,
     h: number,
     opacityMultiplier = 1
@@ -102,20 +141,28 @@ function createCanvasFillStyle(
     if (fill.kind === 'solid') {
         return hexToRgba(fill.color, fill.opacity * opacityMultiplier);
     }
-    const rad = ((fill.angle - 90) * Math.PI) / 180;
+    const isRadial = (fill as any).gradientType === 'radial';
     const cx = w / 2;
     const cy = h / 2;
     const len = Math.hypot(w, h) / 2;
-    const grad = ctx.createLinearGradient(
-        cx - Math.cos(rad) * len,
-        cy - Math.sin(rad) * len,
-        cx + Math.cos(rad) * len,
-        cy + Math.sin(rad) * len
-    );
+    let grad: CanvasGradient;
+
+    if (isRadial) {
+        grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
+    } else {
+        const rad = ((fill.angle - 90) * Math.PI) / 180;
+        grad = ctx.createLinearGradient(
+            cx - Math.cos(rad) * len,
+            cy - Math.sin(rad) * len,
+            cx + Math.cos(rad) * len,
+            cy + Math.sin(rad) * len
+        );
+    }
     for (const stop of fill.stops) {
+        const stopOpacity = (stop.opacity ?? 1) * opacityMultiplier;
         grad.addColorStop(
             Math.max(0, Math.min(1, stop.at)),
-            hexToRgba(stop.color, opacityMultiplier)
+            hexToRgba(stop.color, stopOpacity)
         );
     }
     return grad;
@@ -714,19 +761,8 @@ export function renderProjectFrameToCanvas(
                 const imgH = img.naturalHeight || img.height;
                 if (imgW > 0 && imgH > 0) {
                     const canvasAspect = canvasW / canvasH;
-                    const imgAspect = imgW / imgH;
-                    let sx = 0;
-                    let sy = 0;
-                    let sw = imgW;
-                    let sh = imgH;
-                    if (imgAspect > canvasAspect) {
-                        sw = imgH * canvasAspect;
-                        sx = (imgW - sw) / 2;
-                    } else {
-                        sh = imgW / canvasAspect;
-                        sy = (imgH - sh) / 2;
-                    }
-                    ctx.drawImage(img, sx, sy, sw, sh, 0, 0, canvasW, canvasH);
+                    const crop = calculateCoverCrop(imgW, imgH, canvasAspect);
+                    ctx.drawImage(img, crop.sx, crop.sy, crop.sw, crop.sh, 0, 0, canvasW, canvasH);
                 } else {
                     ctx.drawImage(img, 0, 0, canvasW, canvasH);
                 }

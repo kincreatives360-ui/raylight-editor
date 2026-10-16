@@ -483,7 +483,7 @@ export interface Project {
 
 /** Resolve the effective background for a shot (project vs shot override). */
 export function resolveShotBackground(project: Project, shot: Shot): Background {
-  if (shot.useProjectBackground === true) {
+  if (shot.useProjectBackground !== false) {
     return project.background;
   }
   return shot.background ?? project.background;
