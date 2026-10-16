@@ -2,6 +2,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Plus, Volume2, VolumeX } from 'lucide-react';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock } from '../../model/types';
+import { isBlankProjectState } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -62,6 +63,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
     const activeShot =
         project.shots.find((shot) => shot.id === selectedShotId) ??
         project.shots[0];
+    const isBlankState = isBlankProjectState(project);
 
     // Sync vertical scroll position with LeftPanel's lower track rack
     useEffect(() => {
@@ -71,8 +73,9 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
         }
     }, [timelineScrollTop]);
 
-    const visibleDurationMs =
-        timelineView === 'scene' && activeShot
+    const visibleDurationMs = isBlankState
+        ? 0
+        : timelineView === 'scene' && activeShot
             ? Math.max(4500, activeShot.durationMs + 700)
             : Math.max(18000, totalDurationMs + 3500);
 
@@ -594,6 +597,21 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                 className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
                     }`}
             >
+                {isBlankState && timelineView === 'video' && (
+                    <button
+                        type="button"
+                        onMouseDown={(event) => event.stopPropagation()}
+                        onClick={(event) => {
+                            event.stopPropagation();
+                            const created = addShot();
+                            selectShot(created.id);
+                            setInspectorTab('shot');
+                        }}
+                        className="absolute left-2 right-2 top-[14px] z-10 h-9 rounded-lg border border-[#142b37] bg-[#0e191e] text-[11px] text-[#9aaaba] hover:border-[#0088ff]/50 hover:bg-[#11212a] transition"
+                    >
+                        Click to add shot
+                    </button>
+                )}
                 <div
                     style={{ width: `${timelineWidth}px`, minWidth: '100%' }}
                     className="relative min-h-full"
@@ -684,7 +702,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     {/* =============================================================== */}
                     {/* STATE 1: ZOOMED-OUT WHOLE VIDEO VIEW                            */}
                     {/* =============================================================== */}
-                    {timelineView === 'video' && (
+                    {!isBlankState && timelineView === 'video' && (
                         <div className="space-y-2 pt-2">
                             <div className="h-8 relative flex items-center gap-1">
                                 {project.shots.map((shot) => {

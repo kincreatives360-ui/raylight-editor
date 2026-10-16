@@ -12,6 +12,7 @@ import type {
     TextLayer,
     AssetRecord,
 } from '../model/types';
+import { isBlankProjectState } from '../model/types';
 import {
     DEFAULT_PROJECT,
     createDefaultImageLayer,
@@ -516,18 +517,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     addShot: () => {
         const state = get();
         const count = state.project.shots.length;
-        const newShot = createDefaultShot({
-            id: `shot-${Date.now()}`,
-            name: `Shot ${count + 1}`,
-            durationMs: 3500,
-            lane: count % 8,
-            layers: [],
-            cameraBlocks: [],
-        });
+        const isPromotingStarterShot = isBlankProjectState(state.project);
+        const newShot = isPromotingStarterShot
+            ? {
+                ...state.project.shots[0],
+                id: `shot-${Date.now()}`,
+                name: `Shot ${count}`,
+                startMs: 0,
+            }
+            : createDefaultShot({
+                id: `shot-${Date.now()}`,
+                name: `Shot ${count + 1}`,
+                durationMs: 3500,
+                lane: count % 8,
+                layers: [],
+                cameraBlocks: [],
+            });
 
         get().updateProject((proj) => ({
             ...proj,
-            shots: recalculateShotStartTimes([...proj.shots, newShot]),
+            shots: isPromotingStarterShot
+                ? [newShot]
+                : recalculateShotStartTimes([...proj.shots, newShot]),
         }));
 
         return newShot;

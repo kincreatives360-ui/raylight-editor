@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles, Plus, ChevronDown, SlidersHorizontal, Share2 } from 'lucide-react';
+import { Download, X, Sparkles } from 'lucide-react';
 import type { Layer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -708,39 +708,6 @@ export default function App() {
         className="hidden"
       />
 
-      {/* Raylight-style global top bar */}
-      <header className="h-[50px] shrink-0 flex items-center justify-between border-b border-white/[0.08] bg-[#101012] px-3">
-        <div className="flex items-center gap-3">
-          <button className="h-8 rounded-lg bg-[#1b1b1f] px-3 flex items-center gap-2 text-[13px] font-semibold text-white hover:bg-[#242428]" title="Canvas workspace">
-            <span className="text-lg leading-none">◢</span>
-            <span>Canvas</span>
-            <ChevronDown className="h-3.5 w-3.5 text-white/50" />
-          </button>
-          <button
-            onClick={() => useProjectStore.getState().addShot()}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white"
-            title="Add shot"
-          >
-            <Plus className="h-5 w-5" />
-          </button>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            onClick={() => {
-              clearLayerSelection();
-              setInspectorTab('shot');
-            }}
-            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white"
-            title="Project settings"
-          >
-            <SlidersHorizontal className="h-4 w-4" />
-          </button>
-          <button onClick={() => setExportModalOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white" title="Export / share">
-            <Share2 className="h-4 w-4" />
-          </button>
-          <button onClick={() => setExportModalOpen(true)} className="h-9 rounded-lg bg-[#078fff] hover:bg-[#007ce5] px-4 text-[13px] font-medium text-white">Share</button>
-        </div>
-      </header>
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
         <LeftPanel

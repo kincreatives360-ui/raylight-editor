@@ -23,6 +23,7 @@ import {
     VolumeX,
 } from 'lucide-react';
 import type { Shot, Layer, Group } from '../../model/types';
+import { isBlankProjectState } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -405,11 +406,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     };
 
     const assetList = Object.values(project.assets);
+    const isBlankState = isBlankProjectState(project);
     const hasCameraBlocks = (activeShot.cameraBlocks?.length || 0) > 0;
     const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
 
     return (
-        <aside className="w-[268px] border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
+        <aside className="w-56 border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
                 <button
@@ -590,7 +592,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             {activeTab === 'file' && (
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                        {project.shots.map((shot) => {
+                        {isBlankState && <div className="px-4 pt-11 text-[11px] text-[#a1a1aa]">No layers.</div>}
+                        {project.shots.filter(() => !isBlankState).map((shot) => {
                             const isShotActive = shot.id === activeShot.id;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
@@ -729,13 +732,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             );
                         })}
 
-                        <div
+                        {(!isBlankState || audioLabel || (project.audio?.clips.length ?? 0) > 0) && <div
                             onClick={onSelectAudioClick}
                             className="h-7 px-3 mt-1 rounded-md flex items-center gap-2 text-[11px] text-[#a1a1aa] hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
                         >
                             <Music className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
                             <span className="truncate">{audioLabel}</span>
-                        </div>
+                        </div>}
                     </div>
 
                     {/* =============================================================== */}

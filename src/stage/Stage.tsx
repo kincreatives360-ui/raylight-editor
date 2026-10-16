@@ -23,7 +23,7 @@ import {
     Layers,
 } from 'lucide-react';
 import type { Project } from '../model/types';
-import { resolveShotBackground } from '../model/types';
+import { isBlankProjectState, resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -87,6 +87,7 @@ export const Stage: React.FC<StageProps> = ({
         gradientEditorAngle,
         setGradientEditorAngle,
     } = useSelectionStore();
+    const isBlankState = isBlankProjectState(project);
 
     const containerRef = useRef<HTMLDivElement | null>(null);
     const stageFrameRef = useRef<HTMLDivElement | null>(null);
@@ -139,8 +140,8 @@ export const Stage: React.FC<StageProps> = ({
             const entry = entries[0];
             if (!entry) return;
             setViewportSize({
-                width: Math.max(240, entry.contentRect.width - 96),
-                height: Math.max(200, entry.contentRect.height - 110),
+                width: Math.max(240, entry.contentRect.width - 16),
+                height: Math.max(200, entry.contentRect.height - 74),
             });
         });
 
@@ -738,7 +739,7 @@ export const Stage: React.FC<StageProps> = ({
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
-            className={`flex-1 bg-[#05060a] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
+            className={`flex-1 ${isBlankState ? 'bg-[#242424]' : 'bg-[#05060a]'} relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
                     : isCreationTool
                         ? 'cursor-crosshair'
@@ -746,7 +747,7 @@ export const Stage: React.FC<StageProps> = ({
                 }`}
         >
             {/* Subtle Infinite Workspace Grid */}
-            <div
+            {!isBlankState && <div
                 className="absolute inset-0 opacity-20 pointer-events-none"
                 style={{
                     backgroundImage:
@@ -754,7 +755,7 @@ export const Stage: React.FC<StageProps> = ({
                     backgroundSize: `${24 * canvasZoom}px ${24 * canvasZoom}px`,
                     backgroundPosition: `${canvasPan.x}px ${canvasPan.y}px`,
                 }}
-            />
+            />}
 
             {/* PAN & ZOOM WORKSPACE TRANSFORM WRAPPER */}
             <div
@@ -767,18 +768,19 @@ export const Stage: React.FC<StageProps> = ({
                 {/* THE STAGE FRAME */}
                 <div
                     ref={stageFrameRef}
-                    className="relative rounded-xl border border-white/20 bg-[#070913] transition-[width,height] duration-150 overflow-visible"
+                    className={`relative ${isBlankState ? 'bg-[#070707]' : 'rounded-xl border border-white/20 bg-[#070913]'} transition-[width,height] duration-150 overflow-visible`}
                     style={{
                         width: `${frameWidth}px`,
                         height: `${frameHeight}px`,
                         filter: colorGradeCss,
                         // Dimmed off-screen room mask around the bright export frame
-                        boxShadow:
-                            '0 0 0 4000px rgba(5, 6, 10, 0.72), 0 25px 70px rgba(0,0,0,0.85)',
+                        boxShadow: isBlankState
+                            ? 'none'
+                            : '0 0 0 4000px rgba(5, 6, 10, 0.72), 0 25px 70px rgba(0,0,0,0.85)',
                     }}
                 >
                     {/* PRIMARY 3D VIEWPORT CANVAS (Three.js / React Three Fiber - Raylight Engine) */}
-                    <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-auto">
+                    <div className={`absolute inset-0 ${isBlankState ? '' : 'rounded-xl'} overflow-hidden pointer-events-auto`}>
                         <ViewportCanvas
                             project={project}
                             frame={frame}
@@ -948,7 +950,7 @@ export const Stage: React.FC<StageProps> = ({
             )}
 
             {/* Top-Right Workspace Zoom & Pan Controls */}
-            <div
+            {!isBlankState && <div
                 onMouseDown={(e) => e.stopPropagation()}
                 className="absolute top-3 right-3 px-2 py-1 rounded-lg bg-[#12141e]/90 backdrop-blur-md border border-white/10 text-[11px] font-mono text-gray-300 flex items-center gap-1.5 z-30"
             >
@@ -977,7 +979,7 @@ export const Stage: React.FC<StageProps> = ({
                     <RotateCcw className="w-3 h-3" />
                 </button>
 
-            </div>
+            </div>}
 
             {/* RAYLIGHT RIGHT-CLICK CONTEXT MENU (Audit Section 6.4) */}
             {contextMenu && (

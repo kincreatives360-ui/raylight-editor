@@ -48,6 +48,7 @@ import type {
     BlendMode,
     ShapeLayer,
 } from '../../model/types';
+import { isBlankProjectState } from '../../model/types';
 import { degToRad, radToDeg } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -177,6 +178,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     const refStageH = 1080;
 
     const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
+    const isBlankState = isBlankProjectState(project);
     const isBottomLayerSelected =
         Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
 
@@ -537,7 +539,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     };
 
     return (
-        <aside className="w-[304px] border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative">
+        <aside className="w-64 border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative">
             <input
                 ref={fontInputRef}
                 type="file"
@@ -554,7 +556,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             />
 
             {/* 1. TOP HEADER BAR */}
-            <div className="hidden">
+            <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
                 <div className="w-6 h-6 rounded-full bg-[#18181b] border border-white/10 flex items-center justify-center font-bold text-xs text-white">
                     R
                 </div>
@@ -1160,7 +1162,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             ) : (
                 <>
                     {/* 2. SUB-HEADER: [Design] | [Animate] Pill Tabs */}
-                    <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
+                    <div className={`${isBlankState ? 'hidden' : 'h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0'}`}>
                         <div className="flex items-center gap-1.5">
                             <button
                                 onClick={() => setMainTab('design')}
@@ -2675,7 +2677,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* =============================================================== */}
                     {mainTab === 'design' && !selectedLayer && (
                         <div className="flex-1 overflow-y-auto bg-[#101012]">
-                            <div className="px-3.5 pt-3 pb-4 space-y-4">
+                    <div className={`px-3.5 ${isBlankState ? 'pt-1 space-y-2' : 'pt-3 space-y-4'} pb-4`}>
                                 <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
 
                                 <label className="block space-y-1.5">

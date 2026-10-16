@@ -92,7 +92,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     timelineView: 'video',
     timelineZoom: 1,
-    timelineHeightPx: 248,
+    timelineHeightPx: 220,
     timelineScrollTop: 0,
     expandedTimelineLayerIds: [],
 

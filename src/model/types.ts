@@ -482,6 +482,23 @@ export interface Project {
   audio?: ProjectAudio;
 }
 
+/** True while a newly opened project contains only its implicit empty shot. */
+export function isBlankProjectState(project: Project): boolean {
+  if (project.shots.length !== 1) return false;
+  const [shot] = project.shots;
+  return Boolean(
+    shot &&
+    shot.id === 'shot-1' &&
+    shot.layers.length === 0 &&
+    shot.groups.length === 0 &&
+    (shot.cameraBlocks?.length ?? 0) === 0 &&
+    (shot.lightBlocks?.length ?? 0) === 0 &&
+    (shot.effectBlocks?.length ?? 0) === 0 &&
+    (shot.focusBlocks?.length ?? 0) === 0 &&
+    (project.audio?.clips.length ?? 0) === 0
+  );
+}
+
 /** Resolve the effective background for a shot (project vs shot override). */
 export function resolveShotBackground(project: Project, shot: Shot): Background {
   if (shot.useProjectBackground !== false) {
