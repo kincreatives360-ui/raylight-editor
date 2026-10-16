@@ -1,3 +1,4 @@
+import { ColorField } from './ColorPicker';
 // src/panels/Inspector/ShotInspector.tsx
 import React from 'react';
 import { Film, Sun, Scissors, Palette, Plus, Trash2 } from 'lucide-react';
@@ -215,8 +216,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
                         <div className="flex items-center justify-between">
                             <span className="text-gray-400">Background Color</span>
                             <div className="flex items-center gap-2">
-                                <input
-                                    type="color"
+                                <ColorField
+                                    
                                     value={background.color}
                                     onChange={(e) => handleSetSolid(e.target.value)}
                                     className="w-7 h-5 rounded cursor-pointer bg-transparent border border-white/20"
@@ -297,8 +298,8 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
                                         key={index}
                                         className="flex items-center justify-between gap-2 bg-white/5 p-1.5 rounded-lg border border-white/10"
                                     >
-                                        <input
-                                            type="color"
+                                        <ColorField
+                                            
                                             value={stop.color}
                                             onChange={(e) => handleUpdateStopColor(index, e.target.value)}
                                             className="w-6 h-5 rounded cursor-pointer bg-transparent border border-white/20 shrink-0"

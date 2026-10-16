@@ -21,9 +21,9 @@ import {
     Square,
     Circle,
     Layers,
-    Sparkles,
 } from 'lucide-react';
 import type { AspectRatio, Project } from '../model/types';
+import { resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -97,8 +97,6 @@ interface StageProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     showSafeArea?: boolean;
     snapEnabled?: boolean;
-    onUploadClick?: () => void;
-    onPasteFigmaSample?: () => void;
 }
 
 export const Stage: React.FC<StageProps> = ({
@@ -108,8 +106,6 @@ export const Stage: React.FC<StageProps> = ({
     onSelectLayer,
     showSafeArea = true,
     snapEnabled = true,
-    onUploadClick,
-    onPasteFigmaSample,
 }) => {
     const {
         addLayerToShot,
@@ -134,6 +130,9 @@ export const Stage: React.FC<StageProps> = ({
         setCanvasPan,
         resetCanvasView,
         clearLayerSelection,
+        gradientEditorActive,
+        gradientEditorAngle,
+        setGradientEditorAngle,
     } = useSelectionStore();
 
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -252,6 +251,22 @@ export const Stage: React.FC<StageProps> = ({
     }
 
     const eff = frame.effects.state;
+    const effectiveBackground = resolveShotBackground(project, frame.activeShot);
+    const showGradientAngleControl = gradientEditorActive
+        && effectiveBackground.kind === 'gradient'
+        && effectiveBackground.source === 'color'
+        && effectiveBackground.gradientType !== 'radial';
+
+    const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGSVGElement>) => {
+        event.stopPropagation();
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (!rect.width || !rect.height) return;
+        const x = ((event.clientX - rect.left) / rect.width) * frameWidth - frameWidth / 2;
+        const y = ((event.clientY - rect.top) / rect.height) * frameHeight - frameHeight / 2;
+        if (Math.hypot(x, y) < 8) return;
+        const angle = (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
+        setGradientEditorAngle(Number(angle.toFixed(1)));
+    };
     const colorGradeCss = eff.colorGrade.enabled
         ? `brightness(${eff.colorGrade.exposure}) contrast(${eff.colorGrade.contrast}) saturate(${eff.colorGrade.saturation})`
         : undefined;
@@ -796,6 +811,50 @@ export const Stage: React.FC<StageProps> = ({
                         />
                     </div>
 
+                    {showGradientAngleControl && (
+                        <svg
+                            aria-label="Drag to set gradient direction"
+                            className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none"
+                            viewBox={`0 0 ${frameWidth} ${frameHeight}`}
+                            onPointerDown={(event) => {
+                                event.preventDefault();
+                                updateGradientAngleFromPointer(event);
+                                event.currentTarget.setPointerCapture(event.pointerId);
+                            }}
+                            onPointerMove={(event) => {
+                                if (event.buttons === 1) updateGradientAngleFromPointer(event);
+                            }}
+                            onPointerUp={(event) => {
+                                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                            }}
+                            onPointerCancel={(event) => {
+                                if (event.currentTarget.hasPointerCapture(event.pointerId)) event.currentTarget.releasePointerCapture(event.pointerId);
+                            }}
+                        >
+                            {(() => {
+                                const radians = gradientEditorAngle * Math.PI / 180;
+                                const halfLength = Math.hypot(frameWidth, frameHeight) / 2;
+                                const dx = Math.sin(radians) * halfLength;
+                                const dy = -Math.cos(radians) * halfLength;
+                                const cx = frameWidth / 2;
+                                const cy = frameHeight / 2;
+                                const x1 = cx - dx;
+                                const y1 = cy - dy;
+                                const x2 = cx + dx;
+                                const y2 = cy + dy;
+                                return (
+                                    <g>
+                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" className="cursor-crosshair" />
+                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" className="pointer-events-none drop-shadow" />
+                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="pointer-events-none" />
+                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="pointer-events-none" />
+                                        <text x={frameWidth / 2 + 10} y={frameHeight / 2 - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
+                                    </g>
+                                );
+                            })()}
+                        </svg>
+                    )}
+
                     {/* Drag & Drop Target Glow Overlay */}
                     {isDraggingOver && (
                         <div className="absolute inset-0 z-50 bg-sky-500/15 border-2 border-dashed border-sky-400 rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse">
@@ -808,47 +867,6 @@ export const Stage: React.FC<StageProps> = ({
                             <span className="text-[11px] text-sky-200/80">
                                 Places layer at cursor with natural dimensions
                             </span>
-                        </div>
-                    )}
-
-                    {/* Empty Canvas Onboarding & Quick Actions (Audit Section 10) */}
-                    {frame.activeShot.layers.length === 0 && !isDraggingOver && (
-                        <div className="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 select-none pointer-events-auto">
-                            <div className="w-full max-w-sm p-6 rounded-2xl bg-[#090c14]/90 border border-white/15 shadow-2xl backdrop-blur-xl flex flex-col items-center text-center gap-4 animate-in fade-in zoom-in-95 duration-200">
-                                <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-sky-500/20 to-indigo-500/20 border border-sky-400/30 flex items-center justify-center text-sky-400 shadow-inner">
-                                    <UploadCloud className="w-7 h-7" />
-                                </div>
-
-                                <div className="space-y-1.5">
-                                    <h3 className="text-sm font-bold text-white tracking-wide">
-                                        Empty Canvas
-                                    </h3>
-                                    <p className="text-xs text-gray-400 max-w-xs leading-relaxed">
-                                        Import an image, paste vector frames from Figma, or draw your first shape (videos are added to the timeline).
-                                    </p>
-                                </div>
-
-                                <div className="w-full flex flex-col gap-2 pt-1">
-                                    <div className="grid grid-cols-2 gap-2">
-                                        <button
-                                            type="button"
-                                            onClick={() => onUploadClick?.()}
-                                            className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition"
-                                        >
-                                            <UploadCloud className="w-3.5 h-3.5 text-sky-400" />
-                                            <span>Upload Media</span>
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() => onPasteFigmaSample?.()}
-                                            className="py-1.5 px-2.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-gray-300 hover:text-white text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer transition"
-                                        >
-                                            <Sparkles className="w-3.5 h-3.5 text-fuchsia-400" />
-                                            <span>Paste Sample Figma</span>
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
                         </div>
                     )}
 

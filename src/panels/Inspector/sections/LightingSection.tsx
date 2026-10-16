@@ -1,3 +1,4 @@
+import { ColorField } from '../ColorPicker';
 // src/panels/Inspector/sections/LightingSection.tsx
 import React from 'react';
 import { Plus } from 'lucide-react';
@@ -34,7 +35,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 </select>
             </div>
             {(activeShot.light.sources || []).map((source) => <div key={source.id} className="rounded-lg border border-white/10 p-2 space-y-2">
-                <div className="flex items-center justify-between text-[10px] text-white"><span>{source.name} · {source.type}</span><div className="flex gap-2"><input aria-label={`${source.name} color`} type="color" value={source.color} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, color: e.target.value } : l) } }))} /><button type="button" className="text-rose-300" onClick={() => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).filter((l) => l.id !== source.id) } }))}>Remove</button></div></div>
+                <div className="flex items-center justify-between text-[10px] text-white"><span>{source.name} · {source.type}</span><div className="flex gap-2"><ColorField aria-label={`${source.name} color`}  value={source.color} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, color: e.target.value } : l) } }))} /><button type="button" className="text-rose-300" onClick={() => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).filter((l) => l.id !== source.id) } }))}>Remove</button></div></div>
                 <label className="flex items-center gap-2 text-[10px] text-gray-300"><input type="checkbox" checked={source.enabled} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, enabled: e.target.checked } : l) } }))}/> Enabled</label>
                 <div className="space-y-1">
                     <span className="text-[9px] text-gray-400">Position</span>

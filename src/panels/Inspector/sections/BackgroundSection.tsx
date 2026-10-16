@@ -1,8 +1,9 @@
+import { ColorField, ColorPicker } from '../ColorPicker';
 // src/panels/Inspector/sections/BackgroundSection.tsx
 import React, { useRef, useState, useEffect } from 'react';
 import { Palette, Image as ImageIcon } from 'lucide-react';
 import type { Background, Shot } from '../../../model/types';
-import { RAYLIGHT_COLOR_PALETTE, resolveShotBackground } from '../../../model/types';
+import { resolveShotBackground } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
 
 interface BackgroundSectionProps {
@@ -98,28 +99,34 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         }
     };
 
-    const handlePickImage = async (file: File | null) => {
+    const handlePickImage = (file: File | null) => {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
             const dataUrl = reader.result as string;
             const assetId = `bg-asset-${Date.now()}`;
-            // Store as project asset so Viewport / exporter can resolve it
-            updateProject((p) => ({
-                ...p,
-                assets: {
-                    ...p.assets,
-                    [assetId]: {
-                        id: assetId,
-                        name: file.name,
-                        mimeType: file.type || 'image/png',
-                        dataUrl,
-                        width: 0,
-                        height: 0,
+            const image = new Image();
+            const save = (width: number, height: number) => {
+                // Store as project asset so Viewport / exporter can resolve it
+                updateProject((p) => ({
+                    ...p,
+                    assets: {
+                        ...p.assets,
+                        [assetId]: {
+                            id: assetId,
+                            name: file.name,
+                            mimeType: file.type || 'image/png',
+                            dataUrl,
+                            width,
+                            height,
+                        },
                     },
-                },
-            }));
-            setBackground({ kind: 'image', assetId });
+                }));
+                setBackground({ kind: 'image', assetId });
+            };
+            image.onload = () => save(image.naturalWidth, image.naturalHeight);
+            image.onerror = () => save(0, 0);
+            image.src = dataUrl;
         };
         reader.readAsDataURL(file);
     };
@@ -170,8 +177,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             type="button"
                             onClick={() => handleSetKind(k)}
                             className={`flex-1 px-2 py-1 rounded-md text-[10px] font-medium capitalize transition cursor-pointer ${uiKind === k
-                                    ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                    : 'text-[#71717a] hover:text-white'
+                                ? 'bg-[#2a2a2e] text-white shadow-sm'
+                                : 'text-[#71717a] hover:text-white'
                                 }`}
                         >
                             {k === 'color' ? 'Color' : k === 'image' ? 'Image' : 'Shader'}
@@ -180,68 +187,43 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                 </div>
             </div>
 
-            {/* Color controls */}
+            {/* Color controls: use the shared Raylight popover everywhere. */}
             {uiKind === 'color' && (
                 <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                        <div className="relative shrink-0">
-                            <input
-                                type="color"
-                                value={currentColor}
-                                onChange={(e) => handleSetColor(e.target.value)}
-                                className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                                title="Pick color"
-                            />
-                            <div
-                                className="w-7 h-7 rounded-lg border border-white/10"
-                                style={{ backgroundColor: currentColor }}
-                            />
-                        </div>
-                        <div className="flex-1 flex items-center h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] gap-1.5">
-                            <span className="text-[10px] text-[#71717a] font-medium">HEX</span>
-                            <input
-                                type="text"
-                                value={colorDraft}
-                                onChange={(e) => {
-                                    const raw = e.target.value;
-                                    setColorDraft(raw);
-                                    let v = raw.trim();
-                                    if (!v.startsWith('#')) v = `#${v}`;
-                                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
-                                        handleSetColor(v);
-                                    }
-                                }}
-                                onBlur={() => {
-                                    let v = colorDraft.trim();
-                                    if (!v.startsWith('#')) v = `#${v}`;
-                                    if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
-                                        handleSetColor(v);
-                                        setColorDraft(v);
-                                    } else {
-                                        setColorDraft(currentColor);
-                                    }
-                                }}
-                                className="flex-1 bg-transparent text-[11px] font-mono text-white outline-none"
-                                spellCheck={false}
-                            />
-                        </div>
-                    </div>
-
-                    {/* Raylight custom palette (matches raylight.app bottom swatches) */}
-                    <div className="flex items-center gap-1.5 pt-0.5">
-                        {RAYLIGHT_COLOR_PALETTE.map((c) => (
-                            <button
-                                key={c}
-                                type="button"
-                                title={c}
-                                onClick={() => handleSetColor(c)}
-                                className={`w-5 h-5 rounded-full border transition cursor-pointer shrink-0 ${currentColor.toLowerCase() === c.toLowerCase()
-                                        ? 'border-white scale-110 shadow-md ring-1 ring-white/40'
-                                        : 'border-white/15 hover:border-white/40 hover:scale-105'
-                                    }`}
-                                style={{ backgroundColor: c }}
-                            />
-                        ))}
+                    <ColorPicker
+                        color={currentColor}
+                        label="Background color"
+                        onChange={handleSetColor}
+                        showGradientMode={false}
+                    />
+                    <div className="flex items-center h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] gap-1.5">
+                        <span className="text-[10px] text-[#71717a] font-medium">HEX</span>
+                        <input
+                            type="text"
+                            aria-label="Background color HEX"
+                            value={colorDraft}
+                            onChange={(e) => {
+                                const raw = e.target.value;
+                                setColorDraft(raw);
+                                let value = raw.trim();
+                                if (!value.startsWith('#')) value = `#${value}`;
+                                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) {
+                                    handleSetColor(value.toLowerCase());
+                                }
+                            }}
+                            onBlur={() => {
+                                let value = colorDraft.trim();
+                                if (!value.startsWith('#')) value = `#${value}`;
+                                if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(value)) {
+                                    handleSetColor(value.toLowerCase());
+                                    setColorDraft(value.toLowerCase());
+                                } else {
+                                    setColorDraft(currentColor);
+                                }
+                            }}
+                            className="flex-1 min-w-0 bg-transparent text-[11px] font-mono text-white outline-none"
+                            spellCheck={false}
+                        />
                     </div>
                 </div>
             )}
@@ -289,8 +271,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                 <div className="space-y-2">
                     <div className="grid grid-cols-2 gap-2">
                         <div className="flex items-center gap-1.5">
-                            <input
-                                type="color"
+                            <ColorField
+
                                 value={effectiveBg.stops[0]?.color || '#0a0a0c'}
                                 onChange={(e) => {
                                     const col = e.target.value;
@@ -303,8 +285,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             <span className="text-[10px] text-[#71717a]">Start</span>
                         </div>
                         <div className="flex items-center gap-1.5">
-                            <input
-                                type="color"
+                            <ColorField
+
                                 value={effectiveBg.stops[1]?.color || '#000000'}
                                 onChange={(e) => {
                                     const col = e.target.value;

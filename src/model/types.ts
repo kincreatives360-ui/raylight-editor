@@ -80,14 +80,15 @@ export type Background =
 
 /** Raylight.app-style quick color swatches (bottom row of the color picker). */
 export const RAYLIGHT_COLOR_PALETTE: string[] = [
-  '#ffffff',
-  '#a1a1aa',
-  '#3b82f6',
-  '#22d3ee',
-  '#22c55e',
-  '#eab308',
-  '#ec4899',
-  '#ef4444',
+  '#f4f4f5', // white
+  '#94a3b8', // slate
+  '#6366f1', // indigo
+  '#06b6d4', // cyan
+  '#10b981', // emerald
+  '#facc15', // yellow
+  '#f59e0b', // amber
+  '#f9a8d4', // pink
+  '#ef4444', // red
 ];
 
 export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow';

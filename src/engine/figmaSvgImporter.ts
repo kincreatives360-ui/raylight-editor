@@ -446,19 +446,3 @@ export function parseFigmaSvgToLayers(
     return { layers, assets };
 }
 
-// Sample multi-layer Figma SVG frame so users can test Figma paste with 1 click
-export const SAMPLE_FIGMA_SVG = `
-<svg width="1200" height="675" viewBox="0 0 1200 675" fill="none" xmlns="http://www.w3.org/2000/svg">
-  <defs>
-    <linearGradient id="cardGrad" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0%" stop-color="#1e1b4b" />
-      <stop offset="100%" stop-color="#312e81" />
-    </linearGradient>
-  </defs>
-  <rect id="Figma Card Base" x="180" y="135" width="440" height="280" rx="24" fill="url(#cardGrad)" stroke="#6366f1" stroke-width="2" />
-  <rect id="Figma Metric Pill" x="660" y="195" width="360" height="170" rx="20" fill="#0f172a" stroke="#38bdf8" stroke-width="2" />
-  <circle id="Figma Status Badge" cx="235" cy="195" r="22" fill="#10b981" />
-  <text id="Figma Card Title" x="215" y="275" fill="#ffffff" font-size="34" font-weight="700">Pasted from Figma</text>
-  <text id="Figma Metric Value" x="695" y="290" fill="#38bdf8" font-size="38" font-weight="700">+284% Velocity</text>
-</svg>
-`;

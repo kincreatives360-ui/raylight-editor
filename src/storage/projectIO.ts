@@ -3,6 +3,8 @@ import type { Project } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 
 const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
+const DEFAULT_CANVAS_BACKGROUND = '#0A0A0C';
+const LEGACY_DEFAULT_CANVAS_BACKGROUND = '#111114';
 
 // Save project recipe to browser local storage
 export function saveProjectToBrowser(project: Project): void {
@@ -25,7 +27,29 @@ export function loadProjectFromBrowser(): Project | null {
         const parsed = JSON.parse(raw);
         const result = validateProject(parsed);
         if (result.success) {
-            return result.data;
+            const project = result.data;
+
+            // Migrate older blank projects that still contain the previous default
+            // background. Do not overwrite the background of projects with layers.
+            const isUntouchedBlankProject =
+                project.name === 'Untitled project' &&
+                project.shots.length > 0 &&
+                project.shots.every((shot) => shot.layers.length === 0) &&
+                project.background.kind === 'solid' &&
+                project.background.color.toUpperCase() ===
+                LEGACY_DEFAULT_CANVAS_BACKGROUND;
+
+            if (isUntouchedBlankProject) {
+                return {
+                    ...project,
+                    background: {
+                        kind: 'solid',
+                        color: DEFAULT_CANVAS_BACKGROUND,
+                    },
+                };
+            }
+
+            return project;
         }
     } catch (err) {
         console.error('Failed to load project from browser storage:', err);

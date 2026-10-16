@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import type { GradientStop } from '../../model/types';
@@ -54,6 +54,9 @@ interface ColorPickerProps {
     onGradientChange?: (gradient: GradientValue) => void;
     onEnterGradient?: () => void;
     onExitGradient?: () => void;
+    compact?: boolean;
+    showGradientMode?: boolean;
+    className?: string;
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({
@@ -64,10 +67,15 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     onGradientChange,
     onEnterGradient,
     onExitGradient,
+    compact = false,
+    showGradientMode = true,
+    className = '',
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
+    const popupRef = useRef<HTMLDivElement>(null);
     const squareRef = useRef<HTMLDivElement>(null);
     const hexInputRef = useRef<HTMLInputElement>(null);
+    const pickerId = useId();
     const [open, setOpen] = useState(false);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
     const [hexDraft, setHexDraft] = useState(color);
@@ -105,7 +113,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         window.addEventListener('scroll', updatePosition, true);
         const onPointerDown = (event: PointerEvent) => {
             const target = event.target as Node;
-            if (!anchorRef.current?.contains(target) && !document.getElementById('raylight-color-picker')?.contains(target)) {
+            if (!anchorRef.current?.contains(target) && !popupRef.current?.contains(target)) {
                 setOpen(false);
                 onExitGradient?.();
             }
@@ -164,24 +172,26 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const enterColorMode = () => {
         setPickerMode('color');
         onExitGradient?.();
+        if (gradientValue) onChange(gradient.stops[0]?.color ?? color);
     };
 
     const popup = open ? createPortal(
         <div
-            id="raylight-color-picker"
+            ref={popupRef}
+            id={`raylight-color-picker-${pickerId}`}
             role="dialog"
             aria-label={`${label} picker`}
             style={{ left: position.left, top: position.top }}
             className="fixed z-[10000] w-[312px] rounded-2xl border border-white/10 bg-[#111113] p-2.5 shadow-[0_18px_60px_rgba(0,0,0,.7)]"
         >
-            <div className="mb-2 flex items-center gap-1.5">
+            {showGradientMode && <div className="mb-2 flex items-center gap-1.5">
                 <button type="button" aria-label="Solid color" aria-pressed={pickerMode === 'color'} onClick={enterColorMode} className={`grid h-7 w-7 place-items-center rounded-lg border ${pickerMode === 'color' ? 'border-white bg-[#202024]' : 'border-transparent text-[#9ca3af] hover:bg-white/5'}`}>
                     <span className="h-3.5 w-3.5 rounded border border-current" />
                 </button>
                 <button type="button" aria-label="Gradient" aria-pressed={pickerMode === 'gradient'} onClick={enterGradientMode} className={`grid h-7 w-7 place-items-center rounded-lg border ${pickerMode === 'gradient' ? 'border-white bg-[#202024]' : 'border-transparent text-[#9ca3af] hover:bg-white/5'}`}>
                     <span className="h-3.5 w-3.5 rounded-sm border border-current bg-[linear-gradient(135deg,#fff_0%,#777_50%,#111_100%)]" />
                 </button>
-            </div>
+            </div>}
 
             {pickerMode === 'color' ? (
                 <>
@@ -268,7 +278,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             <div key={`${index}-${stop.at}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-white/10 bg-[#1a1a1d] px-1.5 py-1">
                                 <label className="flex items-center text-[10px] text-[#c4c4cc]"><input aria-label={`Stop ${index + 1} position`} type="number" min="0" max="100" value={Math.round(stop.at * 100)} onChange={(event) => updateStop(index, { at: Math.max(0, Math.min(100, Number(event.target.value))) / 100 })} className="w-7 bg-transparent text-right outline-none" /><span>%</span></label>
                                 <label className="flex min-w-0 items-center gap-1 rounded bg-[#101013] px-1">
-                                    <input aria-label={`Stop ${index + 1} color`} type="color" value={normalizeHex(stop.color) ?? '#000000'} onChange={(event) => updateStop(index, { color: event.target.value })} className="h-5 w-5 shrink-0 cursor-pointer border-0 bg-transparent p-0" />
+                                    <ColorField aria-label={`Stop ${index + 1} color`} value={normalizeHex(stop.color) ?? '#000000'} onChange={(event) => updateStop(index, { color: event.target.value })} className="h-5 w-5 shrink-0 cursor-pointer border-0 bg-transparent p-0" />
                                     <input aria-label={`Stop ${index + 1} hex`} value={stop.color.replace(/^#/, '').toUpperCase()} onChange={(event) => { const value = normalizeHex(event.target.value); if (value) updateStop(index, { color: value }); }} className="min-w-0 w-full bg-transparent font-mono text-[10px] text-white outline-none" />
                                 </label>
                                 <label className="flex items-center text-[10px] text-[#c4c4cc]"><input aria-label={`Stop ${index + 1} opacity`} type="number" min="0" max="100" value={Math.round((stop.opacity ?? 1) * 100)} onChange={(event) => updateStop(index, { opacity: Math.max(0, Math.min(100, Number(event.target.value))) / 100 })} className="w-7 bg-transparent text-right outline-none" /><span>%</span></label>
@@ -294,10 +304,30 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 setOpen(true);
                 if (gradientValue) onEnterGradient?.();
             }
-        }} className="flex h-8 w-full items-center gap-2 rounded-lg border border-white/[0.06] bg-[#1c1c1f] px-2 text-left hover:bg-[#232326]">
-            <span className="h-5 w-5 shrink-0 rounded-md border border-white/15" style={{ background: gradientValue ? `linear-gradient(${gradientValue.angle}deg, ${gradientValue.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : color }} />
-            <span className="font-mono text-[11px] text-white">{gradientValue ? 'Gradient' : color.replace(/^#/, '').toUpperCase()}</span>
+        }} className={`${compact ? 'h-full w-full min-h-[18px] min-w-[18px] rounded border border-white/20' : 'flex h-8 w-full items-center gap-2 rounded-lg border border-white/[0.06] bg-[#1c1c1f] px-2 text-left hover:bg-[#232326]'} ${className}`}>
+            <span className={`${compact ? 'block h-full w-full rounded-[inherit]' : 'h-5 w-5 shrink-0 rounded-md border border-white/15'}`} style={{ background: gradientValue ? `linear-gradient(${gradientValue.angle}deg, ${gradientValue.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : color }} />
+            {!compact && <span className="font-mono text-[11px] text-white">{gradientValue ? 'Gradient' : color.replace(/^#/, '').toUpperCase()}</span>}
         </button>
         {popup}
     </>;
 };
+
+interface ColorFieldProps {
+    value: string;
+    onChange: (event: { target: { value: string } }) => void;
+    className?: string;
+    title?: string;
+    'aria-label'?: string;
+}
+
+/** Drop-in replacement for native color inputs; opens the Raylight-style picker. */
+export const ColorField: React.FC<ColorFieldProps> = ({ value, onChange, className = '', title, 'aria-label': ariaLabel }) => (
+    <ColorPicker
+        color={value}
+        label={ariaLabel ?? title ?? 'Color'}
+        compact
+        showGradientMode={false}
+        className={className}
+        onChange={(color) => onChange({ target: { value: color } })}
+    />
+);

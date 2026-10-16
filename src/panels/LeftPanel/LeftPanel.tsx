@@ -341,8 +341,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                         startRename(group.id, group.name);
                     }}
                     className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isGroupSelected
-                            ? 'bg-[#0088ff] text-white font-semibold'
-                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                        ? 'bg-[#0088ff] text-white font-semibold'
+                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                         }`}
                 >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -407,7 +407,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
 
     return (
-        <aside className="w-60 border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
+        <aside className="w-[268px] border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
                 <button
@@ -531,8 +531,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     <button
                         onClick={() => setActiveTab('file')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'file'
-                                ? 'bg-[#1f1f23] text-white'
-                                : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            ? 'bg-[#1f1f23] text-white'
+                            : 'text-[#71717a] hover:text-[#d4d4d8]'
                             }`}
                     >
                         File
@@ -540,8 +540,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     <button
                         onClick={() => setActiveTab('assets')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'assets'
-                                ? 'bg-[#1f1f23] text-white'
-                                : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            ? 'bg-[#1f1f23] text-white'
+                            : 'text-[#71717a] hover:text-[#d4d4d8]'
                             }`}
                     >
                         Assets
@@ -625,8 +625,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         }}
                                         onDoubleClick={() => startRename(shot.id, shot.name)}
                                         className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isShotActive && !hasGroupSelected
-                                                ? 'bg-[#0088ff] text-white font-semibold'
-                                                : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                            ? 'bg-[#0088ff] text-white font-semibold'
+                                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                             }`}
                                     >
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -648,8 +648,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             </button>
                                             <Hash
                                                 className={`w-3.5 h-3.5 shrink-0 ${isShotActive && !hasGroupSelected
-                                                        ? 'text-white'
-                                                        : 'text-[#0088ff]'
+                                                    ? 'text-white'
+                                                    : 'text-[#0088ff]'
                                                     }`}
                                             />
                                             {isEditingShot ? (
@@ -841,8 +841,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             selectCameraBlock(activeShot.cameraBlocks[0]?.id || null)
                                         }
                                         className={`h-7 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${selectedCameraBlockId
-                                                ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
-                                                : 'text-emerald-400 hover:bg-white/[0.04]'
+                                            ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
+                                            : 'text-emerald-400 hover:bg-white/[0.04]'
                                             }`}
                                     >
                                         <div className="flex items-center gap-1.5 truncate">
@@ -897,8 +897,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                         selectLayer(layer.id, false);
                                                     }}
                                                     className={`h-7 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected
-                                                            ? 'bg-[#0088ff] text-white font-semibold'
-                                                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                                        ? 'bg-[#0088ff] text-white font-semibold'
+                                                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -926,8 +926,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                                 toggleTimelineLayerExpanded(layer.id);
                                                             }}
                                                             className={`p-0.5 rounded ${isSelected
-                                                                    ? 'text-white'
-                                                                    : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
+                                                                ? 'text-white'
+                                                                : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
                                                                 }`}
                                                         >
                                                             <Activity className="w-3 h-3" />
@@ -944,8 +944,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                                 selectPreset('entrance', layer.id)
                                                             }
                                                             className={`h-6 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer ${isSelected && selectedPresetType
-                                                                    ? 'bg-purple-500/20 text-purple-200 font-medium'
-                                                                    : 'text-[#a1a1aa] hover:text-white'
+                                                                ? 'bg-purple-500/20 text-purple-200 font-medium'
+                                                                : 'text-[#a1a1aa] hover:text-white'
                                                                 }`}
                                                         >
                                                             <div className="flex items-center gap-2 truncate">
@@ -963,8 +963,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                                 key={blk.id}
                                                                 onClick={() => selectBlock(blk.id, layer.id)}
                                                                 className={`h-6 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer capitalize ${selectedBlockId === blk.id
-                                                                        ? 'bg-purple-500/25 text-white font-medium'
-                                                                        : 'text-[#a1a1aa] hover:text-white'
+                                                                    ? 'bg-purple-500/25 text-white font-medium'
+                                                                    : 'text-[#a1a1aa] hover:text-white'
                                                                     }`}
                                                             >
                                                                 <div className="flex items-center gap-2 truncate">

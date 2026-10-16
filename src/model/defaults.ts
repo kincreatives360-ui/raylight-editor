@@ -310,7 +310,7 @@ export const DEFAULT_PROJECT: Project = {
   createdAt: new Date().toISOString(),
   aspectRatio: '16:9',
   fps: 60,
-  background: { kind: 'solid', color: '#111114' },
+  background: { kind: 'solid', color: '#0A0A0C' },
   assets: {},
   audio: createDefaultAudio(),
   shots: [createDefaultShot({

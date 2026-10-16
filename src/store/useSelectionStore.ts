@@ -45,6 +45,8 @@ interface SelectionStore {
 
     canvasZoom: number;
     canvasPan: { x: number; y: number };
+    gradientEditorActive: boolean;
+    gradientEditorAngle: number;
 
     selectShot: (shotId: string, defaultLayerId?: string) => void;
     selectLayer: (layerId: string, toggleMulti?: boolean) => void;
@@ -75,6 +77,8 @@ interface SelectionStore {
             | ((prev: { x: number; y: number }) => { x: number; y: number })
     ) => void;
     resetCanvasView: () => void;
+    setGradientEditor: (active: boolean, angle?: number) => void;
+    setGradientEditorAngle: (angle: number) => void;
 }
 
 export const useSelectionStore = create<SelectionStore>((set) => ({
@@ -98,6 +102,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     canvasZoom: 1,
     canvasPan: { x: 0, y: 0 },
+    gradientEditorActive: false,
+    gradientEditorAngle: 0,
 
     selectShot: (shotId, defaultLayerId) =>
         set({
@@ -267,4 +273,12 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             canvasZoom: 1,
             canvasPan: { x: 0, y: 0 },
         }),
+
+    setGradientEditor: (gradientEditorActive, gradientEditorAngle) =>
+        set((state) => ({
+            gradientEditorActive,
+            gradientEditorAngle: gradientEditorAngle ?? state.gradientEditorAngle,
+        })),
+
+    setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
 }));

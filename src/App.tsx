@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles } from 'lucide-react';
+import { Download, X, Sparkles, Plus, ChevronDown, SlidersHorizontal, Share2 } from 'lucide-react';
 import type { Layer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -10,7 +10,6 @@ import { evaluateProjectAtTime } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
   readImageFileWithThumbnail,
-  SAMPLE_FIGMA_SVG,
 } from './engine/figmaSvgImporter';
 import { decodeAudioFromDataUrl, syncAudioPlayback, stopAudioPlayback } from './engine/audioEngine';
 import { Stage } from './stage/Stage';
@@ -161,19 +160,6 @@ export default function App() {
     rafId = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(rafId);
   }, [isPlaying, loop, totalDurationMs, setCurrentTimeMs, setIsPlaying]);
-
-  const handlePasteSampleFigmaSvg = () => {
-    const parsed = parseFigmaSvgToLayers(
-      SAMPLE_FIGMA_SVG,
-      activeShot.durationMs,
-      activeShot.layers.length
-    );
-    if (parsed.layers.length > 0) {
-      addMultipleLayersToShot(activeShot.id, parsed.layers, parsed.assets);
-      setInspectorTab('layer');
-      setSelectedLayerIds(parsed.layers.map((l) => l.id));
-    }
-  };
 
   // Global Clipboard Paste Listener (Figma SVG, Screenshots, & Copied Layers)
   useEffect(() => {
@@ -654,7 +640,7 @@ export default function App() {
   };
 
   return (
-    <div className="flex h-screen w-screen bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
+    <div className="flex h-screen w-screen flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
@@ -722,41 +708,68 @@ export default function App() {
         className="hidden"
       />
 
-      {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
-      <LeftPanel
-        activeShot={activeShot}
-        onUploadClick={() => fileInputRef.current?.click()}
-        audioLabel={audioLabel}
-        onSelectAudioClick={() => audioInputRef.current?.click()}
-      />
-
-      {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
-      <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
-        <Stage
-          project={project}
-          frame={frame}
-          selectedLayerIds={selectedLayerIds}
-          onSelectLayer={(id, multi) => {
-            setInspectorTab('layer');
-            selectLayer(id, multi);
-          }}
-          showSafeArea={false}
-          snapEnabled={true}
+      {/* Raylight-style global top bar */}
+      <header className="h-[50px] shrink-0 flex items-center justify-between border-b border-white/[0.08] bg-[#101012] px-3">
+        <div className="flex items-center gap-3">
+          <button className="h-8 rounded-lg bg-[#1b1b1f] px-3 flex items-center gap-2 text-[13px] font-semibold text-white hover:bg-[#242428]" title="Canvas workspace">
+            <span className="text-lg leading-none">◢</span>
+            <span>Canvas</span>
+            <ChevronDown className="h-3.5 w-3.5 text-white/50" />
+          </button>
+          <button
+            onClick={() => useProjectStore.getState().addShot()}
+            className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white"
+            title="Add shot"
+          >
+            <Plus className="h-5 w-5" />
+          </button>
+        </div>
+        <div className="flex items-center gap-3">
+          <button className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white" title="Project settings">
+            <SlidersHorizontal className="h-4 w-4" />
+          </button>
+          <button onClick={() => setExportModalOpen(true)} className="h-8 w-8 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:bg-white/10 hover:text-white" title="Export / share">
+            <Share2 className="h-4 w-4" />
+          </button>
+          <button onClick={() => setExportModalOpen(true)} className="h-9 rounded-lg bg-[#078fff] hover:bg-[#007ce5] px-4 text-[13px] font-medium text-white">Share</button>
+        </div>
+      </header>
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
+        <LeftPanel
+          activeShot={activeShot}
           onUploadClick={() => fileInputRef.current?.click()}
-          onPasteFigmaSample={handlePasteSampleFigmaSvg}
+          audioLabel={audioLabel}
+          onSelectAudioClick={() => audioInputRef.current?.click()}
         />
 
-        <Timeline totalDurationMs={totalDurationMs} />
-      </main>
+        {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
+        <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
+          <Stage
+            project={project}
+            frame={frame}
+            selectedLayerIds={selectedLayerIds}
+            onSelectLayer={(id, multi) => {
+              setInspectorTab('layer');
+              selectLayer(id, multi);
+            }}
+            showSafeArea={false}
+            snapEnabled={true}
+          />
 
-      {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
-      <RightSidebar
-        activeShot={activeShot}
-        selectedLayer={selectedLayer}
-        selectedLayerIds={selectedLayerIds}
-        onSwapImageClick={() => fileInputRef.current?.click()}
-        onOpenExportModal={() => setExportModalOpen(true)}
-      />
+          <Timeline totalDurationMs={totalDurationMs} />
+        </main>
+
+        {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
+        <RightSidebar
+          activeShot={activeShot}
+          selectedLayer={selectedLayer}
+          selectedLayerIds={selectedLayerIds}
+          onSwapImageClick={() => fileInputRef.current?.click()}
+          onOpenExportModal={() => setExportModalOpen(true)}
+        />
+
+      </div>
 
       {/* EXPORT / SHARE MODAL */}
       {exportModalOpen && (
@@ -800,8 +813,8 @@ export default function App() {
                     setExportSettings((s) => ({ ...s, format: fmt.id }))
                   }
                   className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${exportSettings.format === fmt.id
-                      ? 'bg-[#0088ff]/20 border-[#0088ff] text-white'
-                      : 'bg-[#1c1c1f] border-white/10 text-[#a1a1aa] hover:text-white'
+                    ? 'bg-[#0088ff]/20 border-[#0088ff] text-white'
+                    : 'bg-[#1c1c1f] border-white/10 text-[#a1a1aa] hover:text-white'
                     }`}
                 >
                   <div className="font-semibold text-xs">{fmt.label}</div>

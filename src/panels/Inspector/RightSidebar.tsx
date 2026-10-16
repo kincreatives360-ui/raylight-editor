@@ -1,3 +1,4 @@
+import { ColorField } from './ColorPicker';
 // src/panels/Inspector/RightSidebar.tsx
 import React, { useState, useRef, useEffect } from 'react';
 import {
@@ -54,10 +55,8 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { ASPECT_RATIO_CONFIG } from '../../stage/Stage';
 import { ScrubInput } from '../../ui/ScrubInput';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
-import { LightingSection } from './sections/LightingSection';
 import { BackgroundSection } from './sections/BackgroundSection';
 import { SceneTransitionSection } from './sections/SceneTransitionSection';
-import { CameraSection } from './sections/CameraSection';
 
 const POPULAR_FONTS = [
     'Inter',
@@ -538,7 +537,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     };
 
     return (
-        <aside className="w-68 border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative">
+        <aside className="w-[304px] border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative">
             <input
                 ref={fontInputRef}
                 type="file"
@@ -555,7 +554,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             />
 
             {/* 1. TOP HEADER BAR */}
-            <div className="h-11 px-3.5 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
+            <div className="hidden">
                 <div className="w-6 h-6 rounded-full bg-[#18181b] border border-white/10 flex items-center justify-center font-bold text-xs text-white">
                     R
                 </div>
@@ -696,8 +695,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                     ? project.background.color
                                                     : project.background.kind === 'gradient'
                                                         ? project.background.stops[0]?.color ??
-                                                        '#000000'
-                                                        : '#000000';
+                                                        '#0A0A0C'
+                                                        : '#0A0A0C';
                                             updateProject((p) => ({
                                                 ...p,
                                                 background: { kind: 'solid', color },
@@ -747,8 +746,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         {project.background.kind === 'solid' && (
                             <div className="flex items-center gap-2 pt-0.5">
                                 <div className="relative shrink-0">
-                                    <input
-                                        type="color"
+                                    <ColorField
+
                                         value={project.background.color}
                                         onChange={(e) =>
                                             updateProject((p) => ({
@@ -804,8 +803,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             <div className="space-y-2 pt-1">
                                 <div className="flex items-center gap-2">
                                     <div className="flex items-center gap-1.5 flex-1">
-                                        <input
-                                            type="color"
+                                        <ColorField
+
                                             value={project.background.stops[0]?.color ?? '#0a0a0c'}
                                             onChange={(e) => {
                                                 if (project.background.kind !== 'gradient') return;
@@ -830,8 +829,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             className="w-6 h-6 rounded border border-white/10 cursor-pointer"
                                             title="Start Color"
                                         />
-                                        <input
-                                            type="color"
+                                        <ColorField
+
                                             value={project.background.stops[1]?.color ?? '#000000'}
                                             onChange={(e) => {
                                                 if (project.background.kind !== 'gradient') return;
@@ -1333,8 +1332,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         <div className="space-y-1">
                                             <span className="text-[10px] text-[#71717a]">Color</span>
                                             <div className="flex items-center gap-1.5 h-7 px-1.5 rounded-lg bg-[#1c1c1f] border border-white/10">
-                                                <input
-                                                    type="color"
+                                                <ColorField
+
                                                     value={selectedLayer.font.color}
                                                     onChange={(e) =>
                                                         updateLayer(activeShot.id, selectedLayer.id, (l) =>
@@ -1559,8 +1558,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         {selectedLayer.fill.kind === 'solid' ? (
                                             <div className="flex items-center gap-2 pt-0.5">
                                                 <div className="relative shrink-0">
-                                                    <input
-                                                        type="color"
+                                                    <ColorField
+
                                                         value={selectedLayer.fill.color}
                                                         onChange={(e) => {
                                                             const color = e.target.value;
@@ -1595,8 +1594,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         ) : (
                                             <div className="space-y-2 pt-1">
                                                 <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="color"
+                                                    <ColorField
+
                                                         value={selectedLayer.fill.stops[0]?.color ?? '#818cf8'}
                                                         onChange={(e) => {
                                                             const color = e.target.value;
@@ -1610,8 +1609,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         className="w-6 h-6 rounded border border-white/10 cursor-pointer"
                                                         title="Color 1"
                                                     />
-                                                    <input
-                                                        type="color"
+                                                    <ColorField
+
                                                         value={selectedLayer.fill.stops[1]?.color ?? '#4f46e5'}
                                                         onChange={(e) => {
                                                             const color = e.target.value;
@@ -1714,8 +1713,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         {selectedLayer.stroke && (
                                             <div className="space-y-1.5">
                                                 <div className="flex items-center gap-2">
-                                                    <input
-                                                        type="color"
+                                                    <ColorField
+
                                                         value={selectedLayer.stroke.color}
                                                         onChange={(e) => {
                                                             const color = e.target.value;
@@ -1955,8 +1954,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                                         {selectedLayer.stroke && (
                                             <div className="flex items-center gap-1.5">
-                                                <input
-                                                    type="color"
+                                                <ColorField
+
                                                     value={selectedLayer.stroke.color}
                                                     onChange={(e) => {
                                                         const color = e.target.value;
@@ -2521,8 +2520,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     {selectedLayer.effects?.dropShadow?.enabled && (
                                         <div className="space-y-1.5 p-2 rounded-lg bg-[#161619] border border-white/[0.05]">
                                             <div className="flex items-center gap-2">
-                                                <input
-                                                    type="color"
+                                                <ColorField
+
                                                     value={selectedLayer.effects.dropShadow.color}
                                                     onChange={(e) => {
                                                         const color = e.target.value;
@@ -2675,26 +2674,91 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — SHOT SETTINGS)       */}
                     {/* =============================================================== */}
                     {mainTab === 'design' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            <div className="p-3.5 space-y-1">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-semibold text-white">
-                                        {activeShot.name || 'Shot 1'}
-                                    </span>
-                                    <span className="text-[10px] font-mono text-[#0088ff] bg-[#0088ff]/10 px-1.5 py-0.5 rounded">
-                                        {(activeShot.durationMs / 1000).toFixed(2)}s
-                                    </span>
-                                </div>
-                                <span className="text-[10px] text-[#71717a] block">
-                                    Background, Lighting, Camera &amp; Scene Effects
-                                </span>
-                            </div>
+                        <div className="flex-1 overflow-y-auto bg-[#101012]">
+                            <div className="px-3.5 pt-3 pb-4 space-y-4">
+                                <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
 
-                            <BackgroundSection activeShot={activeShot} />
-                            <LightingSection activeShot={activeShot} />
-                            <CameraSection activeShot={activeShot} />
-                            <SceneEffectsSection activeShot={activeShot} />
-                            <SceneTransitionSection activeShot={activeShot} />
+                                <label className="block space-y-1.5">
+                                    <span className="block text-[11px] text-[#a1a1aa]">Name</span>
+                                    <input
+                                        aria-label="Project name"
+                                        value={project.name}
+                                        onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
+                                        className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                    />
+                                </label>
+
+                                <label className="block space-y-1.5">
+                                    <span className="block text-[11px] text-[#a1a1aa]">Aspect Ratio</span>
+                                    <select
+                                        aria-label="Project aspect ratio"
+                                        value={project.aspectRatio}
+                                        onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
+                                        className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                    >
+                                        <option value="16:9">Landscape 16:9</option>
+                                        <option value="4:3">Classic 4:3</option>
+                                        <option value="3:2">Landscape 3:2</option>
+                                        <option value="21:9">Ultrawide 21:9</option>
+                                        <option value="1:1">Square 1:1</option>
+                                        <option value="9:16">Portrait 9:16</option>
+                                        <option value="3:4">Portrait 3:4</option>
+                                        <option value="2:3">Portrait 2:3</option>
+                                        <option value="4:5">Portrait 4:5</option>
+                                    </select>
+                                </label>
+
+                                <label className="block space-y-1.5">
+                                    <span className="block text-[11px] text-[#a1a1aa]">Lens</span>
+                                    <div className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 flex items-center text-[12px] text-[#d4d4d8]">
+                                        <span className="text-[#a1a1aa] mr-2">F</span>50 mm
+                                    </div>
+                                </label>
+
+                                <div className="space-y-2">
+                                    <span className="block text-[11px] text-[#a1a1aa]">Background</span>
+                                    <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1d1d20] p-0.5">
+                                        <button
+                                            onClick={() => updateProject((p) => ({ ...p, background: { kind: 'solid', color: p.background.kind === 'solid' ? p.background.color : '#0A0A0C' } }))}
+                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'solid' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                        >Color</button>
+                                        <button
+                                            onClick={() => projectBgFileRef.current?.click()}
+                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'image' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                        >Image</button>
+                                        <button
+                                            onClick={() => updateProject((p) => ({ ...p, background: { kind: 'gradient', source: 'shader', gradientType: 'radial', angle: 135, stops: [{ at: 0, color: '#17172b' }, { at: 1, color: '#050507' }] } }))}
+                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'gradient' && project.background.source === 'shader' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                        >Shader</button>
+                                    </div>
+
+                                    {project.background.kind === 'solid' && (
+                                        <label className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2 flex items-center gap-2">
+                                            <ColorField
+                                                aria-label="Background color"
+                                                value={project.background.color}
+                                                onChange={(e) => updateProject((p) => ({ ...p, background: { kind: 'solid', color: e.target.value.toUpperCase() } }))}
+                                                className="w-5 h-5 rounded border-0 bg-transparent p-0 cursor-pointer"
+                                            />
+                                            <input
+                                                aria-label="Background color hex"
+                                                value={project.background.color.replace('#', '').toUpperCase()}
+                                                onChange={(e) => {
+                                                    const hex = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
+                                                    if (hex.length === 6) updateProject((p) => ({ ...p, background: { kind: 'solid', color: `#${hex.toUpperCase()}` } }));
+                                                }}
+                                                className="min-w-0 flex-1 bg-transparent text-[11px] text-[#d4d4d8] outline-none"
+                                            />
+                                        </label>
+                                    )}
+                                    {project.background.kind === 'image' && (
+                                        <button onClick={() => projectBgFileRef.current?.click()} className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] text-[11px] text-[#d4d4d8] hover:bg-[#262629]">Choose background image…</button>
+                                    )}
+                                    {project.background.kind === 'gradient' && (
+                                        <div className="h-[30px] rounded-lg border border-white/[0.06] bg-gradient-to-r from-[#17172b] to-[#050507] px-2 flex items-center text-[11px] text-[#d4d4d8]">Shader background</div>
+                                    )}
+                                </div>
+                            </div>
                         </div>
                     )}
 
