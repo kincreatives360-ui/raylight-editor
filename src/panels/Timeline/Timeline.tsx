@@ -10,9 +10,15 @@ import { evaluateEasing } from '../../engine/easing';
 
 interface TimelineProps {
     totalDurationMs: number;
+    hoverTimeMs?: number | null;
+    onHoverTimeChange?: (timeMs: number | null) => void;
 }
 
-export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
+export const Timeline: React.FC<TimelineProps> = ({
+    totalDurationMs,
+    hoverTimeMs: propHoverTimeMs,
+    onHoverTimeChange: propOnHoverTimeChange,
+}) => {
     const {
         project,
         updateProject,
@@ -26,10 +32,15 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
 
     const {
         currentTimeMs,
+        hoverTimeMs: storeHoverTimeMs,
+        setHoverTimeMs,
         isPlaying,
         setCurrentTimeMs,
         togglePlay,
     } = usePlayheadStore();
+
+    const hoverTimeMs = propHoverTimeMs !== undefined ? propHoverTimeMs : storeHoverTimeMs;
+    const onHoverTimeChange = propOnHoverTimeChange ?? setHoverTimeMs;
 
     const {
         selectedShotId,
@@ -164,6 +175,31 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
         } else {
             setCurrentTimeMs(Math.min(totalDurationMs, localMs));
         }
+    };
+
+    const timeAtClientX = (clientX: number) => {
+        const localMs = clientXToLocalMs(clientX);
+        return timelineView === 'scene' && activeShot
+            ? activeShot.startMs + Math.min(activeShot.durationMs, localMs)
+            : Math.min(totalDurationMs, localMs);
+    };
+
+    const handleTimelineMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (isBlankState || totalDurationMs <= 0) {
+            onHoverTimeChange(null);
+            return;
+        }
+        onHoverTimeChange(timeAtClientX(event.clientX));
+    };
+
+    const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        // Empty timeline space seeks on click; existing controls and clips keep their own click behavior.
+        const target = event.target;
+        if (!(target instanceof HTMLElement)) return;
+        if (
+            target.closest('button, input, [role="button"], [data-timeline-item]')
+        ) return;
+        setCurrentTimeMs(hoverTimeMs ?? timeAtClientX(event.clientX));
     };
 
     const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -624,6 +660,11 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
         timelineView === 'scene' && activeShot
             ? Math.max(0, currentTimeMs - activeShot.startMs)
             : currentTimeMs;
+    const hoverDisplayTimeMs = hoverTimeMs === null
+        ? null
+        : timelineView === 'scene' && activeShot
+            ? Math.max(0, hoverTimeMs - activeShot.startMs)
+            : hoverTimeMs;
 
     const hasLightBlocks = (activeShot?.lightBlocks?.length || 0) > 0;
 
@@ -765,6 +806,9 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
                     setScrollLeft(e.currentTarget.scrollLeft);
                 }}
+                onMouseMove={handleTimelineMouseMove}
+                onMouseLeave={() => onHoverTimeChange(null)}
+                onClick={handleTimelineClick}
                 onMouseDown={handleRulerMouseDown}
                 className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
                     }`}
@@ -1403,6 +1447,13 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     )}
 
                     {/* Active blue playhead moves only when scrubbed or playing. */}
+                    {hoverDisplayTimeMs !== null && (
+                        <div
+                            aria-hidden="true"
+                            className="absolute top-0 bottom-0 w-px border-l border-dashed border-white/45 z-20 pointer-events-none"
+                            style={{ left: `${hoverDisplayTimeMs * pxPerMs}px` }}
+                        />
+                    )}
                     <div
                         className="absolute top-0 bottom-0 w-[1.5px] bg-[#0088ff] z-30 pointer-events-none"
                         style={{ left: `${playheadDisplayTimeMs * pxPerMs}px` }}

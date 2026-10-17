@@ -3,9 +3,11 @@ import { create } from 'zustand';
 
 interface PlayheadStore {
     currentTimeMs: number;
+    hoverTimeMs: number | null;
     isPlaying: boolean;
     loop: boolean;
     setCurrentTimeMs: (timeMs: number | ((prev: number) => number)) => void;
+    setHoverTimeMs: (timeMs: number | null) => void;
     setIsPlaying: (isPlaying: boolean) => void;
     togglePlay: () => void;
     toggleLoop: () => void;
@@ -13,6 +15,7 @@ interface PlayheadStore {
 
 export const usePlayheadStore = create<PlayheadStore>((set) => ({
     currentTimeMs: 0,
+    hoverTimeMs: null,
     isPlaying: false,
     loop: true,
 
@@ -23,6 +26,8 @@ export const usePlayheadStore = create<PlayheadStore>((set) => ({
                     ? Math.max(0, timeMs(state.currentTimeMs))
                     : Math.max(0, timeMs),
         })),
+
+    setHoverTimeMs: (timeMs) => set({ hoverTimeMs: timeMs }),
 
     setIsPlaying: (isPlaying) => set({ isPlaying }),
 
