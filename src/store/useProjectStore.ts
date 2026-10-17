@@ -144,7 +144,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 ...updater(state.project),
                 updatedAt: new Date().toISOString(),
             };
-            const validation = validateProject(updated);
+            // Pointer-move updates inside a drag are transient. Validate the committed
+            // project once at pointer-up instead of reparsing the full asset graph per frame.
+            const validation = state.dragSnapshot === null
+                ? validateProject(updated)
+                : state.validation;
 
             if (options?.skipHistory || state.dragSnapshot !== null) {
                 return { project: updated, validation };
@@ -643,6 +647,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 ],
                 future: [],
                 dragSnapshot: null,
+                validation: validateProject(state.project),
             };
         }),
 

@@ -175,7 +175,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const isMacbook = device?.type === 'macbook';
     const isBrowser = device?.type === 'browser';
 
-    const [loadedImg, setLoadedImg] = useState<HTMLImageElement | null>(null);
+    const [loadedImageState, setLoadedImageState] = useState<{
+        url: string;
+        image: HTMLImageElement;
+    } | null>(null);
 
     const assetUrl = useMemo(() => {
         if (layer.kind !== 'image') return null;
@@ -191,20 +194,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         }
         return null;
     }, [layer, project.assets]);
+    const loadedImg = loadedImageState?.url === assetUrl ? loadedImageState.image : null;
 
     useEffect(() => {
-        if (!assetUrl) {
-            setLoadedImg(null);
-            return;
-        }
+        if (!assetUrl) return;
         let active = true;
         const img = new Image();
         img.crossOrigin = 'anonymous';
         img.onload = () => {
-            if (active) setLoadedImg(img);
-        };
-        img.onerror = () => {
-            if (active) setLoadedImg(null);
+            if (active) setLoadedImageState({ url: assetUrl, image: img });
         };
         img.src = assetUrl;
         return () => {
@@ -351,8 +349,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 ctx.fillStyle = shapeL.fill.color || '#6366f1';
                 ctx.globalAlpha = shapeL.fill.opacity ?? 1;
             } else {
-                const fillAny = shapeL.fill as any;
-                const isRadial = fillAny.gradientType === 'radial';
+                const isRadial = shapeL.fill.gradientType === 'radial';
                 const cx = canvasW / 2;
                 const cy = canvasH / 2;
                 const len = Math.hypot(canvasW, canvasH) / 2;

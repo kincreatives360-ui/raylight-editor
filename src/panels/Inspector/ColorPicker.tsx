@@ -82,6 +82,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color));
     const [position, setPosition] = useState({ left: 0, top: 0 });
     const [draggingSquare, setDraggingSquare] = useState(false);
+    const [previousColor, setPreviousColor] = useState(color);
     const hueColor = useMemo(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }), [hsv.h]);
     const gradient = gradientValue ?? {
         angle: 0,
@@ -89,13 +90,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
     };
 
-    useEffect(() => {
-        if (draggingSquare) return;
-        if (document.activeElement !== hexInputRef.current) {
-            setHexDraft(color);
-        }
+    if (color !== previousColor && !draggingSquare) {
+        setPreviousColor(color);
+        setHexDraft(color);
         setHsv(hexToHsv(color));
-    }, [color, draggingSquare]);
+    }
 
     useEffect(() => {
         if (!open) return;

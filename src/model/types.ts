@@ -53,6 +53,7 @@ export type Fill =
     kind: 'gradient';
     angle: number;
     stops: GradientStop[];
+    gradientType?: 'linear' | 'radial';
   };
 
 /**

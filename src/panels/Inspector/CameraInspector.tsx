@@ -1,7 +1,13 @@
 // src/panels/Inspector/CameraInspector.tsx
 import React, { useState } from 'react';
 import { Camera, Plus, Trash2, Video, Eye, Crosshair } from 'lucide-react';
-import type { Shot, Framing, CameraBlock } from '../../model/types';
+import type {
+    Shot,
+    Framing,
+    CameraBlock,
+    PresetEasingName,
+    SpringEasingName,
+} from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ScrubInput } from '../../ui/ScrubInput';
 
@@ -413,11 +419,11 @@ export const CameraInspector: React.FC<CameraInspectorProps> = ({ activeShot }) 
                                                 });
                                             } else if (val.startsWith('spring:')) {
                                                 updateCameraBlock(cb.id, {
-                                                    easing: { kind: 'spring', name: val.split(':')[1] as any },
+                                                    easing: { kind: 'spring', name: val.split(':')[1] as SpringEasingName },
                                                 });
                                             } else {
                                                 updateCameraBlock(cb.id, {
-                                                    easing: { kind: 'preset', name: val.split(':')[1] as any },
+                                                    easing: { kind: 'preset', name: val.split(':')[1] as PresetEasingName },
                                                 });
                                             }
                                         }}

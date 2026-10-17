@@ -1,5 +1,5 @@
 import { ColorField, ColorPicker, type GradientValue } from './ColorPicker';
-import React, { useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef } from 'react';
 import { Image as ImageIcon, Palette } from 'lucide-react';
 import type { Background, GradientStop, Shot } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
@@ -34,14 +34,14 @@ export const BackgroundEditor: React.FC<BackgroundEditorProps> = ({ scope, activ
     const isColorGradient = background.kind === 'gradient' && background.source === 'color';
     const type: BackgroundType = background.kind === 'solid' || isColorGradient ? 'color' : background.kind === 'image' ? 'image' : 'shader';
 
-    const setBackground = (next: Background) => {
+    const setBackground = useCallback((next: Background) => {
         if (!isShot) {
             updateProject((current) => ({ ...current, background: next }));
             return;
         }
         if (!activeShot) return;
         updateShot(activeShot.id, (current) => ({ ...current, useProjectBackground: false, background: next }));
-    };
+    }, [activeShot, isShot, updateProject, updateShot]);
 
     const setUseProject = (enabled: boolean) => {
         if (!activeShot) return;

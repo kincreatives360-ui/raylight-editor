@@ -1,6 +1,6 @@
 import { ColorField } from './ColorPicker';
 // src/panels/Inspector/RightSidebar.tsx
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
     AlignLeft,
     AlignCenterHorizontal,
@@ -47,6 +47,9 @@ import type {
     CameraKeyframeEndpoint,
     BlendMode,
     ShapeLayer,
+    Vec3,
+    PresetEasingName,
+    SpringEasingName,
 } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { degToRad, radToDeg } from '../../model/defaults';
@@ -166,15 +169,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     const fontInputRef = useRef<HTMLInputElement>(null);
     const projectBgFileRef = useRef<HTMLInputElement>(null);
 
-    const [bgColorDraft, setBgColorDraft] = useState(
-        project.background.kind === 'solid' ? project.background.color : '#000000'
-    );
-
-    useEffect(() => {
-        if (project.background.kind === 'solid') {
-            setBgColorDraft(project.background.color);
-        }
-    }, [project.background]);
+    const currentBgColor = project.background.kind === 'solid' ? project.background.color : '#000000';
+    const [bgColorDraft, setBgColorDraft] = useState(currentBgColor);
+    const [previousBgColor, setPreviousBgColor] = useState(currentBgColor);
+    if (currentBgColor !== previousBgColor) {
+        setPreviousBgColor(currentBgColor);
+        setBgColorDraft(currentBgColor);
+    }
 
     const refStageW = 1920;
     const refStageH = 1080;
@@ -182,12 +183,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
     const isBlankState = isBlankProjectState(project);
     const effectiveMainTab = isBlankState ? 'design' : mainTab;
-
-    useEffect(() => {
-        if (isBlankState && mainTab !== 'design') {
-            setMainTab('design');
-        }
-    }, [isBlankState, mainTab]);
 
     const isBottomLayerSelected =
         Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
@@ -276,7 +271,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             0,
             Math.min(activeShot.durationMs - 800, currentTimeMs - activeShot.startMs)
         );
-        const id = `blk-${Date.now()}`;
+        const id = `blk-${crypto.randomUUID()}`;
         const defaultAmount =
             property === 'opacity'
                 ? -0.5
@@ -1123,11 +1118,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                 : val.startsWith('spring:')
                                                     ? {
                                                         kind: 'spring',
-                                                        name: val.split(':')[1] as any,
+                                                        name: val.split(':')[1] as SpringEasingName,
                                                     }
                                                     : {
                                                         kind: 'preset',
-                                                        name: val.split(':')[1] as any,
+                                                        name: val.split(':')[1] as PresetEasingName,
                                                     };
                                         updateCameraBlock(activeCameraBlock.id, (cb) => ({
                                             ...cb,
@@ -2859,8 +2854,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         label={isSize ? 'ΔW' : 'X'}
                                                         value={
                                                             isAngle
-                                                                ? radToDeg((blk.amount as any).x)
-                                                                : Math.round((blk.amount as any).x * scaleFactor)
+                                                                ? radToDeg((blk.amount as Vec3).x)
+                                                                : Math.round((blk.amount as Vec3).x * scaleFactor)
                                                         }
                                                         min={-3000}
                                                         max={3000}
@@ -2869,7 +2864,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         onChange={(v) =>
                                                             handleUpdateBlock(blk.id, {
                                                                 amount: {
-                                                                    ...(blk.amount as any),
+                                                                    ...(blk.amount as Vec3),
                                                                     x: isAngle
                                                                         ? degToRad(v)
                                                                         : Number((v / scaleFactor).toFixed(4)),
@@ -2881,8 +2876,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         label={isSize ? 'ΔH' : 'Y'}
                                                         value={
                                                             isAngle
-                                                                ? radToDeg((blk.amount as any).y)
-                                                                : Math.round((blk.amount as any).y * refStageH)
+                                                                ? radToDeg((blk.amount as Vec3).y)
+                                                                : Math.round((blk.amount as Vec3).y * refStageH)
                                                         }
                                                         min={-3000}
                                                         max={3000}
@@ -2891,7 +2886,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         onChange={(v) =>
                                                             handleUpdateBlock(blk.id, {
                                                                 amount: {
-                                                                    ...(blk.amount as any),
+                                                                    ...(blk.amount as Vec3),
                                                                     y: isAngle
                                                                         ? degToRad(v)
                                                                         : Number((v / refStageH).toFixed(4)),
@@ -2904,8 +2899,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             label="Z"
                                                             value={
                                                                 isAngle
-                                                                    ? radToDeg((blk.amount as any).z)
-                                                                    : Math.round((blk.amount as any).z * 500)
+                                                                    ? radToDeg((blk.amount as Vec3).z)
+                                                                    : Math.round((blk.amount as Vec3).z * 500)
                                                             }
                                                             min={-1500}
                                                             max={1500}
@@ -2914,7 +2909,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             onChange={(v) =>
                                                                 handleUpdateBlock(blk.id, {
                                                                     amount: {
-                                                                        ...(blk.amount as any),
+                                                                        ...(blk.amount as Vec3),
                                                                         z: isAngle
                                                                             ? degToRad(v)
                                                                             : Number((v / 500).toFixed(4)),
@@ -2951,12 +2946,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             e.stopPropagation();
                                                             handleUpdateBlock(blk.id, {
                                                                 amount: {
-                                                                    ...(blk.amount as any),
-                                                                    x: -Math.abs((blk.amount as any).x || 0.35),
+                                                                    ...(blk.amount as Vec3),
+                                                                    x: -Math.abs((blk.amount as Vec3).x || 0.35),
                                                                 },
                                                             });
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as any).x <= 0
+                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x <= 0
                                                             ? 'bg-[#27272c] text-white'
                                                             : 'text-[#71717a] hover:text-white'
                                                             }`}
@@ -2969,12 +2964,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             e.stopPropagation();
                                                             handleUpdateBlock(blk.id, {
                                                                 amount: {
-                                                                    ...(blk.amount as any),
-                                                                    x: Math.abs((blk.amount as any).x || 0.35),
+                                                                    ...(blk.amount as Vec3),
+                                                                    x: Math.abs((blk.amount as Vec3).x || 0.35),
                                                                 },
                                                             });
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as any).x > 0
+                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x > 0
                                                             ? 'bg-[#27272c] text-white'
                                                             : 'text-[#71717a] hover:text-white'
                                                             }`}
@@ -3036,11 +3031,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             : val.startsWith('spring:')
                                                                 ? {
                                                                     kind: 'spring',
-                                                                    name: val.split(':')[1] as any,
+                                                                    name: val.split(':')[1] as SpringEasingName,
                                                                 }
                                                                 : {
                                                                     kind: 'preset',
-                                                                    name: val.split(':')[1] as any,
+                                                                    name: val.split(':')[1] as PresetEasingName,
                                                                 };
                                                     handleUpdateBlock(blk.id, { easing });
                                                 }}

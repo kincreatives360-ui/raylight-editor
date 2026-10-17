@@ -577,10 +577,11 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
             if (!currentDrag.dragging) return;
 
             let delta = moveEvent.clientX - currentDrag.startX;
-            while (delta >= 60 && currentDrag.index < project.shots.length - 1) {
+            while (delta >= 60 && currentDrag.index < useProjectStore.getState().project.shots.length - 1) {
                 const from = currentDrag.index;
                 updateProject((current) => {
                     const shots = [...current.shots];
+                    if (from < 0 || from >= shots.length - 1) return current;
                     [shots[from], shots[from + 1]] = [shots[from + 1], shots[from]];
                     return { ...current, shots: recalculateShotStartTimes(shots) };
                 }, { skipHistory: true });
@@ -592,6 +593,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                 const from = currentDrag.index;
                 updateProject((current) => {
                     const shots = [...current.shots];
+                    if (from <= 0 || from >= shots.length) return current;
                     [shots[from], shots[from - 1]] = [shots[from - 1], shots[from]];
                     return { ...current, shots: recalculateShotStartTimes(shots) };
                 }, { skipHistory: true });

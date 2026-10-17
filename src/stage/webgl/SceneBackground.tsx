@@ -17,29 +17,27 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
 }) => {
     const project = useProjectStore((s) => s.project);
     const assets = project.assets;
-    const [imageTexture, setImageTexture] = useState<THREE.Texture | null>(null);
+    const [imageTextureState, setImageTextureState] = useState<{
+        assetId: string;
+        texture: THREE.Texture;
+    } | null>(null);
     const texRef = React.useRef<THREE.Texture | null>(null);
 
     const spec = ASPECT_RATIO_CONFIG[project.aspectRatio] ?? { widthRatio: 16, heightRatio: 9 };
     const targetAspect = spec.widthRatio / spec.heightRatio;
+    const backgroundAssetId = background.kind === 'image' ? background.assetId : null;
+    const backgroundAssetUrl = backgroundAssetId ? assets[backgroundAssetId]?.dataUrl : undefined;
+    const imageTexture = backgroundAssetId && imageTextureState?.assetId === backgroundAssetId
+        ? imageTextureState.texture
+        : null;
 
     // Load image background texture when kind === 'image'
     useEffect(() => {
-        if (background.kind !== 'image' || !background.assetId) {
-            texRef.current = null;
-            setImageTexture(null);
-            return;
-        }
-        const asset = assets[background.assetId];
-        if (!asset?.dataUrl) {
-            texRef.current = null;
-            setImageTexture(null);
-            return;
-        }
+        if (!backgroundAssetId || !backgroundAssetUrl) return;
         const loader = new THREE.TextureLoader();
         let cancelled = false;
         loader.load(
-            asset.dataUrl,
+            backgroundAssetUrl,
             (tex) => {
                 if (cancelled) {
                     tex.dispose();
@@ -55,20 +53,20 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
                     tex.offset.set(crop.uOffset, crop.vOffset);
                 }
                 texRef.current = tex;
-                setImageTexture(tex);
+                setImageTextureState({ assetId: backgroundAssetId, texture: tex });
             },
             undefined,
             () => {
                 if (!cancelled) {
                     texRef.current = null;
-                    setImageTexture(null);
+                    setImageTextureState((current) => current?.assetId === backgroundAssetId ? null : current);
                 }
             }
         );
         return () => {
             cancelled = true;
         };
-    }, [background, assets, targetAspect]);
+    }, [backgroundAssetId, backgroundAssetUrl, targetAspect]);
 
     // Keep crop UVs in sync if targetAspect or texture changes
     useEffect(() => {
@@ -124,10 +122,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
 
             if (background.stops && background.stops.length > 0) {
                 background.stops.forEach((st) => {
-                    const pos = Math.max(
-                        0,
-                        Math.min(1, 'at' in st ? (st as any).at : (st as any).position)
-                    );
+                    const pos = Math.max(0, Math.min(1, st.at));
                     const color = hexToRgba(st.color, st.opacity ?? 1);
                     grad.addColorStop(pos, color);
                 });

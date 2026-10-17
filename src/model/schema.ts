@@ -34,6 +34,7 @@ export const FillSchema = z.discriminatedUnion('kind', [
     kind: z.literal('gradient'),
     angle: z.number(),
     stops: z.array(GradientStopSchema).min(2),
+    gradientType: z.enum(['linear', 'radial']).optional(),
   }),
 ]);
 

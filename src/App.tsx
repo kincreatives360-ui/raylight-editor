@@ -1,5 +1,5 @@
 // src/App.tsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, X, Sparkles } from 'lucide-react';
 import type { Layer } from './model/types';
 import { createDefaultShot } from './model/defaults';
@@ -12,21 +12,19 @@ import {
   readImageFileWithThumbnail,
 } from './engine/figmaSvgImporter';
 import { decodeAudioFromDataUrl, syncAudioPlayback, stopAudioPlayback } from './engine/audioEngine';
-import { Stage } from './stage/Stage';
+const Stage = lazy(() => import('./stage/Stage').then(({ Stage }) => ({ default: Stage })));
 import { LeftPanel } from './panels/LeftPanel/LeftPanel';
 import { RightSidebar } from './panels/Inspector/RightSidebar';
 import { Timeline } from './panels/Timeline/Timeline';
 import { saveProjectToBrowser } from './storage/projectIO';
-import {
-  exportCurrentFrameAsPng,
-  runVideoExportPipeline,
-  estimateExportMetrics,
-  type ExportSettings,
-  type ExportFormat,
-  type ExportResolution,
-  type ExportQuality,
-  type ExportScope,
+import type {
+  ExportSettings,
+  ExportFormat,
+  ExportResolution,
+  ExportQuality,
+  ExportScope,
 } from './engine/exporter';
+import { estimateExportMetrics } from './engine/exportMetrics';
 
 export default function App() {
   const {
@@ -80,6 +78,7 @@ export default function App() {
   const [exporting, setExporting] = useState<boolean>(false);
   const [exportProgressText, setExportProgressText] = useState<string>('');
   const [exportPercent, setExportPercent] = useState<number>(0);
+  const [exportError, setExportError] = useState<string>('');
   const exportAbortRef = useRef<AbortController | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -119,7 +118,13 @@ export default function App() {
   );
 
   useEffect(() => {
-    saveProjectToBrowser(project);
+    const timeoutId = window.setTimeout(() => saveProjectToBrowser(project), 250);
+    const saveOnPageHide = () => saveProjectToBrowser(project);
+    window.addEventListener('pagehide', saveOnPageHide);
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener('pagehide', saveOnPageHide);
+    };
   }, [project]);
 
   // Decode imported audio assets and keep WebAudio playback synchronized with the active playhead.
@@ -480,6 +485,7 @@ export default function App() {
     updateShot,
     restackLayerInShot,
     recordAnimatedBlockAtPlayhead,
+    setTimelineLayerExpanded,
     createGroupFromLayers,
     ungroupInShot,
     duplicateLayerInShot,
@@ -614,39 +620,47 @@ export default function App() {
 
   const handleStartExport = async () => {
     setIsPlaying(false);
-    if (exportSettings.format === 'png') {
-      await exportCurrentFrameAsPng(
+    setExportError('');
+    try {
+      if (exportSettings.format === 'png') {
+        const { exportCurrentFrameAsPng } = await import('./engine/exporter');
+        await exportCurrentFrameAsPng(
+          project,
+          project.name,
+          currentTimeMs,
+          exportSettings.resolution
+        );
+        setExportModalOpen(false);
+        return;
+      }
+
+      const controller = new AbortController();
+      exportAbortRef.current = controller;
+      setExporting(true);
+      setExportPercent(0);
+
+      const { runVideoExportPipeline } = await import('./engine/exporter');
+      await runVideoExportPipeline(
         project,
-        project.name,
-        currentTimeMs,
-        exportSettings.resolution
+        (prog) => {
+          setExportProgressText(prog.statusText);
+          setExportPercent(prog.percent);
+        },
+        {
+          ...exportSettings,
+          selectedShotId: activeShot.id,
+        },
+        controller.signal
       );
-      setExportModalOpen(false);
-      return;
-    }
 
-    const controller = new AbortController();
-    exportAbortRef.current = controller;
-    setExporting(true);
-    setExportPercent(0);
-
-    await runVideoExportPipeline(
-      project,
-      (prog) => {
-        setExportProgressText(prog.statusText);
-        setExportPercent(prog.percent);
-      },
-      {
-        ...exportSettings,
-        selectedShotId: activeShot.id,
-      },
-      controller.signal
-    );
-
-    setExporting(false);
-    exportAbortRef.current = null;
-    if (!controller.signal.aborted) {
-      setTimeout(() => setExportModalOpen(false), 600);
+      if (!controller.signal.aborted) {
+        setTimeout(() => setExportModalOpen(false), 600);
+      }
+    } catch (error) {
+      setExportError(error instanceof Error ? error.message : 'Export failed.');
+    } finally {
+      setExporting(false);
+      exportAbortRef.current = null;
     }
   };
 
@@ -730,17 +744,19 @@ export default function App() {
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
-          <Stage
-            project={project}
-            frame={frame}
-            selectedLayerIds={selectedLayerIds}
-            onSelectLayer={(id, multi) => {
-              setInspectorTab('layer');
-              selectLayer(id, multi);
-            }}
-            showSafeArea={false}
-            snapEnabled={true}
-          />
+          <Suspense fallback={<div className="flex-1 bg-[#242424]" />}>
+            <Stage
+              project={project}
+              frame={frame}
+              selectedLayerIds={selectedLayerIds}
+              onSelectLayer={(id, multi) => {
+                setInspectorTab('layer');
+                selectLayer(id, multi);
+              }}
+              showSafeArea={false}
+              snapEnabled={true}
+            />
+          </Suspense>
 
           <Timeline totalDurationMs={totalDurationMs} />
         </main>
@@ -924,6 +940,10 @@ export default function App() {
                   />
                 </div>
               </div>
+            )}
+
+            {exportError && (
+              <p role="alert" className="text-xs text-red-400">{exportError}</p>
             )}
 
             <div className="flex items-center justify-end gap-2 pt-2">

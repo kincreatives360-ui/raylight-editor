@@ -1,87 +1,32 @@
-# React + TypeScript + Vite
+# Raylight Editor
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A browser based 2D/3D motion design editor built with React, TypeScript, Three.js, React Three Fiber, Zustand, and Vite.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
-
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-
+```sh
+npm install
+npm run dev
 ```
 
-You can also install [eslint-plugin-react-x](https://npmx.dev/package/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://npmx.dev/package/eslint-plugin-react-dom) for React-specific lint rules:
+The app is served by Vite at the local URL printed in the terminal. Use `npm run build` to type-check and create a production build, `npm run lint` to run ESLint, and `npm run preview` to serve the latest build locally.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Main areas
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+- `src/model`: project types, defaults, and Zod validation.
+- `src/store`: project, selection, and playhead state.
+- `src/stage`: canvas, selection controls, and WebGL scene.
+- `src/panels`: project/layer inspectors and the timeline.
+- `src/engine`: evaluation, rendering, importing, audio, and export.
+- `src/storage`: browser autosave and project JSON import/export.
 
-```
+## Project data
 
+The current project is autosaved in browser `localStorage`. Imported media is stored as data URLs in project state, so large media files can exceed browser storage quotas. Export a `.raylight.json` project file to keep a portable copy.
 
-## Parity fixes in this replacement build
+## Current limitations
 
-- The initial project is now an empty, editable project with one blank shot and no bundled demo assets or starter templates. Existing saved projects are still loaded from browser storage.
-- Timeline now has an independent cursor-following ghost playhead and a blue active playhead; shots remain clickable/selectable. Imported audio and video files are represented as media clips in the timeline.
-- The floating canvas toolbar includes Pen, Rectangle, Polygon, Line, and Arrow tools.
-- Lighting supports multiple independently enabled Point, Directional, Spot, Area, and Ambient sources with editable color and intensity. The old on-canvas light dot is removed; use Lighting controls to position lights.
-- Newly added layer animation blocks start relative to the selected layer's in-point and are bounded to its out-point.
-- Shape/image layers expose mask-source assignment; shape masks are composited as alpha masks in the WebGL layer texture. Shape fills, strokes, and layer effects remain editable.
-
-Note: imported video is currently a timeline media clip, not a fully time-synchronized video-texture layer in the canvas renderer.
+- Video files are represented as timeline media clips; they are not time-synchronized video-texture layers in the canvas renderer.
+- PNG and animated GIF exports use the 2D project renderer. Video export records a rendered canvas using the browser's `MediaRecorder` support; the available container/codec depends on the browser.
+- WebGL-only scene rendering and audio mixing are not included in the 2D export pipeline.
+- The project does not currently define an automated test script. The available checks are TypeScript/Vite production build and ESLint.

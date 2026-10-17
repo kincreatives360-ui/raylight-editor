@@ -1,7 +1,7 @@
 import { ColorField, ColorPicker } from '../ColorPicker';
 import { saveImageAsset } from '../imageAssetHelper';
 // src/panels/Inspector/sections/BackgroundSection.tsx
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState } from 'react';
 import { Palette, Image as ImageIcon } from 'lucide-react';
 import type { Background, Shot } from '../../../model/types';
 import { resolveShotBackground } from '../../../model/types';
@@ -36,10 +36,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     const uiKind = bgToUiKind(effectiveBg);
     const currentColor = solidColorOf(effectiveBg);
     const [colorDraft, setColorDraft] = useState(currentColor);
-
-    useEffect(() => {
+    const [previousColor, setPreviousColor] = useState(currentColor);
+    if (currentColor !== previousColor) {
+        setPreviousColor(currentColor);
         setColorDraft(currentColor);
-    }, [currentColor]);
+    }
 
     /** Write background either to project (when Use project) or to the shot override. */
     const setBackground = (next: Background) => {

@@ -116,11 +116,21 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             if (asset.mimeType.startsWith('video/')) {
                 const video = document.createElement('video');
                 video.preload = 'metadata';
-                video.onloadedmetadata = () => saveDimensions(video.videoWidth, video.videoHeight);
+                video.onloadedmetadata = () => {
+                    saveDimensions(video.videoWidth, video.videoHeight);
+                    video.src = '';
+                };
+                video.onerror = () => {
+                    dimensionRepairsInFlight.current.delete(asset.id);
+                    video.src = '';
+                };
                 video.src = asset.dataUrl;
             } else {
                 const image = new Image();
                 image.onload = () => saveDimensions(image.naturalWidth || image.width, image.naturalHeight || image.height);
+                image.onerror = () => {
+                    dimensionRepairsInFlight.current.delete(asset.id);
+                };
                 image.src = asset.dataUrl;
             }
         });

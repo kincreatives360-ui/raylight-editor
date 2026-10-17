@@ -141,7 +141,7 @@ export function createCanvasFillStyle(
     if (fill.kind === 'solid') {
         return hexToRgba(fill.color, fill.opacity * opacityMultiplier);
     }
-    const isRadial = (fill as any).gradientType === 'radial';
+    const isRadial = fill.kind === 'gradient' && fill.gradientType === 'radial';
     const cx = w / 2;
     const cy = h / 2;
     const len = Math.hypot(w, h) / 2;

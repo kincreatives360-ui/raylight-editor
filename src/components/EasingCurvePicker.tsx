@@ -26,17 +26,10 @@ export const EasingCurvePicker: React.FC<EasingCurvePickerProps> = ({
     label = 'Easing Curve',
 }) => {
     const [isOpen, setIsOpen] = useState(false);
-    const [activeCategory, setActiveCategory] = useState<'bezier' | 'spring' | 'preset'>(
-        value.kind === 'bezier' ? 'bezier' : value.kind === 'spring' ? 'spring' : 'preset'
-    );
+    const activeCategory = value.kind;
     const [previewProgress, setPreviewProgress] = useState(1);
     const [isPlaying, setIsPlaying] = useState(false);
     const animRef = useRef<number | null>(null);
-
-    // Keep category in sync if value kind changes from outside
-    useEffect(() => {
-        setActiveCategory(value.kind === 'bezier' ? 'bezier' : value.kind === 'spring' ? 'spring' : 'preset');
-    }, [value.kind]);
 
     // Handle interactive drag on SVG canvas for cubic-bezier handles
     const svgRef = useRef<SVGSVGElement | null>(null);
@@ -208,7 +201,6 @@ export const EasingCurvePicker: React.FC<EasingCurvePickerProps> = ({
                         <button
                             type="button"
                             onClick={() => {
-                                setActiveCategory('bezier');
                                 if (value.kind !== 'bezier') {
                                     onChange({ kind: 'bezier', x1: 0.16, y1: 1.0, x2: 0.3, y2: 1.0 });
                                 }
@@ -224,7 +216,6 @@ export const EasingCurvePicker: React.FC<EasingCurvePickerProps> = ({
                         <button
                             type="button"
                             onClick={() => {
-                                setActiveCategory('spring');
                                 if (value.kind !== 'spring') {
                                     onChange({ kind: 'spring', name: 'gentle' });
                                 }
@@ -240,7 +231,6 @@ export const EasingCurvePicker: React.FC<EasingCurvePickerProps> = ({
                         <button
                             type="button"
                             onClick={() => {
-                                setActiveCategory('preset');
                                 if (value.kind !== 'preset') {
                                     onChange({ kind: 'preset', name: 'ease-out' });
                                 }

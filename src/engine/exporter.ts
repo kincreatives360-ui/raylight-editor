@@ -1,11 +1,11 @@
 // src/engine/exporter.ts
-import type { Project, AspectRatio } from '../model/types';
+import type { Project } from '../model/types';
 import { evaluateProjectAtTime } from './evaluateShot';
 import {
     preloadProjectImages,
     renderProjectFrameToCanvas,
 } from './canvasRenderer';
-import { ASPECT_RATIO_CONFIG } from '../stage/stageUtils';
+import { getExportDimensions } from './exportMetrics';
 
 export type ExportFormat = 'mp4' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
@@ -26,93 +26,6 @@ export interface ExportProgress {
     totalFrames: number;
     percent: number;
     statusText: string;
-}
-
-export function getExportDimensions(
-    aspectRatio: AspectRatio,
-    resolution: ExportResolution = '1080p'
-): { width: number; height: number } {
-    const spec = ASPECT_RATIO_CONFIG[aspectRatio];
-    const baseLongEdge =
-        resolution === '4k' ? 3840 : resolution === '1080p' ? 1920 : 1280;
-    const aspect = spec.widthRatio / spec.heightRatio;
-
-    if (aspect >= 1) {
-        const width = baseLongEdge;
-        const height = Math.round(width / aspect / 2) * 2;
-        return { width, height };
-    } else {
-        const height = baseLongEdge;
-        const width = Math.round((height * aspect) / 2) * 2;
-        return { width, height };
-    }
-}
-
-// Calculates estimated render time and file size for the Export Dialog
-export function estimateExportMetrics(
-    project: Project,
-    settings: ExportSettings
-): {
-    width: number;
-    height: number;
-    durationSec: number;
-    totalFrames: number;
-    estimatedTimeSec: number;
-    estimatedSizeMb: number;
-} {
-    const { width, height } = getExportDimensions(
-        project.aspectRatio,
-        settings.format === 'gif' ? '720p' : settings.resolution
-    );
-
-    const totalProjectMs = project.shots.reduce(
-        (max, s) => Math.max(max, s.startMs + s.durationMs),
-        4000
-    );
-    const targetShot =
-        project.shots.find((s) => s.id === settings.selectedShotId) ||
-        project.shots[0];
-
-    const durationMs =
-        settings.scope === 'shot' && targetShot
-            ? targetShot.durationMs
-            : totalProjectMs;
-
-    const durationSec = Math.max(0.5, durationMs / 1000);
-    const effectiveFps = settings.format === 'gif' ? 15 : settings.fps;
-    const totalFrames =
-        settings.format === 'png'
-            ? 1
-            : Math.max(1, Math.floor(durationSec * effectiveFps));
-
-    const bitrateMbps =
-        settings.quality === 'studio'
-            ? 16
-            : settings.quality === 'social'
-                ? 8
-                : 4;
-    const resScale = (width * height) / (1920 * 1080);
-
-    const estimatedSizeMb =
-        settings.format === 'png'
-            ? Number((1.4 * resScale).toFixed(1))
-            : settings.format === 'gif'
-                ? Number((durationSec * 0.85).toFixed(1))
-                : Number(((durationSec * bitrateMbps * resScale) / 8).toFixed(1));
-
-    const estimatedTimeSec =
-        settings.format === 'png'
-            ? 1
-            : Math.max(2, Math.ceil((totalFrames * (resScale > 2 ? 32 : 16)) / 1000));
-
-    return {
-        width,
-        height,
-        durationSec: Number(durationSec.toFixed(1)),
-        totalFrames,
-        estimatedTimeSec,
-        estimatedSizeMb: Math.max(0.2, estimatedSizeMb),
-    };
 }
 
 function downloadBlob(blob: Blob, filename: string): void {
@@ -445,29 +358,30 @@ export async function runVideoExportPipeline(
                 ? 10_000_000
                 : 5_000_000;
 
-    let recorder: MediaRecorder | null = null;
-    const chunks: BlobPart[] = [];
-
     if (
-        typeof canvas.captureStream === 'function' &&
-        typeof MediaRecorder !== 'undefined'
+        typeof canvas.captureStream !== 'function' ||
+        typeof MediaRecorder === 'undefined'
     ) {
-        const stream = canvas.captureStream(fps);
-        recorder = new MediaRecorder(stream, {
-            ...(selectedMime ? { mimeType: selectedMime } : {}),
-            videoBitsPerSecond: bitrate,
-        });
-        recorder.ondataavailable = (ev) => {
-            if (ev.data && ev.data.size > 0) chunks.push(ev.data);
-        };
-        recorder.start();
+        throw new Error('Video export is not supported by this browser.');
     }
+
+    const stream = canvas.captureStream(fps);
+    const recorder = new MediaRecorder(stream, {
+        ...(selectedMime ? { mimeType: selectedMime } : {}),
+        videoBitsPerSecond: bitrate,
+    });
+    const chunks: BlobPart[] = [];
+    recorder.ondataavailable = (ev) => {
+        if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+    };
+    recorder.start();
 
     const frameDelayMs = Math.max(8, Math.round(1000 / fps));
 
     for (let f = 0; f <= totalFrames; f++) {
         if (abortSignal?.aborted) {
-            if (recorder && recorder.state !== 'inactive') recorder.stop();
+            if (recorder.state !== 'inactive') recorder.stop();
+            stream.getTracks().forEach((track) => track.stop());
             return;
         }
 
@@ -486,27 +400,31 @@ export async function runVideoExportPipeline(
         await new Promise((r) => setTimeout(r, frameDelayMs));
     }
 
-    if (recorder) {
-        await new Promise<void>((resolve) => {
-            if (!recorder) {
-                resolve();
+    await new Promise<void>((resolve, reject) => {
+        recorder.onstop = () => {
+            stream.getTracks().forEach((track) => track.stop());
+            if (chunks.length === 0) {
+                reject(new Error('Video export finished without any recorded data.'));
                 return;
             }
-            recorder.onstop = () => {
-                const isMp4 = selectedMime.includes('mp4');
-                const ext = isMp4 ? 'mp4' : 'webm';
-                const videoBlob = new Blob(chunks, {
-                    type: selectedMime || 'video/mp4',
-                });
-                downloadBlob(
-                    videoBlob,
-                    `${cleanName}-${settings.resolution}-${fps}fps.${ext}`
-                );
-                resolve();
-            };
-            recorder.stop();
-        });
-    }
+            const isMp4 = selectedMime.includes('mp4');
+            const ext = isMp4 ? 'mp4' : 'webm';
+            const videoBlob = new Blob(chunks, {
+                type: recorder.mimeType || selectedMime || 'video/webm',
+            });
+            downloadBlob(
+                videoBlob,
+                `${cleanName}-${settings.resolution}-${fps}fps.${ext}`
+            );
+            resolve();
+        };
+        recorder.onerror = () => {
+            stream.getTracks().forEach((track) => track.stop());
+            reject(new Error('The browser failed to record the video export.'));
+        };
+        if (recorder.state !== 'inactive') recorder.stop();
+        else resolve();
+    });
 
     onProgress({
         frameIndex: totalFrames,

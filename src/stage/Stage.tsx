@@ -824,7 +824,7 @@ export const Stage: React.FC<StageProps> = ({
                     )}
 
                     {/* SCENE POST-PROCESSING OVERLAYS (Vignette, Edge Fade, Film Grain) */}
-                    <div className="absolute inset-0 rounded-xl overflow-hidden pointer-events-none z-20">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
                         {eff.vignette.enabled && (
                             <div
                                 className="absolute inset-0"
