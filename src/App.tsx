@@ -26,6 +26,51 @@ import type {
 } from './engine/exporter';
 import { estimateExportMetrics } from './engine/exportMetrics';
 
+interface StageErrorBoundaryProps {
+  children: React.ReactNode;
+}
+
+interface StageErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class StageErrorBoundary extends React.Component<StageErrorBoundaryProps, StageErrorBoundaryState> {
+  constructor(props: StageErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): StageErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error('Stage render error:', error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="flex-1 flex flex-col items-center justify-center bg-[#111114] text-[#a1a1aa] p-6 text-center select-none">
+          <div className="text-sm font-semibold text-white mb-1.5">Stage Canvas Failed to Load</div>
+          <div className="text-xs text-rose-400 mb-4 max-w-md">
+            {this.state.error?.message || 'A runtime error occurred in the 3D viewport.'}
+          </div>
+          <button
+            type="button"
+            onClick={() => this.setState({ hasError: false })}
+            className="px-3.5 py-1.5 rounded-lg bg-[#27272a] hover:bg-[#3f3f46] text-xs font-medium text-white transition cursor-pointer"
+          >
+            Retry Loading Stage
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const {
     project,
@@ -80,6 +125,7 @@ export default function App() {
   const [exportPercent, setExportPercent] = useState<number>(0);
   const [exportError, setExportError] = useState<string>('');
   const exportAbortRef = useRef<AbortController | null>(null);
+  const exportCloseTimerRef = useRef<number | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
@@ -634,6 +680,10 @@ export default function App() {
         return;
       }
 
+      if (exportCloseTimerRef.current !== null) {
+        window.clearTimeout(exportCloseTimerRef.current);
+        exportCloseTimerRef.current = null;
+      }
       const controller = new AbortController();
       exportAbortRef.current = controller;
       setExporting(true);
@@ -654,7 +704,10 @@ export default function App() {
       );
 
       if (!controller.signal.aborted) {
-        setTimeout(() => setExportModalOpen(false), 600);
+        exportCloseTimerRef.current = window.setTimeout(() => {
+          setExportModalOpen(false);
+          exportCloseTimerRef.current = null;
+        }, 600);
       }
     } catch (error) {
       setExportError(error instanceof Error ? error.message : 'Export failed.');
@@ -744,19 +797,21 @@ export default function App() {
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
-          <Suspense fallback={<div className="flex-1 bg-[#242424]" />}>
-            <Stage
-              project={project}
-              frame={frame}
-              selectedLayerIds={selectedLayerIds}
-              onSelectLayer={(id, multi) => {
-                setInspectorTab('layer');
-                selectLayer(id, multi);
-              }}
-              showSafeArea={false}
-              snapEnabled={true}
-            />
-          </Suspense>
+          <StageErrorBoundary>
+            <Suspense fallback={<div className="flex-1 bg-[#242424]" />}>
+              <Stage
+                project={project}
+                frame={frame}
+                selectedLayerIds={selectedLayerIds}
+                onSelectLayer={(id, multi) => {
+                  setInspectorTab('layer');
+                  selectLayer(id, multi);
+                }}
+                showSafeArea={false}
+                snapEnabled={true}
+              />
+            </Suspense>
+          </StageErrorBoundary>
 
           <Timeline totalDurationMs={totalDurationMs} />
         </main>

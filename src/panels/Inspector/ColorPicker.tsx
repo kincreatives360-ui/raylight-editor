@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/refs */
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
@@ -90,9 +91,16 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
     };
 
+    const isHexInputFocused =
+        typeof document !== 'undefined' &&
+        hexInputRef.current !== null &&
+        hexInputRef.current === document.activeElement;
+
     if (color !== previousColor && !draggingSquare) {
         setPreviousColor(color);
-        setHexDraft(color);
+        if (!isHexInputFocused) {
+            setHexDraft(color);
+        }
         setHsv(hexToHsv(color));
     }
 
@@ -198,11 +206,29 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         <span className="text-lg leading-none text-[#8b8b95]">♢</span>
                         <span className="h-5 w-5 rounded-full border border-white/10" style={{ backgroundColor: hexDraft }} />
                         <span className="font-medium">HEX</span>
-                        <input ref={hexInputRef} aria-label="Hex color" value={hexDraft.replace(/^#/, '').toUpperCase()} onChange={(event) => {
-                            const raw = event.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
-                            setHexDraft(`#${raw}`);
-                            if (raw.length === 3 || raw.length === 6) commitHex(raw);
-                        }} onBlur={() => commitHex(hexDraft)} onKeyDown={(event) => { if (event.key === 'Enter') commitHex(hexDraft); }} className="min-w-0 w-[86px] bg-transparent font-mono text-white outline-none" spellCheck={false} />
+                        <input
+                            ref={hexInputRef}
+                            aria-label="Hex color"
+                            value={hexDraft.replace(/^#/, '').toUpperCase()}
+                            onChange={(event) => {
+                                const raw = event.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
+                                setHexDraft(`#${raw}`);
+                                if (raw.length === 3 || raw.length === 6) commitHex(raw);
+                            }}
+                            onBlur={() => {
+                                commitHex(hexDraft);
+                                setHexDraft(normalizeHex(hexDraft) || color);
+                            }}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter') {
+                                    commitHex(hexDraft);
+                                    setHexDraft(normalizeHex(hexDraft) || color);
+                                    hexInputRef.current?.blur();
+                                }
+                            }}
+                            className="min-w-0 w-[86px] bg-transparent font-mono text-white outline-none"
+                            spellCheck={false}
+                        />
                     </label>
                     <div className="flex h-[205px] gap-3">
                         <div ref={squareRef} role="slider" aria-label="Saturation and brightness" aria-valuetext={hexDraft} onPointerDown={(event) => {

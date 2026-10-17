@@ -366,70 +366,128 @@ export async function runVideoExportPipeline(
     }
 
     const stream = canvas.captureStream(fps);
-    const recorder = new MediaRecorder(stream, {
-        ...(selectedMime ? { mimeType: selectedMime } : {}),
-        videoBitsPerSecond: bitrate,
-    });
-    const chunks: BlobPart[] = [];
-    recorder.ondataavailable = (ev) => {
-        if (ev.data && ev.data.size > 0) chunks.push(ev.data);
-    };
-    recorder.start();
-
-    const frameDelayMs = Math.max(8, Math.round(1000 / fps));
-
-    for (let f = 0; f <= totalFrames; f++) {
-        if (abortSignal?.aborted) {
-            if (recorder.state !== 'inactive') recorder.stop();
-            stream.getTracks().forEach((track) => track.stop());
-            return;
-        }
-
-        const t = startMs + (f / fps) * 1000;
-        const evaluated = evaluateProjectAtTime(project, t);
-        renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
-
-        const percent = Math.round((f / totalFrames) * 100);
-        onProgress({
-            frameIndex: f,
-            totalFrames,
-            percent,
-            statusText: `Rendering ${settings.resolution} Frame ${f}/${totalFrames} (${percent}%)`,
+    let recorder: MediaRecorder | null = null;
+    try {
+        recorder = new MediaRecorder(stream, {
+            ...(selectedMime ? { mimeType: selectedMime } : {}),
+            videoBitsPerSecond: bitrate,
         });
+        const chunks: BlobPart[] = [];
+        let recordingError: Error | null = null;
+        let finalizationResolve: (() => void) | null = null;
+        let finalizationReject: ((err: Error) => void) | null = null;
 
-        await new Promise((r) => setTimeout(r, frameDelayMs));
-    }
-
-    await new Promise<void>((resolve, reject) => {
+        recorder.ondataavailable = (ev) => {
+            if (ev.data && ev.data.size > 0) chunks.push(ev.data);
+        };
+        recorder.onerror = (ev) => {
+            stream.getTracks().forEach((track) => track.stop());
+            const err =
+                (ev as unknown as { error?: Error })?.error instanceof Error
+                    ? (ev as unknown as { error: Error }).error
+                    : new Error('The browser failed to record the video export.');
+            recordingError = err;
+            if (finalizationReject) {
+                finalizationReject(err);
+            }
+        };
         recorder.onstop = () => {
             stream.getTracks().forEach((track) => track.stop());
-            if (chunks.length === 0) {
-                reject(new Error('Video export finished without any recorded data.'));
+            if (recordingError) {
+                if (finalizationReject) {
+                    finalizationReject(recordingError);
+                }
                 return;
             }
-            const isMp4 = selectedMime.includes('mp4');
-            const ext = isMp4 ? 'mp4' : 'webm';
-            const videoBlob = new Blob(chunks, {
-                type: recorder.mimeType || selectedMime || 'video/webm',
-            });
-            downloadBlob(
-                videoBlob,
-                `${cleanName}-${settings.resolution}-${fps}fps.${ext}`
-            );
-            resolve();
+            if (chunks.length === 0) {
+                const err = new Error('Video export finished without any recorded data.');
+                recordingError = err;
+                if (finalizationReject) {
+                    finalizationReject(err);
+                }
+                return;
+            }
+            try {
+                const isMp4 = selectedMime.includes('mp4');
+                const ext = isMp4 ? 'mp4' : 'webm';
+                const videoBlob = new Blob(chunks, {
+                    type: recorder?.mimeType || selectedMime || 'video/webm',
+                });
+                downloadBlob(
+                    videoBlob,
+                    `${cleanName}-${settings.resolution}-${fps}fps.${ext}`
+                );
+                if (finalizationResolve) {
+                    finalizationResolve();
+                }
+            } catch (err) {
+                const error = err instanceof Error ? err : new Error(String(err));
+                recordingError = error;
+                if (finalizationReject) {
+                    finalizationReject(error);
+                }
+            }
         };
-        recorder.onerror = () => {
-            stream.getTracks().forEach((track) => track.stop());
-            reject(new Error('The browser failed to record the video export.'));
-        };
-        if (recorder.state !== 'inactive') recorder.stop();
-        else resolve();
-    });
 
-    onProgress({
-        frameIndex: totalFrames,
-        totalFrames,
-        percent: 100,
-        statusText: 'Video Export Complete!',
-    });
+        recorder.start();
+
+        const frameDelayMs = Math.max(8, Math.round(1000 / fps));
+
+        for (let f = 0; f <= totalFrames; f++) {
+            if (abortSignal?.aborted) {
+                return;
+            }
+            if (recordingError) {
+                throw recordingError;
+            }
+
+            const t = startMs + (f / fps) * 1000;
+            const evaluated = evaluateProjectAtTime(project, t);
+            renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+
+            const percent = Math.round((f / totalFrames) * 100);
+            onProgress({
+                frameIndex: f,
+                totalFrames,
+                percent,
+                statusText: `Rendering ${settings.resolution} Frame ${f}/${totalFrames} (${percent}%)`,
+            });
+
+            await new Promise((r) => setTimeout(r, frameDelayMs));
+        }
+
+        const activeRecorder = recorder;
+        await new Promise<void>((resolve, reject) => {
+            if (recordingError) {
+                reject(recordingError);
+                return;
+            }
+            if (!activeRecorder || activeRecorder.state === 'inactive') {
+                reject(
+                    recordingError ||
+                        new Error('The browser failed to record the video export.')
+                );
+                return;
+            }
+            finalizationResolve = resolve;
+            finalizationReject = reject;
+            activeRecorder.stop();
+        });
+
+        onProgress({
+            frameIndex: totalFrames,
+            totalFrames,
+            percent: 100,
+            statusText: 'Video Export Complete!',
+        });
+    } finally {
+        if (recorder && recorder.state !== 'inactive') {
+            try {
+                recorder.stop();
+            } catch {
+                // ignore
+            }
+        }
+        stream.getTracks().forEach((track) => track.stop());
+    }
 }

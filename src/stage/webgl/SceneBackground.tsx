@@ -19,6 +19,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     const assets = project.assets;
     const [imageTextureState, setImageTextureState] = useState<{
         assetId: string;
+        url: string;
         texture: THREE.Texture;
     } | null>(null);
     const texRef = React.useRef<THREE.Texture | null>(null);
@@ -27,9 +28,13 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     const targetAspect = spec.widthRatio / spec.heightRatio;
     const backgroundAssetId = background.kind === 'image' ? background.assetId : null;
     const backgroundAssetUrl = backgroundAssetId ? assets[backgroundAssetId]?.dataUrl : undefined;
-    const imageTexture = backgroundAssetId && imageTextureState?.assetId === backgroundAssetId
-        ? imageTextureState.texture
-        : null;
+    const imageTexture =
+        backgroundAssetId &&
+        backgroundAssetUrl &&
+        imageTextureState?.assetId === backgroundAssetId &&
+        imageTextureState?.url === backgroundAssetUrl
+            ? imageTextureState.texture
+            : null;
 
     // Load image background texture when kind === 'image'
     useEffect(() => {
@@ -53,13 +58,17 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
                     tex.offset.set(crop.uOffset, crop.vOffset);
                 }
                 texRef.current = tex;
-                setImageTextureState({ assetId: backgroundAssetId, texture: tex });
+                setImageTextureState({ assetId: backgroundAssetId, url: backgroundAssetUrl, texture: tex });
             },
             undefined,
             () => {
                 if (!cancelled) {
                     texRef.current = null;
-                    setImageTextureState((current) => current?.assetId === backgroundAssetId ? null : current);
+                    setImageTextureState((current) =>
+                        current?.assetId === backgroundAssetId && current?.url === backgroundAssetUrl
+                            ? null
+                            : current
+                    );
                 }
             }
         );
