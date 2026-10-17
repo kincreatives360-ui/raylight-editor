@@ -14,7 +14,7 @@ interface LightingSectionProps {
 export const LightingSection: React.FC<LightingSectionProps> = ({
     activeShot,
 }) => {
-    const { updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const { updateShot } = useProjectStore();
     const { selectedLightBlockId, selectLightBlock, setTimelineView } = useSelectionStore();
     const { light } = activeShot;
     const selectedLightBlock = (activeShot.lightBlocks || []).find(
@@ -34,85 +34,165 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                     <option value="">+ Add light source…</option><option value="point">Point light</option><option value="directional">Directional light</option><option value="spot">Spot light</option><option value="area">Area light</option><option value="ambient">Ambient light</option>
                 </select>
             </div>
-            {(activeShot.light.sources || []).map((source) => <div key={source.id} className="rounded-lg border border-white/10 p-2 space-y-2">
-                <div className="flex items-center justify-between text-[10px] text-white"><span>{source.name} · {source.type}</span><div className="flex gap-2"><ColorField aria-label={`${source.name} color`}  value={source.color} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, color: e.target.value } : l) } }))} /><button type="button" className="text-rose-300" onClick={() => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).filter((l) => l.id !== source.id) } }))}>Remove</button></div></div>
-                <label className="flex items-center gap-2 text-[10px] text-gray-300"><input type="checkbox" checked={source.enabled} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, enabled: e.target.checked } : l) } }))}/> Enabled</label>
-                <div className="space-y-1">
-                    <span className="text-[9px] text-gray-400">Position</span>
-                    <div className="grid grid-cols-3 gap-1.5">
-                        <label className="text-[9px] text-gray-400">
-                            X:
-                            <input
-                                type="number"
-                                step="0.05"
-                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
-                                value={source.position?.x ?? 0}
-                                onChange={(e) => {
-                                    const val = Number(e.target.value);
+            {(activeShot.light?.sources || []).map((source) => (
+                <div key={source.id} className="rounded-lg border border-white/10 bg-black/20 p-2.5 space-y-2">
+                    <div className="flex items-center justify-between text-[11px] font-medium text-white">
+                        <span>{source.name} · {source.type}</span>
+                        <div className="flex items-center gap-2">
+                            <ColorField
+                                aria-label={`${source.name} color`}
+                                value={source.color}
+                                onChange={(e) =>
                                     updateShot(activeShot.id, (shot) => ({
                                         ...shot,
                                         light: {
                                             ...shot.light,
-                                            sources: (shot.light.sources || []).map((l) =>
-                                                l.id === source.id
-                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), x: val } }
-                                                    : l
+                                            sources: (shot.light?.sources || []).map((l) =>
+                                                l.id === source.id ? { ...l, color: e.target.value } : l
                                             ),
                                         },
-                                    }));
-                                }}
+                                    }))
+                                }
                             />
-                        </label>
-                        <label className="text-[9px] text-gray-400">
-                            Y:
-                            <input
-                                type="number"
-                                step="0.05"
-                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
-                                value={source.position?.y ?? 0}
-                                onChange={(e) => {
-                                    const val = Number(e.target.value);
+                            <button
+                                type="button"
+                                className="text-[10px] text-rose-400 hover:text-rose-300 transition"
+                                onClick={() =>
                                     updateShot(activeShot.id, (shot) => ({
                                         ...shot,
                                         light: {
                                             ...shot.light,
-                                            sources: (shot.light.sources || []).map((l) =>
-                                                l.id === source.id
-                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), y: val } }
-                                                    : l
-                                            ),
+                                            sources: (shot.light?.sources || []).filter((l) => l.id !== source.id),
                                         },
-                                    }));
-                                }}
-                            />
-                        </label>
-                        <label className="text-[9px] text-gray-400">
-                            Z:
-                            <input
-                                type="number"
-                                step="0.05"
-                                className="w-full rounded bg-[#11131b] border border-white/10 px-1.5 py-0.5 text-[10px] text-white"
-                                value={source.position?.z ?? 0}
-                                onChange={(e) => {
-                                    const val = Number(e.target.value);
-                                    updateShot(activeShot.id, (shot) => ({
-                                        ...shot,
-                                        light: {
-                                            ...shot.light,
-                                            sources: (shot.light.sources || []).map((l) =>
-                                                l.id === source.id
-                                                    ? { ...l, position: { ...(l.position || { x: 0, y: 0, z: 0 }), z: val } }
-                                                    : l
-                                            ),
-                                        },
-                                    }));
-                                }}
-                            />
-                        </label>
+                                    }))
+                                }
+                            >
+                                Remove
+                            </button>
+                        </div>
                     </div>
+                    <label className="flex items-center gap-1.5 text-[10px] text-gray-300 cursor-pointer">
+                        <input
+                            type="checkbox"
+                            checked={source.enabled}
+                            onChange={(e) =>
+                                updateShot(activeShot.id, (shot) => ({
+                                    ...shot,
+                                    light: {
+                                        ...shot.light,
+                                        sources: (shot.light?.sources || []).map((l) =>
+                                            l.id === source.id ? { ...l, enabled: e.target.checked } : l
+                                        ),
+                                    },
+                                }))
+                            }
+                        />
+                        <span>Enabled</span>
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                        <ScrubInput
+                            label="X"
+                            value={Math.round((source.position?.x ?? 0) * 100)}
+                            min={-200}
+                            max={200}
+                            step={2}
+                            unit="%"
+                            onChange={(pctX) =>
+                                updateShot(activeShot.id, (shot) => ({
+                                    ...shot,
+                                    light: {
+                                        ...shot.light,
+                                        sources: (shot.light?.sources || []).map((l) =>
+                                            l.id === source.id
+                                                ? {
+                                                      ...l,
+                                                      position: {
+                                                          ...(l.position || { x: 0, y: 0, z: 0 }),
+                                                          x: Number((pctX / 100).toFixed(2)),
+                                                      },
+                                                  }
+                                                : l
+                                        ),
+                                    },
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="Y"
+                            value={Math.round((source.position?.y ?? 0) * 100)}
+                            min={-200}
+                            max={200}
+                            step={2}
+                            unit="%"
+                            onChange={(pctY) =>
+                                updateShot(activeShot.id, (shot) => ({
+                                    ...shot,
+                                    light: {
+                                        ...shot.light,
+                                        sources: (shot.light?.sources || []).map((l) =>
+                                            l.id === source.id
+                                                ? {
+                                                      ...l,
+                                                      position: {
+                                                          ...(l.position || { x: 0, y: 0, z: 0 }),
+                                                          y: Number((pctY / 100).toFixed(2)),
+                                                      },
+                                                  }
+                                                : l
+                                        ),
+                                    },
+                                }))
+                            }
+                        />
+                        <ScrubInput
+                            label="Z"
+                            value={Math.round((source.position?.z ?? 0) * 100)}
+                            min={-200}
+                            max={200}
+                            step={2}
+                            unit="%"
+                            onChange={(pctZ) =>
+                                updateShot(activeShot.id, (shot) => ({
+                                    ...shot,
+                                    light: {
+                                        ...shot.light,
+                                        sources: (shot.light?.sources || []).map((l) =>
+                                            l.id === source.id
+                                                ? {
+                                                      ...l,
+                                                      position: {
+                                                          ...(l.position || { x: 0, y: 0, z: 0 }),
+                                                          z: Number((pctZ / 100).toFixed(2)),
+                                                      },
+                                                  }
+                                                : l
+                                        ),
+                                    },
+                                }))
+                            }
+                        />
+                    </div>
+                    <ScrubInput
+                        label="Source Intensity"
+                        value={Math.round((source.intensity ?? 1) * 100)}
+                        min={0}
+                        max={500}
+                        step={5}
+                        unit="%"
+                        onChange={(pct) =>
+                            updateShot(activeShot.id, (shot) => ({
+                                ...shot,
+                                light: {
+                                    ...shot.light,
+                                    sources: (shot.light?.sources || []).map((l) =>
+                                        l.id === source.id ? { ...l, intensity: Number((pct / 100).toFixed(2)) } : l
+                                    ),
+                                },
+                            }))
+                        }
+                    />
                 </div>
-                <label className="block text-[10px] text-gray-400">Intensity <input className="w-full" type="range" min="0" max="5" step="0.1" value={source.intensity} onPointerDown={() => beginDragTransaction()} onPointerUp={() => commitDragTransaction()} onPointerCancel={() => commitDragTransaction()} onChange={(e) => updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, sources: (shot.light.sources || []).map((l) => l.id === source.id ? { ...l, intensity: Number(e.target.value) } : l) } }))}/></label>
-            </div>)}
+            ))}
 
         <div className="p-3.5 space-y-3">
             <div className="flex items-center justify-between">
@@ -154,7 +234,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
             <div className="grid grid-cols-2 gap-1.5">
                 <ScrubInput
                     label="X"
-                    value={Math.round(light.position.x * 100)}
+                    value={Math.round((light?.position?.x ?? -0.28) * 100)}
                     min={-100}
                     max={100}
                     step={2}
@@ -165,7 +245,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                             light: {
                                 ...s.light,
                                 position: {
-                                    ...s.light.position,
+                                    ...(s.light?.position || { x: -0.28, y: 0.36, z: 0.9 }),
                                     x: Number((pctX / 100).toFixed(2)),
                                 },
                             },
@@ -174,7 +254,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 />
                 <ScrubInput
                     label="Y"
-                    value={Math.round(light.position.y * 100)}
+                    value={Math.round((light?.position?.y ?? 0.36) * 100)}
                     min={-100}
                     max={100}
                     step={2}
@@ -185,7 +265,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                             light: {
                                 ...s.light,
                                 position: {
-                                    ...s.light.position,
+                                    ...(s.light?.position || { x: -0.28, y: 0.36, z: 0.9 }),
                                     y: Number((pctY / 100).toFixed(2)),
                                 },
                             },
@@ -194,12 +274,12 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 />
             </div>
 
-            <div className="grid grid-cols-2 gap-1.5">
+            <div className="grid grid-cols-3 gap-1.5">
                 <ScrubInput
                     label="Intensity"
-                    value={Math.round(light.intensity * 100)}
+                    value={Math.round((light.intensity ?? 1.2) * 100)}
                     min={0}
-                    max={250}
+                    max={300}
                     step={5}
                     unit="%"
                     onChange={(pct) =>
@@ -211,7 +291,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 />
                 <ScrubInput
                     label="Temp"
-                    value={light.temperature}
+                    value={light.temperature ?? 6100}
                     min={2500}
                     max={9500}
                     step={100}
@@ -220,6 +300,20 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                         updateShot(activeShot.id, (s) => ({
                             ...s,
                             light: { ...s.light, temperature },
+                        }))
+                    }
+                />
+                <ScrubInput
+                    label="Fill"
+                    value={Math.round((light.ambience ?? 0.38) * 100)}
+                    min={0}
+                    max={100}
+                    step={2}
+                    unit="%"
+                    onChange={(pct) =>
+                        updateShot(activeShot.id, (s) => ({
+                            ...s,
+                            light: { ...s.light, ambience: Number((pct / 100).toFixed(2)) },
                         }))
                     }
                 />

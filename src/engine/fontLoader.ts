@@ -39,6 +39,8 @@ export const POPULAR_FONTS: FontDefinition[] = [
     { name: 'System Mono', family: 'monospace', category: 'System' },
 ];
 
+export const POPULAR_FONT_NAMES: string[] = POPULAR_FONTS.map((f) => f.name);
+
 const loadedFonts = new Set<string>([
     'sans-serif',
     'serif',

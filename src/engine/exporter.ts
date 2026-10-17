@@ -19,6 +19,7 @@ export interface ExportSettings {
     quality: ExportQuality;
     scope: ExportScope;
     selectedShotId?: string;
+    onSeekFrame?: (timeMs: number) => Promise<void> | void;
 }
 
 export interface ExportProgress {
@@ -190,8 +191,14 @@ export async function exportCurrentFrameAsPng(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const evaluated = evaluateProjectAtTime(project, timeMs);
-    renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+    // 1. Prefer capturing high-resolution frame directly from the active WebGL canvas
+    const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+    if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+        ctx.drawImage(webglCanvas, 0, 0, width, height);
+    } else {
+        const evaluated = evaluateProjectAtTime(project, timeMs);
+        renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+    }
 
     const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const filename = `${cleanName || 'raylight'}-${Math.round(timeMs)}ms.png`;
@@ -281,8 +288,17 @@ export async function runVideoExportPipeline(
         for (let f = 0; f < totalFrames; f++) {
             if (abortSignal?.aborted) return;
             const t = startMs + (f / gifFps) * 1000;
-            const evaluated = evaluateProjectAtTime(project, t);
-            renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
+            if (settings.onSeekFrame) {
+                await settings.onSeekFrame(t);
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+            const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+            if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+                ctx.drawImage(webglCanvas, 0, 0, gifW, gifH);
+            } else {
+                const evaluated = evaluateProjectAtTime(project, t);
+                renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
+            }
             framesData.push(ctx.getImageData(0, 0, gifW, gifH));
 
             const percent = Math.round(((f + 1) / totalFrames) * 90);
@@ -442,8 +458,18 @@ export async function runVideoExportPipeline(
             }
 
             const t = startMs + (f / fps) * 1000;
-            const evaluated = evaluateProjectAtTime(project, t);
-            renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+            if (settings.onSeekFrame) {
+                await settings.onSeekFrame(t);
+                await new Promise((r) => requestAnimationFrame(r));
+            }
+
+            const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+            if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+                ctx.drawImage(webglCanvas, 0, 0, width, height);
+            } else {
+                const evaluated = evaluateProjectAtTime(project, t);
+                renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+            }
 
             const percent = Math.round((f / totalFrames) * 100);
             onProgress({

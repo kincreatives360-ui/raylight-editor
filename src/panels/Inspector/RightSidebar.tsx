@@ -62,22 +62,8 @@ import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { BackgroundSection } from './sections/BackgroundSection';
 import { SceneTransitionSection } from './sections/SceneTransitionSection';
 import { readImageFileWithThumbnail } from '../../engine/figmaSvgImporter';
-
-const POPULAR_FONTS = [
-    'Inter',
-    'Roboto',
-    'Outfit',
-    'Montserrat',
-    'Playfair Display',
-    'Fira Code',
-    'Plus Jakarta Sans',
-    'Space Grotesk',
-    'Cinzel',
-    'Bebas Neue',
-    'sans-serif',
-    'serif',
-    'monospace',
-];
+import { ShotInspector } from './ShotInspector';
+import { POPULAR_FONT_NAMES as POPULAR_FONTS, loadGoogleFont } from '../../engine/fontLoader';
 
 const SHAPE_GRADIENT_PRESETS = [
     {
@@ -147,8 +133,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         deleteLayerFromShot,
     } = useProjectStore();
     const {
+        inspectorTab,
         selectedBlockId,
         selectedCameraBlockId,
+        selectProject,
+        selectShot,
         setTimelineLayerExpanded,
         selectBlock,
         selectCameraBlock,
@@ -1159,40 +1148,65 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                 </div>
             ) : (
                 <>
-                    {/* 2. SUB-HEADER: [Design] | [Animate] Pill Tabs */}
-                    <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
-                        <div className="flex items-center gap-1.5">
-                            <button
-                                onClick={() => setMainTab('design')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
-                                    ? 'bg-[#1f1f23] text-white'
-                                    : 'text-[#71717a] hover:text-[#d4d4d8]'
-                                    }`}
-                            >
-                                Design
-                            </button>
-                            <button
-                                onClick={() => setMainTab('animate')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
-                                    ? 'bg-[#1f1f23] text-white'
-                                    : 'text-[#71717a] hover:text-[#d4d4d8]'
-                                    }`}
-                            >
-                                Animate
-                            </button>
-                        </div>
+                    {/* 2. SUB-HEADER: Context navigation */}
+                    {selectedLayer ? (
+                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
+                            <div className="flex items-center gap-1.5">
+                                <button
+                                    onClick={() => setMainTab('design')}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
+                                        ? 'bg-[#1f1f23] text-white'
+                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                        }`}
+                                >
+                                    Design
+                                </button>
+                                <button
+                                    onClick={() => setMainTab('animate')}
+                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
+                                        ? 'bg-[#1f1f23] text-white'
+                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                        }`}
+                                >
+                                    Animate
+                                </button>
+                            </div>
 
-                        {selectedLayer && (
                             <button
-                                onClick={() => clearLayerSelection()}
+                                onClick={() => {
+                                    clearLayerSelection();
+                                    selectShot(activeShot.id);
+                                }}
                                 title="Click to view Shot settings"
                                 className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
                             >
                                 <Film className="w-3 h-3 text-[#0088ff]" />
                                 <span>{activeShot.name || 'Shot'}</span>
                             </button>
-                        )}
-                    </div>
+                        </div>
+                    ) : (
+                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center gap-1 bg-[#121215] shrink-0">
+                            <button
+                                onClick={() => selectProject()}
+                                className={`flex-1 py-1 px-2 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${inspectorTab === 'project'
+                                    ? 'bg-[#27272a] text-white shadow-sm'
+                                    : 'text-[#a1a1aa] hover:text-white'
+                                    }`}
+                            >
+                                Project
+                            </button>
+                            <button
+                                onClick={() => selectShot(activeShot.id)}
+                                className={`flex-1 py-1 px-2 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center gap-1 ${inspectorTab === 'shot' || inspectorTab !== 'project'
+                                    ? 'bg-[#0088ff] text-white shadow-sm'
+                                    : 'text-[#a1a1aa] hover:text-white'
+                                    }`}
+                            >
+                                <Film className="w-3 h-3" />
+                                <span className="truncate">{activeShot.name || 'Shot'}</span>
+                            </button>
+                        </div>
+                    )}
 
                     {/* =============================================================== */}
                     {/* TAB 1: DESIGN (WHEN A LAYER IS SELECTED)                        */}
@@ -1310,13 +1324,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         <span className="text-[10px] text-[#71717a]">Font Family</span>
                                         <select
                                             value={selectedLayer.font.family}
-                                            onChange={(e) =>
+                                            onChange={(e) => {
+                                                const nextFont = e.target.value;
+                                                loadGoogleFont(nextFont);
                                                 updateLayer(activeShot.id, selectedLayer.id, (l) =>
                                                     l.kind === 'text'
-                                                        ? { ...l, font: { ...l.font, family: e.target.value } }
+                                                        ? { ...l, font: { ...l.font, family: nextFont } }
                                                         : l
-                                                )
-                                            }
+                                                );
+                                            }}
                                             className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer"
                                         >
                                             {[...POPULAR_FONTS, ...customFonts].map((f) => (
@@ -2671,95 +2687,99 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     )}
 
                     {/* =============================================================== */}
-                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — SHOT SETTINGS)       */}
+                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — SHOT OR PROJECT SETTINGS) */}
                     {/* =============================================================== */}
                     {effectiveMainTab === 'design' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto bg-[#101012]">
-                    <div className={`px-3.5 ${isBlankState ? 'pt-1 space-y-2' : 'pt-3 space-y-4'} pb-4`}>
-                                <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
+                        inspectorTab === 'project' ? (
+                            <div className="flex-1 overflow-y-auto bg-[#101012]">
+                                <div className={`px-3.5 ${isBlankState ? 'pt-1 space-y-2' : 'pt-3 space-y-4'} pb-4`}>
+                                    <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
 
-                                <label className="block space-y-1.5">
-                                    <span className="block text-[11px] text-[#a1a1aa]">Name</span>
-                                    <input
-                                        aria-label="Project name"
-                                        value={project.name}
-                                        onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
-                                        className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
-                                    />
-                                </label>
+                                    <label className="block space-y-1.5">
+                                        <span className="block text-[11px] text-[#a1a1aa]">Name</span>
+                                        <input
+                                            aria-label="Project name"
+                                            value={project.name}
+                                            onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
+                                            className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                        />
+                                    </label>
 
-                                <label className="block space-y-1.5">
-                                    <span className="block text-[11px] text-[#a1a1aa]">Aspect Ratio</span>
-                                    <select
-                                        aria-label="Project aspect ratio"
-                                        value={project.aspectRatio}
-                                        onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
-                                        className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
-                                    >
-                                        <option value="16:9">Landscape 16:9</option>
-                                        <option value="4:3">Classic 4:3</option>
-                                        <option value="3:2">Landscape 3:2</option>
-                                        <option value="21:9">Ultrawide 21:9</option>
-                                        <option value="1:1">Square 1:1</option>
-                                        <option value="9:16">Portrait 9:16</option>
-                                        <option value="3:4">Portrait 3:4</option>
-                                        <option value="2:3">Portrait 2:3</option>
-                                        <option value="4:5">Portrait 4:5</option>
-                                    </select>
-                                </label>
+                                    <label className="block space-y-1.5">
+                                        <span className="block text-[11px] text-[#a1a1aa]">Aspect Ratio</span>
+                                        <select
+                                            aria-label="Project aspect ratio"
+                                            value={project.aspectRatio}
+                                            onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
+                                            className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                        >
+                                            <option value="16:9">Landscape 16:9</option>
+                                            <option value="4:3">Classic 4:3</option>
+                                            <option value="3:2">Landscape 3:2</option>
+                                            <option value="21:9">Ultrawide 21:9</option>
+                                            <option value="1:1">Square 1:1</option>
+                                            <option value="9:16">Portrait 9:16</option>
+                                            <option value="3:4">Portrait 3:4</option>
+                                            <option value="2:3">Portrait 2:3</option>
+                                            <option value="4:5">Portrait 4:5</option>
+                                        </select>
+                                    </label>
 
-                                <label className="block space-y-1.5">
-                                    <span className="block text-[11px] text-[#a1a1aa]">Lens</span>
-                                    <div className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 flex items-center text-[12px] text-[#d4d4d8]">
-                                        <span className="text-[#a1a1aa] mr-2">F</span>50 mm
+                                    <label className="block space-y-1.5">
+                                        <span className="block text-[11px] text-[#a1a1aa]">Lens</span>
+                                        <div className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 flex items-center text-[12px] text-[#d4d4d8]">
+                                            <span className="text-[#a1a1aa] mr-2">F</span>50 mm
+                                        </div>
+                                    </label>
+
+                                    <div className="space-y-2">
+                                        <span className="block text-[11px] text-[#a1a1aa]">Background</span>
+                                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1d1d20] p-0.5">
+                                            <button
+                                                onClick={() => updateProject((p) => ({ ...p, background: { kind: 'solid', color: p.background.kind === 'solid' ? p.background.color : '#0A0A0C' } }))}
+                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'solid' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                            >Color</button>
+                                            <button
+                                                onClick={() => projectBgFileRef.current?.click()}
+                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'image' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                            >Image</button>
+                                            <button
+                                                onClick={() => updateProject((p) => ({ ...p, background: { kind: 'gradient', source: 'shader', gradientType: 'radial', angle: 135, stops: [{ at: 0, color: '#17172b' }, { at: 1, color: '#050507' }] } }))}
+                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'gradient' && project.background.source === 'shader' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
+                                            >Shader</button>
+                                        </div>
+
+                                        {project.background.kind === 'solid' && (
+                                            <label className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2 flex items-center gap-2">
+                                                <ColorField
+                                                    aria-label="Background color"
+                                                    value={project.background.color}
+                                                    onChange={(e) => updateProject((p) => ({ ...p, background: { kind: 'solid', color: e.target.value.toUpperCase() } }))}
+                                                    className="w-5 h-5 rounded border-0 bg-transparent p-0 cursor-pointer"
+                                                />
+                                                <input
+                                                    aria-label="Background color hex"
+                                                    value={project.background.color.replace('#', '').toUpperCase()}
+                                                    onChange={(e) => {
+                                                        const hex = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
+                                                        if (hex.length === 6) updateProject((p) => ({ ...p, background: { kind: 'solid', color: `#${hex.toUpperCase()}` } }));
+                                                    }}
+                                                    className="min-w-0 flex-1 bg-transparent text-[11px] text-[#d4d4d8] outline-none"
+                                                />
+                                            </label>
+                                        )}
+                                        {project.background.kind === 'image' && (
+                                            <button onClick={() => projectBgFileRef.current?.click()} className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] text-[11px] text-[#d4d4d8] hover:bg-[#262629]">Choose background image…</button>
+                                        )}
+                                        {project.background.kind === 'gradient' && (
+                                            <div className="h-[30px] rounded-lg border border-white/[0.06] bg-gradient-to-r from-[#17172b] to-[#050507] px-2 flex items-center text-[11px] text-[#d4d4d8]">Shader background</div>
+                                        )}
                                     </div>
-                                </label>
-
-                                <div className="space-y-2">
-                                    <span className="block text-[11px] text-[#a1a1aa]">Background</span>
-                                    <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1d1d20] p-0.5">
-                                        <button
-                                            onClick={() => updateProject((p) => ({ ...p, background: { kind: 'solid', color: p.background.kind === 'solid' ? p.background.color : '#0A0A0C' } }))}
-                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'solid' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                        >Color</button>
-                                        <button
-                                            onClick={() => projectBgFileRef.current?.click()}
-                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'image' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                        >Image</button>
-                                        <button
-                                            onClick={() => updateProject((p) => ({ ...p, background: { kind: 'gradient', source: 'shader', gradientType: 'radial', angle: 135, stops: [{ at: 0, color: '#17172b' }, { at: 1, color: '#050507' }] } }))}
-                                            className={`h-7 rounded-md text-[11px] ${project.background.kind === 'gradient' && project.background.source === 'shader' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                        >Shader</button>
-                                    </div>
-
-                                    {project.background.kind === 'solid' && (
-                                        <label className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2 flex items-center gap-2">
-                                            <ColorField
-                                                aria-label="Background color"
-                                                value={project.background.color}
-                                                onChange={(e) => updateProject((p) => ({ ...p, background: { kind: 'solid', color: e.target.value.toUpperCase() } }))}
-                                                className="w-5 h-5 rounded border-0 bg-transparent p-0 cursor-pointer"
-                                            />
-                                            <input
-                                                aria-label="Background color hex"
-                                                value={project.background.color.replace('#', '').toUpperCase()}
-                                                onChange={(e) => {
-                                                    const hex = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
-                                                    if (hex.length === 6) updateProject((p) => ({ ...p, background: { kind: 'solid', color: `#${hex.toUpperCase()}` } }));
-                                                }}
-                                                className="min-w-0 flex-1 bg-transparent text-[11px] text-[#d4d4d8] outline-none"
-                                            />
-                                        </label>
-                                    )}
-                                    {project.background.kind === 'image' && (
-                                        <button onClick={() => projectBgFileRef.current?.click()} className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] text-[11px] text-[#d4d4d8] hover:bg-[#262629]">Choose background image…</button>
-                                    )}
-                                    {project.background.kind === 'gradient' && (
-                                        <div className="h-[30px] rounded-lg border border-white/[0.06] bg-gradient-to-r from-[#17172b] to-[#050507] px-2 flex items-center text-[11px] text-[#d4d4d8]">Shader background</div>
-                                    )}
                                 </div>
                             </div>
-                        </div>
+                        ) : (
+                            <ShotInspector activeShot={activeShot} />
+                        )
                     )}
 
                     {/* =============================================================== */}

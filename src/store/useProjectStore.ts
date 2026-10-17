@@ -76,6 +76,7 @@ interface ProjectStore {
         newAssets?: Record<string, AssetRecord>
     ) => Layer[];
     deleteLayerFromShot: (shotId: string, layerId: string) => void;
+    deleteMultipleLayersFromShot: (shotId: string, layerIds: string[]) => void;
     duplicateLayerInShot: (shotId: string, layerId: string) => Layer | null;
     reorderLayerInShot: (
         shotId: string,
@@ -254,6 +255,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             ...shot,
             layers: shot.layers
                 .filter((l) => l.id !== layerId)
+                .sort((a, b) => a.order - b.order)
+                .map((l, idx) => ({ ...l, order: idx })),
+        }));
+    },
+
+    deleteMultipleLayersFromShot: (shotId, layerIds) => {
+        if (!layerIds || layerIds.length === 0) return;
+        const idSet = new Set(layerIds);
+        get().updateShot(shotId, (shot) => ({
+            ...shot,
+            layers: shot.layers
+                .filter((l) => !idSet.has(l.id))
                 .sort((a, b) => a.order - b.order)
                 .map((l, idx) => ({ ...l, order: idx })),
         }));

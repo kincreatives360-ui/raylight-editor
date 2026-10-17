@@ -5,6 +5,7 @@ import { Film, Sun, Scissors, Palette, Plus, Trash2 } from 'lucide-react';
 import type { Shot } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { ScrubInput } from '../../ui/ScrubInput';
+import { LightingSection } from './sections/LightingSection';
 
 interface ShotInspectorProps {
     activeShot: Shot;
@@ -127,7 +128,6 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
         if (background.kind !== 'gradient') return;
         const stops = [...background.stops];
         stops[index] = { ...stops[index], at };
-        // Keep stops sorted by position
         stops.sort((a, b) => a.at - b.at);
         updateProject((p) => ({
             ...p,
@@ -168,11 +168,47 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
     };
 
     return (
-        <aside className="w-80 border-l border-white/10 bg-[#0c0e17] p-4 flex flex-col gap-4 overflow-y-auto shrink-0 text-xs select-none">
-            <div className="font-semibold text-sm text-white flex items-center gap-2">
-                <Film className="w-4 h-4 text-indigo-400" />
-                <span className="truncate">Shot Settings: {activeShot.name}</span>
-            </div>
+        <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5 text-xs select-none bg-[#101012]">
+            {/* SHOT IDENTITY & DURATION */}
+            <section className="p-3 rounded-xl bg-white/[0.03] border border-white/[0.08] space-y-3">
+                <div className="font-semibold text-white flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-[12px]">
+                        <Film className="w-3.5 h-3.5 text-[#0088ff]" />
+                        Shot Settings
+                    </span>
+                    <span className="text-[10px] text-[#71717a] font-mono">
+                        {(activeShot.durationMs / 1000).toFixed(2)}s
+                    </span>
+                </div>
+
+                <label className="block space-y-1">
+                    <span className="block text-[10px] text-[#a1a1aa]">Shot Name</span>
+                    <input
+                        type="text"
+                        value={activeShot.name}
+                        onChange={(e) =>
+                            updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))
+                        }
+                        className="w-full h-7 px-2.5 rounded-lg bg-[#1a1a1e] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff]"
+                    />
+                </label>
+
+                <div className="space-y-1">
+                    <span className="block text-[10px] text-[#a1a1aa]">Shot Duration</span>
+                    <ScrubInput
+                        label="Duration"
+                        value={activeShot.durationMs}
+                        min={300}
+                        max={60000}
+                        step={100}
+                        decimals={0}
+                        unit="ms"
+                        onChange={(durationMs) =>
+                            updateShot(activeShot.id, (s) => ({ ...s, durationMs }))
+                        }
+                    />
+                </div>
+            </section>
 
             {/* STAGE BACKGROUND SECTION */}
             <section className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-3">
@@ -416,64 +452,14 @@ export const ShotInspector: React.FC<ShotInspectorProps> = ({ activeShot }) => {
                 </p>
             </section>
 
-            {/* SCENE LIGHT RIG */}
+            {/* SCENE LIGHT RIG & SOURCES */}
             <section className="p-3 rounded-xl bg-black/40 border border-white/10 space-y-3">
                 <div className="font-semibold text-gray-200 flex items-center gap-1.5">
                     <Sun className="w-3.5 h-3.5 text-amber-400" />
-                    Scene Light Rig
+                    Scene Lighting
                 </div>
-                <ScrubInput
-                    label="Light X Position"
-                    value={activeShot.light.position.x}
-                    min={-0.6}
-                    max={0.6}
-                    step={0.02}
-                    decimals={2}
-                    onChange={(x) =>
-                        updateShot(activeShot.id, (shot) => ({
-                            ...shot,
-                            light: { ...shot.light, position: { ...shot.light.position, x } },
-                        }))
-                    }
-                />
-                <ScrubInput
-                    label="Light Y Position"
-                    value={activeShot.light.position.y}
-                    min={-0.6}
-                    max={0.6}
-                    step={0.02}
-                    decimals={2}
-                    onChange={(y) =>
-                        updateShot(activeShot.id, (shot) => ({
-                            ...shot,
-                            light: { ...shot.light, position: { ...shot.light.position, y } },
-                        }))
-                    }
-                />
-                <ScrubInput
-                    label="Light Intensity"
-                    value={activeShot.light.intensity}
-                    min={0}
-                    max={2.5}
-                    step={0.05}
-                    decimals={2}
-                    onChange={(intensity) =>
-                        updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, intensity } }))
-                    }
-                />
-                <ScrubInput
-                    label="Color Temp (Kelvin)"
-                    value={activeShot.light.temperature}
-                    min={2500}
-                    max={9500}
-                    step={100}
-                    decimals={0}
-                    unit="K"
-                    onChange={(temperature) =>
-                        updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, temperature } }))
-                    }
-                />
+                <LightingSection activeShot={activeShot} />
             </section>
-        </aside>
+        </div>
     );
 };

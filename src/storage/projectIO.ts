@@ -1,25 +1,193 @@
 // src/storage/projectIO.ts
-import type { Project } from '../model/types';
+import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 
 const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
 const DEFAULT_CANVAS_BACKGROUND = '#0A0A0C';
 const LEGACY_DEFAULT_CANVAS_BACKGROUND = '#111114';
 
-// Save project recipe to browser local storage
+const DB_NAME = 'raylight_studio_db';
+const DB_VERSION = 1;
+const STORE_PROJECTS = 'projects';
+const STORE_ASSETS = 'assets';
+
+function openIndexedDb(): Promise<IDBDatabase | null> {
+    if (typeof window === 'undefined' || !window.indexedDB) {
+        return Promise.resolve(null);
+    }
+    return new Promise((resolve) => {
+        try {
+            const req = window.indexedDB.open(DB_NAME, DB_VERSION);
+            req.onupgradeneeded = () => {
+                const db = req.result;
+                if (!db.objectStoreNames.contains(STORE_PROJECTS)) {
+                    db.createObjectStore(STORE_PROJECTS, { keyPath: 'id' });
+                }
+                if (!db.objectStoreNames.contains(STORE_ASSETS)) {
+                    db.createObjectStore(STORE_ASSETS, { keyPath: 'id' });
+                }
+            };
+            req.onsuccess = () => resolve(req.result);
+            req.onerror = () => {
+                console.warn('[Raylight Storage] IndexedDB open error, falling back to localStorage');
+                resolve(null);
+            };
+        } catch (e) {
+            console.warn('[Raylight Storage] IndexedDB exception:', e);
+            resolve(null);
+        }
+    });
+}
+
+/**
+ * Saves project to IndexedDB asynchronously with full asset blobs,
+ * preventing localStorage quota exhaustion.
+ */
+export async function saveProjectToIndexedDB(project: Project): Promise<boolean> {
+    const db = await openIndexedDb();
+    if (!db) return false;
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readwrite');
+            const projectStore = tx.objectStore(STORE_PROJECTS);
+            const assetStore = tx.objectStore(STORE_ASSETS);
+
+            // Separate large assets to prevent massive single-record serialization
+            const lightweightAssets: Record<string, AssetRecord> = {};
+            for (const [id, asset] of Object.entries(project.assets || {})) {
+                if (asset) {
+                    assetStore.put(asset);
+                    lightweightAssets[id] = {
+                        ...asset,
+                        // Retain lightweight metadata; assetStore holds the full payload
+                    };
+                }
+            }
+
+            const record = {
+                id: 'current_project',
+                project: {
+                    ...project,
+                    assets: lightweightAssets,
+                    updatedAt: new Date().toISOString(),
+                },
+            };
+
+            projectStore.put(record);
+
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => {
+                console.warn('[Raylight Storage] IndexedDB transaction failed');
+                resolve(false);
+            };
+        } catch (err) {
+            console.warn('[Raylight Storage] saveProjectToIndexedDB error:', err);
+            resolve(false);
+        }
+    });
+}
+
+/**
+ * Loads project and reconstitutes assets from IndexedDB
+ */
+export async function loadProjectFromIndexedDB(): Promise<Project | null> {
+    const db = await openIndexedDb();
+    if (!db) return null;
+
+    return new Promise((resolve) => {
+        try {
+            const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readonly');
+            const projectStore = tx.objectStore(STORE_PROJECTS);
+            const assetStore = tx.objectStore(STORE_ASSETS);
+
+            const getReq = projectStore.get('current_project');
+            getReq.onsuccess = () => {
+                const result = getReq.result;
+                if (!result || !result.project) {
+                    resolve(null);
+                    return;
+                }
+
+                const baseProject = result.project as Project;
+                // Fetch all assets from asset store to reconstitute full dataUrls
+                const allAssetsReq = assetStore.getAll();
+                allAssetsReq.onsuccess = () => {
+                    const assetsArray = (allAssetsReq.result as AssetRecord[]) || [];
+                    const assetMap: Record<string, AssetRecord> = {};
+                    for (const a of assetsArray) {
+                        if (a && a.id) {
+                            assetMap[a.id] = a;
+                        }
+                    }
+
+                    const validated = validateProject({
+                        ...baseProject,
+                        assets: {
+                            ...baseProject.assets,
+                            ...assetMap,
+                        },
+                    });
+
+                    if (validated.success) {
+                        resolve(validated.data);
+                    } else {
+                        resolve(null);
+                    }
+                };
+                allAssetsReq.onerror = () => {
+                    const validated = validateProject(baseProject);
+                    resolve(validated.success ? validated.data : null);
+                };
+            };
+            getReq.onerror = () => resolve(null);
+        } catch (err) {
+            console.warn('[Raylight Storage] loadProjectFromIndexedDB error:', err);
+            resolve(null);
+        }
+    });
+}
+
+// Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
 export function saveProjectToBrowser(project: Project): void {
+    // 1. Dual-write to IndexedDB for unlimited asset quota
+    void saveProjectToIndexedDB(project);
+
+    // 2. Synchronous LocalStorage save with payload truncation guard
     try {
         const payload = JSON.stringify({
             ...project,
             updatedAt: new Date().toISOString(),
         });
         localStorage.setItem(AUTO_SAVE_KEY, payload);
-    } catch (err) {
-        console.error('Failed to auto-save project to browser storage:', err);
+    } catch {
+        // If localStorage throws QuotaExceededError, try saving without heavy asset base64s
+        try {
+            const lightweightAssets: Record<string, Partial<AssetRecord>> = {};
+            for (const [id, a] of Object.entries(project.assets || {})) {
+                if (a) {
+                    lightweightAssets[id] = {
+                        id: a.id,
+                        name: a.name,
+                        mimeType: a.mimeType,
+                        width: a.width,
+                        height: a.height,
+                    };
+                }
+            }
+            const fallbackPayload = JSON.stringify({
+                ...project,
+                assets: lightweightAssets,
+                updatedAt: new Date().toISOString(),
+            });
+            localStorage.setItem(AUTO_SAVE_KEY, fallbackPayload);
+        } catch (fallbackErr) {
+            console.warn('[Raylight Storage] LocalStorage fallback also exceeded quota, relying on IndexedDB:', fallbackErr);
+        }
     }
 }
 
-// Load auto-saved project from browser local storage
+// Load auto-saved project from browser local storage (synchronous initial load)
 export function loadProjectFromBrowser(): Project | null {
     try {
         const raw = localStorage.getItem(AUTO_SAVE_KEY);

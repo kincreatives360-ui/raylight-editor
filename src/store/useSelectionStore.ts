@@ -2,8 +2,9 @@
 import { create } from 'zustand';
 
 export type InspectorTab =
-    | 'layer'
+    | 'project'
     | 'shot'
+    | 'layer'
     | 'transitions'
     | 'blocks'
     | 'camera'
@@ -48,6 +49,7 @@ interface SelectionStore {
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
 
+    selectProject: () => void;
     selectShot: (shotId: string, defaultLayerId?: string) => void;
     selectLayer: (layerId: string, toggleMulti?: boolean) => void;
     selectLayerRange: (orderedLayerIds: string[], targetLayerId: string) => void;
@@ -106,23 +108,28 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     gradientEditorActive: false,
     gradientEditorAngle: 0,
 
-    selectShot: (shotId, defaultLayerId) =>
-        set((state) => {
-            const sameShot = state.selectedShotId === shotId;
-            return {
-                selectedShotId: shotId,
-                selectedLayerIds: defaultLayerId
-                    ? [defaultLayerId]
-                    : sameShot
-                        ? state.selectedLayerIds
-                        : [],
-                selectedBlockId: null,
-                selectedCameraBlockId: null,
-                selectedLightBlockId: null,
-                selectedPresetType: null,
-                isCropping: false,
-            };
+    selectProject: () =>
+        set({
+            selectedLayerIds: [],
+            selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
+            isCropping: false,
+            inspectorTab: 'project',
         }),
+
+    selectShot: (shotId, defaultLayerId) =>
+        set(() => ({
+            selectedShotId: shotId,
+            selectedLayerIds: defaultLayerId ? [defaultLayerId] : [],
+            selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedPresetType: null,
+            isCropping: false,
+            inspectorTab: defaultLayerId ? 'layer' : 'shot',
+        })),
 
     selectLayer: (layerId, toggleMulti = false) =>
         set((state) => {
@@ -134,6 +141,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                     selectedLightBlockId: null,
                     selectedPresetType: null,
                     isCropping: false,
+                    inspectorTab: 'layer',
                 };
             }
             const exists = state.selectedLayerIds.includes(layerId);
@@ -145,6 +153,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 selectedCameraBlockId: null,
                 selectedLightBlockId: null,
                 isCropping: false,
+                inspectorTab: 'layer',
             };
         }),
 
@@ -152,12 +161,12 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         set((state) => {
             const anchorId = state.selectedLayerIds[0];
             if (!anchorId) {
-                return { selectedLayerIds: [targetLayerId], isCropping: false };
+                return { selectedLayerIds: [targetLayerId], isCropping: false, inspectorTab: 'layer' };
             }
             const startIdx = orderedLayerIds.indexOf(anchorId);
             const endIdx = orderedLayerIds.indexOf(targetLayerId);
             if (startIdx === -1 || endIdx === -1) {
-                return { selectedLayerIds: [targetLayerId], isCropping: false };
+                return { selectedLayerIds: [targetLayerId], isCropping: false, inspectorTab: 'layer' };
             }
             const low = Math.min(startIdx, endIdx);
             const high = Math.max(startIdx, endIdx);
@@ -166,6 +175,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 selectedCameraBlockId: null,
                 selectedLightBlockId: null,
                 isCropping: false,
+                inspectorTab: 'layer',
             };
         }),
 
@@ -175,6 +185,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             isCropping: false,
+            inspectorTab: selectedLayerIds.length > 0 ? 'layer' : 'project',
         }),
 
     clearLayerSelection: () =>
@@ -185,6 +196,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedLightBlockId: null,
             selectedPresetType: null,
             isCropping: false,
+            inspectorTab: 'project',
         }),
 
     selectBlock: (blockId, layerId) =>

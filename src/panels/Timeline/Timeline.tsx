@@ -35,6 +35,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         hoverTimeMs: storeHoverTimeMs,
         setHoverTimeMs,
         isPlaying,
+        setIsPlaying,
         setCurrentTimeMs,
         togglePlay,
     } = usePlayheadStore();
@@ -75,10 +76,21 @@ export const Timeline: React.FC<TimelineProps> = ({
         dragging: boolean;
     } | null>(null);
     const suppressShotClickRef = useRef<string | null>(null);
-    const [scrollLeft, setScrollLeft] = useState(0);
     const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
+    const isDraggingPlayheadRef = useRef(false);
+    const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+    const rafIdRef = useRef<number | null>(null);
+    const latestHoverClientXRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        return () => {
+            if (rafIdRef.current !== null) {
+                cancelAnimationFrame(rafIdRef.current);
+            }
+        };
+    }, []);
 
     const activeShot =
         project.shots.find((shot) => shot.id === selectedShotId) ??
@@ -111,33 +123,33 @@ export const Timeline: React.FC<TimelineProps> = ({
                 ? activeShot.durationMs
                 : totalDurationMs
         );
-    const fitWidth = Math.max(120, timelineViewportWidth - 92);
-    const fittedPxPerSecond = visibleDurationMs > 0
-        ? (fitWidth * 1000) / visibleDurationMs
-        : 45;
-    const pxPerSecond = fittedPxPerSecond * timelineZoom;
+    // Fixed base scale so resizing an element's duration physically expands/contracts its bar,
+    // while keeping the timeline ruler rock solid!
+    const BASE_PX_PER_SECOND = 140;
+    const pxPerSecond = BASE_PX_PER_SECOND * timelineZoom;
     const pxPerMs = pxPerSecond / 1000;
     const timelineWidth = Math.max(
         1,
         timelineViewportWidth - 32,
-        visibleDurationMs * pxPerMs + 60
+        visibleDurationMs * pxPerMs + 160
     );
 
     const rulerStepMs = useMemo(() => {
-        if (visibleDurationMs <= 0) return 1000;
-        const desiredStep = (visibleDurationMs * 48) / fitWidth;
-        return [1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000]
-            .find((step) => step >= desiredStep) ?? 600000;
-    }, [visibleDurationMs, fitWidth]);
+        if (pxPerSecond >= 220) return 500;
+        if (pxPerSecond >= 90) return 1000;
+        if (pxPerSecond >= 45) return 2000;
+        return 5000;
+    }, [pxPerSecond]);
 
     const rulerMarks = useMemo(() => {
         const marks: { timeMs: number; isHalf?: boolean }[] = [];
-        const minorStep = timelineView === 'scene' ? rulerStepMs / 2 : rulerStepMs;
-        for (let t = 0; t <= visibleDurationMs; t += minorStep) {
+        const maxTimeMs = Math.max(visibleDurationMs, totalDurationMs);
+        const minorStep = rulerStepMs / 2;
+        for (let t = 0; t <= maxTimeMs + rulerStepMs * 2; t += minorStep) {
             marks.push({ timeMs: t, isHalf: t % rulerStepMs !== 0 });
         }
         return marks;
-    }, [visibleDurationMs, timelineView, rulerStepMs]);
+    }, [visibleDurationMs, totalDurationMs, rulerStepMs]);
 
     // Top Splitter Drag: Expand Timeline Up or Contract Down
     const handleStartResizeTimelineHeight = (e: React.MouseEvent) => {
@@ -162,7 +174,7 @@ export const Timeline: React.FC<TimelineProps> = ({
         if (!el) return 0;
         const rect = el.getBoundingClientRect();
         const contentX = clientX - rect.left - 16 + el.scrollLeft;
-        const localMs = Math.round(contentX / pxPerMs / 10) * 10;
+        const localMs = contentX / pxPerMs;
         return Math.max(0, Math.min(visibleDurationMs, localMs));
     };
 
@@ -184,12 +196,36 @@ export const Timeline: React.FC<TimelineProps> = ({
             : Math.min(totalDurationMs, localMs);
     };
 
-    const handleTimelineMouseMove = (event: React.MouseEvent<HTMLDivElement>) => {
-        if (isBlankState || totalDurationMs <= 0) {
-            onHoverTimeChange(null);
+    const handleTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (isBlankState || totalDurationMs <= 0 || isDraggingPlayheadRef.current || dragging) {
+            if (hoverTimeMs !== null) onHoverTimeChange(null);
             return;
         }
-        onHoverTimeChange(timeAtClientX(event.clientX));
+
+        // Pause playback while skimming so the preview has full visual focus
+        if (isPlaying) {
+            setIsPlaying(false);
+        }
+
+        latestHoverClientXRef.current = event.clientX;
+        if (rafIdRef.current === null) {
+            rafIdRef.current = requestAnimationFrame(() => {
+                rafIdRef.current = null;
+                if (latestHoverClientXRef.current !== null && !isDraggingPlayheadRef.current) {
+                    const time = timeAtClientX(latestHoverClientXRef.current);
+                    onHoverTimeChange(time);
+                }
+            });
+        }
+    };
+
+    const handleTimelinePointerLeave = () => {
+        if (rafIdRef.current !== null) {
+            cancelAnimationFrame(rafIdRef.current);
+            rafIdRef.current = null;
+        }
+        latestHoverClientXRef.current = null;
+        onHoverTimeChange(null);
     };
 
     const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
@@ -197,16 +233,26 @@ export const Timeline: React.FC<TimelineProps> = ({
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         if (
-            target.closest('button, input, [role="button"], [data-timeline-item]')
+            target.closest('button, input, [role="button"], [data-timeline-item], [data-cam-pill], [data-light-pill], [data-preset-pill]')
         ) return;
-        setCurrentTimeMs(hoverTimeMs ?? timeAtClientX(event.clientX));
+        const targetTime = hoverTimeMs !== null ? hoverTimeMs : timeAtClientX(event.clientX);
+        setCurrentTimeMs(targetTime);
     };
 
     const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         e.preventDefault();
+        e.stopPropagation();
+        isDraggingPlayheadRef.current = true;
+        setIsDraggingPlayhead(true);
+        onHoverTimeChange(null);
         scrubFromClientX(e.clientX);
-        const onMove = (ev: MouseEvent) => scrubFromClientX(ev.clientX);
+
+        const onMove = (ev: MouseEvent) => {
+            scrubFromClientX(ev.clientX);
+        };
         const onUp = () => {
+            isDraggingPlayheadRef.current = false;
+            setIsDraggingPlayhead(false);
             window.removeEventListener('mousemove', onMove);
             window.removeEventListener('mouseup', onUp);
         };
@@ -771,47 +817,18 @@ export const Timeline: React.FC<TimelineProps> = ({
                 </div>
             </div>
 
-            {/* 2. TIME RULER (h-6 = 24px, Total Header = 56px / h-14 matching LeftPanel!) */}
-            <div
-                onMouseDown={handleRulerMouseDown}
-                className="h-6 border-b border-white/[0.06] px-4 relative overflow-hidden cursor-ew-resize shrink-0"
-            >
-                <div
-                    style={{
-                        width: `${timelineWidth}px`,
-                        transform: `translateX(-${scrollLeft}px)`,
-                    }}
-                    className="h-full relative text-[10px] font-mono text-[#71717a] pointer-events-none"
-                >
-                    {rulerMarks.map((m) => (
-                        <div
-                            key={m.timeMs}
-                            className="absolute top-1"
-                            style={{ left: `${m.timeMs * pxPerMs}px` }}
-                        >
-                            {m.isHalf ? (
-                                <span className="text-[#52525b]">&middot;</span>
-                            ) : (
-                                <span>{Math.round(m.timeMs / 1000)}s</span>
-                            )}
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* 3. SCROLL-SYNCED TRACKS BODY */}
+            {/* 2. SCROLL-SYNCED TRACKS BODY (Includes Ruler + Tracks + Playhead + Skimmer) */}
             <div
                 ref={trackRef}
                 onScroll={(e) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
-                    setScrollLeft(e.currentTarget.scrollLeft);
                 }}
-                onMouseMove={handleTimelineMouseMove}
-                onMouseLeave={() => onHoverTimeChange(null)}
+                onPointerMove={handleTimelinePointerMove}
+                onPointerLeave={handleTimelinePointerLeave}
                 onClick={handleTimelineClick}
-                onMouseDown={handleRulerMouseDown}
-                className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
-                    }`}
+                className={`flex-1 overflow-auto relative px-4 ${
+                    isDraggingPlayhead ? 'cursor-ew-resize' : dragging ? 'cursor-grabbing' : 'cursor-pointer'
+                }`}
             >
                 {isBlankState && timelineView === 'video' && (
                     <button
@@ -823,15 +840,39 @@ export const Timeline: React.FC<TimelineProps> = ({
                             selectShot(created.id);
                             setInspectorTab('shot');
                         }}
-                        className="absolute left-2 right-2 top-[14px] z-10 h-9 rounded-lg border border-[#142b37] bg-[#0e191e] text-[11px] text-[#9aaaba] hover:border-[#0088ff]/50 hover:bg-[#11212a] transition"
+                        className="absolute left-2 right-2 top-[38px] z-10 h-9 rounded-lg border border-[#142b37] bg-[#0e191e] text-[11px] text-[#9aaaba] hover:border-[#0088ff]/50 hover:bg-[#11212a] transition"
                     >
                         Click to add shot
                     </button>
                 )}
                 <div
                     style={{ width: `${timelineWidth}px`, minWidth: '100%' }}
-                    className="relative min-h-full"
+                    className="relative min-h-full flex flex-col"
                 >
+                    {/* TIME RULER (h-6 = 24px) */}
+                    <div
+                        onMouseDown={handleRulerMouseDown}
+                        className="sticky top-0 z-10 h-6 border-b border-white/[0.08] bg-[#0b0b0d] relative cursor-ew-resize select-none shrink-0"
+                    >
+                        {rulerMarks.map((m) => (
+                            <div
+                                key={m.timeMs}
+                                className="absolute top-1 pointer-events-none -translate-x-1/2 flex items-center justify-center"
+                                style={{ left: `${m.timeMs * pxPerMs}px` }}
+                            >
+                                {m.isHalf ? (
+                                    <span className="text-[#52525b] text-base leading-none">&middot;</span>
+                                ) : (
+                                    <span className="text-[10px] font-mono text-[#71717a] font-medium">
+                                        {Math.round(m.timeMs / 1000)}s
+                                    </span>
+                                )}
+                            </div>
+                        ))}
+                    </div>
+
+                    {/* TRACKS CONTENT */}
+                    <div className="py-2 flex-1 relative flex flex-col">
                     {(project.audio?.clips?.length || 0) > 0 && (
                         <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
                             <span className="absolute left-2 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
@@ -923,7 +964,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                             <div className="h-8 relative flex items-center gap-1">
                                 {project.shots.map((shot, shotIndex) => {
                                     const isSelected = shot.id === activeShot?.id;
-                                    const width = Math.max(95, shot.durationMs * pxPerMs - 4);
+                                    const width = Math.max(16, shot.durationMs * pxPerMs - 2);
                                     return (
                                         <div
                                             key={shot.id}
@@ -1445,20 +1486,56 @@ export const Timeline: React.FC<TimelineProps> = ({
                             />
                         </div>
                     )}
+                    </div>
 
-                    {/* Active blue playhead moves only when scrubbed or playing. */}
-                    {hoverDisplayTimeMs !== null && (
+                    {/* ======================================================= */}
+                    {/* SKIMMER (GREY)                                          */}
+                    {/* ======================================================= */}
+                    {hoverDisplayTimeMs !== null && !isDraggingPlayhead && (
                         <div
                             aria-hidden="true"
-                            className="absolute top-0 bottom-0 w-px border-l border-dashed border-white/45 z-20 pointer-events-none"
-                            style={{ left: `${hoverDisplayTimeMs * pxPerMs}px` }}
-                        />
+                            className="absolute top-0 bottom-0 pointer-events-none z-20 flex flex-col items-center"
+                            style={{
+                                left: `${hoverDisplayTimeMs * pxPerMs}px`,
+                                transform: 'translateX(-50%)',
+                            }}
+                        >
+                            {/* 1px vertical line in muted grey (~#3a3a3a to #4a4a4a) spanning with same height */}
+                            <div
+                                className="absolute inset-y-0 w-px"
+                                style={{
+                                    background: 'linear-gradient(to bottom, #44444c 0%, #44444c 82%, rgba(68, 68, 76, 0) 100%)',
+                                }}
+                            />
+
+                            {/* Small dark pill label with grey monospace text sitting on ruler at top */}
+                            <div className="relative px-1.5 py-0.5 rounded-full bg-[#242428] border border-white/10 text-[#a1a1aa] text-[9.5px] font-mono font-medium shadow-sm whitespace-nowrap leading-none select-none mt-1 z-10">
+                                {(hoverDisplayTimeMs / 1000).toFixed(2)}
+                            </div>
+                        </div>
                     )}
+
+                    {/* ======================================================= */}
+                    {/* MAIN PLAYHEAD (BLUE)                                    */}
+                    {/* ======================================================= */}
                     <div
-                        className="absolute top-0 bottom-0 w-[1.5px] bg-[#0088ff] z-30 pointer-events-none"
-                        style={{ left: `${playheadDisplayTimeMs * pxPerMs}px` }}
+                        aria-hidden="true"
+                        className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
+                        style={{
+                            left: `${playheadDisplayTimeMs * pxPerMs}px`,
+                            transform: 'translateX(-50%)',
+                        }}
                     >
-                        <div className="absolute -left-4 top-0 px-1.5 py-0.2 rounded-full bg-[#0088ff] text-white text-[9px] font-mono font-bold shadow">
+                        {/* 1px vertical line in bright blue (~#0A84FF) spanning through full track area with bottom fade */}
+                        <div
+                            className="absolute inset-y-0 w-px"
+                            style={{
+                                background: 'linear-gradient(to bottom, #0A84FF 0%, #0A84FF 82%, rgba(10, 132, 255, 0) 100%)',
+                            }}
+                        />
+
+                        {/* Rounded pill label sitting on the ruler at the top */}
+                        <div className="relative px-1.5 py-0.5 rounded-full bg-[#0A84FF] text-white text-[9.5px] font-mono font-bold shadow-md whitespace-nowrap leading-none select-none mt-1 z-10">
                             {(playheadDisplayTimeMs / 1000).toFixed(2)}
                         </div>
                     </div>

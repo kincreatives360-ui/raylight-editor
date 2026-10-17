@@ -201,15 +201,68 @@ export function evaluateProjectAtTime(
 
     // 6. Evaluate Shot-to-Shot Transition
     const trans = activeShot.transition;
-    const isInTransitionWindow =
+    const isIncomingTransition =
         trans.type !== 'cut' &&
         trans.durationMs > 0 &&
-        shotLocalTimeMs >= activeShot.durationMs - trans.durationMs;
+        shotIndex > 0 &&
+        shotLocalTimeMs < trans.durationMs;
 
-    const rawTransProgress = isInTransitionWindow
-        ? (shotLocalTimeMs - (activeShot.durationMs - trans.durationMs)) /
-        trans.durationMs
-        : 0;
+    const rawTransProgress = isIncomingTransition
+        ? shotLocalTimeMs / trans.durationMs
+        : 1;
+
+    let outgoingFrame: EvaluatedProjectFrame | undefined;
+    if (isIncomingTransition) {
+        const prevShot = project.shots[shotIndex - 1];
+        if (prevShot) {
+            const prevLocalTime = Math.max(
+                0,
+                prevShot.durationMs - (trans.durationMs - shotLocalTimeMs)
+            );
+            const prevCamera = evaluateShotCameraAtTime(prevShot, prevLocalTime);
+            const prevEffects = evaluateEffectsAtTime(
+                prevShot,
+                frameNumber,
+                prevLocalTime
+            );
+            const prevLayers: EvaluatedLayerWithEffects[] = prevShot.layers.map(
+                (layer) => {
+                    const evalLayer = evaluateLayerAtTime(layer, prevLocalTime);
+                    const dofBlurPx = calculateLayerDofBlurPx(
+                        evalLayer.position.z,
+                        prevShot.effects.depthOfField
+                    );
+                    const manualBlurPx =
+                        (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
+                    return {
+                        ...evalLayer,
+                        layer:
+                            layer.kind !== 'text'
+                                ? { ...layer, cornerRadius: evalLayer.cornerRadius }
+                                : layer,
+                        dofBlurPx,
+                        totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
+                    };
+                }
+            );
+            outgoingFrame = {
+                globalTimeMs: clampedGlobalMs,
+                frameNumber,
+                activeShot: prevShot,
+                shotIndex: shotIndex - 1,
+                shotLocalTimeMs: prevLocalTime,
+                shotProgress: prevLocalTime / Math.max(1, prevShot.durationMs),
+                camera: prevCamera,
+                layers: prevLayers,
+                effects: prevEffects,
+                shotTransition: {
+                    isTransitioning: false,
+                    type: 'cut',
+                    progress: 1,
+                },
+            };
+        }
+    }
 
     return {
         globalTimeMs: clampedGlobalMs,
@@ -222,12 +275,13 @@ export function evaluateProjectAtTime(
         layers,
         effects,
         shotTransition: {
-            isTransitioning: isInTransitionWindow,
+            isTransitioning: isIncomingTransition,
             type: trans.type,
             progress: evaluateEasing(
                 Math.max(0, Math.min(1, rawTransProgress)),
                 trans.easing
             ),
+            outgoingFrame,
         },
     };
 }

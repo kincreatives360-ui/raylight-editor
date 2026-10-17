@@ -1,7 +1,7 @@
-// src/stage/webgl/ViewportCanvas.tsx
-import React, { useEffect } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
+import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Project } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
 import type {
@@ -12,6 +12,7 @@ import { SceneBackground } from './SceneBackground';
 import { SceneLighting } from './SceneLighting';
 import { ViewportCamera } from './ViewportCamera';
 import { ThreeLayerObject } from './ThreeLayerObject';
+import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 
 interface ViewportCanvasProps {
     project: Project;
@@ -21,6 +22,26 @@ interface ViewportCanvasProps {
     onPointerMissed?: () => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
+
+const StudioEnvironment: React.FC = () => {
+    const { gl } = useThree();
+
+    const envTexture = useMemo(() => {
+        const pmrem = new THREE.PMREMGenerator(gl);
+        pmrem.compileEquirectangularShader();
+        const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+        pmrem.dispose();
+        return texture;
+    }, [gl]);
+
+    useEffect(() => {
+        return () => {
+            envTexture.dispose();
+        };
+    }, [envTexture]);
+
+    return <primitive object={envTexture} attach="environment" />;
+};
 
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
@@ -70,6 +91,9 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     selectedLayerIds={selectedLayerIds}
                 />
 
+                {/* Studio PBR Reflection Environment Map */}
+                <StudioEnvironment />
+
                 {/* 1. Time-Evaluated 3D Camera (Supports Dolly, Zoom & Dolly-Zoom!) */}
                 <ViewportCamera
                     evaluatedCamera={frame.camera}
@@ -103,6 +127,9 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                         />
                     ))}
                 </group>
+
+                {/* 5. Realtime Cinematic Scene Effects (Bloom, Vignette, Chromatic Aberration, Grain, Glitch) */}
+                <SceneEffectsPipeline effects={frame.effects} />
             </Canvas>
         </div>
     );

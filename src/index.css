@@ -5,6 +5,10 @@
   user-select: none;
 }
 
+input, textarea, [contenteditable="true"] {
+  user-select: text;
+}
+
 body {
   margin: 0;
   background-color: #07080d;

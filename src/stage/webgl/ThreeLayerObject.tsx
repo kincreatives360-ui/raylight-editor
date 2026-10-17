@@ -1,4 +1,3 @@
-// src/stage/webgl/ThreeLayerObject.tsx
 import React, { useMemo, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';

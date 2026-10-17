@@ -16,7 +16,7 @@ const Stage = lazy(() => import('./stage/Stage').then(({ Stage }) => ({ default:
 import { LeftPanel } from './panels/LeftPanel/LeftPanel';
 import { RightSidebar } from './panels/Inspector/RightSidebar';
 import { Timeline } from './panels/Timeline/Timeline';
-import { saveProjectToBrowser } from './storage/projectIO';
+import { saveProjectToBrowser, loadProjectFromIndexedDB } from './storage/projectIO';
 import type {
   ExportSettings,
   ExportFormat,
@@ -25,6 +25,7 @@ import type {
   ExportScope,
 } from './engine/exporter';
 import { estimateExportMetrics } from './engine/exportMetrics';
+import { preloadProjectFonts } from './engine/fontLoader';
 
 interface StageErrorBoundaryProps {
   children: React.ReactNode;
@@ -80,6 +81,7 @@ export default function App() {
     addMultipleLayersToShot,
     duplicateLayerInShot,
     deleteLayerFromShot,
+    deleteMultipleLayersFromShot,
     restackLayerInShot,
     recordAnimatedBlockAtPlayhead,
     createGroupFromLayers,
@@ -90,6 +92,7 @@ export default function App() {
 
   const {
     currentTimeMs,
+    hoverTimeMs,
     isPlaying,
     loop,
     setCurrentTimeMs,
@@ -140,19 +143,29 @@ export default function App() {
     [project.shots]
   );
 
+  // Skimmer support: Canvas renders skimTime ?? playheadTime
+  const effectiveTimeMs = hoverTimeMs !== null ? hoverTimeMs : currentTimeMs;
+
   const frame = useMemo(
-    () => evaluateProjectAtTime(project, currentTimeMs),
-    [project, currentTimeMs]
+    () => evaluateProjectAtTime(project, effectiveTimeMs),
+    [project, effectiveTimeMs]
   );
 
   const activeShot = frame.activeShot;
+  const projectActiveShot = useMemo(
+    () => project.shots.find((s) => s.id === frame.activeShot.id) || project.shots[0],
+    [project.shots, frame.activeShot.id]
+  );
 
   // IMPORTANT FIX: Do NOT fall back to activeShot.layers[0] when selectedLayerIds is empty!
   // When selectedLayerIds is empty, selectedLayer is undefined so RightSidebar shows Shot Settings.
-  const selectedLayer =
-    selectedLayerIds.length > 0
-      ? activeShot.layers.find((l) => selectedLayerIds.includes(l.id))
-      : undefined;
+  const selectedLayer = useMemo(
+    () =>
+      selectedLayerIds.length > 0
+        ? projectActiveShot.layers.find((l) => selectedLayerIds.includes(l.id))
+        : undefined,
+    [selectedLayerIds, projectActiveShot.layers]
+  );
 
   const exportMetrics = useMemo(
     () =>
@@ -173,6 +186,24 @@ export default function App() {
     };
   }, [project]);
 
+  // Restore heavy assets from IndexedDB on startup if available
+  useEffect(() => {
+    void loadProjectFromIndexedDB().then((idbProject) => {
+      if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
+        updateProject(
+          (curr) => ({
+            ...curr,
+            assets: {
+              ...idbProject.assets,
+              ...curr.assets,
+            },
+          }),
+          { skipHistory: true }
+        );
+      }
+    });
+  }, [updateProject]);
+
   // Decode imported audio assets and keep WebAudio playback synchronized with the active playhead.
   useEffect(() => {
     for (const clip of project.audio?.clips || []) {
@@ -181,8 +212,12 @@ export default function App() {
   }, [project.audio?.clips]);
 
   useEffect(() => {
-    syncAudioPlayback(project.audio, isPlaying, currentTimeMs);
-  }, [project.audio, isPlaying, currentTimeMs]);
+    void preloadProjectFonts(project);
+  }, [project]);
+
+  useEffect(() => {
+    syncAudioPlayback(project.audio, isPlaying && hoverTimeMs === null, currentTimeMs);
+  }, [project.audio, isPlaying, hoverTimeMs, currentTimeMs]);
 
   useEffect(() => () => stopAudioPlayback(), []);
 
@@ -458,14 +493,15 @@ export default function App() {
         return;
       }
 
-      // Delete / Backspace: Delete Selected Layer
+      // Delete / Backspace: Delete Selected Layer(s)
       if (
         (e.key === 'Backspace' || e.key === 'Delete') &&
-        selectedLayer &&
-        activeShot.layers.length > 1
+        selectedLayerIds.length > 0
       ) {
         e.preventDefault();
-        deleteLayerFromShot(activeShot.id, selectedLayer.id);
+        deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
+        clearLayerSelection();
+        setInspectorTab('shot');
         return;
       }
 
@@ -536,6 +572,7 @@ export default function App() {
     ungroupInShot,
     duplicateLayerInShot,
     deleteLayerFromShot,
+    deleteMultipleLayersFromShot,
     selectLayer,
     setSelectedLayerIds,
     selectBlock,
@@ -699,6 +736,9 @@ export default function App() {
         {
           ...exportSettings,
           selectedShotId: activeShot.id,
+          onSeekFrame: async (seekTimeMs: number) => {
+            setCurrentTimeMs(seekTimeMs);
+          },
         },
         controller.signal
       );
@@ -789,7 +829,7 @@ export default function App() {
       <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
         <LeftPanel
-          activeShot={activeShot}
+          activeShot={projectActiveShot}
           onUploadClick={() => fileInputRef.current?.click()}
           audioLabel={audioLabel}
           onSelectAudioClick={() => audioInputRef.current?.click()}
@@ -818,7 +858,7 @@ export default function App() {
 
         {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
         <RightSidebar
-          activeShot={activeShot}
+          activeShot={projectActiveShot}
           selectedLayer={selectedLayer}
           selectedLayerIds={selectedLayerIds}
           onSwapImageClick={() => fileInputRef.current?.click()}
