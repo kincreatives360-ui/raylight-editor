@@ -1,11 +1,12 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Plus, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
-import { useProjectStore } from '../../store/useProjectStore';
+import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
+import { evaluateEasing } from '../../engine/easing';
 
 interface TimelineProps {
     totalDurationMs: number;
@@ -56,14 +57,32 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
     } = useSelectionStore();
 
     const trackRef = useRef<HTMLDivElement | null>(null);
+    const shotDragRef = useRef<{
+        shotId: string;
+        index: number;
+        startX: number;
+        dragging: boolean;
+    } | null>(null);
+    const suppressShotClickRef = useRef<string | null>(null);
     const [scrollLeft, setScrollLeft] = useState(0);
+    const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
     const [dragging, setDragging] = useState(false);
-    const [hoverTimeMs, setHoverTimeMs] = useState<number | null>(null);
+    const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
 
     const activeShot =
         project.shots.find((shot) => shot.id === selectedShotId) ??
         project.shots[0];
     const isBlankState = isBlankProjectState(project);
+
+    useEffect(() => {
+        const element = trackRef.current;
+        if (!element) return;
+        const observer = new ResizeObserver(([entry]) => {
+            setTimelineViewportWidth(Math.max(1, entry.contentRect.width));
+        });
+        observer.observe(element);
+        return () => observer.disconnect();
+    }, []);
 
     // Sync vertical scroll position with LeftPanel's lower track rack
     useEffect(() => {
@@ -75,25 +94,39 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
 
     const visibleDurationMs = isBlankState
         ? 0
-        : timelineView === 'scene' && activeShot
-            ? Math.max(4500, activeShot.durationMs + 700)
-            : Math.max(18000, totalDurationMs + 3500);
-
-    const pxPerSecond =
-        timelineView === 'scene' ? 155 * timelineZoom : 45 * timelineZoom;
+        : Math.max(
+            1000,
+            timelineView === 'scene' && activeShot
+                ? activeShot.durationMs
+                : totalDurationMs
+        );
+    const fitWidth = Math.max(120, timelineViewportWidth - 92);
+    const fittedPxPerSecond = visibleDurationMs > 0
+        ? (fitWidth * 1000) / visibleDurationMs
+        : 45;
+    const pxPerSecond = fittedPxPerSecond * timelineZoom;
     const pxPerMs = pxPerSecond / 1000;
-    const timelineWidth = Math.max(760, visibleDurationMs * pxPerMs + 60);
+    const timelineWidth = Math.max(
+        1,
+        timelineViewportWidth - 32,
+        visibleDurationMs * pxPerMs + 60
+    );
+
+    const rulerStepMs = useMemo(() => {
+        if (visibleDurationMs <= 0) return 1000;
+        const desiredStep = (visibleDurationMs * 48) / fitWidth;
+        return [1000, 2000, 5000, 10000, 15000, 30000, 60000, 120000, 300000, 600000]
+            .find((step) => step >= desiredStep) ?? 600000;
+    }, [visibleDurationMs, fitWidth]);
 
     const rulerMarks = useMemo(() => {
-        const stepMs = timelineView === 'scene' ? 1000 : 2000;
         const marks: { timeMs: number; isHalf?: boolean }[] = [];
-        for (let t = 0; t <= visibleDurationMs; t += stepMs / 2) {
-            const isHalf = t % stepMs !== 0;
-            if (timelineView === 'video' && isHalf) continue;
-            marks.push({ timeMs: t, isHalf });
+        const minorStep = timelineView === 'scene' ? rulerStepMs / 2 : rulerStepMs;
+        for (let t = 0; t <= visibleDurationMs; t += minorStep) {
+            marks.push({ timeMs: t, isHalf: t % rulerStepMs !== 0 });
         }
         return marks;
-    }, [visibleDurationMs, timelineView]);
+    }, [visibleDurationMs, timelineView, rulerStepMs]);
 
     // Top Splitter Drag: Expand Timeline Up or Contract Down
     const handleStartResizeTimelineHeight = (e: React.MouseEvent) => {
@@ -118,7 +151,8 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
         if (!el) return 0;
         const rect = el.getBoundingClientRect();
         const contentX = clientX - rect.left - 16 + el.scrollLeft;
-        return Math.max(0, Math.round(contentX / pxPerMs / 10) * 10);
+        const localMs = Math.round(contentX / pxPerMs / 10) * 10;
+        return Math.max(0, Math.min(visibleDurationMs, localMs));
     };
 
     const scrubFromClientX = (clientX: number) => {
@@ -492,13 +526,151 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
         window.addEventListener('mouseup', onUp);
     };
 
+    const startShotTrim = (event: React.MouseEvent, shot: Shot) => {
+        event.preventDefault();
+        event.stopPropagation();
+        selectShot(shot.id);
+        setInspectorTab('shot');
+        const startX = event.clientX;
+        const startDuration = shot.durationMs;
+        const pixelsPerMsAtStart = pxPerMs;
+        beginDragTransaction();
+        setDragging(true);
+
+        const onMove = (moveEvent: MouseEvent) => {
+            const deltaMs = Math.round((moveEvent.clientX - startX) / Math.max(pixelsPerMsAtStart, 0.0001) / 10) * 10;
+            const durationMs = Math.max(300, startDuration + deltaMs);
+            updateProject((current) => ({
+                ...current,
+                shots: recalculateShotStartTimes(current.shots.map((item) =>
+                    item.id === shot.id ? { ...item, durationMs } : item
+                )),
+            }), { skipHistory: true });
+        };
+        const onUp = () => {
+            suppressShotClickRef.current = shot.id;
+            commitDragTransaction();
+            setDragging(false);
+            window.setTimeout(() => {
+                if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
+            }, 0);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
+    const startShotReorder = (event: React.MouseEvent, shot: Shot, shotIndex: number) => {
+        if (event.button !== 0 || (event.target as HTMLElement).closest('[data-shot-trim]')) return;
+        const drag = { shotId: shot.id, index: shotIndex, startX: event.clientX, dragging: false };
+        shotDragRef.current = drag;
+
+        const onMove = (moveEvent: MouseEvent) => {
+            const currentDrag = shotDragRef.current;
+            if (!currentDrag) return;
+            if (!currentDrag.dragging && Math.abs(moveEvent.clientX - currentDrag.startX) >= 6) {
+                currentDrag.dragging = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+            if (!currentDrag.dragging) return;
+
+            let delta = moveEvent.clientX - currentDrag.startX;
+            while (delta >= 60 && currentDrag.index < project.shots.length - 1) {
+                const from = currentDrag.index;
+                updateProject((current) => {
+                    const shots = [...current.shots];
+                    [shots[from], shots[from + 1]] = [shots[from + 1], shots[from]];
+                    return { ...current, shots: recalculateShotStartTimes(shots) };
+                }, { skipHistory: true });
+                currentDrag.index += 1;
+                currentDrag.startX += 60;
+                delta -= 60;
+            }
+            while (delta <= -60 && currentDrag.index > 0) {
+                const from = currentDrag.index;
+                updateProject((current) => {
+                    const shots = [...current.shots];
+                    [shots[from], shots[from - 1]] = [shots[from - 1], shots[from]];
+                    return { ...current, shots: recalculateShotStartTimes(shots) };
+                }, { skipHistory: true });
+                currentDrag.index -= 1;
+                currentDrag.startX -= 60;
+                delta += 60;
+            }
+        };
+        const onUp = () => {
+            const currentDrag = shotDragRef.current;
+            if (currentDrag?.dragging) {
+                suppressShotClickRef.current = shot.id;
+                commitDragTransaction();
+                setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
+                }, 0);
+            }
+            shotDragRef.current = null;
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', onUp);
+        };
+        window.addEventListener('mousemove', onMove);
+        window.addEventListener('mouseup', onUp);
+    };
+
     const playheadDisplayTimeMs =
         timelineView === 'scene' && activeShot
             ? Math.max(0, currentTimeMs - activeShot.startMs)
             : currentTimeMs;
 
-    const hasCameraBlocks = (activeShot?.cameraBlocks?.length || 0) > 0;
     const hasLightBlocks = (activeShot?.lightBlocks?.length || 0) > 0;
+
+    const addCameraBlockAtTime = (timeMs: number) => {
+        if (!activeShot) return;
+        const startMs = Math.max(
+            0,
+            Math.min(Math.max(0, activeShot.durationMs - 100), timeMs)
+        );
+        const durationMs = Math.max(
+            100,
+            Math.min(1000, activeShot.durationMs - startMs)
+        );
+        const camId = `cam-blk-${Date.now()}`;
+        updateShot(activeShot.id, (shot) => ({
+            ...shot,
+            cameraBlocks: [
+                ...(shot.cameraBlocks || []),
+                {
+                    id: camId,
+                    label: 'Camera Move',
+                    startMs,
+                    durationMs,
+                    fromFramingId: shot.framings[0]?.id || 'f1',
+                    toFramingId: shot.framings[1]?.id || 'f2',
+                    mode: 'dolly',
+                    easing: { kind: 'preset', name: 'linear' },
+                    from: {
+                        anchorX: 0,
+                        anchorY: 0,
+                        zoom: 1,
+                        roll: 0,
+                        orbit: 0,
+                        tilt: 0,
+                    },
+                    to: {
+                        anchorX: -0.05,
+                        anchorY: 0.02,
+                        zoom: 1.15,
+                        roll: 0,
+                        orbit: 0,
+                        tilt: 0,
+                    },
+                    shake: { from: 0, to: 0 },
+                },
+            ],
+        }));
+        selectCameraBlock(camId);
+    };
 
     return (
         <section
@@ -591,8 +763,6 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
                     setScrollLeft(e.currentTarget.scrollLeft);
                 }}
-                onMouseMove={(e) => setHoverTimeMs(clientXToLocalMs(e.clientX))}
-                onMouseLeave={() => setHoverTimeMs(null)}
                 onMouseDown={handleRulerMouseDown}
                 className={`flex-1 overflow-auto relative px-4 py-1 ${dragging ? 'cursor-grabbing' : 'cursor-pointer'
                     }`}
@@ -705,50 +875,51 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     {!isBlankState && timelineView === 'video' && (
                         <div className="space-y-2 pt-2">
                             <div className="h-8 relative flex items-center gap-1">
-                                {project.shots.map((shot) => {
+                                {project.shots.map((shot, shotIndex) => {
                                     const isSelected = shot.id === activeShot?.id;
                                     const width = Math.max(95, shot.durationMs * pxPerMs - 4);
                                     return (
                                         <div
                                             key={shot.id}
+                                            onMouseDown={(e) => startShotReorder(e, shot, shotIndex)}
                                             onClick={(e) => {
                                                 e.stopPropagation();
+                                                if (suppressShotClickRef.current === shot.id) {
+                                                    suppressShotClickRef.current = null;
+                                                    return;
+                                                }
                                                 selectShot(shot.id);
                                                 setInspectorTab('shot');
-                                                setCurrentTimeMs(shot.startMs + 100);
+                                                setCurrentTimeMs(Math.min(totalDurationMs, clientXToLocalMs(e.clientX)));
                                             }}
                                             onDoubleClick={(e) => {
                                                 e.stopPropagation();
+                                                const hasSelectedLayer = selectedLayerIds.some((id) =>
+                                                    shot.layers.some((layer) => layer.id === id)
+                                                );
                                                 selectShot(shot.id);
                                                 setTimelineView('scene');
+                                                setInspectorTab(hasSelectedLayer ? 'layer' : 'shot');
                                             }}
-                                            title={`${shot.name} (Double-click to open scene tracks)`}
+                                            title={`${shot.name} · ${(shot.durationMs / 1000).toFixed(2)}s · Drag to reorder, drag the right edge to trim, double-click to open layer tracks`}
                                             style={{ width: `${width}px` }}
-                                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-pointer relative ${isSelected
-                                                    ? 'border-[#0090ff] bg-gradient-to-b from-[#083c6e]/90 to-[#041d38]/90 text-white shadow-[0_0_12px_rgba(0,144,255,0.25)]'
+                                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
+                                                    ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-[0_0_12px_rgba(129,118,217,0.22)]'
                                                     : 'border-[#0284c7]/80 bg-gradient-to-b from-[#062c52]/75 to-[#031529]/85 text-sky-200/80 hover:border-[#38bdf8]'
                                                 }`}
                                         >
                                             <span className="truncate">{shot.name}</span>
+                                            <span
+                                                data-shot-trim="right"
+                                                onMouseDown={(e) => startShotTrim(e, shot)}
+                                                title="Drag to trim shot duration"
+                                                className="absolute right-0 top-0 bottom-0 w-2.5 flex items-center justify-center rounded-r-xl opacity-0 group-hover:opacity-100 hover:bg-white/15 cursor-ew-resize transition"
+                                            >
+                                                <span className="h-4 w-0.5 rounded-full bg-white/80" />
+                                            </span>
                                         </div>
                                     );
                                 })}
-
-                                {/* Click directly on Timeline after last shot to add a Blank Shot! */}
-                                <button
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                        e.stopPropagation();
-                                        const created = addShot();
-                                        selectShot(created.id);
-                                        setInspectorTab('shot');
-                                    }}
-                                    title="Click to add a new blank Shot here"
-                                    className="h-8 px-3 rounded-xl border border-dashed border-white/15 hover:border-[#0088ff] bg-white/[0.02] hover:bg-[#0088ff]/10 text-[#71717a] hover:text-white flex items-center gap-1 text-[11px] cursor-pointer transition"
-                                >
-                                    <Plus className="w-3.5 h-3.5" />
-                                    <span>Add Shot</span>
-                                </button>
                             </div>
                         </div>
                     )}
@@ -757,59 +928,55 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                     {/* STATE 2: ZOOMED-IN SCENE LAYER VIEW (1-to-1 Aligned with LeftPanel!) */}
                     {/* =============================================================== */}
                     {timelineView === 'scene' && activeShot && (
-                        <div className="relative space-y-0.5">
-                            {/* 1. Camera Track Row (h-7 = 28px, ONLY rendered when Camera exists!) */}
-                            {hasCameraBlocks && (
-                                <div
-                                    onMouseDown={(e) => e.stopPropagation()}
-                                    onClick={(e) => {
-                                        if (
-                                            (e.target as HTMLElement).closest('[data-cam-pill]')
-                                        )
-                                            return;
-                                        const clickMs = clientXToLocalMs(e.clientX);
-                                        const camId = `cam-blk-${Date.now()}`;
-                                        updateShot(activeShot.id, (s) => {
-                                            const startMs = Math.max(0, Math.min(Math.max(0, s.durationMs - 100), clickMs));
-                                            const durationMs = Math.max(100, Math.min(1500, s.durationMs - startMs));
-                                            return {
-                                                ...s,
-                                                cameraBlocks: [
-                                                    ...s.cameraBlocks,
-                                                    {
-                                                        id: camId,
-                                                        label: 'Camera Move',
-                                                        startMs,
-                                                        durationMs,
-                                                    fromFramingId: s.framings[0]?.id || 'f1',
-                                                    toFramingId: s.framings[1]?.id || 'f2',
-                                                    mode: 'dolly',
-                                                    easing: { kind: 'preset', name: 'linear' },
-                                                    from: {
-                                                        anchorX: 0,
-                                                        anchorY: 0,
-                                                        zoom: 1,
-                                                        roll: 0,
-                                                        orbit: 0,
-                                                        tilt: 0,
-                                                    },
-                                                    to: {
-                                                        anchorX: -0.05,
-                                                        anchorY: 0.02,
-                                                        zoom: 1.15,
-                                                        roll: 0,
-                                                        orbit: 0,
-                                                        tilt: 0,
-                                                    },
-                                                    shake: { from: 0, to: 0 },
-                                                },
-                                            ],
-                                        };
+                        <div className="relative flex flex-col gap-0.5">
+                            {/* Raylight exposes the add-layer lane before the layer rows. */}
+                            <div
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    const created = addLayerToShot(activeShot.id, 'shape', {
+                                        inMs: 0,
+                                        outMs: activeShot.durationMs,
                                     });
-                                    selectCameraBlock(camId);
+                                    setInspectorTab('layer');
+                                    selectLayer(created.id, false);
                                 }}
-                                    className="h-7 relative flex items-center"
-                                >
+                                title="Add a layer to this shot"
+                                className="order-0 h-7 relative flex items-center justify-center rounded-md border border-dashed border-sky-500/30 bg-sky-500/[0.025] text-[10px] text-[#8495a8] hover:border-sky-400/70 hover:bg-sky-500/[0.07] hover:text-sky-200 cursor-pointer transition"
+                            >
+                                <span>+ Add layer</span>
+                            </div>
+
+                            {/* Camera track: always present, with a hover preview in empty space. */}
+                            <div
+                                onMouseDown={(e) => e.stopPropagation()}
+                                onMouseMove={(e) => {
+                                    e.stopPropagation();
+                                    setHoverCameraTimeMs(clientXToLocalMs(e.clientX));
+                                }}
+                                onMouseLeave={() => setHoverCameraTimeMs(null)}
+                                onClick={(e) => {
+                                    if ((e.target as HTMLElement).closest('[data-cam-pill]')) return;
+                                    addCameraBlockAtTime(clientXToLocalMs(e.clientX));
+                                }}
+                                title="Hover to preview a camera move; click to add it"
+                                aria-label="Camera track"
+                                style={{ order: 30 }}
+                                className="h-7 relative flex items-center cursor-pointer"
+                            >
+                                    {hoverCameraTimeMs !== null && !activeShot.cameraBlocks.some((block) =>
+                                        hoverCameraTimeMs >= block.startMs &&
+                                        hoverCameraTimeMs <= block.startMs + block.durationMs
+                                    ) && (
+                                        <div
+                                            aria-hidden="true"
+                                            className="absolute top-1 bottom-1 rounded-md border border-dashed border-emerald-400/80 bg-emerald-400/10 pointer-events-none"
+                                            style={{
+                                                left: `${hoverCameraTimeMs * pxPerMs}px`,
+                                                width: `${Math.max(24, Math.min(1000, activeShot.durationMs - hoverCameraTimeMs) * pxPerMs)}px`,
+                                            }}
+                                        />
+                                    )}
                                     {activeShot.cameraBlocks.map((cb) => {
                                         const isCamSelected = selectedCameraBlockId === cb.id;
                                         const left = cb.startMs * pxPerMs;
@@ -850,12 +1017,11 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                             </div>
                                         );
                                     })}
-                                </div>
-                            )}
+                            </div>
 
                             {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
                             {hasLightBlocks && (
-                                <div className="h-7 relative flex items-center">
+                                <div style={{ order: 20 }} className="h-7 relative flex items-center">
                                     {(activeShot.lightBlocks || []).map((lb) => {
                                         const isLightSelected = selectedLightBlockId === lb.id;
                                         const left = lb.startMs * pxPerMs;
@@ -918,7 +1084,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                             )}
 
                             {/* 3. Layer Track Rows (h-7 = 28px) + Indented Sub-rows (h-6 = 24px) */}
-                            {activeShot.layers
+                                {activeShot.layers
                                 .slice()
                                 .sort((a, b) => b.order - a.order)
                                 .map((layer) => {
@@ -950,7 +1116,7 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                     const extStartMs = Math.max(layer.inMs, extEndMs - extDurMs);
 
                                     return (
-                                        <div key={layer.id} className="space-y-0.5">
+                                        <div key={layer.id} style={{ order: 10 }} className="space-y-0.5">
                                             {/* Main Layer Bar Row (h-7 = 28px — NO duplicate text header above it!) */}
                                             <div className="h-7 relative flex items-center">
                                                 <div
@@ -960,6 +1126,9 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                                     style={{ left: `${left}px`, width: `${width}px` }}
                                                     className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle}`}
                                                 >
+                                                    <span className="absolute inset-0 flex items-center justify-center px-3 text-[10px] font-medium text-white/80 truncate pointer-events-none">
+                                                        {layer.name}
+                                                    </span>
                                                     <span
                                                         onMouseDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'in')
@@ -1158,11 +1327,30 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                                                         blk.durationMs * pxPerMs
                                                                     )}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab transition ${selectedBlockId === blk.id
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab transition relative ${selectedBlockId === blk.id
                                                                         ? 'border-[#c084fc] bg-[#581c87] text-white'
                                                                         : 'border-[#7c3aed] bg-[#2a1452]/90 text-purple-200 hover:border-[#a855f7]'
                                                                     }`}
                                                             >
+                                                                <svg
+                                                                    aria-hidden="true"
+                                                                    viewBox="0 0 100 16"
+                                                                    preserveAspectRatio="none"
+                                                                    className="absolute inset-0 h-full w-full rounded-full opacity-50 pointer-events-none"
+                                                                >
+                                                                    <polyline
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        strokeWidth="1.25"
+                                                                        strokeLinecap="round"
+                                                                        strokeLinejoin="round"
+                                                                        points={Array.from({ length: 25 }, (_, index) => {
+                                                                            const progress = index / 24;
+                                                                            const eased = Math.max(0, Math.min(1, evaluateEasing(progress, blk.easing)));
+                                                                            return `${(progress * 100).toFixed(2)},${(14 - eased * 12).toFixed(2)}`;
+                                                                        }).join(' ')}
+                                                                    />
+                                                                </svg>
                                                                 <span className="truncate pointer-events-none">
                                                                     {blk.label}
                                                                 </span>
@@ -1199,24 +1387,6 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                     );
                                 })}
 
-                            {/* 4. Click-to-Add Layer Row at Bottom of Timeline */}
-                            <div
-                                onMouseDown={(e) => e.stopPropagation()}
-                                onClick={(e) => {
-                                    const clickMs = clientXToLocalMs(e.clientX);
-                                    const created = addLayerToShot(activeShot.id, 'shape', {
-                                        inMs: Math.min(activeShot.durationMs - 400, clickMs),
-                                        outMs: activeShot.durationMs,
-                                    });
-                                    setInspectorTab('layer');
-                                    selectLayer(created.id, false);
-                                }}
-                                title="Click anywhere on this row to add a new Layer starting at that timestamp"
-                                className="h-7 relative flex items-center rounded border border-dashed border-transparent hover:border-white/10 hover:bg-white/[0.02] text-[10px] text-[#52525b] hover:text-[#a1a1aa] px-2 cursor-pointer transition"
-                            >
-                                <span>+ Click at any time position to add Layer</span>
-                            </div>
-
                             {/* Dimmed Right-Hand Step-Out Curtain */}
                             <div
                                 onClick={(e) => {
@@ -1227,14 +1397,6 @@ export const Timeline: React.FC<TimelineProps> = ({ totalDurationMs }) => {
                                 style={{ left: `${activeShot.durationMs * pxPerMs + 8}px` }}
                                 className="absolute top-0 bottom-0 right-0 rounded-l-2xl bg-[#16202a]/80 hover:bg-[#1e2c3a]/85 border-l border-white/10 cursor-pointer transition z-10"
                             />
-                        </div>
-                    )}
-
-                    {/* Hover ghost playhead follows the cursor independently of the active playhead. */}
-                    {hoverTimeMs !== null && (
-                        <div className="absolute top-0 bottom-0 z-20 pointer-events-none" style={{ left: `${hoverTimeMs * pxPerMs}px` }}>
-                            <div className="absolute top-0 bottom-0 w-px bg-white/70 shadow-[0_0_5px_rgba(255,255,255,.35)]" />
-                            <div className="absolute -left-5 top-4 whitespace-nowrap rounded bg-white/90 px-1.5 py-0.5 text-[9px] font-mono text-black shadow">{(hoverTimeMs / 1000).toFixed(2)}s</div>
                         </div>
                     )}
 

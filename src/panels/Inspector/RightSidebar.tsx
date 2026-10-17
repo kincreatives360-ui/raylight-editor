@@ -58,6 +58,7 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { BackgroundSection } from './sections/BackgroundSection';
 import { SceneTransitionSection } from './sections/SceneTransitionSection';
+import { readImageFileWithThumbnail } from '../../engine/figmaSvgImporter';
 
 const POPULAR_FONTS = [
     'Inter',
@@ -145,6 +146,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     const {
         selectedBlockId,
         selectedCameraBlockId,
+        setTimelineLayerExpanded,
         selectBlock,
         selectCameraBlock,
         clearLayerSelection,
@@ -179,6 +181,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
     const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
     const isBlankState = isBlankProjectState(project);
+    const effectiveMainTab = isBlankState ? 'design' : mainTab;
+
+    useEffect(() => {
+        if (isBlankState && mainTab !== 'design') {
+            setMainTab('design');
+        }
+    }, [isBlankState, mainTab]);
+
     const isBottomLayerSelected =
         Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
 
@@ -243,29 +253,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         }
     };
 
-    const handlePickProjectBgImage = (file: File | null) => {
+    const handlePickProjectBgImage = async (file: File | null) => {
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-            const dataUrl = reader.result as string;
-            const assetId = `bg-asset-${Date.now()}`;
+        try {
+            const asset = await readImageFileWithThumbnail(file);
             updateProject((p) => ({
                 ...p,
                 assets: {
                     ...p.assets,
-                    [assetId]: {
-                        id: assetId,
-                        name: file.name,
-                        mimeType: file.type || 'image/png',
-                        dataUrl,
-                        width: 0,
-                        height: 0,
-                    },
+                    [asset.id]: asset,
                 },
-                background: { kind: 'image', assetId },
+                background: { kind: 'image', assetId: asset.id },
             }));
-        };
-        reader.readAsDataURL(file);
+        } catch (error) {
+            console.error('Failed to load project background image:', error);
+        }
     };
 
     const handleAddAnimationBlock = (property: AnimationBlockProperty) => {
@@ -306,6 +308,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             ...l,
             blocks: [...l.blocks, newBlock],
         }));
+        setTimelineLayerExpanded(selectedLayer.id, true);
         selectBlock(id, selectedLayer.id);
         setAddAnimMenuOpen(false);
     };
@@ -1162,11 +1165,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             ) : (
                 <>
                     {/* 2. SUB-HEADER: [Design] | [Animate] Pill Tabs */}
-                    <div className={`${isBlankState ? 'hidden' : 'h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0'}`}>
+                    <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
                         <div className="flex items-center gap-1.5">
                             <button
                                 onClick={() => setMainTab('design')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'design'
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
                                     ? 'bg-[#1f1f23] text-white'
                                     : 'text-[#71717a] hover:text-[#d4d4d8]'
                                     }`}
@@ -1175,7 +1178,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </button>
                             <button
                                 onClick={() => setMainTab('animate')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${mainTab === 'animate'
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
                                     ? 'bg-[#1f1f23] text-white'
                                     : 'text-[#71717a] hover:text-[#d4d4d8]'
                                     }`}
@@ -1199,7 +1202,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* =============================================================== */}
                     {/* TAB 1: DESIGN (WHEN A LAYER IS SELECTED)                        */}
                     {/* =============================================================== */}
-                    {mainTab === 'design' && selectedLayer && (
+                    {effectiveMainTab === 'design' && selectedLayer && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
                             {/* LAYER HEADER: Name, Lock, Hide, Delete */}
                             <div className="p-3.5 space-y-2.5">
@@ -2675,7 +2678,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* =============================================================== */}
                     {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — SHOT SETTINGS)       */}
                     {/* =============================================================== */}
-                    {mainTab === 'design' && !selectedLayer && (
+                    {effectiveMainTab === 'design' && !selectedLayer && (
                         <div className="flex-1 overflow-y-auto bg-[#101012]">
                     <div className={`px-3.5 ${isBlankState ? 'pt-1 space-y-2' : 'pt-3 space-y-4'} pb-4`}>
                                 <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
@@ -2767,7 +2770,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* =============================================================== */}
                     {/* TAB 2: ANIMATE (WHEN A LAYER IS SELECTED)                       */}
                     {/* =============================================================== */}
-                    {mainTab === 'animate' && selectedLayer && (
+                    {effectiveMainTab === 'animate' && selectedLayer && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
                             <div className="p-3.5 relative">
                                 <div className="flex items-center justify-between">
@@ -3349,7 +3352,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     {/* =============================================================== */}
                     {/* TAB 2: ANIMATE (WHEN NO LAYER IS SELECTED — SCENE CAMERA)       */}
                     {/* =============================================================== */}
-                    {mainTab === 'animate' && !selectedLayer && (
+                    {effectiveMainTab === 'animate' && !selectedLayer && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
                             <div className="p-3.5 space-y-2.5">
                                 <div className="flex items-center justify-between">

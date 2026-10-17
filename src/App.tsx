@@ -60,6 +60,7 @@ export default function App() {
     selectLayer,
     setSelectedLayerIds,
     selectBlock,
+    setTimelineLayerExpanded,
     clearLayerSelection,
     setInspectorTab,
     setActiveTool,
@@ -442,7 +443,10 @@ export default function App() {
             frame.shotLocalTimeMs,
             'Nudge'
           );
-          if (blkId) selectBlock(blkId, selectedLayer.id);
+          if (blkId) {
+            setTimelineLayerExpanded(selectedLayer.id, true);
+            selectBlock(blkId, selectedLayer.id);
+          }
           return;
         }
 
@@ -502,7 +506,14 @@ export default function App() {
       const video = document.createElement('video'); video.preload = 'metadata'; video.src = dataUrl;
       const addVideoClip = (durationMs: number) => {
         const assetId = `video-${Date.now()}`;
-        const asset = { id: assetId, name: file.name, mimeType: file.type, dataUrl, width: 1920, height: 1080 };
+        const asset = {
+          id: assetId,
+          name: file.name,
+          mimeType: file.type,
+          dataUrl,
+          width: video.videoWidth || 1920,
+          height: video.videoHeight || 1080,
+        };
         const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
         const clipEnd = currentTimeMs + clipDuration;
         updateProject((p) => {

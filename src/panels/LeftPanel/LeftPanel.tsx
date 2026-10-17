@@ -92,6 +92,39 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
     const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
     const mirrorScrollRef = useRef<HTMLDivElement | null>(null);
+    const dimensionRepairsInFlight = useRef(new Set<string>());
+
+    // Repair dimensions for assets imported by older builds, which stored 0×0.
+    useEffect(() => {
+        Object.values(project.assets).forEach((asset) => {
+            if ((asset.width > 0 && asset.height > 0) || !asset.dataUrl || dimensionRepairsInFlight.current.has(asset.id)) return;
+            if (!asset.mimeType.startsWith('image/') && !asset.mimeType.startsWith('video/')) return;
+            dimensionRepairsInFlight.current.add(asset.id);
+
+            const saveDimensions = (width: number, height: number) => {
+                if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return;
+                updateProject((current) => {
+                    const stored = current.assets[asset.id];
+                    if (!stored || (stored.width > 0 && stored.height > 0)) return current;
+                    return {
+                        ...current,
+                        assets: { ...current.assets, [asset.id]: { ...stored, width, height } },
+                    };
+                }, { skipHistory: true });
+            };
+
+            if (asset.mimeType.startsWith('video/')) {
+                const video = document.createElement('video');
+                video.preload = 'metadata';
+                video.onloadedmetadata = () => saveDimensions(video.videoWidth, video.videoHeight);
+                video.src = asset.dataUrl;
+            } else {
+                const image = new Image();
+                image.onload = () => saveDimensions(image.naturalWidth || image.width, image.naturalHeight || image.height);
+                image.src = asset.dataUrl;
+            }
+        });
+    }, [project.assets, updateProject]);
 
     // Keep Left Panel mirror rack scrollTop synced with Timeline scrollTop!
     useEffect(() => {
@@ -750,51 +783,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             className="border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0"
                         >
                             {/* Header Spacer matching Timeline Transport (h-8) + Ruler (h-6) = 56px (h-14) */}
-                            <div className="h-14 border-b border-white/[0.06] px-3 flex items-center justify-between text-[10px] font-mono text-[#71717a] shrink-0">
+                            <div className="h-14 border-b border-white/[0.06] px-3 flex items-center text-[10px] font-mono text-[#71717a] shrink-0">
                                 <span className="truncate">{activeShot.name} TRACKS</span>
-                                <button
-                                    onClick={() => {
-                                        const camId = `cam-blk-${Date.now()}`;
-                                        updateShot(activeShot.id, (s) => ({
-                                            ...s,
-                                            cameraBlocks: [
-                                                ...(s.cameraBlocks || []),
-                                                {
-                                                    id: camId,
-                                                    label: 'Camera Move',
-                                                    startMs: 0,
-                                                    durationMs: s.durationMs,
-                                                    fromFramingId: s.framings[0]?.id || 'f1',
-                                                    toFramingId: s.framings[1]?.id || 'f2',
-                                                    mode: 'dolly',
-                                                    easing: { kind: 'preset', name: 'linear' },
-                                                    from: {
-                                                        anchorX: 0,
-                                                        anchorY: 0,
-                                                        zoom: 1,
-                                                        roll: 0,
-                                                        orbit: 0,
-                                                        tilt: 0,
-                                                    },
-                                                    to: {
-                                                        anchorX: -0.05,
-                                                        anchorY: 0.02,
-                                                        zoom: 1.15,
-                                                        roll: 0,
-                                                        orbit: 0,
-                                                        tilt: 0,
-                                                    },
-                                                    shake: { from: 0, to: 0 },
-                                                },
-                                            ],
-                                        }));
-                                        selectCameraBlock(camId);
-                                    }}
-                                    className="px-1.5 py-0.5 rounded bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 text-[9px] cursor-pointer"
-                                    title="Add Camera Move Track"
-                                >
-                                    + Camera
-                                </button>
                             </div>
 
                             {/* Scroll-Synced Track Labels (1-to-1 with Timeline Bars on the Right!) */}
@@ -803,7 +793,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 onScroll={(e) =>
                                     setTimelineScrollTop(e.currentTarget.scrollTop)
                                 }
-                                className="flex-1 overflow-y-auto px-1.5 py-1 space-y-0.5"
+                                className="flex-1 overflow-y-auto px-1.5 py-1 flex flex-col gap-0.5"
                             >
                                 {/* 0. Media Track Row (Matching Timeline Media row when audio/video clips exist!) */}
                                 {(project.audio?.clips?.length || 0) > 0 && (
@@ -839,41 +829,39 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                     </div>
                                 )}
 
-                                {/* 1. Camera Track Row (ONLY shown when Camera is added!) */}
-                                {hasCameraBlocks && (
-                                    <div
-                                        onClick={() =>
-                                            selectCameraBlock(activeShot.cameraBlocks[0]?.id || null)
-                                        }
-                                        className={`h-7 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${selectedCameraBlockId
-                                            ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
-                                            : 'text-emerald-400 hover:bg-white/[0.04]'
-                                            }`}
-                                    >
-                                        <div className="flex items-center gap-1.5 truncate">
-                                            <Video className="w-3.5 h-3.5 shrink-0" />
-                                            <span className="truncate">Camera</span>
-                                        </div>
-                                        <button
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                updateShot(activeShot.id, (s) => ({
-                                                    ...s,
-                                                    cameraBlocks: [],
-                                                }));
-                                                selectCameraBlock(null);
-                                            }}
-                                            className="text-[10px] opacity-60 hover:opacity-100 hover:text-rose-400 cursor-pointer"
-                                            title="Remove Camera Track"
-                                        >
-                                            &times;
-                                        </button>
-                                    </div>
-                                )}
+                                {/* Add-layer lane is first in the scene timeline. */}
+                                <button
+                                    onClick={() => {
+                                        const layer = addLayerToShot(activeShot.id, 'shape');
+                                        selectLayer(layer.id);
+                                        setInspectorTab('layer');
+                                    }}
+                                    className="order-0 h-7 rounded-md border border-dashed border-sky-500/30 px-2 flex items-center gap-1.5 text-[10px] text-[#8495a8] hover:border-sky-400/70 hover:bg-sky-500/[0.07] hover:text-sky-200 cursor-pointer transition"
+                                >
+                                    <Plus className="w-3 h-3 text-sky-400" />
+                                    <span>Add layer</span>
+                                </button>
+
+                                {/* Camera track stays visible even before its first move is added. */}
+                                <div
+                                    onClick={() =>
+                                        selectCameraBlock(activeShot.cameraBlocks[0]?.id || null)
+                                    }
+                                    style={{ order: 30 }}
+                                    className={`h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] cursor-pointer transition ${selectedCameraBlockId
+                                        ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
+                                        : hasCameraBlocks
+                                            ? 'text-emerald-400 hover:bg-white/[0.04]'
+                                            : 'text-[#71717a] hover:text-emerald-300 hover:bg-white/[0.04]'
+                                        }`}
+                                >
+                                    <Video className="w-3.5 h-3.5 shrink-0" />
+                                    <span className="truncate">Camera</span>
+                                </div>
 
                                 {/* 2. Light Track Row (ONLY shown when Light animation is added) */}
                                 {hasLightBlocks && (
-                                    <div className="h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] text-amber-300 hover:bg-white/[0.04] cursor-pointer">
+                                    <div style={{ order: 20 }} className="h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] text-amber-300 hover:bg-white/[0.04] cursor-pointer">
                                         <Sun className="w-3.5 h-3.5 shrink-0 text-amber-400" />
                                         <span className="truncate">Lighting Rig</span>
                                     </div>
@@ -894,7 +882,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             layer.blocks.length > 0;
 
                                         return (
-                                            <div key={`mirror-${layer.id}`} className="space-y-0.5">
+                                            <div key={`mirror-${layer.id}`} style={{ order: 10 }} className="space-y-0.5">
                                                 {/* Main Layer Row (h-7 = 28px) */}
                                                 <div
                                                     onClick={() => {
@@ -986,18 +974,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         );
                                     })}
 
-                                {/* Quick + Add Layer Row at bottom of track list */}
-                                <button
-                                    onClick={() => {
-                                        const l = addLayerToShot(activeShot.id, 'shape');
-                                        selectLayer(l.id);
-                                        setInspectorTab('layer');
-                                    }}
-                                    className="w-full h-7 px-2 rounded-md flex items-center gap-1.5 text-[10px] text-[#71717a] hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
-                                >
-                                    <Plus className="w-3 h-3 text-[#0088ff]" />
-                                    <span>Add Layer Track</span>
-                                </button>
                             </div>
                         </div>
                     )}

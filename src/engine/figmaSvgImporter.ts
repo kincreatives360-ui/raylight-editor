@@ -27,20 +27,14 @@ export function readImageFileWithThumbnail(
         reader.onload = () => {
             const dataUrl = String(reader.result);
             const img = new Image();
-            img.onerror = () => {
-                resolve({
-                    id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-                    name: file.name || 'Pasted image',
-                    mimeType: file.type || 'image/png',
-                    dataUrl,
-                    thumbUrl: dataUrl,
-                    width: 1920,
-                    height: 1080,
-                });
-            };
+            img.onerror = () => reject(new Error(`Unable to decode image: ${file.name || 'image'}`));
             img.onload = () => {
-                const natW = img.naturalWidth || 1920;
-                const natH = img.naturalHeight || 1080;
+                const natW = img.naturalWidth || img.width;
+                const natH = img.naturalHeight || img.height;
+                if (!Number.isFinite(natW) || !Number.isFinite(natH) || natW <= 0 || natH <= 0) {
+                    reject(new Error(`Image has invalid dimensions: ${file.name || 'image'}`));
+                    return;
+                }
 
                 // Generate a small 240px wide thumbnail for fast sidebar rendering
                 let thumbUrl = dataUrl;

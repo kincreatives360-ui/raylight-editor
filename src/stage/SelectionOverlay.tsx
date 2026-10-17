@@ -50,8 +50,14 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         commitDragTransaction,
     } = useProjectStore();
 
-    const { activeTool, isAnimateMode, isCropping, canvasZoom, selectBlock } =
-        useSelectionStore();
+    const {
+        activeTool,
+        isAnimateMode,
+        isCropping,
+        canvasZoom,
+        selectBlock,
+        setTimelineLayerExpanded,
+    } = useSelectionStore();
 
     const overlayRootRef = useRef<HTMLDivElement | null>(null);
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
@@ -190,7 +196,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         'Move',
                         { skipHistory: true }
                     );
-                    if (blkId) selectBlock(blkId, layer.id);
+                    if (blkId) {
+                        setTimelineLayerExpanded(layer.id, true);
+                        selectBlock(blkId, layer.id);
+                    }
                 }
                 return;
             }
@@ -368,7 +377,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         'Resize',
                         { skipHistory: true }
                     );
-                    if (blkId) selectBlock(blkId, layer.id);
+                    if (blkId) {
+                        setTimelineLayerExpanded(layer.id, true);
+                        selectBlock(blkId, layer.id);
+                    }
                 }
                 return;
             }
@@ -470,7 +482,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         'Roll',
                         { skipHistory: true }
                     );
-                    if (blkId) selectBlock(blkId, layer.id);
+                    if (blkId) {
+                        setTimelineLayerExpanded(layer.id, true);
+                        selectBlock(blkId, layer.id);
+                    }
                 }
                 return;
             }
@@ -534,7 +549,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         '3D Tilt',
                         { skipHistory: true }
                     );
-                    if (blkId) selectBlock(blkId, layer.id);
+                    if (blkId) {
+                        setTimelineLayerExpanded(layer.id, true);
+                        selectBlock(blkId, layer.id);
+                    }
                 }
                 return;
             }

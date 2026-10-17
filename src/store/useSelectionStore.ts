@@ -64,6 +64,7 @@ interface SelectionStore {
     setTimelineHeightPx: (heightPx: number) => void;
     setTimelineScrollTop: (scrollTop: number) => void;
     toggleTimelineLayerExpanded: (layerId: string) => void;
+    setTimelineLayerExpanded: (layerId: string, expanded: boolean) => void;
 
     setActiveTool: (tool: CanvasTool) => void;
     toggleAnimateMode: () => void;
@@ -106,14 +107,21 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     gradientEditorAngle: 0,
 
     selectShot: (shotId, defaultLayerId) =>
-        set({
-            selectedShotId: shotId,
-            selectedLayerIds: defaultLayerId ? [defaultLayerId] : [],
-            selectedBlockId: null,
-            selectedCameraBlockId: null,
-            selectedLightBlockId: null,
-            selectedPresetType: null,
-            isCropping: false,
+        set((state) => {
+            const sameShot = state.selectedShotId === shotId;
+            return {
+                selectedShotId: shotId,
+                selectedLayerIds: defaultLayerId
+                    ? [defaultLayerId]
+                    : sameShot
+                        ? state.selectedLayerIds
+                        : [],
+                selectedBlockId: null,
+                selectedCameraBlockId: null,
+                selectedLightBlockId: null,
+                selectedPresetType: null,
+                isCropping: false,
+            };
         }),
 
     selectLayer: (layerId, toggleMulti = false) =>
@@ -239,6 +247,17 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 expandedTimelineLayerIds: exists
                     ? state.expandedTimelineLayerIds.filter((id) => id !== layerId)
                     : [...state.expandedTimelineLayerIds, layerId],
+            };
+        }),
+
+    setTimelineLayerExpanded: (layerId, expanded) =>
+        set((state) => {
+            const exists = state.expandedTimelineLayerIds.includes(layerId);
+            if (exists === expanded) return state;
+            return {
+                expandedTimelineLayerIds: expanded
+                    ? [...state.expandedTimelineLayerIds, layerId]
+                    : state.expandedTimelineLayerIds.filter((id) => id !== layerId),
             };
         }),
 
