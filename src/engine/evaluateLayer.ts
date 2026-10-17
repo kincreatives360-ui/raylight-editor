@@ -77,74 +77,90 @@ export function evaluateLayerAtTime(
     let glowRadiusOffset = 0;
     let textContentOverride: string | undefined = undefined;
 
-    // 1. Evaluate Entrance Transition (In)
-    const ent = layer.entrance;
-    if (ent.type !== 'none' && ent.durationMs > 0) {
-        const entStart = layer.inMs + (ent.delayMs || 0);
-        const rawP = (shotLocalTimeMs - entStart) / ent.durationMs;
-        if (rawP < 1) {
-            const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ent.easing);
-            const inv = 1 - p;
-            const dist = ent.distance ?? 0.18;
+    // 1. Evaluate Entrance Transition (In) — supports stacked entrances via layer.entrances
+    const entranceList =
+        layer.entrances && layer.entrances.length > 0
+            ? layer.entrances
+            : layer.entrance
+                ? [layer.entrance]
+                : [];
 
-            if (ent.type === 'fade') opacity *= p;
-            else if (ent.type === 'slide-up') {
-                opacity *= p;
-                position.y += dist * inv;
-            } else if (ent.type === 'slide-down') {
-                opacity *= p;
-                position.y -= dist * inv;
-            } else if (ent.type === 'slide-left') {
-                opacity *= p;
-                position.x += dist * inv;
-            } else if (ent.type === 'slide-right') {
-                opacity *= p;
-                position.x -= dist * inv;
-            } else if (ent.type === 'float-out') {
-                opacity *= p;
-                position.z -= dist * inv;
-            } else if (ent.type === 'scale-out') {
-                opacity *= p;
-                scale.x *= 0.7 + 0.3 * p;
-                scale.y *= 0.7 + 0.3 * p;
-            } else if (ent.type === 'mask-sweep') {
-                maskSweepProgress = Math.min(maskSweepProgress, p);
+    for (const ent of entranceList) {
+        if (ent && ent.type !== 'none' && ent.durationMs > 0) {
+            const entStart = layer.inMs + (ent.delayMs || 0);
+            const rawP = (shotLocalTimeMs - entStart) / ent.durationMs;
+            if (rawP < 1) {
+                const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ent.easing);
+                const inv = 1 - p;
+                const dist = ent.distance ?? 0.18;
+
+                if (ent.type === 'fade') opacity *= p;
+                else if (ent.type === 'slide-up') {
+                    opacity *= p;
+                    position.y += dist * inv;
+                } else if (ent.type === 'slide-down') {
+                    opacity *= p;
+                    position.y -= dist * inv;
+                } else if (ent.type === 'slide-left') {
+                    opacity *= p;
+                    position.x += dist * inv;
+                } else if (ent.type === 'slide-right') {
+                    opacity *= p;
+                    position.x -= dist * inv;
+                } else if (ent.type === 'float-out') {
+                    opacity *= p;
+                    position.z -= dist * inv;
+                } else if (ent.type === 'scale-out') {
+                    opacity *= p;
+                    scale.x *= 0.7 + 0.3 * p;
+                    scale.y *= 0.7 + 0.3 * p;
+                } else if (ent.type === 'mask-sweep') {
+                    maskSweepProgress = Math.min(maskSweepProgress, p);
+                }
             }
         }
     }
 
-    // 2. Evaluate Exit Transition (Out)
-    const ext = layer.exit;
-    if (ext.type !== 'none' && ext.durationMs > 0) {
-        const extEnd = layer.outMs - (ext.delayMs || 0);
-        const extStart = extEnd - ext.durationMs;
-        if (shotLocalTimeMs > extStart) {
-            const rawP = (shotLocalTimeMs - extStart) / ext.durationMs;
-            const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ext.easing);
-            const dist = ext.distance ?? 0.16;
+    // 2. Evaluate Exit Transition (Out) — supports stacked exits via layer.exits
+    const exitList =
+        layer.exits && layer.exits.length > 0
+            ? layer.exits
+            : layer.exit
+                ? [layer.exit]
+                : [];
 
-            if (ext.type === 'fade') opacity *= 1 - p;
-            else if (ext.type === 'slide-up') {
-                opacity *= 1 - p;
-                position.y -= dist * p;
-            } else if (ext.type === 'slide-down') {
-                opacity *= 1 - p;
-                position.y += dist * p;
-            } else if (ext.type === 'slide-left') {
-                opacity *= 1 - p;
-                position.x -= dist * p;
-            } else if (ext.type === 'slide-right') {
-                opacity *= 1 - p;
-                position.x += dist * p;
-            } else if (ext.type === 'float-out') {
-                opacity *= 1 - p;
-                position.z += dist * p;
-            } else if (ext.type === 'scale-out') {
-                opacity *= 1 - p;
-                scale.x *= 1 - 0.3 * p;
-                scale.y *= 1 - 0.3 * p;
-            } else if (ext.type === 'mask-sweep') {
-                maskSweepProgress = Math.min(maskSweepProgress, 1 - p);
+    for (const ext of exitList) {
+        if (ext && ext.type !== 'none' && ext.durationMs > 0) {
+            const extEnd = layer.outMs - (ext.delayMs || 0);
+            const extStart = extEnd - ext.durationMs;
+            if (shotLocalTimeMs > extStart) {
+                const rawP = (shotLocalTimeMs - extStart) / ext.durationMs;
+                const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ext.easing);
+                const dist = ext.distance ?? 0.16;
+
+                if (ext.type === 'fade') opacity *= 1 - p;
+                else if (ext.type === 'slide-up') {
+                    opacity *= 1 - p;
+                    position.y -= dist * p;
+                } else if (ext.type === 'slide-down') {
+                    opacity *= 1 - p;
+                    position.y += dist * p;
+                } else if (ext.type === 'slide-left') {
+                    opacity *= 1 - p;
+                    position.x -= dist * p;
+                } else if (ext.type === 'slide-right') {
+                    opacity *= 1 - p;
+                    position.x += dist * p;
+                } else if (ext.type === 'float-out') {
+                    opacity *= 1 - p;
+                    position.z += dist * p;
+                } else if (ext.type === 'scale-out') {
+                    opacity *= 1 - p;
+                    scale.x *= 1 - 0.3 * p;
+                    scale.y *= 1 - 0.3 * p;
+                } else if (ext.type === 'mask-sweep') {
+                    maskSweepProgress = Math.min(maskSweepProgress, 1 - p);
+                }
             }
         }
     }

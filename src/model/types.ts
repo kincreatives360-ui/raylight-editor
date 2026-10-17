@@ -177,10 +177,18 @@ export interface LayerBase {
   entrance: Transitionish;
   entrances?: (Transitionish & { id?: string })[];
   exit: Transitionish;
+  exits?: (Transitionish & { id?: string })[];
   blocks: AnimationBlock[];
   effects: LayerEffects;
   /** Optional alpha-mask source layer ID. */
   maskLayerId?: string;
+  /** When true, layer surface reacts to 3D scene lighting. Default false for text, true for images/video/devices. */
+  receivesLight?: boolean;
+  /** Optional 3D surface material response */
+  material?: {
+    roughness?: number;
+    metalness?: number;
+  };
 }
 
 export interface ImageLayer extends LayerBase {
@@ -280,12 +288,16 @@ export interface CameraBlock {
 export interface LightAnimationBlock {
   id: string;
   label: string;
+  /** 'key' for primary directional light, or specific source id */
+  targetLightId?: string;
   startMs: number;
   durationMs: number;
   fromX: number;
   fromY: number;
   toX: number;
   toY: number;
+  fromZ?: number;
+  toZ?: number;
   fromIntensity: number;
   toIntensity: number;
   easing: Easing;
@@ -310,22 +322,44 @@ export interface SceneLight {
   type: LightSourceType;
   enabled: boolean;
   position: Vec3;
+  /** Aim target for spot lights or orientation */
+  target?: Vec3;
+  /** Optional rotation in radians */
+  rotation?: Vec3;
   intensity: number;
   color: string;
-  temperature: number;
+  temperature?: number;
+  /** Distance / radius falloff for point and spot lights */
   distance?: number;
+  /** Falloff decay factor (physically accurate inverse-square default = 2) */
+  decay?: number;
+  /** Cone angle for spot lights (radians) */
   angle?: number;
+  /** Edge softness for spot lights (0 = hard edge, 1 = maximum penumbra) */
   penumbra?: number;
+  /** Width for area lights */
   width?: number;
+  /** Height for area lights */
   height?: number;
+  /** Whether this light casts shadows */
+  castShadow?: boolean;
 }
 
 export interface LightRig {
   position: Vec3;
   intensity: number;
   temperature: number;
+  /** Ambient light intensity / shadow floor (0 - 1) */
   ambience: number;
-  /** Multiple independently editable light sources; legacy fields remain supported. */
+  /** Scene-level ambient light tint color */
+  ambientColor?: string;
+  /** Toggle key light on/off */
+  keyLightEnabled?: boolean;
+  /** Whether the directional key light casts shadows */
+  castShadow?: boolean;
+  /** Show 3D light helper gizmos on stage */
+  showGizmos?: boolean;
+  /** Multiple independently editable light sources */
   sources?: SceneLight[];
 }
 

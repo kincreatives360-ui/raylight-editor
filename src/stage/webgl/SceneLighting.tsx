@@ -3,7 +3,7 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { kelvinToRgb } from '../stageUtils';
-import type { Shot } from '../../model/types';
+import type { Shot, SceneLight } from '../../model/types';
 
 interface SceneLightingProps {
     light?: Shot['light'];
@@ -45,6 +45,121 @@ const AreaLightItem: React.FC<{
     );
 };
 
+const SpotLightItem: React.FC<{
+    position: [number, number, number];
+    targetPos: [number, number, number];
+    intensity: number;
+    color: THREE.Color;
+    distance: number;
+    decay: number;
+    angle: number;
+    penumbra: number;
+    castShadow: boolean;
+}> = ({ position, targetPos, intensity, color, distance, decay, angle, penumbra, castShadow }) => {
+    const spotRef = useRef<THREE.SpotLight>(null);
+    const targetRef = useRef<THREE.Object3D>(null);
+
+    useLayoutEffect(() => {
+        if (spotRef.current && targetRef.current) {
+            spotRef.current.target = targetRef.current;
+        }
+    }, [targetPos]);
+
+    return (
+        <group>
+            <object3D ref={targetRef} position={targetPos} />
+            <spotLight
+                ref={spotRef}
+                position={position}
+                intensity={intensity}
+                color={color}
+                distance={distance}
+                decay={decay}
+                angle={angle}
+                penumbra={penumbra}
+                castShadow={castShadow}
+                shadow-bias={-0.0002}
+                shadow-mapSize-width={1024}
+                shadow-mapSize-height={1024}
+            />
+        </group>
+    );
+};
+
+/** Lightweight 3D wireframe helper gizmo showing light positions and orientations */
+const LightGizmo: React.FC<{
+    source: SceneLight;
+    position: [number, number, number];
+    color: THREE.Color;
+}> = ({ source, position, color }) => {
+    const colorHex = '#' + color.getHexString();
+
+    if (source.type === 'point') {
+        return (
+            <group position={position}>
+                <mesh>
+                    <sphereGeometry args={[0.12, 12, 12]} />
+                    <meshBasicMaterial color={colorHex} wireframe />
+                </mesh>
+                <mesh>
+                    <ringGeometry args={[0.22, 0.25, 16]} />
+                    <meshBasicMaterial color={colorHex} side={THREE.DoubleSide} />
+                </mesh>
+            </group>
+        );
+    }
+
+    if (source.type === 'spot') {
+        const targetPos: [number, number, number] = [
+            (source.target?.x ?? 0) * 6,
+            (source.target?.y ?? 0) * 6,
+            (source.target?.z ?? 0) * 5,
+        ];
+        return (
+            <group>
+                <group position={position}>
+                    <mesh>
+                        <coneGeometry args={[0.2, 0.35, 8]} />
+                        <meshBasicMaterial color={colorHex} wireframe />
+                    </mesh>
+                </group>
+                <line>
+                    <bufferGeometry>
+                        <bufferAttribute
+                            attach="attributes-position"
+                            args={[new Float32Array([...position, ...targetPos]), 3]}
+                        />
+                    </bufferGeometry>
+                    <lineDashedMaterial color={colorHex} dashSize={0.2} gapSize={0.1} />
+                </line>
+            </group>
+        );
+    }
+
+    if (source.type === 'area') {
+        const w = source.width ?? 3;
+        const h = source.height ?? 3;
+        return (
+            <group position={position}>
+                <lineSegments>
+                    <edgesGeometry args={[new THREE.PlaneGeometry(w, h)]} />
+                    <lineBasicMaterial color={colorHex} />
+                </lineSegments>
+            </group>
+        );
+    }
+
+    // Directional
+    return (
+        <group position={position}>
+            <mesh>
+                <octahedronGeometry args={[0.16]} />
+                <meshBasicMaterial color={colorHex} wireframe />
+            </mesh>
+        </group>
+    );
+};
+
 export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
     useEffect(() => {
         initRectAreaLightUniforms();
@@ -66,59 +181,149 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
     }, [posX, posY, posZ]);
 
     const intensity = light?.intensity ?? 1.2;
-    const ambience = light?.ambience ?? 0.38;
+    const ambience = light?.ambience ?? 0.45;
+    const ambientColor = light?.ambientColor || '#f8fafc';
+    const keyEnabled = light?.keyLightEnabled !== false;
+    const keyShadow = light?.castShadow !== false;
+    const showGizmos = light?.showGizmos ?? false;
 
-    const sources = light?.sources?.filter((source) => source.enabled) || [];
+    // Cap at maximum 8 active lights for peak real-time shader performance
+    const sources = (light?.sources?.filter((source) => source.enabled) || []).slice(0, 8);
 
     return (
         <group name="raylight_scene_lighting">
-            <ambientLight intensity={0.25 + ambience * 0.8} color="#f8fafc" />
-            <directionalLight
-                position={lightPos}
-                intensity={intensity * 2.2}
-                color={lightColor}
-                castShadow
-                shadow-mapSize-width={2048}
-                shadow-mapSize-height={2048}
-                shadow-camera-near={0.1}
-                shadow-camera-far={40}
-                shadow-camera-left={-4}
-                shadow-camera-right={4}
-                shadow-camera-top={4}
-                shadow-camera-bottom={-4}
-                shadow-bias={-0.0002}
-            />
-            <directionalLight
-                position={[-lightPos[0] * 0.7, -lightPos[1] * 0.5, lightPos[2] * 0.5]}
-                intensity={intensity * 0.45}
-                color="#e0e7ff"
-            />
+            {/* 1. SCENE AMBIENT (Shadow Floor): lights all surfaces equally, no direction or falloff */}
+            <ambientLight intensity={0.15 + ambience * 1.2} color={ambientColor} />
+
+            {/* 2. DIRECTIONAL KEY LIGHT (Sun): produces main shading gradient, specular streak, cast shadows */}
+            {keyEnabled && (
+                <>
+                    <directionalLight
+                        position={lightPos}
+                        intensity={intensity * 2.2}
+                        color={lightColor}
+                        castShadow={keyShadow}
+                        shadow-mapSize-width={2048}
+                        shadow-mapSize-height={2048}
+                        shadow-camera-near={0.1}
+                        shadow-camera-far={40}
+                        shadow-camera-left={-4}
+                        shadow-camera-right={4}
+                        shadow-camera-top={4}
+                        shadow-camera-bottom={-4}
+                        shadow-bias={-0.0002}
+                    />
+                    {/* Secondary soft bounce fill opposite key light */}
+                    <directionalLight
+                        position={[-lightPos[0] * 0.7, -lightPos[1] * 0.5, lightPos[2] * 0.5]}
+                        intensity={intensity * 0.38}
+                        color="#e0e7ff"
+                    />
+                </>
+            )}
+
+            {/* Gizmo for Key Light if gizmos enabled */}
+            {showGizmos && keyEnabled && (
+                <group position={lightPos}>
+                    <mesh>
+                        <sphereGeometry args={[0.22, 16, 16]} />
+                        <meshBasicMaterial color="#fbbf24" wireframe />
+                    </mesh>
+                </group>
+            )}
+
+            {/* 3. MULTIPLE INDEPENDENT LIGHT SOURCES (Point, Spot, Area, Directional) */}
             {sources.map((source) => {
                 const position: [number, number, number] = [
                     (source.position?.x ?? 0) * 6,
                     (source.position?.y ?? 0) * 6,
-                    Math.max(0.1, (source.position?.z ?? 1) * 5),
+                    (source.position?.z ?? 1) * 5,
                 ];
                 const baseColor = new THREE.Color(source.color || '#ffffff');
-                const color = temp ? baseColor.clone().multiply(lightColor) : baseColor;
+                const srcTemp = source.temperature ?? temp;
+                const srcTempColor = srcTemp
+                    ? (() => {
+                        const { r, g, b } = kelvinToRgb(srcTemp);
+                        return new THREE.Color(r / 255, g / 255, b / 255);
+                    })()
+                    : lightColor;
+                const color = baseColor.clone().multiply(srcTempColor);
                 const sourceIntensity = source.intensity * intensity * 2.0;
+                const castShadow = source.castShadow !== false;
 
-                if (source.type === 'ambient') return <ambientLight key={source.id} intensity={sourceIntensity} color={color} />;
-                if (source.type === 'point') return <pointLight key={source.id} position={position} intensity={sourceIntensity} color={color} distance={source.distance ?? 8} castShadow />;
-                if (source.type === 'spot') return <spotLight key={source.id} position={position} intensity={sourceIntensity} color={color} distance={source.distance ?? 8} angle={source.angle ?? Math.PI / 5} penumbra={source.penumbra ?? 0.35} castShadow />;
+                if (source.type === 'ambient') {
+                    return <ambientLight key={source.id} intensity={sourceIntensity * 0.5} color={color} />;
+                }
+
+                if (source.type === 'point') {
+                    return (
+                        <React.Fragment key={source.id}>
+                            <pointLight
+                                position={position}
+                                intensity={sourceIntensity}
+                                color={color}
+                                distance={source.distance ?? 10}
+                                decay={source.decay ?? 2}
+                                castShadow={castShadow}
+                                shadow-bias={-0.0002}
+                            />
+                            {showGizmos && <LightGizmo source={source} position={position} color={color} />}
+                        </React.Fragment>
+                    );
+                }
+
+                if (source.type === 'spot') {
+                    const targetPos: [number, number, number] = [
+                        (source.target?.x ?? 0) * 6,
+                        (source.target?.y ?? 0) * 6,
+                        (source.target?.z ?? 0) * 5,
+                    ];
+                    return (
+                        <React.Fragment key={source.id}>
+                            <SpotLightItem
+                                position={position}
+                                targetPos={targetPos}
+                                intensity={sourceIntensity}
+                                color={color}
+                                distance={source.distance ?? 12}
+                                decay={source.decay ?? 2}
+                                angle={source.angle ?? Math.PI / 5}
+                                penumbra={source.penumbra ?? 0.4}
+                                castShadow={castShadow}
+                            />
+                            {showGizmos && <LightGizmo source={source} position={position} color={color} />}
+                        </React.Fragment>
+                    );
+                }
+
                 if (source.type === 'area') {
                     return (
-                        <AreaLightItem
-                            key={source.id}
+                        <React.Fragment key={source.id}>
+                            <AreaLightItem
+                                position={position}
+                                intensity={sourceIntensity}
+                                color={color}
+                                width={source.width ?? 3}
+                                height={source.height ?? 3}
+                            />
+                            {showGizmos && <LightGizmo source={source} position={position} color={color} />}
+                        </React.Fragment>
+                    );
+                }
+
+                // Default: directional light
+                return (
+                    <React.Fragment key={source.id}>
+                        <directionalLight
                             position={position}
                             intensity={sourceIntensity}
                             color={color}
-                            width={source.width ?? 2}
-                            height={source.height ?? 2}
+                            castShadow={castShadow}
+                            shadow-bias={-0.0002}
                         />
-                    );
-                }
-                return <directionalLight key={source.id} position={position} intensity={sourceIntensity} color={color} castShadow />;
+                        {showGizmos && <LightGizmo source={source} position={position} color={color} />}
+                    </React.Fragment>
+                );
             })}
         </group>
     );

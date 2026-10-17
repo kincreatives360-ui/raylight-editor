@@ -9,6 +9,7 @@ import type {
   Fill,
   Background,
   LayerBase,
+  LightRig,
 } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import { radToDeg } from '../model/defaults';
@@ -360,12 +361,13 @@ function drawLayerOnCanvas(
   if (!evalLayer.visible || evalLayer.opacity <= 0.001) return;
 
   const { layer } = evalLayer;
-  const light = frame.activeShot?.light ||
+  const light: LightRig = frame.activeShot?.light ||
     frame.shot?.light || {
       position: { x: -0.2, y: -0.3, z: 0.8 },
-      color: '#ffffff',
       intensity: 1,
       temperature: 5500,
+      ambience: 0.5,
+      sources: [],
     };
   const eff = frame.effects.state;
 
@@ -624,26 +626,71 @@ function drawLayerOnCanvas(
       ctx.fill();
     }
 
+    const receivesLight = layer.receivesLight ?? true;
+
+    if (receivesLight) {
+      // Normal-based shading: Brightness depends on the angle between surface normal and light
+      const nX = -Math.sin(ry);
+      const nY = Math.sin(rx);
+      const nZ = Math.cos(rx) * Math.cos(ry);
+      const lX = light.position.x;
+      const lY = light.position.y;
+      const lZ = light.position.z;
+      const lLen = Math.hypot(lX, lY, lZ) || 1;
+      const dot = Math.max(0, (nX * lX + nY * lY + nZ * lZ) / lLen);
+      const shadowFactor = (1 - dot) * (1 - (light.ambience ?? 0.45));
+      if (shadowFactor > 0.02) {
+        ctx.fillStyle = `rgba(0, 0, 0, ${(shadowFactor * 0.45).toFixed(3)})`;
+        ctx.fillRect(screenX, screenY, screenW, screenH);
+      }
+    }
+
     const glossAmount = device ? device.gloss : 0;
     if (glossAmount > 0) {
-      const sweepOffset =
-        (rotYDeg - light.position.x * 45) * 0.01 +
-        evalLayer.shimmerProgress * 0.6;
-      const glossGrad = ctx.createLinearGradient(
-        -baseW / 2,
-        -baseH / 2,
-        baseW / 2,
-        baseH / 2
-      );
-      const mid = Math.max(0.15, Math.min(0.85, 0.5 + sweepOffset));
-      glossGrad.addColorStop(Math.max(0, mid - 0.2), 'rgba(255,255,255,0)');
-      glossGrad.addColorStop(
-        mid,
-        kelvinToRgb(light.temperature, 0.22 * glossAmount * light.intensity).css
-      );
-      glossGrad.addColorStop(Math.min(1, mid + 0.2), 'rgba(255,255,255,0)');
-      ctx.fillStyle = glossGrad;
-      ctx.fillRect(screenX, screenY, screenW, screenH);
+      if (light.keyLightEnabled !== false) {
+        const sweepOffset =
+          (rotYDeg - light.position.x * 45) * 0.01 +
+          evalLayer.shimmerProgress * 0.6;
+        const glossGrad = ctx.createLinearGradient(
+          -baseW / 2,
+          -baseH / 2,
+          baseW / 2,
+          baseH / 2
+        );
+        const mid = Math.max(0.15, Math.min(0.85, 0.5 + sweepOffset));
+        glossGrad.addColorStop(Math.max(0, mid - 0.2), 'rgba(255,255,255,0)');
+        glossGrad.addColorStop(
+          mid,
+          kelvinToRgb(light.temperature, 0.22 * glossAmount * light.intensity).css
+        );
+        glossGrad.addColorStop(Math.min(1, mid + 0.2), 'rgba(255,255,255,0)');
+        ctx.fillStyle = glossGrad;
+        ctx.fillRect(screenX, screenY, screenW, screenH);
+      }
+
+      // Render specular gloss reflections from all enabled additional light sources
+      const enabledSources = (light.sources || []).filter((s) => s.enabled);
+      for (const src of enabledSources) {
+        const srcSweepOffset =
+          (rotYDeg - (src.position?.x ?? 0) * 45) * 0.01 +
+          evalLayer.shimmerProgress * 0.6;
+        const srcGlossGrad = ctx.createLinearGradient(
+          -baseW / 2,
+          -baseH / 2,
+          baseW / 2,
+          baseH / 2
+        );
+        const srcMid = Math.max(0.15, Math.min(0.85, 0.5 + srcSweepOffset));
+        srcGlossGrad.addColorStop(Math.max(0, srcMid - 0.2), 'rgba(255,255,255,0)');
+        const srcAlpha = 0.18 * glossAmount * (src.intensity ?? 1) * light.intensity;
+        const srcColor = src.temperature
+          ? kelvinToRgb(src.temperature, srcAlpha).css
+          : hexToRgba(src.color || '#ffffff', srcAlpha);
+        srcGlossGrad.addColorStop(srcMid, srcColor);
+        srcGlossGrad.addColorStop(Math.min(1, srcMid + 0.2), 'rgba(255,255,255,0)');
+        ctx.fillStyle = srcGlossGrad;
+        ctx.fillRect(screenX, screenY, screenW, screenH);
+      }
     }
     ctx.restore();
 
@@ -758,6 +805,122 @@ function drawLayerOnCanvas(
   ctx.restore();
 }
 
+function renderSceneLightSources(
+  ctx: CanvasRenderingContext2D,
+  light: LightRig | undefined,
+  camera: EvaluatedCamera,
+  canvasW: number,
+  canvasH: number
+): void {
+  if (!light) return;
+
+  ctx.save();
+
+  // 1. Scene Ambient Shadow Floor
+  const ambience = light.ambience ?? 0.45;
+  const ambientColor = light.ambientColor || '#f8fafc';
+  if (ambience > 0.05) {
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = hexToRgba(ambientColor, Math.min(0.2, ambience * 0.08));
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
+  }
+
+  // 2. Key Directional Light Wash (if enabled)
+  if (light.keyLightEnabled !== false) {
+    const keyInt = (light.intensity ?? 1.2) * 0.14;
+    const dirX = light.position?.x ?? -0.28;
+    const dirY = light.position?.y ?? 0.36;
+    const grad = ctx.createLinearGradient(
+      canvasW / 2 + dirX * canvasW * 0.5,
+      canvasH / 2 + dirY * canvasH * 0.5,
+      canvasW / 2 - dirX * canvasW * 0.5,
+      canvasH / 2 - dirY * canvasH * 0.5
+    );
+    const keyColor = kelvinToRgb(light.temperature ?? 6100, Math.min(0.35, keyInt)).css;
+    grad.addColorStop(0, keyColor);
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
+  }
+
+  const sources = (light.sources || []).filter((s) => s.enabled);
+  for (const src of sources) {
+    const intensity = (src.intensity ?? 1) * (light.intensity ?? 1);
+    if (intensity <= 0.001) continue;
+
+    const baseColor = src.color || '#ffffff';
+
+    if (src.type === 'ambient') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = hexToRgba(baseColor, Math.min(0.25, intensity * 0.06));
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+    } else if (src.type === 'directional') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const dirX = src.position?.x ?? -0.28;
+      const dirY = src.position?.y ?? 0.36;
+      const startX = canvasW / 2 + dirX * canvasW * 0.6;
+      const startY = canvasH / 2 + dirY * canvasH * 0.6;
+      const endX = canvasW / 2 - dirX * canvasW * 0.4;
+      const endY = canvasH / 2 - dirY * canvasH * 0.4;
+      const grad = ctx.createLinearGradient(startX, startY, endX, endY);
+      grad.addColorStop(0, hexToRgba(baseColor, Math.min(0.35, intensity * 0.12)));
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+    } else if (src.type === 'point') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const px = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
+      const py = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const radius = Math.max(30, (src.distance ?? 8) * (canvasW * 0.07) * camera.zoom);
+      const radGrad = ctx.createRadialGradient(px, py, 0, px, py, radius);
+      radGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.45, intensity * 0.2)));
+      radGrad.addColorStop(0.5, hexToRgba(baseColor, Math.min(0.18, intensity * 0.07)));
+      radGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = radGrad;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+    } else if (src.type === 'spot') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const sx = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
+      const sy = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const radius = Math.max(40, (src.distance ?? 8) * (canvasW * 0.09) * camera.zoom);
+      const spotGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
+      spotGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.5, intensity * 0.24)));
+      spotGrad.addColorStop(0.6, hexToRgba(baseColor, Math.min(0.2, intensity * 0.08)));
+      spotGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = spotGrad;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+    } else if (src.type === 'area') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      const ax = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
+      const ay = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const areaW = Math.max(20, (src.width ?? 2) * (canvasW * 0.1) * camera.zoom);
+      const areaH = Math.max(20, (src.height ?? 2) * (canvasH * 0.1) * camera.zoom);
+      const areaGrad = ctx.createRadialGradient(ax, ay, 0, ax, ay, Math.max(areaW, areaH));
+      areaGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.4, intensity * 0.16)));
+      areaGrad.addColorStop(0.7, hexToRgba(baseColor, Math.min(0.12, intensity * 0.04)));
+      areaGrad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = areaGrad;
+      ctx.fillRect(ax - areaW, ay - areaH, areaW * 2, areaH * 2);
+      ctx.restore();
+    }
+  }
+  ctx.restore();
+}
+
 export function renderProjectFrameToCanvas(
   ctx: CanvasRenderingContext2D,
   project: Project,
@@ -867,6 +1030,13 @@ export function renderProjectFrameToCanvas(
     for (const outLayer of outgoing.layers) {
       drawLayerOnCanvas(ctx, outLayer, project, outgoing, canvasW, canvasH);
     }
+    renderSceneLightSources(
+      ctx,
+      outgoing.activeShot.light,
+      outgoing.camera,
+      canvasW,
+      canvasH
+    );
     ctx.restore();
   } else {
     incomingOpacity = transType === 'crossfade' ? transProgress : 1;
@@ -906,6 +1076,15 @@ export function renderProjectFrameToCanvas(
   for (const evalLayer of frame.layers) {
     drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
   }
+
+  // 4b. Render Scene Light Sources (Fallback Path)
+  renderSceneLightSources(
+    ctx,
+    frame.activeShot.light,
+    frame.camera,
+    canvasW,
+    canvasH
+  );
   ctx.restore();
 
   // 5. Vignette Pass (only when explicitly enabled on the shot)

@@ -73,6 +73,14 @@ export function evaluateProjectAtTime(
     const evaluatedLight: LightRig = {
         ...baseShot.light,
         position: { ...baseShot.light.position },
+        sources: baseShot.light.sources
+            ? baseShot.light.sources.map((s) => ({
+                ...s,
+                position: { ...s.position },
+                target: s.target ? { ...s.target } : undefined,
+                rotation: s.rotation ? { ...s.rotation } : undefined,
+            }))
+            : [],
     };
     for (const lb of baseShot.lightBlocks || []) {
         if (shotLocalTimeMs < lb.startMs) continue;
@@ -81,15 +89,33 @@ export function evaluateProjectAtTime(
                 ? Math.max(0, Math.min(1, (shotLocalTimeMs - lb.startMs) / lb.durationMs))
                 : 1;
         const eased = evaluateEasing(rawP, lb.easing);
-        evaluatedLight.position.x = Number(
-            lerp(lb.fromX, lb.toX, eased).toFixed(3)
-        );
-        evaluatedLight.position.y = Number(
-            lerp(lb.fromY, lb.toY, eased).toFixed(3)
-        );
-        evaluatedLight.intensity = Number(
-            lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2)
-        );
+
+        if (lb.targetLightId && lb.targetLightId !== 'key') {
+            const targetSrc = evaluatedLight.sources?.find((s) => s.id === lb.targetLightId);
+            if (targetSrc) {
+                targetSrc.position.x = Number(lerp(lb.fromX, lb.toX, eased).toFixed(3));
+                targetSrc.position.y = Number(lerp(lb.fromY, lb.toY, eased).toFixed(3));
+                if (lb.fromZ !== undefined && lb.toZ !== undefined) {
+                    targetSrc.position.z = Number(lerp(lb.fromZ, lb.toZ, eased).toFixed(3));
+                }
+                targetSrc.intensity = Number(lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2));
+            }
+        } else {
+            evaluatedLight.position.x = Number(
+                lerp(lb.fromX, lb.toX, eased).toFixed(3)
+            );
+            evaluatedLight.position.y = Number(
+                lerp(lb.fromY, lb.toY, eased).toFixed(3)
+            );
+            if (lb.fromZ !== undefined && lb.toZ !== undefined) {
+                evaluatedLight.position.z = Number(
+                    lerp(lb.fromZ, lb.toZ, eased).toFixed(3)
+                );
+            }
+            evaluatedLight.intensity = Number(
+                lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2)
+            );
+        }
     }
 
     // 2. Evaluate Animated Scene Effect Blocks on the Timeline (if any)
@@ -245,10 +271,20 @@ export function evaluateProjectAtTime(
                     };
                 }
             );
+            const prevEvaluatedLight: LightRig = {
+                ...prevShot.light,
+                position: { ...prevShot.light.position },
+                sources: prevShot.light.sources
+                    ? prevShot.light.sources.map((s) => ({
+                        ...s,
+                        position: { ...s.position },
+                    }))
+                    : [],
+            };
             outgoingFrame = {
                 globalTimeMs: clampedGlobalMs,
                 frameNumber,
-                activeShot: prevShot,
+                activeShot: { ...prevShot, light: prevEvaluatedLight },
                 shotIndex: shotIndex - 1,
                 shotLocalTimeMs: prevLocalTime,
                 shotProgress: prevLocalTime / Math.max(1, prevShot.durationMs),

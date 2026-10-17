@@ -2500,6 +2500,116 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     </select>
                                 </div>
 
+                                {/* 3D Lighting & Material Response */}
+                                <div className="space-y-2 pt-2 border-t border-white/[0.06]">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex flex-col">
+                                            <span className="text-[10px] font-medium text-white">Receives 3D Light</span>
+                                            <span className="text-[9px] text-[#71717a]">
+                                                {selectedLayer.kind === 'text' ? 'Unlit preserves flat, crisp typography' : 'Shades surface with scene lighting'}
+                                            </span>
+                                        </div>
+                                        <input
+                                            type="checkbox"
+                                            checked={
+                                                selectedLayer.receivesLight !== undefined
+                                                    ? selectedLayer.receivesLight
+                                                    : selectedLayer.kind !== 'text'
+                                            }
+                                            onChange={(e) => {
+                                                const receivesLight = e.target.checked;
+                                                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                    ...l,
+                                                    receivesLight,
+                                                }));
+                                            }}
+                                            className="w-3.5 h-3.5 rounded accent-amber-500 cursor-pointer"
+                                        />
+                                    </div>
+
+                                    {(selectedLayer.receivesLight ?? (selectedLayer.kind !== 'text')) && (
+                                        <div className="space-y-1.5 pt-1">
+                                            <div className="flex items-center justify-between gap-1 text-[9px] text-[#71717a]">
+                                                <span>Material Presets:</span>
+                                                <div className="flex gap-1">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                material: { roughness: 0.08, metalness: 0.12 },
+                                                            }))
+                                                        }
+                                                        className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white cursor-pointer"
+                                                    >
+                                                        Glass
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                material: { roughness: 0.5, metalness: 0.02 },
+                                                            }))
+                                                        }
+                                                        className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white cursor-pointer"
+                                                    >
+                                                        Matte
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                material: { roughness: 0.22, metalness: 0.92 },
+                                                            }))
+                                                        }
+                                                        className="px-1.5 py-0.5 rounded bg-white/5 hover:bg-white/10 text-white cursor-pointer"
+                                                    >
+                                                        Metal
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <ScrubInput
+                                                    label="Roughness"
+                                                    value={Math.round((selectedLayer.material?.roughness ?? (selectedLayer.kind === 'text' ? 0.45 : 0.24)) * 100)}
+                                                    min={0}
+                                                    max={100}
+                                                    step={2}
+                                                    unit="%"
+                                                    onChange={(pct) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            material: {
+                                                                ...l.material,
+                                                                roughness: Number((pct / 100).toFixed(2)),
+                                                            },
+                                                        }))
+                                                    }
+                                                />
+                                                <ScrubInput
+                                                    label="Metalness"
+                                                    value={Math.round((selectedLayer.material?.metalness ?? 0.06) * 100)}
+                                                    min={0}
+                                                    max={100}
+                                                    step={2}
+                                                    unit="%"
+                                                    onChange={(pct) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            material: {
+                                                                ...l.material,
+                                                                metalness: Number((pct / 100).toFixed(2)),
+                                                            },
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Drop Shadow */}
                                 <div className="space-y-2 pt-1 border-t border-white/[0.06]">
                                     <div className="flex items-center justify-between">
@@ -3073,284 +3183,470 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 );
                             })}
 
-                            {/* IN SECTION (Entrance Transition) */}
+                            {/* IN SECTION (Entrance Transitions — supports stacked presets) */}
                             <div className="p-3.5 space-y-2.5">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        In (Entrance)
+                                        In (Entrance){(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
                                     </span>
                                     <button
                                         onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                ...l,
-                                                entrance: {
-                                                    ...l.entrance,
-                                                    type: l.entrance.type === 'none' ? 'fade' : l.entrance.type,
-                                                    durationMs: l.entrance.durationMs || 650,
-                                                },
-                                            }))
+                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                if (l.entrances && l.entrances.length > 0) {
+                                                    const nextEnt = {
+                                                        id: `ent-${Date.now()}`,
+                                                        type: 'scale-out' as TransitionType,
+                                                        durationMs: 650,
+                                                        delayMs: 0,
+                                                        distance: 0.18,
+                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
+                                                    };
+                                                    const next = [...l.entrances, nextEnt];
+                                                    return { ...l, entrances: next, entrance: next[0] };
+                                                }
+                                                if (l.entrance && l.entrance.type !== 'none') {
+                                                    const first = { ...l.entrance, id: `ent-${Date.now()}-1` };
+                                                    const second = {
+                                                        id: `ent-${Date.now()}-2`,
+                                                        type: 'scale-out' as TransitionType,
+                                                        durationMs: 650,
+                                                        delayMs: 0,
+                                                        distance: 0.18,
+                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
+                                                    };
+                                                    return { ...l, entrances: [first, second], entrance: first };
+                                                }
+                                                return {
+                                                    ...l,
+                                                    entrance: {
+                                                        ...l.entrance,
+                                                        type: 'fade',
+                                                        durationMs: l.entrance.durationMs || 650,
+                                                    },
+                                                };
+                                            })
                                         }
-                                        title="Add / Configure Entrance"
+                                        title="Add / Stack Entrance"
                                         className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
-                                {selectedLayer.entrance.type !== 'none' && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
-                                                <select
-                                                    value={selectedLayer.entrance.type}
-                                                    onChange={(e) =>
-                                                        updateLayer(
-                                                            activeShot.id,
-                                                            selectedLayer.id,
-                                                            (l) => ({
-                                                                ...l,
-                                                                entrance: {
-                                                                    ...l.entrance,
-                                                                    type: e.target.value as TransitionType,
-                                                                },
+                                {selectedLayer.entrances && selectedLayer.entrances.length > 0 ? (
+                                    <div className="space-y-2.5">
+                                        {selectedLayer.entrances.map((ent, idx) => (
+                                            <div key={ent.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
+                                                        <Sparkles className="w-3 h-3 text-[#0088ff]" />
+                                                        <select
+                                                            value={ent.type}
+                                                            onChange={(e) =>
+                                                                updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                    const next = [...(l.entrances || [])];
+                                                                    next[idx] = { ...next[idx], type: e.target.value as TransitionType };
+                                                                    return { ...l, entrances: next, entrance: next[0] };
+                                                                })
+                                                            }
+                                                            className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                        >
+                                                            <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                            <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                            <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                            <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                            <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                            <option value="scale-out" className="bg-[#18181b]">Scale In</option>
+                                                            <option value="float-out" className="bg-[#18181b]">Float Out</option>
+                                                            <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                        </select>
+                                                    </div>
+                                                    <button
+                                                        onClick={() =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = (l.entrances || []).filter((_, i) => i !== idx);
+                                                                return {
+                                                                    ...l,
+                                                                    entrances: next.length > 0 ? next : undefined,
+                                                                    entrance: next[0] || { ...l.entrance, type: 'none' },
+                                                                };
                                                             })
-                                                        )
+                                                        }
+                                                        title="Remove this entrance"
+                                                        className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                    >
+                                                        <Minus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="Delay"
+                                                        value={ent.delayMs || 0}
+                                                        min={0}
+                                                        max={Math.max(0, activeShot.durationMs - 100)}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(delayMs) =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = [...(l.entrances || [])];
+                                                                next[idx] = { ...next[idx], delayMs };
+                                                                return { ...l, entrances: next, entrance: next[0] };
+                                                            })
+                                                        }
+                                                    />
+                                                    <ScrubInput
+                                                        label="Length"
+                                                        value={ent.durationMs}
+                                                        min={0}
+                                                        max={activeShot.durationMs}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(durationMs) =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = [...(l.entrances || [])];
+                                                                next[idx] = { ...next[idx], durationMs };
+                                                                return { ...l, entrances: next, entrance: next[0] };
+                                                            })
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    selectedLayer.entrance.type !== 'none' && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
+                                                    <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
+                                                    <select
+                                                        value={selectedLayer.entrance.type}
+                                                        onChange={(e) =>
+                                                            updateLayer(
+                                                                activeShot.id,
+                                                                selectedLayer.id,
+                                                                (l) => ({
+                                                                    ...l,
+                                                                    entrance: {
+                                                                        ...l.entrance,
+                                                                        type: e.target.value as TransitionType,
+                                                                    },
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                    >
+                                                        <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                        <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                        <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                        <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                        <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                        <option value="scale-out" className="bg-[#18181b]">Scale In</option>
+                                                        <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                    </select>
+                                                </div>
+
+                                                <button
+                                                    onClick={() =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            entrance: {
+                                                                ...l.entrance,
+                                                                durationMs:
+                                                                    l.entrance.durationMs === 0 ? 650 : 0,
+                                                            },
+                                                        }))
                                                     }
-                                                    className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                    title={selectedLayer.entrance.durationMs === 0 ? 'Enable' : 'Disable'}
+                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
                                                 >
-                                                    <option value="fade" className="bg-[#18181b]">
-                                                        Fade
-                                                    </option>
-                                                    <option value="slide-up" className="bg-[#18181b]">
-                                                        Slide Up
-                                                    </option>
-                                                    <option value="slide-down" className="bg-[#18181b]">
-                                                        Slide Down
-                                                    </option>
-                                                    <option value="slide-left" className="bg-[#18181b]">
-                                                        Slide Left
-                                                    </option>
-                                                    <option value="slide-right" className="bg-[#18181b]">
-                                                        Slide Right
-                                                    </option>
-                                                    <option value="scale-out" className="bg-[#18181b]">
-                                                        Scale In
-                                                    </option>
-                                                    <option value="mask-sweep" className="bg-[#18181b]">
-                                                        Mask Sweep
-                                                    </option>
-                                                </select>
+                                                    {selectedLayer.entrance.durationMs === 0 ? (
+                                                        <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                                    ) : (
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    onClick={() =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            entrance: { ...l.entrance, type: 'none' },
+                                                        }))
+                                                    }
+                                                    title="Remove Entrance"
+                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                >
+                                                    <Minus className="w-3.5 h-3.5" />
+                                                </button>
                                             </div>
 
-                                            <button
-                                                onClick={() =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        entrance: {
-                                                            ...l.entrance,
-                                                            durationMs:
-                                                                l.entrance.durationMs === 0 ? 650 : 0,
-                                                        },
-                                                    }))
-                                                }
-                                                title={selectedLayer.entrance.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                            >
-                                                {selectedLayer.entrance.durationMs === 0 ? (
-                                                    <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                                ) : (
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                )}
-                                            </button>
-
-                                            <button
-                                                onClick={() =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        entrance: { ...l.entrance, type: 'none' },
-                                                    }))
-                                                }
-                                                title="Remove Entrance"
-                                                className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                            >
-                                                <Minus className="w-3.5 h-3.5" />
-                                            </button>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <ScrubInput
+                                                    label="Delay"
+                                                    value={selectedLayer.entrance.delayMs || 0}
+                                                    min={0}
+                                                    max={Math.max(0, activeShot.durationMs - 100)}
+                                                    step={20}
+                                                    unit=" ms"
+                                                    onChange={(delayMs) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            entrance: { ...l.entrance, delayMs },
+                                                        }))
+                                                    }
+                                                />
+                                                <ScrubInput
+                                                    label="Length"
+                                                    value={selectedLayer.entrance.durationMs}
+                                                    min={0}
+                                                    max={activeShot.durationMs}
+                                                    step={20}
+                                                    unit=" ms"
+                                                    onChange={(durationMs) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            entrance: { ...l.entrance, durationMs },
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-1.5">
-                                            <ScrubInput
-                                                label="Delay"
-                                                value={selectedLayer.entrance.delayMs || 0}
-                                                min={0}
-                                                max={Math.max(0, activeShot.durationMs - 100)}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(delayMs) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        entrance: { ...l.entrance, delayMs },
-                                                    }))
-                                                }
-                                            />
-                                            <ScrubInput
-                                                label="Length"
-                                                value={selectedLayer.entrance.durationMs}
-                                                min={0}
-                                                max={activeShot.durationMs}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(durationMs) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        entrance: { ...l.entrance, durationMs },
-                                                    }))
-                                                }
-                                            />
-                                        </div>
-                                    </div>
+                                    )
                                 )}
                             </div>
 
-                            {/* OUT SECTION (Exit Transition) */}
+                            {/* OUT SECTION (Exit Transitions — supports stacked presets) */}
                             <div className="p-3.5 space-y-2.5">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Out (Exit)
+                                        Out (Exit){(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
                                     </span>
                                     <button
                                         onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                ...l,
-                                                exit: {
-                                                    ...l.exit,
-                                                    type: l.exit.type === 'none' ? 'fade' : l.exit.type,
-                                                    durationMs: l.exit.durationMs || 550,
-                                                },
-                                            }))
+                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                if (l.exits && l.exits.length > 0) {
+                                                    const nextExt = {
+                                                        id: `ext-${Date.now()}`,
+                                                        type: 'scale-out' as TransitionType,
+                                                        durationMs: 550,
+                                                        delayMs: 0,
+                                                        distance: 0.16,
+                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
+                                                    };
+                                                    const next = [...l.exits, nextExt];
+                                                    return { ...l, exits: next, exit: next[0] };
+                                                }
+                                                if (l.exit && l.exit.type !== 'none') {
+                                                    const first = { ...l.exit, id: `ext-${Date.now()}-1` };
+                                                    const second = {
+                                                        id: `ext-${Date.now()}-2`,
+                                                        type: 'scale-out' as TransitionType,
+                                                        durationMs: 550,
+                                                        delayMs: 0,
+                                                        distance: 0.16,
+                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
+                                                    };
+                                                    return { ...l, exits: [first, second], exit: first };
+                                                }
+                                                return {
+                                                    ...l,
+                                                    exit: {
+                                                        ...l.exit,
+                                                        type: 'fade',
+                                                        durationMs: l.exit.durationMs || 550,
+                                                    },
+                                                };
+                                            })
                                         }
-                                        title="Add / Configure Exit"
+                                        title="Add / Stack Exit"
                                         className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
-                                {selectedLayer.exit.type !== 'none' && (
-                                    <div className="space-y-2">
-                                        <div className="flex items-center gap-1.5">
-                                            <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
-                                                <select
-                                                    value={selectedLayer.exit.type}
-                                                    onChange={(e) =>
-                                                        updateLayer(
-                                                            activeShot.id,
-                                                            selectedLayer.id,
-                                                            (l) => ({
-                                                                ...l,
-                                                                exit: {
-                                                                    ...l.exit,
-                                                                    type: e.target.value as TransitionType,
-                                                                },
+                                {selectedLayer.exits && selectedLayer.exits.length > 0 ? (
+                                    <div className="space-y-2.5">
+                                        {selectedLayer.exits.map((ext, idx) => (
+                                            <div key={ext.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                                <div className="flex items-center gap-1.5">
+                                                    <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
+                                                        <Sparkles className="w-3 h-3 text-rose-400" />
+                                                        <select
+                                                            value={ext.type}
+                                                            onChange={(e) =>
+                                                                updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                    const next = [...(l.exits || [])];
+                                                                    next[idx] = { ...next[idx], type: e.target.value as TransitionType };
+                                                                    return { ...l, exits: next, exit: next[0] };
+                                                                })
+                                                            }
+                                                            className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                        >
+                                                            <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                            <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                            <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                            <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                            <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                            <option value="scale-out" className="bg-[#18181b]">Scale Out</option>
+                                                            <option value="float-out" className="bg-[#18181b]">Float Out</option>
+                                                            <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                        </select>
+                                                    </div>
+                                                    <button
+                                                        onClick={() =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = (l.exits || []).filter((_, i) => i !== idx);
+                                                                return {
+                                                                    ...l,
+                                                                    exits: next.length > 0 ? next : undefined,
+                                                                    exit: next[0] || { ...l.exit, type: 'none' },
+                                                                };
                                                             })
-                                                        )
+                                                        }
+                                                        title="Remove this exit"
+                                                        className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                    >
+                                                        <Minus className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="Offset"
+                                                        value={ext.delayMs || 0}
+                                                        min={0}
+                                                        max={Math.max(0, activeShot.durationMs - 100)}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(delayMs) =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = [...(l.exits || [])];
+                                                                next[idx] = { ...next[idx], delayMs };
+                                                                return { ...l, exits: next, exit: next[0] };
+                                                            })
+                                                        }
+                                                    />
+                                                    <ScrubInput
+                                                        label="Length"
+                                                        value={ext.durationMs}
+                                                        min={0}
+                                                        max={activeShot.durationMs}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(durationMs) =>
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
+                                                                const next = [...(l.exits || [])];
+                                                                next[idx] = { ...next[idx], durationMs };
+                                                                return { ...l, exits: next, exit: next[0] };
+                                                            })
+                                                        }
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    selectedLayer.exit.type !== 'none' && (
+                                        <div className="space-y-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
+                                                    <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
+                                                    <select
+                                                        value={selectedLayer.exit.type}
+                                                        onChange={(e) =>
+                                                            updateLayer(
+                                                                activeShot.id,
+                                                                selectedLayer.id,
+                                                                (l) => ({
+                                                                    ...l,
+                                                                    exit: {
+                                                                        ...l.exit,
+                                                                        type: e.target.value as TransitionType,
+                                                                    },
+                                                                })
+                                                            )
+                                                        }
+                                                        className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                    >
+                                                        <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                        <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                        <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                        <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                        <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                        <option value="float-out" className="bg-[#18181b]">Float Out</option>
+                                                        <option value="scale-out" className="bg-[#18181b]">Scale Out</option>
+                                                        <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                    </select>
+                                                </div>
+
+                                                <button
+                                                    onClick={() =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            exit: {
+                                                                ...l.exit,
+                                                                durationMs:
+                                                                    l.exit.durationMs === 0 ? 550 : 0,
+                                                            },
+                                                        }))
                                                     }
-                                                    className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                    title={selectedLayer.exit.durationMs === 0 ? 'Enable' : 'Disable'}
+                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
                                                 >
-                                                    <option value="fade" className="bg-[#18181b]">
-                                                        Fade
-                                                    </option>
-                                                    <option value="slide-up" className="bg-[#18181b]">
-                                                        Slide Up
-                                                    </option>
-                                                    <option value="slide-down" className="bg-[#18181b]">
-                                                        Slide Down
-                                                    </option>
-                                                    <option value="slide-left" className="bg-[#18181b]">
-                                                        Slide Left
-                                                    </option>
-                                                    <option value="slide-right" className="bg-[#18181b]">
-                                                        Slide Right
-                                                    </option>
-                                                    <option value="float-out" className="bg-[#18181b]">
-                                                        Float Out
-                                                    </option>
-                                                    <option value="scale-out" className="bg-[#18181b]">
-                                                        Scale Out
-                                                    </option>
-                                                    <option value="mask-sweep" className="bg-[#18181b]">
-                                                        Mask Sweep
-                                                    </option>
-                                                </select>
+                                                    {selectedLayer.exit.durationMs === 0 ? (
+                                                        <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                                    ) : (
+                                                        <Eye className="w-3.5 h-3.5" />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    onClick={() =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            exit: { ...l.exit, type: 'none' },
+                                                        }))
+                                                    }
+                                                    title="Remove Exit"
+                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                >
+                                                    <Minus className="w-3.5 h-3.5" />
+                                                </button>
                                             </div>
 
-                                            <button
-                                                onClick={() =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        exit: {
-                                                            ...l.exit,
-                                                            durationMs:
-                                                                l.exit.durationMs === 0 ? 550 : 0,
-                                                        },
-                                                    }))
-                                                }
-                                                title={selectedLayer.exit.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                            >
-                                                {selectedLayer.exit.durationMs === 0 ? (
-                                                    <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                                ) : (
-                                                    <Eye className="w-3.5 h-3.5" />
-                                                )}
-                                            </button>
-
-                                            <button
-                                                onClick={() =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        exit: { ...l.exit, type: 'none' },
-                                                    }))
-                                                }
-                                                title="Remove Exit"
-                                                className="p-1 text-[#71717a] hover:text-white cursor-pointer"
-                                            >
-                                                <Minus className="w-3.5 h-3.5" />
-                                            </button>
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <ScrubInput
+                                                    label="Offset"
+                                                    value={selectedLayer.exit.delayMs || 0}
+                                                    min={0}
+                                                    max={Math.max(0, activeShot.durationMs - 100)}
+                                                    step={20}
+                                                    unit=" ms"
+                                                    onChange={(delayMs) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            exit: { ...l.exit, delayMs },
+                                                        }))
+                                                    }
+                                                />
+                                                <ScrubInput
+                                                    label="Length"
+                                                    value={selectedLayer.exit.durationMs}
+                                                    min={0}
+                                                    max={activeShot.durationMs}
+                                                    step={20}
+                                                    unit=" ms"
+                                                    onChange={(durationMs) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                            ...l,
+                                                            exit: { ...l.exit, durationMs },
+                                                        }))
+                                                    }
+                                                />
+                                            </div>
                                         </div>
-
-                                        <div className="grid grid-cols-2 gap-1.5">
-                                            <ScrubInput
-                                                label="Offset"
-                                                value={selectedLayer.exit.delayMs || 0}
-                                                min={0}
-                                                max={Math.max(0, activeShot.durationMs - 100)}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(delayMs) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        exit: { ...l.exit, delayMs },
-                                                    }))
-                                                }
-                                            />
-                                            <ScrubInput
-                                                label="Length"
-                                                value={selectedLayer.exit.durationMs}
-                                                min={0}
-                                                max={activeShot.durationMs}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(durationMs) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                        ...l,
-                                                        exit: { ...l.exit, durationMs },
-                                                    }))
-                                                }
-                                            />
-                                        </div>
-                                    </div>
+                                    )
                                 )}
                             </div>
                         </div>

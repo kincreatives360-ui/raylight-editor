@@ -572,10 +572,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         isBrowser,
         device?.color,
         evalLayer.shimmerProgress,
-        evalLayer.pathRevealProgress,
-        evalLayer.glowIntensityOffset,
-        evalLayer.glowRadiusOffset,
         evalLayer.textContentOverride,
+        evalLayer.size.height,
     ]);
 
     // Live frame redraw for video layers as currentTimeMs updates
@@ -663,7 +661,25 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     if (!isSelected && (!evalLayer.visible || opacity <= 0.001)) return null;
 
     const renderOpacity = isSelected ? Math.max(0.65, opacity) : opacity;
-    const chassisRoughness = Math.min(0.9, 0.25 + totalBlurPx * 0.02);
+    const chassisRoughness = Math.min(0.9, 0.22 + totalBlurPx * 0.02);
+
+    // Layer opt-in: text defaults to unlit (receivesLight = false) for sharp readability; images/video/devices/shapes default to lit
+    const receivesLight = layer.receivesLight !== undefined
+        ? layer.receivesLight
+        : layer.kind !== 'text';
+
+    // Surface material response:
+    // Device screen gets glass finish (low roughness, subtle specular reflection for blooming highlights)
+    const isDeviceScreen = isPhone || isIpad || isMacbook;
+    const defaultRoughness = isDeviceScreen
+        ? 0.08
+        : (layer.kind === 'image' || layer.kind === 'video' ? 0.24 : 0.45);
+    const defaultMetalness = isDeviceScreen
+        ? 0.12
+        : (layer.kind === 'image' || layer.kind === 'video' ? 0.06 : 0.02);
+
+    const surfaceRoughness = layer.material?.roughness ?? defaultRoughness;
+    const surfaceMetalness = layer.material?.metalness ?? defaultMetalness;
 
     return (
         <group
@@ -685,9 +701,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                         <extrudeGeometry args={[roundedShape, phoneExtrudeSettings]} />
                         <meshStandardMaterial
                             color={device?.color === 'black' ? '#18181c' : '#2d3039'}
-                            metalness={0.92}
+                            metalness={0.94}
                             roughness={chassisRoughness}
-                            envMapIntensity={1.35}
+                            envMapIntensity={1.4}
                         />
                     </mesh>
                 </group>
@@ -705,8 +721,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                         <boxGeometry args={[meshW * 1.08, meshH * 0.85, 0.022]} />
                         <meshStandardMaterial
                             color={device?.color === 'black' ? '#1f2026' : '#32353e'}
-                            metalness={0.88}
-                            roughness={0.3}
+                            metalness={0.9}
+                            roughness={0.28}
+                            envMapIntensity={1.2}
                         />
                     </mesh>
                 </group>
@@ -718,21 +735,33 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 geometry={
                     (layer.kind === 'image' || layer.kind === 'video') ? normalizedScreenGeometry : undefined
                 }
-                castShadow={layer.kind === 'image' || layer.kind === 'video'}
-                receiveShadow={layer.kind === 'image' || layer.kind === 'video'}
+                castShadow={receivesLight && (layer.kind === 'image' || layer.kind === 'video')}
+                receiveShadow={receivesLight}
             >
                 {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
-                <meshStandardMaterial
-                    map={texture || undefined}
-                    color="#ffffff"
-                    transparent={true}
-                    opacity={renderOpacity}
-                    roughness={(layer.kind === 'image' || layer.kind === 'video') ? 0.22 : 0.45}
-                    metalness={(layer.kind === 'image' || layer.kind === 'video') ? 0.08 : 0.02}
-                    side={THREE.DoubleSide}
-                    depthWrite={layer.kind === 'image' || layer.kind === 'video'}
-                    depthTest={true}
-                />
+                {receivesLight ? (
+                    <meshStandardMaterial
+                        map={texture || undefined}
+                        color="#ffffff"
+                        transparent={true}
+                        opacity={renderOpacity}
+                        roughness={surfaceRoughness}
+                        metalness={surfaceMetalness}
+                        side={THREE.DoubleSide}
+                        depthWrite={layer.kind === 'image' || layer.kind === 'video'}
+                        depthTest={true}
+                    />
+                ) : (
+                    <meshBasicMaterial
+                        map={texture || undefined}
+                        color="#ffffff"
+                        transparent={true}
+                        opacity={renderOpacity}
+                        side={THREE.DoubleSide}
+                        depthWrite={layer.kind === 'image' || layer.kind === 'video'}
+                        depthTest={true}
+                    />
+                )}
             </mesh>
 
             {/* 4. DYNAMIC ISLAND NOTCH (iPhone only) */}

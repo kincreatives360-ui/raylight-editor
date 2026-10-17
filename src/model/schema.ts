@@ -203,9 +203,15 @@ const LayerBaseSchema = z.object({
   entrance: TransitionishSchema,
   entrances: z.array(TransitionishSchema.extend({ id: z.string().optional() })).optional(),
   exit: TransitionishSchema,
+  exits: z.array(TransitionishSchema.extend({ id: z.string().optional() })).optional(),
   blocks: z.array(AnimationBlockSchema),
   effects: LayerEffectsSchema,
   maskLayerId: z.string().optional(),
+  receivesLight: z.boolean().optional(),
+  material: z.object({
+    roughness: z.number().min(0).max(1).optional(),
+    metalness: z.number().min(0).max(1).optional(),
+  }).optional(),
 });
 
 export const ImageLayerSchema = LayerBaseSchema.extend({
@@ -331,12 +337,15 @@ export const CameraBlockSchema = z.object({
 export const LightAnimationBlockSchema = z.object({
   id: z.string(),
   label: z.string(),
+  targetLightId: z.string().optional(),
   startMs: z.number().min(0),
   durationMs: z.number().min(50),
   fromX: z.number(),
   fromY: z.number(),
   toX: z.number(),
   toY: z.number(),
+  fromZ: z.number().optional(),
+  toZ: z.number().optional(),
   fromIntensity: z.number(),
   toIntensity: z.number(),
   easing: EasingSchema,
@@ -397,10 +406,28 @@ export const ShotSchema = z.object({
     intensity: z.number().min(0),
     temperature: z.number().min(1000).max(15000),
     ambience: z.number().min(0).max(1),
+    ambientColor: z.string().optional(),
+    keyLightEnabled: z.boolean().optional(),
+    castShadow: z.boolean().optional(),
+    showGizmos: z.boolean().optional(),
     sources: z.array(z.object({
-      id: z.string(), name: z.string(), type: z.enum(['directional', 'point', 'spot', 'area', 'ambient']), enabled: z.boolean(),
-      position: Vec3Schema, intensity: z.number().min(0), color: z.string(), temperature: z.number().min(1000).max(15000),
-      distance: z.number().optional(), angle: z.number().optional(), penumbra: z.number().min(0).max(1).optional(), width: z.number().optional(), height: z.number().optional(),
+      id: z.string(),
+      name: z.string(),
+      type: z.enum(['directional', 'point', 'spot', 'area', 'ambient']),
+      enabled: z.boolean(),
+      position: Vec3Schema,
+      target: Vec3Schema.optional(),
+      rotation: Vec3Schema.optional(),
+      intensity: z.number().min(0),
+      color: z.string(),
+      temperature: z.number().min(1000).max(15000).optional(),
+      distance: z.number().optional(),
+      decay: z.number().optional(),
+      angle: z.number().optional(),
+      penumbra: z.number().min(0).max(1).optional(),
+      width: z.number().optional(),
+      height: z.number().optional(),
+      castShadow: z.boolean().optional(),
     })).optional(),
   }),
   effects: z.object({
@@ -596,6 +623,13 @@ function migrateLegacyProject(raw: unknown): unknown {
             for (const ent of layer.entrances) {
               if (ent && ent.type === 'slide') {
                 ent.type = 'slide-up';
+              }
+            }
+          }
+          if (Array.isArray(layer.exits)) {
+            for (const ex of layer.exits) {
+              if (ex && ex.type === 'slide') {
+                ex.type = 'slide-right';
               }
             }
           }
