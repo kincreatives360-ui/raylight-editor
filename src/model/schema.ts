@@ -270,8 +270,13 @@ export const TextLayerSchema = LayerBaseSchema.extend({
   }),
 });
 
+export const VideoLayerSchema = ImageLayerSchema.extend({
+  kind: z.literal('video'),
+});
+
 export const LayerSchema = z.discriminatedUnion('kind', [
   ImageLayerSchema,
+  VideoLayerSchema,
   ShapeLayerSchema,
   TextLayerSchema,
 ]);

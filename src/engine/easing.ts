@@ -92,6 +92,31 @@ export function evaluatePreset(name: PresetEasingName, t: number): number {
     if (t >= 1) return 1;
 
     switch (name) {
+        case 'ease':
+            return solveCubicBezier(0.25, 0.1, 0.25, 1, t);
+
+        case 'ease-in-quad':
+            return t * t;
+
+        case 'ease-out-quad':
+            return t * (2 - t);
+
+        case 'ease-in-out-quad':
+            return t < 0.5
+                ? 2 * t * t
+                : 1 - Math.pow(-2 * t + 2, 2) / 2;
+
+        case 'ease-in-cubic':
+            return t * t * t;
+
+        case 'ease-out-cubic':
+            return 1 - Math.pow(1 - t, 3);
+
+        case 'ease-in-out-cubic':
+            return t < 0.5
+                ? 4 * t * t * t
+                : 1 - Math.pow(-2 * t + 2, 3) / 2;
+
         case 'linear':
             return t;
 

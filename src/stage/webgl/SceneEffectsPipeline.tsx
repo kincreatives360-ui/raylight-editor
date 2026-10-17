@@ -220,7 +220,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     }, [effects, size.width, size.height]);
 
     // Render using composer when effects are enabled, overriding default render
-    useFrame((_, delta) => {
+    useFrame((state, delta) => {
         const pass = shaderPassRef.current;
         if (pass) {
             pass.uniforms.uTime.value += delta;
@@ -228,6 +228,8 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         if (hasAnyActiveEffect && composerRef.current) {
             composerRef.current.render();
+        } else {
+            state.gl.render(state.scene, state.camera);
         }
     }, 1);
 

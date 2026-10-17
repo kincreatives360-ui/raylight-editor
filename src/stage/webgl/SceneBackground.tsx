@@ -1,176 +1,158 @@
 // src/stage/webgl/SceneBackground.tsx
-import React, { useMemo, useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import * as THREE from 'three';
-import type { Background } from '../../model/types';
-import { useProjectStore } from '../../store/useProjectStore';
-import { calculateCoverCrop, hexToRgba } from '../../engine/canvasRenderer';
+import type {
+  Project,
+  Shot,
+  Background,
+  AssetRecord,
+  AspectRatio,
+} from '../../model/types';
+import { resolveShotBackground } from '../../model/types';
+import type { EvaluatedProjectFrame } from '../../engine/evaluateShot';
+import {
+  calculateCoverCrop,
+  createCanvasFillStyle,
+} from '../../engine/canvasRenderer';
 import { ASPECT_RATIO_CONFIG } from '../stageUtils';
 
-interface SceneBackgroundProps {
-    background: Background;
-    cameraDistance?: number;
+export interface SceneBackgroundProps {
+  project?: Project;
+  activeShot?: Shot;
+  shot?: Shot;
+  frame?: EvaluatedProjectFrame;
+  background?: Background;
+  assets?: Record<string, AssetRecord>;
+  aspectRatio?: AspectRatio;
 }
 
 export const SceneBackground: React.FC<SceneBackgroundProps> = ({
-    background,
-    cameraDistance = 45,
+  project,
+  activeShot,
+  shot,
+  frame,
+  background,
+  assets,
+  aspectRatio,
 }) => {
-    const project = useProjectStore((s) => s.project);
-    const assets = project.assets;
-    const [imageTextureState, setImageTextureState] = useState<{
-        assetId: string;
-        url: string;
-        texture: THREE.Texture;
-    } | null>(null);
-    const texRef = React.useRef<THREE.Texture | null>(null);
+  const targetShot =
+    activeShot ?? shot ?? frame?.activeShot ?? project?.shots[0];
 
-    const spec = ASPECT_RATIO_CONFIG[project.aspectRatio] ?? { widthRatio: 16, heightRatio: 9 };
-    const targetAspect = spec.widthRatio / spec.heightRatio;
-    const backgroundAssetId = background.kind === 'image' ? background.assetId : null;
-    const backgroundAssetUrl = backgroundAssetId ? assets[backgroundAssetId]?.dataUrl : undefined;
-    const imageTexture =
-        backgroundAssetId &&
-        backgroundAssetUrl &&
-        imageTextureState?.assetId === backgroundAssetId &&
-        imageTextureState?.url === backgroundAssetUrl
-            ? imageTextureState.texture
-            : null;
+  const effectiveBg: Background = useMemo(() => {
+    if (background) return background;
+    if (project && targetShot) {
+      return resolveShotBackground(project, targetShot);
+    }
+    return project?.background ?? { kind: 'solid', color: '#0a0a0c' };
+  }, [background, project, targetShot]);
 
-    // Load image background texture when kind === 'image'
-    useEffect(() => {
-        if (!backgroundAssetId || !backgroundAssetUrl) return;
-        const loader = new THREE.TextureLoader();
-        let cancelled = false;
-        loader.load(
-            backgroundAssetUrl,
-            (tex) => {
-                if (cancelled) {
-                    tex.dispose();
-                    return;
-                }
-                tex.colorSpace = THREE.SRGBColorSpace;
-                tex.minFilter = THREE.LinearFilter;
-                tex.magFilter = THREE.LinearFilter;
-                const img = tex.image as HTMLImageElement | undefined;
-                if (img && img.width && img.height) {
-                    const crop = calculateCoverCrop(img.width, img.height, targetAspect);
-                    tex.repeat.set(crop.uRepeat, crop.vRepeat);
-                    tex.offset.set(crop.uOffset, crop.vOffset);
-                }
-                texRef.current = tex;
-                setImageTextureState({ assetId: backgroundAssetId, url: backgroundAssetUrl, texture: tex });
-            },
-            undefined,
-            () => {
-                if (!cancelled) {
-                    texRef.current = null;
-                    setImageTextureState((current) =>
-                        current?.assetId === backgroundAssetId && current?.url === backgroundAssetUrl
-                            ? null
-                            : current
-                    );
-                }
-            }
+  const effectiveAssets = assets ?? project?.assets ?? {};
+  const effectiveAspect = aspectRatio ?? project?.aspectRatio ?? '16:9';
+  const ratioSpec = ASPECT_RATIO_CONFIG[effectiveAspect] ?? {
+    widthRatio: 16,
+    heightRatio: 9,
+  };
+  const targetAspect = ratioSpec.widthRatio / Math.max(1, ratioSpec.heightRatio);
+
+  const imageDataUrl =
+    effectiveBg.kind === 'image' && effectiveBg.assetId
+      ? effectiveAssets[effectiveBg.assetId]?.dataUrl
+      : undefined;
+
+  const [loadedImage, setLoadedImage] = useState<{
+    url: string;
+    img: HTMLImageElement;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!imageDataUrl) return;
+    let cancelled = false;
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => {
+      if (!cancelled) {
+        setLoadedImage({ url: imageDataUrl, img });
+      }
+    };
+    img.src = imageDataUrl;
+    return () => {
+      cancelled = true;
+    };
+  }, [imageDataUrl]);
+
+  const activeHtmlImage =
+    imageDataUrl && loadedImage?.url === imageDataUrl ? loadedImage.img : null;
+
+  // Build an unlit, sRGB-accurate CanvasTexture for gradient or image backgrounds
+  const bgTexture = useMemo(() => {
+    if (effectiveBg.kind === 'solid') return null;
+
+    const canvas = document.createElement('canvas');
+    const cw = 1024;
+    const ch = Math.max(256, Math.round(cw / targetAspect));
+    canvas.width = cw;
+    canvas.height = ch;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+
+    if (effectiveBg.kind === 'gradient') {
+      ctx.fillStyle = createCanvasFillStyle(ctx, effectiveBg, cw, ch, 1);
+      ctx.fillRect(0, 0, cw, ch);
+    } else if (effectiveBg.kind === 'image') {
+      if (activeHtmlImage) {
+        const imgW = activeHtmlImage.naturalWidth || activeHtmlImage.width || cw;
+        const imgH = activeHtmlImage.naturalHeight || activeHtmlImage.height || ch;
+        const crop = calculateCoverCrop(imgW, imgH, targetAspect);
+        ctx.drawImage(
+          activeHtmlImage,
+          crop.sx,
+          crop.sy,
+          crop.sw,
+          crop.sh,
+          0,
+          0,
+          cw,
+          ch
         );
-        return () => {
-            cancelled = true;
-        };
-    }, [backgroundAssetId, backgroundAssetUrl, targetAspect]);
+      } else {
+        ctx.fillStyle = '#0a0a0c';
+        ctx.fillRect(0, 0, cw, ch);
+      }
+    }
 
-    // Keep crop UVs in sync if targetAspect or texture changes
-    useEffect(() => {
-        const tex = texRef.current;
-        if (!tex || tex !== imageTexture) return;
-        const img = tex.image as HTMLImageElement | undefined;
-        if (img && img.width && img.height) {
-            const crop = calculateCoverCrop(img.width, img.height, targetAspect);
-            tex.repeat.set(crop.uRepeat, crop.vRepeat);
-            tex.offset.set(crop.uOffset, crop.vOffset);
-            tex.needsUpdate = true;
-        }
-    }, [imageTexture, targetAspect]);
+    const texture = new THREE.CanvasTexture(canvas);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    texture.needsUpdate = true;
+    return texture;
+  }, [effectiveBg, activeHtmlImage, targetAspect]);
 
-    // Dispose imageTexture when it changes or on unmount
-    useEffect(() => {
-        return () => {
-            texRef.current = null;
-            imageTexture?.dispose();
-        };
-    }, [imageTexture]);
+  useEffect(() => {
+    return () => {
+      bgTexture?.dispose();
+    };
+  }, [bgTexture]);
 
-    // Generate solid / gradient canvas texture
-    const canvasTexture = useMemo(() => {
-        if (background.kind === 'image') return null;
+  const bgColor =
+    effectiveBg.kind === 'solid' ? effectiveBg.color : '#07080d';
 
-        const canvas = document.createElement('canvas');
-        canvas.width = 512;
-        canvas.height = 512;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
+  const planeHeight = 120;
+  const planeWidth = planeHeight * targetAspect;
 
-        if (background.kind === 'solid') {
-            ctx.fillStyle = background.color || '#070913';
-            ctx.fillRect(0, 0, 512, 512);
-        } else if (background.kind === 'gradient') {
-            const isRadial = background.gradientType === 'radial';
-            const cx = 256;
-            const cy = 256;
-            const len = 256;
-            let grad: CanvasGradient;
-
-            if (isRadial) {
-                grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
-            } else {
-                const angleRad = (((background.angle ?? 90) - 90) * Math.PI) / 180;
-                const x0 = cx - Math.cos(angleRad) * len;
-                const y0 = cy - Math.sin(angleRad) * len;
-                const x1 = cx + Math.cos(angleRad) * len;
-                const y1 = cy + Math.sin(angleRad) * len;
-                grad = ctx.createLinearGradient(x0, y0, x1, y1);
-            }
-
-            if (background.stops && background.stops.length > 0) {
-                background.stops.forEach((st) => {
-                    const pos = Math.max(0, Math.min(1, st.at));
-                    const color = hexToRgba(st.color, st.opacity ?? 1);
-                    grad.addColorStop(pos, color);
-                });
-            } else {
-                grad.addColorStop(0, '#070913');
-                grad.addColorStop(1, '#1b1e2e');
-            }
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 512, 512);
-        } else {
-            ctx.fillStyle = '#070913';
-            ctx.fillRect(0, 0, 512, 512);
-        }
-
-        const texture = new THREE.CanvasTexture(canvas);
-        texture.colorSpace = THREE.SRGBColorSpace;
-        return texture;
-    }, [background]);
-
-    // Dispose canvas texture on change
-    useEffect(() => {
-        return () => {
-            canvasTexture?.dispose();
-        };
-    }, [canvasTexture]);
-
-    const map = background.kind === 'image' ? imageTexture : canvasTexture;
-    const planeHeight = 120;
-    const planeWidth = planeHeight * targetAspect;
-
-    return (
-        <mesh position={[0, 0, -cameraDistance]}>
-            <planeGeometry args={[planeWidth, planeHeight]} />
-            <meshBasicMaterial
-                map={map ?? undefined}
-                color={map ? undefined : '#070913'}
-                depthWrite={false}
-                toneMapped={false}
-            />
-        </mesh>
-    );
+  return (
+    <>
+      <color attach="background" args={[bgColor]} />
+      <mesh position={[0, 0, -45]} renderOrder={-100}>
+        <planeGeometry args={[planeWidth, planeHeight]} />
+        <meshBasicMaterial
+          map={effectiveBg.kind !== 'solid' ? bgTexture : null}
+          color={effectiveBg.kind === 'solid' ? effectiveBg.color : '#ffffff'}
+          toneMapped={false}
+          depthWrite={false}
+        />
+      </mesh>
+    </>
+  );
 };
+
+export default SceneBackground;

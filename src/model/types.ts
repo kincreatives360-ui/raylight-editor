@@ -220,7 +220,17 @@ export interface TextLayer extends LayerBase {
   };
 }
 
-export type Layer = ImageLayer | ShapeLayer | TextLayer;
+export interface VideoLayer extends LayerBase {
+  kind: 'video';
+  assetId: string;
+  size: Size2D;
+  cornerRadius: number;
+  crop?: { x: number; y: number; width: number; height: number };
+  stroke?: { color: string; width: number; opacity: number };
+  device?: DeviceFrame;
+}
+
+export type Layer = ImageLayer | VideoLayer | ShapeLayer | TextLayer;
 
 export interface Group {
   id: string;

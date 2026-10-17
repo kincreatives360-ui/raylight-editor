@@ -64,8 +64,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             onClick={(e) => e.stopPropagation()}
             className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2.5 select-none"
         >
-            {/* Floating Crop Pill (Shown above toolbar when an Image layer is selected) */}
-            {selectedLayer?.kind === 'image' && (
+            {/* Floating Crop Pill (Shown above toolbar when an Image or Video layer is selected) */}
+            {(selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
                 <button
                     onClick={() => setIsCropping(!isCropping)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition ${isCropping

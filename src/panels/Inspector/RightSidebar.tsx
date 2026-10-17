@@ -61,8 +61,9 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { BackgroundSection } from './sections/BackgroundSection';
 import { SceneTransitionSection } from './sections/SceneTransitionSection';
+import { CameraSection } from './sections/CameraSection';
+import { LightingSection } from './sections/LightingSection';
 import { readImageFileWithThumbnail } from '../../engine/figmaSvgImporter';
-import { ShotInspector } from './ShotInspector';
 import { POPULAR_FONT_NAMES as POPULAR_FONTS, loadGoogleFont } from '../../engine/fontLoader';
 
 const SHAPE_GRADIENT_PRESETS = [
@@ -133,10 +134,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         deleteLayerFromShot,
     } = useProjectStore();
     const {
-        inspectorTab,
         selectedBlockId,
         selectedCameraBlockId,
-        selectProject,
         selectShot,
         setTimelineLayerExpanded,
         selectBlock,
@@ -1185,26 +1184,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             </button>
                         </div>
                     ) : (
-                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center gap-1 bg-[#121215] shrink-0">
-                            <button
-                                onClick={() => selectProject()}
-                                className={`flex-1 py-1 px-2 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${inspectorTab === 'project'
-                                    ? 'bg-[#27272a] text-white shadow-sm'
-                                    : 'text-[#a1a1aa] hover:text-white'
-                                    }`}
-                            >
-                                Project
-                            </button>
-                            <button
-                                onClick={() => selectShot(activeShot.id)}
-                                className={`flex-1 py-1 px-2 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center gap-1 ${inspectorTab === 'shot' || inspectorTab !== 'project'
-                                    ? 'bg-[#0088ff] text-white shadow-sm'
-                                    : 'text-[#a1a1aa] hover:text-white'
-                                    }`}
-                            >
-                                <Film className="w-3 h-3" />
-                                <span className="truncate">{activeShot.name || 'Shot'}</span>
-                            </button>
+                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between bg-[#121215] shrink-0">
+                            <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
+                                <Film className="w-3.5 h-3.5 text-[#0088ff]" />
+                                <span className="truncate">{activeShot.name || 'Shot Settings'}</span>
+                            </span>
+                            <span className="text-[10px] text-[#71717a] font-mono">
+                                {(activeShot.durationMs / 1000).toFixed(2)}s
+                            </span>
                         </div>
                     )}
 
@@ -1772,8 +1759,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
                             )}
 
-                            {/* IMAGE LAYER: Source, Device Frame & Crop */}
-                            {selectedLayer.kind === 'image' && (
+                            {/* IMAGE / VIDEO LAYER: Source, Device Frame & Crop */}
+                            {(selectedLayer.kind === 'image' || selectedLayer.kind === 'video') && (
                                 <div className="p-3.5 space-y-3 relative">
                                     <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
                                         <span>Image &amp; Frame</span>
@@ -1797,11 +1784,19 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     <div className="flex items-center gap-2.5">
                                         <div className="w-10 h-12 rounded-lg bg-[#18181b] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                                             {project.assets[selectedLayer.assetId]?.dataUrl ? (
-                                                <img
-                                                    src={project.assets[selectedLayer.assetId].dataUrl}
-                                                    alt={selectedLayer.name}
-                                                    className="w-full h-full object-cover"
-                                                />
+                                                project.assets[selectedLayer.assetId].mimeType?.startsWith('video/') ? (
+                                                    <video
+                                                        src={project.assets[selectedLayer.assetId].dataUrl}
+                                                        className="w-full h-full object-cover"
+                                                        muted
+                                                    />
+                                                ) : (
+                                                    <img
+                                                        src={project.assets[selectedLayer.assetId].dataUrl}
+                                                        alt={selectedLayer.name}
+                                                        className="w-full h-full object-cover"
+                                                    />
+                                                )
                                             ) : (
                                                 <ImageIcon className="w-4 h-4 text-[#0088ff]" />
                                             )}
@@ -2687,99 +2682,96 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                     )}
 
                     {/* =============================================================== */}
-                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — SHOT OR PROJECT SETTINGS) */}
+                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — UNIFIED SHOT/PROJECT INSPECTOR) */}
                     {/* =============================================================== */}
                     {effectiveMainTab === 'design' && !selectedLayer && (
-                        inspectorTab === 'project' ? (
-                            <div className="flex-1 overflow-y-auto bg-[#101012]">
-                                <div className={`px-3.5 ${isBlankState ? 'pt-1 space-y-2' : 'pt-3 space-y-4'} pb-4`}>
-                                    <div className="text-[13px] font-medium text-[#d4d4d8]">Project</div>
+                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06] text-xs select-none bg-[#111114]">
+                            {/* 1. PROJECT & SHOT IDENTITY */}
+                            <div className="p-3.5 space-y-3">
+                                <div className="flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
+                                        <Film className="w-3.5 h-3.5 text-[#0088ff]" />
+                                        Shot &amp; Project Settings
+                                    </span>
+                                    <span className="text-[10px] text-[#71717a] font-mono">
+                                        {(activeShot.durationMs / 1000).toFixed(2)}s
+                                    </span>
+                                </div>
 
-                                    <label className="block space-y-1.5">
-                                        <span className="block text-[11px] text-[#a1a1aa]">Name</span>
+                                <div className="grid grid-cols-2 gap-2">
+                                    <label className="block space-y-1">
+                                        <span className="block text-[10px] text-[#71717a]">Project Name</span>
                                         <input
-                                            aria-label="Project name"
+                                            type="text"
                                             value={project.name}
                                             onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
-                                            className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
                                         />
                                     </label>
-
-                                    <label className="block space-y-1.5">
-                                        <span className="block text-[11px] text-[#a1a1aa]">Aspect Ratio</span>
+                                    <label className="block space-y-1">
+                                        <span className="block text-[10px] text-[#71717a]">Aspect Ratio</span>
                                         <select
-                                            aria-label="Project aspect ratio"
                                             value={project.aspectRatio}
                                             onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
-                                            className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 text-[12px] text-white outline-none focus:border-[#0088ff]/70"
+                                            className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
                                         >
-                                            <option value="16:9">Landscape 16:9</option>
-                                            <option value="4:3">Classic 4:3</option>
-                                            <option value="3:2">Landscape 3:2</option>
-                                            <option value="21:9">Ultrawide 21:9</option>
-                                            <option value="1:1">Square 1:1</option>
-                                            <option value="9:16">Portrait 9:16</option>
-                                            <option value="3:4">Portrait 3:4</option>
-                                            <option value="2:3">Portrait 2:3</option>
-                                            <option value="4:5">Portrait 4:5</option>
+                                            <option value="16:9">16:9 Landscape</option>
+                                            <option value="4:3">4:3 Standard</option>
+                                            <option value="3:2">3:2 Photo</option>
+                                            <option value="21:9">21:9 Cinema</option>
+                                            <option value="1:1">1:1 Square</option>
+                                            <option value="9:16">9:16 Vertical</option>
+                                            <option value="3:4">3:4 Portrait</option>
+                                            <option value="2:3">2:3 Portrait</option>
+                                            <option value="4:5">4:5 Social</option>
                                         </select>
                                     </label>
+                                </div>
 
-                                    <label className="block space-y-1.5">
-                                        <span className="block text-[11px] text-[#a1a1aa]">Lens</span>
-                                        <div className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2.5 flex items-center text-[12px] text-[#d4d4d8]">
-                                            <span className="text-[#a1a1aa] mr-2">F</span>50 mm
-                                        </div>
-                                    </label>
+                                <label className="block space-y-1">
+                                    <span className="block text-[10px] text-[#71717a]">Shot Name</span>
+                                    <input
+                                        type="text"
+                                        value={activeShot.name}
+                                        onChange={(e) =>
+                                            updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))
+                                        }
+                                        className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
+                                    />
+                                </label>
 
-                                    <div className="space-y-2">
-                                        <span className="block text-[11px] text-[#a1a1aa]">Background</span>
-                                        <div className="grid grid-cols-3 gap-1 rounded-lg bg-[#1d1d20] p-0.5">
-                                            <button
-                                                onClick={() => updateProject((p) => ({ ...p, background: { kind: 'solid', color: p.background.kind === 'solid' ? p.background.color : '#0A0A0C' } }))}
-                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'solid' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                            >Color</button>
-                                            <button
-                                                onClick={() => projectBgFileRef.current?.click()}
-                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'image' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                            >Image</button>
-                                            <button
-                                                onClick={() => updateProject((p) => ({ ...p, background: { kind: 'gradient', source: 'shader', gradientType: 'radial', angle: 135, stops: [{ at: 0, color: '#17172b' }, { at: 1, color: '#050507' }] } }))}
-                                                className={`h-7 rounded-md text-[11px] ${project.background.kind === 'gradient' && project.background.source === 'shader' ? 'bg-[#39393d] text-white border border-white/10' : 'text-[#a1a1aa] hover:text-white'}`}
-                                            >Shader</button>
-                                        </div>
-
-                                        {project.background.kind === 'solid' && (
-                                            <label className="h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] px-2 flex items-center gap-2">
-                                                <ColorField
-                                                    aria-label="Background color"
-                                                    value={project.background.color}
-                                                    onChange={(e) => updateProject((p) => ({ ...p, background: { kind: 'solid', color: e.target.value.toUpperCase() } }))}
-                                                    className="w-5 h-5 rounded border-0 bg-transparent p-0 cursor-pointer"
-                                                />
-                                                <input
-                                                    aria-label="Background color hex"
-                                                    value={project.background.color.replace('#', '').toUpperCase()}
-                                                    onChange={(e) => {
-                                                        const hex = e.target.value.replace(/[^0-9a-f]/gi, '').slice(0, 6);
-                                                        if (hex.length === 6) updateProject((p) => ({ ...p, background: { kind: 'solid', color: `#${hex.toUpperCase()}` } }));
-                                                    }}
-                                                    className="min-w-0 flex-1 bg-transparent text-[11px] text-[#d4d4d8] outline-none"
-                                                />
-                                            </label>
-                                        )}
-                                        {project.background.kind === 'image' && (
-                                            <button onClick={() => projectBgFileRef.current?.click()} className="w-full h-[30px] rounded-lg bg-[#1d1d20] border border-white/[0.06] text-[11px] text-[#d4d4d8] hover:bg-[#262629]">Choose background image…</button>
-                                        )}
-                                        {project.background.kind === 'gradient' && (
-                                            <div className="h-[30px] rounded-lg border border-white/[0.06] bg-gradient-to-r from-[#17172b] to-[#050507] px-2 flex items-center text-[11px] text-[#d4d4d8]">Shader background</div>
-                                        )}
-                                    </div>
+                                <div className="space-y-1">
+                                    <span className="block text-[10px] text-[#71717a]">Shot Duration</span>
+                                    <ScrubInput
+                                        label="Duration"
+                                        value={activeShot.durationMs}
+                                        min={300}
+                                        max={60000}
+                                        step={100}
+                                        decimals={0}
+                                        unit="ms"
+                                        onChange={(durationMs) =>
+                                            updateShot(activeShot.id, (s) => ({ ...s, durationMs }))
+                                        }
+                                    />
                                 </div>
                             </div>
-                        ) : (
-                            <ShotInspector activeShot={activeShot} />
-                        )
+
+                            {/* 2. STAGE / SHOT BACKGROUND */}
+                            <BackgroundSection activeShot={activeShot} />
+
+                            {/* 3. CAMERA RIG & FRAMING */}
+                            <CameraSection activeShot={activeShot} />
+
+                            {/* 4. SCENE LIGHTING & MULTI-LIGHT SOURCES */}
+                            <LightingSection activeShot={activeShot} />
+
+                            {/* 5. SCENE EFFECTS */}
+                            <SceneEffectsSection activeShot={activeShot} />
+
+                            {/* 6. SHOT-TO-SHOT TRANSITION */}
+                            <SceneTransitionSection activeShot={activeShot} />
+                        </div>
                     )}
 
                     {/* =============================================================== */}

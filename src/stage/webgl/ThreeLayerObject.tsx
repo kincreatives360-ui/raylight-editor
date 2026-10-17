@@ -6,9 +6,11 @@ import type {
     TextLayer,
     ShapeLayer,
     ImageLayer,
+    VideoLayer,
 } from '../../model/types';
 import { getLayer3DWorldTransform } from './cameraMath';
-import { hexToRgba } from '../../engine/canvasRenderer';
+import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
+import { usePlayheadStore } from '../../store/usePlayheadStore';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -167,8 +169,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
 
+    const { currentTimeMs } = usePlayheadStore();
+
     const device =
-        layer.kind === 'image' ? (layer as ImageLayer).device : undefined;
+        (layer.kind === 'image' || layer.kind === 'video')
+            ? (layer as ImageLayer | VideoLayer).device
+            : undefined;
     const isPhone = device?.type === 'iphone';
     const isIpad = device?.type === 'ipad';
     const isMacbook = device?.type === 'macbook';
@@ -179,24 +185,34 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         image: HTMLImageElement;
     } | null>(null);
 
+    const isVideoAsset = useMemo(() => {
+        if (layer.kind === 'video') return true;
+        if (layer.kind === 'image') {
+            const asset = project.assets[(layer as ImageLayer).assetId];
+            return asset?.mimeType?.startsWith('video/') ?? false;
+        }
+        return false;
+    }, [layer, project.assets]);
+
     const assetUrl = useMemo(() => {
-        if (layer.kind !== 'image') return null;
-        const imgL = layer as ImageLayer;
-        const asset = project.assets[imgL.assetId];
+        if (layer.kind !== 'image' && layer.kind !== 'video') return null;
+        const mediaL = layer as ImageLayer | VideoLayer;
+        const asset = project.assets[mediaL.assetId];
         if (asset?.dataUrl) return asset.dataUrl;
         if (
-            imgL.assetId?.startsWith('data:') ||
-            imgL.assetId?.startsWith('http') ||
-            imgL.assetId?.startsWith('blob:')
+            mediaL.assetId?.startsWith('data:') ||
+            mediaL.assetId?.startsWith('http') ||
+            mediaL.assetId?.startsWith('blob:')
         ) {
-            return imgL.assetId;
+            return mediaL.assetId;
         }
         return null;
     }, [layer, project.assets]);
+
     const loadedImg = loadedImageState?.url === assetUrl ? loadedImageState.image : null;
 
     useEffect(() => {
-        if (!assetUrl) return;
+        if (!assetUrl || isVideoAsset) return;
         let active = true;
         const img = new Image();
         img.crossOrigin = 'anonymous';
@@ -207,7 +223,25 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         return () => {
             active = false;
         };
-    }, [assetUrl]);
+    }, [assetUrl, isVideoAsset]);
+
+    const videoElement = useMemo(() => {
+        if (!isVideoAsset || !assetUrl) return null;
+        return getOrCreateVideoElement(assetUrl);
+    }, [isVideoAsset, assetUrl]);
+
+    // Keep video currentTime synchronized with timeline playhead
+    useEffect(() => {
+        const vid = videoElement;
+        if (!vid) return;
+        const targetSec = Math.max(0, (currentTimeMs - layer.inMs) / 1000);
+        if (Number.isFinite(targetSec)) {
+            if (Math.abs(vid.currentTime - targetSec) > 0.04) {
+                // eslint-disable-next-line react-hooks/immutability
+                vid.currentTime = targetSec;
+            }
+        }
+    }, [videoElement, currentTimeMs, layer.inMs]);
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
@@ -228,8 +262,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
 
-        if (layer.kind === 'image') {
-            const imgL = layer as ImageLayer;
+        if (layer.kind === 'image' || layer.kind === 'video') {
+            const imgL = layer as ImageLayer | VideoLayer;
             const topBarH = isBrowser ? Math.round(canvasH * 0.07) : 0;
 
             if (isBrowser) {
@@ -249,7 +283,32 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 });
             }
 
-            if (loadedImg) {
+            if (isVideoAsset && videoElement) {
+                ctx.save();
+                if (totalBlurPx > 0) {
+                    ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
+                }
+                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
+                const vw = videoElement.videoWidth || 1920;
+                const vh = videoElement.videoHeight || 1080;
+                const sx = crop.x * vw;
+                const sy = crop.y * vh;
+                const sw = Math.max(1, crop.width * vw);
+                const sh = Math.max(1, crop.height * vh);
+
+                ctx.drawImage(
+                    videoElement,
+                    sx,
+                    sy,
+                    sw,
+                    sh,
+                    0,
+                    topBarH,
+                    canvasW,
+                    canvasH - topBarH
+                );
+                ctx.restore();
+            } else if (loadedImg) {
                 ctx.save();
                 if (totalBlurPx > 0) {
                     ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
@@ -326,7 +385,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                         : canvasW / 2;
             const cy = canvasH / 2;
 
-            const rawContent = textL.content || 'Headline Title';
+            const rawContent = evalLayer.textContentOverride ?? (textL.content || 'Headline Title');
             const lines = rawContent.split('\n');
             const lineHeight = fontSize * 1.22;
             const startY = cy - ((lines.length - 1) * lineHeight) / 2;
@@ -505,14 +564,56 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         layer,
         project,
         loadedImg,
+        isVideoAsset,
+        videoElement,
         totalBlurPx,
         meshW,
         meshH,
         isBrowser,
         device?.color,
         evalLayer.shimmerProgress,
-        evalLayer.size.height,
+        evalLayer.pathRevealProgress,
+        evalLayer.glowIntensityOffset,
+        evalLayer.glowRadiusOffset,
+        evalLayer.textContentOverride,
     ]);
+
+    // Live frame redraw for video layers as currentTimeMs updates
+    useEffect(() => {
+        if (!isVideoAsset || !videoElement || !texture) return;
+        const image = texture.image as HTMLCanvasElement | undefined;
+        if (!image) return;
+        const ctx = image.getContext('2d');
+        if (!ctx) return;
+        const topBarH = isBrowser ? Math.round(image.height * 0.07) : 0;
+        const imgL = layer as ImageLayer | VideoLayer;
+        const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
+        const vw = videoElement.videoWidth || 1920;
+        const vh = videoElement.videoHeight || 1080;
+        const sx = crop.x * vw;
+        const sy = crop.y * vh;
+        const sw = Math.max(1, crop.width * vw);
+        const sh = Math.max(1, crop.height * vh);
+
+        ctx.save();
+        if (totalBlurPx > 0) {
+            ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
+        }
+        ctx.drawImage(
+            videoElement,
+            sx,
+            sy,
+            sw,
+            sh,
+            0,
+            topBarH,
+            image.width,
+            image.height - topBarH
+        );
+        ctx.restore();
+        // eslint-disable-next-line react-hooks/immutability
+        texture.needsUpdate = true;
+    }, [currentTimeMs, isVideoAsset, videoElement, texture, isBrowser, layer, totalBlurPx]);
 
     // Dispose texture on replace/unmount to prevent GPU memory leaks
     useEffect(() => {
@@ -615,21 +716,21 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             <mesh
                 position={[0, 0, 0.016]}
                 geometry={
-                    layer.kind === 'image' ? normalizedScreenGeometry : undefined
+                    (layer.kind === 'image' || layer.kind === 'video') ? normalizedScreenGeometry : undefined
                 }
-                castShadow={layer.kind === 'image'}
-                receiveShadow={layer.kind === 'image'}
+                castShadow={layer.kind === 'image' || layer.kind === 'video'}
+                receiveShadow={layer.kind === 'image' || layer.kind === 'video'}
             >
-                {layer.kind !== 'image' && <planeGeometry args={[meshW, meshH]} />}
+                {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
                 <meshStandardMaterial
                     map={texture || undefined}
                     color="#ffffff"
                     transparent={true}
                     opacity={renderOpacity}
-                    roughness={layer.kind === 'image' ? 0.22 : 0.45}
-                    metalness={layer.kind === 'image' ? 0.08 : 0.02}
+                    roughness={(layer.kind === 'image' || layer.kind === 'video') ? 0.22 : 0.45}
+                    metalness={(layer.kind === 'image' || layer.kind === 'video') ? 0.08 : 0.02}
                     side={THREE.DoubleSide}
-                    depthWrite={layer.kind === 'image'}
+                    depthWrite={layer.kind === 'image' || layer.kind === 'video'}
                     depthTest={true}
                 />
             </mesh>

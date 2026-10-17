@@ -3,6 +3,7 @@ import type {
   Project,
   Shot,
   ImageLayer,
+  VideoLayer,
   ShapeLayer,
   TextLayer,
   Transitionish,
@@ -50,9 +51,9 @@ export const DEFAULT_TRANSITION_OUT: Transitionish = {
 
 export const DEFAULT_LIGHT_RIG: LightRig = {
   position: { x: -0.28, y: 0.36, z: 0.9 },
-  intensity: 1.2,
+  intensity: 1.0,
   temperature: 6100,
-  ambience: 0.38,
+  ambience: 0.75,
 };
 
 export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
@@ -70,7 +71,7 @@ export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
 
 export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
   depthOfField: {
-    enabled: true,
+    enabled: false,
     target: { x: 0, y: 0, z: 0 },
     focusRange: 0.35,
     aperture: 2.8,
@@ -78,12 +79,12 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     bokehShape: 'anamorphic',
   },
   bloom: {
-    enabled: true,
+    enabled: false,
     intensity: 0.35,
     threshold: 0.75,
   },
   vignette: {
-    enabled: true,
+    enabled: false,
     intensity: 0.42,
   },
   motionBlur: {
@@ -95,7 +96,7 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     offset: 0.002,
   },
   filmGrain: {
-    enabled: true,
+    enabled: false,
     intensity: 0.025,
     size: 1.2,
   },
@@ -106,10 +107,10 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     blur: 4,
   },
   colorGrade: {
-    enabled: true,
-    exposure: 1.04,
-    contrast: 1.06,
-    saturation: 1.08,
+    enabled: false,
+    exposure: 1.0,
+    contrast: 1.0,
+    saturation: 1.0,
   },
   edgeFade: {
     enabled: false,
@@ -121,6 +122,52 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     intensity: 0.15,
   },
 };
+
+export function createDefaultVideoLayer(
+  overrides: Partial<VideoLayer> = {}
+): VideoLayer {
+  return {
+    id: `layer-vid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    kind: 'video',
+    name: 'Video Layer',
+    order: 0,
+    hidden: false,
+    locked: false,
+    inMs: 0,
+    outMs: 4000,
+    position: { x: 0, y: 0, z: 0 },
+    rotation: { x: 0, y: 0, z: 0 },
+    scale: { x: 1, y: 1, z: 1 },
+    opacity: 1,
+    blendMode: 'normal',
+    assetId: '',
+    size: { width: 0.34, height: 0.68 },
+    cornerRadius: 0.04,
+    device: undefined,
+    entrance: { ...DEFAULT_TRANSITION_IN },
+    exit: { ...DEFAULT_TRANSITION_OUT },
+    blocks: [],
+    effects: {
+      dropShadow: {
+        enabled: true,
+        color: '#000000',
+        opacity: 0.68,
+        blur: 0.045,
+        offsetX: 0,
+        offsetY: 0.024,
+      },
+      glow: {
+        enabled: false,
+        color: '#0088ff',
+        intensity: 0.35,
+        radius: 0.05,
+      },
+      layerBlur: 0,
+      backdropBlur: 0,
+    },
+    ...overrides,
+  };
+}
 
 export function createDefaultImageLayer(
   overrides: Partial<ImageLayer> = {}
@@ -156,7 +203,7 @@ export function createDefaultImageLayer(
         offsetY: 0.024,
       },
       glow: {
-        enabled: true,
+        enabled: false,
         color: '#0088ff',
         intensity: 0.35,
         radius: 0.05,
@@ -258,10 +305,24 @@ export function createDefaultTextLayer(
   };
 }
 
-// Every new shot created on the timeline is BLANK by default (no Pasted image, no default Camera move)
 export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
   const f1Id = `framing-1-${Date.now()}`;
   const f2Id = `framing-2-${Date.now()}`;
+
+  const starterLayers = [
+    createDefaultImageLayer({
+      id: `layer-img-${Date.now()}`,
+      name: 'App Showcase Device',
+      position: { x: 0, y: -0.02, z: 0 },
+      device: { type: 'iphone', color: 'black', gloss: 0.6 },
+    }),
+    createDefaultTextLayer({
+      id: `layer-txt-${Date.now()}`,
+      name: 'Headline',
+      position: { x: 0, y: 0.38, z: 0.15 },
+      content: 'RAYLIGHT STUDIO',
+    }),
+  ];
 
   return {
     id: `shot-${Date.now()}`,
@@ -270,7 +331,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     durationMs: 4000,
     lane: 0,
     useProjectBackground: true,
-    layers: [],
+    layers: overrides.layers !== undefined ? overrides.layers : starterLayers,
     groups: [],
     framings: [
       {
@@ -310,18 +371,23 @@ export const DEFAULT_PROJECT: Project = {
   createdAt: new Date().toISOString(),
   aspectRatio: '16:9',
   fps: 60,
-  background: { kind: 'solid', color: '#0A0A0C' },
+  background: {
+    kind: 'gradient',
+    angle: 135,
+    stops: [
+      { at: 0, color: '#0c0e17' },
+      { at: 1, color: '#161928' },
+    ],
+  },
   assets: {},
   audio: createDefaultAudio(),
-  shots: [createDefaultShot({
-    id: 'shot-1',
-    name: 'Shot 1',
-    startMs: 0,
-    durationMs: 4000,
-    lane: 0,
-    layers: [],
-    cameraBlocks: [],
-    lightBlocks: [],
-    effectBlocks: [],
-  })],
+  shots: [
+    createDefaultShot({
+      id: 'shot-1',
+      name: 'Shot 1',
+      startMs: 0,
+      durationMs: 4000,
+      lane: 0,
+    }),
+  ],
 };

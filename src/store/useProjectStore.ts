@@ -16,6 +16,7 @@ import { isBlankProjectState } from '../model/types';
 import {
     DEFAULT_PROJECT,
     createDefaultImageLayer,
+    createDefaultVideoLayer,
     createDefaultShapeLayer,
     createDefaultTextLayer,
     createDefaultShot,
@@ -192,30 +193,37 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const nextOrder = targetShot.layers.length;
 
         const newLayer: Layer =
-            kind === 'image'
-                ? createDefaultImageLayer({
-                    name: `Image ${nextOrder + 1}`,
+            kind === 'video'
+                ? createDefaultVideoLayer({
+                    name: `Video ${nextOrder + 1}`,
                     order: nextOrder,
                     outMs: targetShot.durationMs,
                     ...customOverrides,
                 })
-                : kind === 'shape'
-                    ? createDefaultShapeLayer({
-                        name: `${customOverrides.shape
-                                ? customOverrides.shape.charAt(0).toUpperCase() +
-                                customOverrides.shape.slice(1)
-                                : 'Rectangle'
-                            } ${nextOrder + 1}`,
+                : kind === 'image'
+                    ? createDefaultImageLayer({
+                        name: `Image ${nextOrder + 1}`,
                         order: nextOrder,
                         outMs: targetShot.durationMs,
                         ...customOverrides,
                     })
-                    : createDefaultTextLayer({
-                        name: `Text ${nextOrder + 1}`,
-                        order: nextOrder,
-                        outMs: targetShot.durationMs,
-                        ...customOverrides,
-                    });
+                    : kind === 'shape'
+                        ? createDefaultShapeLayer({
+                            name: `${customOverrides.shape
+                                    ? customOverrides.shape.charAt(0).toUpperCase() +
+                                    customOverrides.shape.slice(1)
+                                    : 'Rectangle'
+                                } ${nextOrder + 1}`,
+                            order: nextOrder,
+                            outMs: targetShot.durationMs,
+                            ...customOverrides,
+                        })
+                        : createDefaultTextLayer({
+                            name: `Text ${nextOrder + 1}`,
+                            order: nextOrder,
+                            outMs: targetShot.durationMs,
+                            ...customOverrides,
+                        });
 
         get().updateShot(shotId, (shot) => ({
             ...shot,

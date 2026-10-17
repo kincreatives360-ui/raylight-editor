@@ -1,9 +1,9 @@
 // src/storage/projectIO.ts
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
+import { DEFAULT_PROJECT } from '../model/defaults';
 
 const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
-const DEFAULT_CANVAS_BACKGROUND = '#0A0A0C';
 const LEGACY_DEFAULT_CANVAS_BACKGROUND = '#111114';
 
 const DB_NAME = 'raylight_studio_db';
@@ -215,13 +215,7 @@ export function loadProjectFromBrowser(): Project | null {
                 LEGACY_DEFAULT_CANVAS_BACKGROUND;
 
             if (isUntouchedBlankProject) {
-                return {
-                    ...project,
-                    background: {
-                        kind: 'solid',
-                        color: DEFAULT_CANVAS_BACKGROUND,
-                    },
-                };
+                return DEFAULT_PROJECT;
             }
 
             return project;

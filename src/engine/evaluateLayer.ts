@@ -17,7 +17,37 @@ export interface EvaluatedLayer {
     extraLayerBlur: number;
     maskSweepProgress: number;
     shimmerProgress: number;
+    pathRevealProgress: number;
+    glowIntensityOffset: number;
+    glowRadiusOffset: number;
+    textContentOverride?: string;
     layer: Layer;
+}
+
+function evaluateSplineOffset(amount: Vec3 | number, u: number): Vec3 {
+    const ax = typeof amount === 'number' ? amount : amount.x;
+    const ay = typeof amount === 'number' ? 0 : amount.y;
+    const az = typeof amount === 'number' ? 0 : amount.z;
+
+    // Cubic Bezier Spline Arc from (0,0,0) to (ax, ay, az)
+    const p1x = 0.2 * ax - 0.5 * ay;
+    const p1y = 0.8 * ay + 0.5 * ax;
+    const p1z = 0.3 * az;
+
+    const p2x = 0.8 * ax + 0.5 * ay;
+    const p2y = 0.2 * ay - 0.5 * ax;
+    const p2z = 0.7 * az;
+
+    const inv = 1 - u;
+    const b1 = 3 * inv * inv * u;
+    const b2 = 3 * inv * u * u;
+    const b3 = u * u * u;
+
+    return {
+        x: b1 * p1x + b2 * p2x + b3 * ax,
+        y: b1 * p1y + b2 * p2y + b3 * ay,
+        z: b1 * p1z + b2 * p2z + b3 * az,
+    };
 }
 
 export function evaluateLayerAtTime(
@@ -42,6 +72,10 @@ export function evaluateLayerAtTime(
     let extraLayerBlur = 0;
     let maskSweepProgress = 1;
     let shimmerProgress = 0;
+    let pathRevealProgress = 1;
+    let glowIntensityOffset = 0;
+    let glowRadiusOffset = 0;
+    let textContentOverride: string | undefined = undefined;
 
     // 1. Evaluate Entrance Transition (In)
     const ent = layer.entrance;
@@ -124,8 +158,13 @@ export function evaluateLayerAtTime(
                 : 1;
         const eased = evaluateEasing(rawP, blk.easing);
 
-        if (
-            (blk.property === 'position' || blk.property === 'followPath') &&
+        if (blk.property === 'followPath') {
+            const splineOffset = evaluateSplineOffset(blk.amount, eased);
+            position.x += splineOffset.x;
+            position.y += splineOffset.y;
+            position.z += splineOffset.z;
+        } else if (
+            blk.property === 'position' &&
             typeof blk.amount === 'object'
         ) {
             position.x += blk.amount.x * eased;
@@ -162,6 +201,34 @@ export function evaluateLayerAtTime(
             maskSweepProgress = Math.max(0, Math.min(1, eased * blk.amount));
         } else if (blk.property === 'shimmer') {
             shimmerProgress = rawP < 1 ? eased : 0;
+        } else if (blk.property === 'pathReveal') {
+            const maxVal = typeof blk.amount === 'number' ? blk.amount : 1;
+            pathRevealProgress = Math.max(0, Math.min(1, maxVal * eased));
+        } else if (blk.property === 'glow') {
+            if (typeof blk.amount === 'number') {
+                glowIntensityOffset += blk.amount * eased;
+            } else if (typeof blk.amount === 'object') {
+                glowIntensityOffset += blk.amount.x * eased;
+                glowRadiusOffset += blk.amount.y * eased;
+            }
+        } else if (blk.property === 'counter' && layer.kind === 'text') {
+            const currentContent: string = textContentOverride ?? layer.content;
+            const match = currentContent.match(/(-?\d[\d,]*\.?\d*)/);
+            if (match) {
+                const numStr = match[1].replace(/,/g, '');
+                const baseNum = parseFloat(numStr);
+                if (Number.isFinite(baseNum)) {
+                    const delta = typeof blk.amount === 'number' ? blk.amount : blk.amount.x;
+                    const currentNum = baseNum + delta * eased;
+                    const hasDecimals = numStr.includes('.');
+                    const decimalPlaces = hasDecimals ? (numStr.split('.')[1] || '').length : 0;
+                    const formattedNum = currentNum.toLocaleString('en-US', {
+                        minimumFractionDigits: decimalPlaces,
+                        maximumFractionDigits: decimalPlaces,
+                    });
+                    textContentOverride = currentContent.replace(match[1], formattedNum);
+                }
+            }
         }
     }
 
@@ -180,6 +247,10 @@ export function evaluateLayerAtTime(
         extraLayerBlur,
         maskSweepProgress,
         shimmerProgress,
+        pathRevealProgress,
+        glowIntensityOffset,
+        glowRadiusOffset,
+        textContentOverride,
         layer,
     };
 }

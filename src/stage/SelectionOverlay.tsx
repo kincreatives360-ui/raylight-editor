@@ -2,7 +2,7 @@
 import React, { useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Move, RotateCw, Compass, Lock, Crop, Type } from 'lucide-react';
-import type { Shot, TextLayer } from '../model/types';
+import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import type {
     EvaluatedLayerWithEffects,
@@ -253,9 +253,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const startClientX = e.clientX;
         const startClientY = e.clientY;
 
-        // On-Canvas Crop Mode for Image Layers
-        if (isCropping && layer.kind === 'image') {
-            const initCrop = layer.crop || { x: 0, y: 0, width: 1, height: 1 };
+        // On-Canvas Crop Mode for Image & Video Layers
+        if (isCropping && (layer.kind === 'image' || layer.kind === 'video')) {
+            const initCrop = (layer as ImageLayer | VideoLayer).crop || { x: 0, y: 0, width: 1, height: 1 };
             const boxW = Math.max(40, primaryEval.size.width * frameWidth * canvasZoom);
             const boxH = Math.max(40, primaryEval.size.height * frameHeight * canvasZoom);
 
@@ -293,7 +293,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     activeShot.id,
                     layer.id,
                     (l) =>
-                        l.kind === 'image'
+                        (l.kind === 'image' || l.kind === 'video')
                             ? {
                                 ...l,
                                 crop: {

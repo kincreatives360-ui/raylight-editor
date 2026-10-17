@@ -192,6 +192,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
     const renderLayerIcon = (layer: Layer, isSelected: boolean) => {
+        if (layer.kind === 'video') {
+            return (
+                <Video
+                    className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#38bdf8]' : 'text-[#38bdf8]'}`}
+                />
+            );
+        }
         if (layer.kind === 'image') {
             return (
                 <ImageIcon

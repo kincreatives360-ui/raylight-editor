@@ -1,7 +1,7 @@
 // src/App.tsx
 import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import { Download, X, Sparkles } from 'lucide-react';
-import type { Layer } from './model/types';
+import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
@@ -591,20 +591,53 @@ export default function App() {
     if (!file) return;
 
     if (file.type.startsWith('video/')) {
-      const dataUrl = await new Promise<string>((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result || '')); reader.onerror = reject; reader.readAsDataURL(file); });
-      const video = document.createElement('video'); video.preload = 'metadata'; video.src = dataUrl;
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+      const video = document.createElement('video');
+      video.preload = 'metadata';
+      video.src = dataUrl;
       const addVideoClip = (durationMs: number) => {
-        const assetId = `video-${Date.now()}`;
+        const assetId = `video-asset-${Date.now()}`;
+        const vw = video.videoWidth || 1920;
+        const vh = video.videoHeight || 1080;
         const asset = {
           id: assetId,
           name: file.name,
           mimeType: file.type,
           dataUrl,
-          width: video.videoWidth || 1920,
-          height: video.videoHeight || 1080,
+          width: vw,
+          height: vh,
         };
         const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
         const clipEnd = currentTimeMs + clipDuration;
+
+        const videoLayer: VideoLayer = {
+          id: `layer-video-${Date.now()}`,
+          name: file.name,
+          kind: 'video',
+          order: (activeShot?.layers.length || 0) + 1,
+          hidden: false,
+          locked: false,
+          inMs: 0,
+          outMs: activeShot?.durationMs || 4000,
+          position: { x: 0, y: 0, z: 0 },
+          rotation: { x: 0, y: 0, z: 0 },
+          scale: { x: 1, y: 1, z: 1 },
+          opacity: 1,
+          blendMode: 'normal',
+          entrance: { type: 'none', durationMs: 400, delayMs: 0, distance: 0.2, easing: { kind: 'preset', name: 'ease-out' } },
+          exit: { type: 'none', durationMs: 400, delayMs: 0, distance: 0.2, easing: { kind: 'preset', name: 'ease-out' } },
+          blocks: [],
+          effects: {},
+          assetId,
+          size: { width: 0.65, height: Math.min(0.85, 0.65 * (vh / (vw || 1))) },
+          cornerRadius: 0.04,
+        };
+
         updateProject((p) => {
           const currentTotal = p.shots.reduce((max, s) => Math.max(max, s.startMs + s.durationMs), 0);
           let nextShots = p.shots;
@@ -618,6 +651,11 @@ export default function App() {
               );
             }
           }
+          const targetShotId = activeShot?.id || nextShots[0]?.id;
+          nextShots = nextShots.map((s) =>
+            s.id === targetShotId ? { ...s, layers: [...s.layers, videoLayer] } : s
+          );
+
           return {
             ...p,
             shots: nextShots,
@@ -626,7 +664,7 @@ export default function App() {
               clips: [
                 ...(p.audio?.clips || []),
                 {
-                  id: assetId,
+                  id: `audio-${assetId}`,
                   name: file.name,
                   assetId,
                   dataUrl,
@@ -634,7 +672,7 @@ export default function App() {
                   durationMs: clipDuration,
                   offsetMs: 0,
                   volume: 1,
-                  muted: true,
+                  muted: false,
                 },
               ],
               muted: p.audio?.muted || false,
@@ -642,7 +680,11 @@ export default function App() {
             },
           };
         });
-        setAudioLabel(file.name); e.target.value = '';
+
+        setSelectedLayerIds([videoLayer.id]);
+        setInspectorTab('layer');
+        setAudioLabel(file.name);
+        e.target.value = '';
       };
       video.addEventListener('loadedmetadata', () => addVideoClip(video.duration * 1000), { once: true });
       video.addEventListener('error', () => addVideoClip(10000), { once: true });

@@ -4,6 +4,7 @@ import { evaluateProjectAtTime } from './evaluateShot';
 import {
     preloadProjectImages,
     renderProjectFrameToCanvas,
+    syncAndSeekAllProjectVideos,
 } from './canvasRenderer';
 import { getExportDimensions } from './exportMetrics';
 
@@ -191,6 +192,8 @@ export async function exportCurrentFrameAsPng(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
+    await syncAndSeekAllProjectVideos(project, timeMs);
+
     // 1. Prefer capturing high-resolution frame directly from the active WebGL canvas
     const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
     if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
@@ -290,8 +293,9 @@ export async function runVideoExportPipeline(
             const t = startMs + (f / gifFps) * 1000;
             if (settings.onSeekFrame) {
                 await settings.onSeekFrame(t);
-                await new Promise((r) => requestAnimationFrame(r));
             }
+            await syncAndSeekAllProjectVideos(project, t);
+            await new Promise((r) => requestAnimationFrame(r));
             const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
             if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
                 ctx.drawImage(webglCanvas, 0, 0, gifW, gifH);
@@ -460,8 +464,9 @@ export async function runVideoExportPipeline(
             const t = startMs + (f / fps) * 1000;
             if (settings.onSeekFrame) {
                 await settings.onSeekFrame(t);
-                await new Promise((r) => requestAnimationFrame(r));
             }
+            await syncAndSeekAllProjectVideos(project, t);
+            await new Promise((r) => requestAnimationFrame(r));
 
             const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
             if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
