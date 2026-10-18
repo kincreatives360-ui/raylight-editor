@@ -11,9 +11,47 @@ import type {
   EffectKey,
   LightRig,
   ProjectAudio,
+  CameraBlock,
 } from './types';
 
 export const CURRENT_SCHEMA_VERSION = 1;
+
+export function createDefaultCameraBlock(
+  id: string,
+  startMs: number,
+  durationMs: number,
+  fromFramingId: string = 'f1',
+  toFramingId: string = 'f2',
+  label: string = 'Camera Move'
+): CameraBlock {
+  return {
+    id,
+    label,
+    startMs,
+    durationMs,
+    fromFramingId,
+    toFramingId,
+    mode: 'dolly',
+    easing: { kind: 'preset', name: 'linear' },
+    from: {
+      anchorX: 0,
+      anchorY: 0,
+      zoom: 1,
+      roll: 0,
+      orbit: 0,
+      tilt: 0,
+    },
+    to: {
+      anchorX: 0,
+      anchorY: 0,
+      zoom: 1.2,
+      roll: 0,
+      orbit: 0,
+      tilt: 0,
+    },
+    shake: { from: 0, to: 0 },
+  };
+}
 
 export function createDefaultEffects(): SceneEffects {
   return JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS));

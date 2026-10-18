@@ -301,7 +301,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     };
 
     const currentShaderMeta = effectiveBg.kind === 'shader'
-        ? (SHADER_PRESET_METADATA as Record<string, any>)[effectiveBg.preset]
+        ? SHADER_PRESET_METADATA[effectiveBg.preset]
         : undefined;
 
     return (
@@ -643,8 +643,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                         <div className="grid grid-cols-3 gap-1 bg-[var(--bg-canvas)] p-1 rounded-lg border border-[var(--border-subtle)] max-h-40 overflow-y-auto">
                             {SHADER_PRESETS.map((p) => {
                                 const isCurrent = effectiveBg.kind === 'shader' && effectiveBg.preset === p;
-                                const meta = (SHADER_PRESET_METADATA as Record<string, any>)[p];
-                                const cfg = (DEFAULT_SHADER_CONFIGS as Record<string, any>)[p];
+                                const meta = SHADER_PRESET_METADATA[p];
+                                const cfg = DEFAULT_SHADER_CONFIGS[p];
                                 return (
                                     <button
                                         key={p}
@@ -963,5 +963,3 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         </div>
     );
 };
-
-export default BackgroundSection;

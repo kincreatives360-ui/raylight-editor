@@ -7,6 +7,7 @@ import { recalculateShotStartTimes, useProjectStore } from '../../store/useProje
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { evaluateEasing } from '../../engine/easing';
+import { createDefaultCameraBlock } from '../../model/defaults';
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -1026,33 +1027,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             ...shot,
             cameraBlocks: [
                 ...(shot.cameraBlocks || []),
-                {
-                    id: camId,
-                    label: 'Camera Move',
+                createDefaultCameraBlock(
+                    camId,
                     startMs,
                     durationMs,
-                    fromFramingId: shot.framings[0]?.id || 'f1',
-                    toFramingId: shot.framings[1]?.id || 'f2',
-                    mode: 'dolly',
-                    easing: { kind: 'preset', name: 'linear' },
-                    from: {
-                        anchorX: 0,
-                        anchorY: 0,
-                        zoom: 1,
-                        roll: 0,
-                        orbit: 0,
-                        tilt: 0,
-                    },
-                    to: {
-                        anchorX: -0.05,
-                        anchorY: 0.02,
-                        zoom: 1.15,
-                        roll: 0,
-                        orbit: 0,
-                        tilt: 0,
-                    },
-                    shake: { from: 0, to: 0 },
-                },
+                    shot.framings[0]?.id || 'f1',
+                    shot.framings[1]?.id || 'f2'
+                ),
             ],
         }));
         selectCameraBlock(camId);

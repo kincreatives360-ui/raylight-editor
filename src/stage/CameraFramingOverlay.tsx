@@ -1,6 +1,6 @@
 // src/stage/CameraFramingOverlay.tsx
 import React, { useRef, useState } from 'react';
-import type { Shot } from '../model/types';
+import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { Film } from 'lucide-react';
 import { useProjectStore } from '../store/useProjectStore';
 
@@ -13,17 +13,13 @@ interface CameraFramingOverlayProps {
     canvasZoom?: number;
 }
 
-type HandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+type CornerDir = 'nw' | 'ne' | 'se' | 'sw';
 
-const RESIZE_HANDLES: { dir: HandleDir; cursor: string; style: React.CSSProperties }[] = [
+const CORNER_HANDLES: { dir: CornerDir; cursor: string; style: React.CSSProperties }[] = [
     { dir: 'nw', cursor: 'nwse-resize', style: { left: 0, top: 0, transform: 'translate(-50%, -50%)' } },
-    { dir: 'n', cursor: 'ns-resize', style: { left: '50%', top: 0, transform: 'translate(-50%, -50%)' } },
     { dir: 'ne', cursor: 'nesw-resize', style: { left: '100%', top: 0, transform: 'translate(-50%, -50%)' } },
-    { dir: 'e', cursor: 'ew-resize', style: { left: '100%', top: '50%', transform: 'translate(-50%, -50%)' } },
     { dir: 'se', cursor: 'nwse-resize', style: { left: '100%', top: '100%', transform: 'translate(-50%, -50%)' } },
-    { dir: 's', cursor: 'ns-resize', style: { left: '50%', top: '100%', transform: 'translate(-50%, -50%)' } },
     { dir: 'sw', cursor: 'nesw-resize', style: { left: 0, top: '100%', transform: 'translate(-50%, -50%)' } },
-    { dir: 'w', cursor: 'ew-resize', style: { left: 0, top: '50%', transform: 'translate(-50%, -50%)' } },
 ];
 
 export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
@@ -38,21 +34,28 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     const [activeDrag, setActiveDrag] = useState<{
         which: 'from' | 'to';
         type: 'resize' | 'pan';
-        dir?: HandleDir;
+        dir?: CornerDir;
         currentZoom: number;
     } | null>(null);
+
+    const [snapGuides, setSnapGuides] = useState<{
+        xLines: number[];
+        yLines: number[];
+    }>({ xLines: [], yLines: [] });
 
     const dragSessionRef = useRef<{
         which: 'from' | 'to';
         type: 'resize' | 'pan';
-        dir?: HandleDir;
+        dir?: CornerDir;
         startX: number;
         startY: number;
         startZoom: number;
         startAnchorX: number;
         startAnchorY: number;
-        startBoxW: number;
-        startBoxH: number;
+        rectCenterX: number;
+        rectCenterY: number;
+        startCornerX: number;
+        startCornerY: number;
     } | null>(null);
 
     if (!selectedCameraBlockId) return null;
@@ -62,7 +65,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     );
     if (!activeBlock) return null;
 
-    const fromEp = activeBlock.from || {
+    const fromEp: CameraKeyframeEndpoint = activeBlock.from || {
         anchorX: 0,
         anchorY: 0,
         zoom: 1,
@@ -71,7 +74,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         tilt: 0,
     };
 
-    const toEp = activeBlock.to || {
+    const toEp: CameraKeyframeEndpoint = activeBlock.to || {
         anchorX: 0,
         anchorY: 0,
         zoom: 1,
@@ -80,14 +83,16 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         tilt: 0,
     };
 
-    // Calculate bounding box dimensions relative to current frame
-    // A framing zoom > 1 means the camera is zoomed in (smaller visible frame)
-    const computeBox = (ep: typeof fromEp) => {
-        const safeZoom = Math.max(0.2, ep.zoom);
+    // Calculate on-canvas rectangle derived strictly from the numbers:
+    // width = artboardW / zoom, height = artboardH / zoom, centred on the anchor.
+    // 1 world unit = 1 artboard pixel (1920x1080), Y points up.
+    const computeBox = (ep: CameraKeyframeEndpoint) => {
+        const safeZoom = Math.max(0.15, ep.zoom);
         const w = frameWidth / safeZoom;
         const h = frameHeight / safeZoom;
-        const cx = frameWidth / 2 + ep.anchorX * frameWidth;
-        const cy = frameHeight / 2 + ep.anchorY * frameHeight;
+        const scale = frameWidth / 1920;
+        const cx = frameWidth / 2 + ep.anchorX * scale;
+        const cy = frameHeight / 2 - ep.anchorY * scale; // world Y is up, DOM Y is down
         return {
             left: cx - w / 2,
             top: cy - h / 2,
@@ -102,13 +107,13 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     const toBox = computeBox(toEp);
 
     // ============================================================================
-    // POINTER DRAG HANDLERS: 8-WAY SCALING AND ANCHOR PAN
+    // POINTER DRAG HANDLERS: CORNER SCALING (SYMMETRIC) AND BODY PAN
     // ============================================================================
     const handleStartDrag = (
         e: React.PointerEvent,
         which: 'from' | 'to',
         type: 'resize' | 'pan',
-        dir?: HandleDir
+        dir?: CornerDir
     ) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -124,6 +129,13 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         const ep = which === 'from' ? fromEp : toEp;
         const box = which === 'from' ? fromBox : toBox;
 
+        let startCornerX = 0;
+        let startCornerY = 0;
+        if (type === 'resize' && dir) {
+            startCornerX = dir === 'nw' || dir === 'sw' ? box.left : box.left + box.width;
+            startCornerY = dir === 'nw' || dir === 'ne' ? box.top : box.top + box.height;
+        }
+
         dragSessionRef.current = {
             which,
             type,
@@ -133,8 +145,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             startZoom: ep.zoom,
             startAnchorX: ep.anchorX,
             startAnchorY: ep.anchorY,
-            startBoxW: box.width,
-            startBoxH: box.height,
+            rectCenterX: box.cx,
+            rectCenterY: box.cy,
+            startCornerX,
+            startCornerY,
         };
 
         setActiveDrag({
@@ -143,6 +157,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             dir,
             currentZoom: ep.zoom,
         });
+        setSnapGuides({ xLines: [], yLines: [] });
     };
 
     const handlePointerMove = (e: React.PointerEvent) => {
@@ -154,70 +169,103 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         const dx = (e.clientX - s.startX) / canvasZoom;
         const dy = (e.clientY - s.startY) / canvasZoom;
 
+        const updateSelectedEndpoint = (patch: Record<string, number>) => {
+            updateShot(
+                shot.id,
+                (shotData) => {
+                    const blocks = (shotData.cameraBlocks || []).map((b) => {
+                        if (b.id !== selectedCameraBlockId) return b;
+                        const baseEp = s.which === 'from' ? fromEp : toEp;
+                        return {
+                            ...b,
+                            [s.which]: {
+                                ...baseEp,
+                                ...b[s.which],
+                                ...patch,
+                            },
+                        };
+                    });
+                    return { ...shotData, cameraBlocks: blocks };
+                },
+                { skipHistory: true }
+            );
+        };
+
         if (s.type === 'pan') {
-            // Pan moves the center anchor
-            const deltaNormX = dx / frameWidth;
-            const deltaNormY = dy / frameHeight;
-            const nextAnchorX = Number((s.startAnchorX + deltaNormX).toFixed(4));
-            const nextAnchorY = Number((s.startAnchorY + deltaNormY).toFixed(4));
+            const scale = frameWidth / 1920;
+            const rawAnchorX = s.startAnchorX + dx / scale;
+            const rawAnchorY = s.startAnchorY - dy / scale; // world Y is up, DOM dy > 0 is down
 
-            updateShot(
-                shot.id,
-                (shotData) => {
-                    const blocks = (shotData.cameraBlocks || []).map((b) => {
-                        if (b.id !== selectedCameraBlockId) return b;
-                        const baseEp = s.which === 'from' ? fromEp : toEp;
-                        return {
-                            ...b,
-                            [s.which]: {
-                                ...baseEp,
-                                ...b[s.which],
-                                anchorX: nextAnchorX,
-                                anchorY: nextAnchorY,
-                            },
-                        };
-                    });
-                    return { ...shotData, cameraBlocks: blocks };
-                },
-                { skipHistory: true }
-            );
+            const ep = s.which === 'from' ? fromEp : toEp;
+            const rectW = 1920 / Math.max(0.15, ep.zoom);
+            const rectH = 1080 / Math.max(0.15, ep.zoom);
+            const hw = rectW / 2;
+            const hh = rectH / 2;
+
+            // Artboard targets in world coordinates:
+            // X: Left edge (-960), Center (0), Right edge (+960)
+            const artboardXTargets = [-960, 0, 960];
+            // Y: Top edge (+540), Center (0), Bottom edge (-540)
+            const artboardYTargets = [540, 0, -540];
+            const snapThreshWorld = 8 / scale;
+
+            let snappedAnchorX = rawAnchorX;
+            let activeSnapX: number | null = null;
+            let minDiffX = snapThreshWorld;
+
+            const rectXLines = [rawAnchorX - hw, rawAnchorX, rawAnchorX + hw];
+            for (const rX of rectXLines) {
+                for (const aX of artboardXTargets) {
+                    const diff = Math.abs(rX - aX);
+                    if (diff < minDiffX) {
+                        minDiffX = diff;
+                        snappedAnchorX = rawAnchorX + (aX - rX);
+                        activeSnapX = frameWidth / 2 + aX * scale;
+                    }
+                }
+            }
+
+            let snappedAnchorY = rawAnchorY;
+            let activeSnapY: number | null = null;
+            let minDiffY = snapThreshWorld;
+
+            const rectYLines = [rawAnchorY + hh, rawAnchorY, rawAnchorY - hh];
+            for (const rY of rectYLines) {
+                for (const aY of artboardYTargets) {
+                    const diff = Math.abs(rY - aY);
+                    if (diff < minDiffY) {
+                        minDiffY = diff;
+                        snappedAnchorY = rawAnchorY + (aY - rY);
+                        activeSnapY = frameHeight / 2 - aY * scale;
+                    }
+                }
+            }
+
+            setSnapGuides({
+                xLines: activeSnapX !== null ? [activeSnapX] : [],
+                yLines: activeSnapY !== null ? [activeSnapY] : [],
+            });
+
+            const nextAnchorX = Math.round(snappedAnchorX);
+            const nextAnchorY = Math.round(snappedAnchorY);
+
+            updateSelectedEndpoint({ anchorX: nextAnchorX, anchorY: nextAnchorY });
         } else if (s.type === 'resize' && s.dir) {
-            // Proportional scaling from handles
-            let deltaW = 0;
-            const dir = s.dir;
+            // Dragging any corner handle scales uniformly about the rectangle's centre.
+            // Aspect ratio is locked to the artboard's.
+            // Compute zoom from the pointer's distance from rectangle center to dragged corner,
+            // relative to distance at zoom 1x.
+            const curCornerX = s.startCornerX + dx;
+            const curCornerY = s.startCornerY + dy;
+            const currentDist = Math.hypot(curCornerX - s.rectCenterX, curCornerY - s.rectCenterY);
+            const dist1x = Math.hypot(frameWidth / 2, frameHeight / 2);
 
-            if (dir.includes('e')) deltaW += dx * 2;
-            else if (dir.includes('w')) deltaW -= dx * 2;
+            const rawZoom = dist1x / Math.max(1, currentDist);
+            const nextZoom = Number(Math.max(0.2, Math.min(5.0, rawZoom)).toFixed(2));
 
-            if (dir.includes('s')) deltaW += dy * 2 * (frameWidth / frameHeight);
-            else if (dir.includes('n')) deltaW -= dy * 2 * (frameWidth / frameHeight);
+            setActiveDrag((prev) => (prev ? { ...prev, currentZoom: nextZoom } : null));
 
-            // Outward drag expands the rectangle -> Camera zooms out (lower zoom factor)
-            // Inward drag shrinks the rectangle -> Camera zooms in (higher zoom factor)
-            const nextBoxW = Math.max(50, s.startBoxW + deltaW);
-            const nextZoom = Number(Math.max(0.2, Math.min(5.0, frameWidth / nextBoxW)).toFixed(3));
-
-            setActiveDrag((prev) => prev ? { ...prev, currentZoom: nextZoom } : null);
-
-            updateShot(
-                shot.id,
-                (shotData) => {
-                    const blocks = (shotData.cameraBlocks || []).map((b) => {
-                        if (b.id !== selectedCameraBlockId) return b;
-                        const baseEp = s.which === 'from' ? fromEp : toEp;
-                        return {
-                            ...b,
-                            [s.which]: {
-                                ...baseEp,
-                                ...b[s.which],
-                                zoom: nextZoom,
-                            },
-                        };
-                    });
-                    return { ...shotData, cameraBlocks: blocks };
-                },
-                { skipHistory: true }
-            );
+            updateSelectedEndpoint({ zoom: nextZoom });
         }
     };
 
@@ -232,19 +280,45 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         }
         dragSessionRef.current = null;
         setActiveDrag(null);
+        setSnapGuides({ xLines: [], yLines: [] });
         commitDragTransaction();
     };
 
     return (
         <div className="absolute inset-0 pointer-events-none z-26 overflow-visible select-none">
-            {/* SVG Connecting Arc between From and To anchors */}
+            {/* SVG Connecting Arc and Snap Guides */}
             <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+                {/* Full-width / full-height green alignment snap lines */}
+                {snapGuides.xLines.map((x, idx) => (
+                    <line
+                        key={`snap-x-${idx}`}
+                        x1={x}
+                        y1={0}
+                        x2={x}
+                        y2={frameHeight}
+                        stroke="#10b981"
+                        strokeWidth="1.5"
+                    />
+                ))}
+                {snapGuides.yLines.map((y, idx) => (
+                    <line
+                        key={`snap-y-${idx}`}
+                        x1={0}
+                        y1={y}
+                        x2={frameWidth}
+                        y2={y}
+                        stroke="#10b981"
+                        strokeWidth="1.5"
+                    />
+                ))}
+
+                {/* Dotted path line from From centre to To centre redraws live */}
                 <line
                     x1={fromBox.cx}
                     y1={fromBox.cy}
                     x2={toBox.cx}
                     y2={toBox.cy}
-                    stroke="rgba(56, 189, 248, 0.4)"
+                    stroke="rgba(56, 189, 248, 0.45)"
                     strokeWidth="1.5"
                     strokeDasharray="4 4"
                 />
@@ -253,7 +327,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             </svg>
 
             {/* =============================================================== */}
-            {/* 1. FROM FRAMING RECTANGLE (Emerald) WITH 8 RESIZE HANDLES       */}
+            {/* 1. FROM FRAMING RECTANGLE (Emerald) WITH 4 CORNER HANDLES       */}
             {/* =============================================================== */}
             <div
                 style={{
@@ -262,15 +336,18 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     width: `${fromBox.width}px`,
                     height: `${fromBox.height}px`,
                 }}
-                className={`absolute border-2 border-dashed border-emerald-400/80 bg-emerald-500/[0.03] rounded-lg pointer-events-none transition-shadow ${activeDrag?.which === 'from' ? 'ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/10' : ''
-                    }`}
+                onPointerDown={(e) => handleStartDrag(e, 'from', 'pan')}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                className={`absolute border-2 border-dashed border-emerald-400/80 bg-emerald-500/[0.03] rounded-lg pointer-events-auto cursor-move transition-shadow ${
+                    activeDrag?.which === 'from' ? 'ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/10' : ''
+                }`}
+                title="Drag body to reposition From camera anchor"
             >
-                {/* Header Chip / Drag Anchor Handle */}
+                {/* Header Chip */}
                 <div
                     onPointerDown={(e) => handleStartDrag(e, 'from', 'pan')}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
                     className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-[10px] font-mono text-emerald-300 flex items-center gap-1.5 shadow-md pointer-events-auto cursor-move hover:scale-105 transition-transform"
                     title="Drag to reposition From camera anchor"
                 >
@@ -279,8 +356,8 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     {fromEp.orbit !== 0 && <span className="text-emerald-400/70">• {fromEp.orbit}°</span>}
                 </div>
 
-                {/* 8 Scaling Handles on all sides */}
-                {RESIZE_HANDLES.map((h) => (
+                {/* 4 Corner Scaling Handles */}
+                {CORNER_HANDLES.map((h) => (
                     <div
                         key={`from-${h.dir}`}
                         style={{ ...h.style, cursor: h.cursor }}
@@ -302,7 +379,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             </div>
 
             {/* =============================================================== */}
-            {/* 2. TO FRAMING RECTANGLE (Sky / Cyan) WITH 8 RESIZE HANDLES       */}
+            {/* 2. TO FRAMING RECTANGLE (Sky / Cyan) WITH 4 CORNER HANDLES       */}
             {/* =============================================================== */}
             <div
                 style={{
@@ -311,15 +388,18 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     width: `${toBox.width}px`,
                     height: `${toBox.height}px`,
                 }}
-                className={`absolute border-2 border-dashed border-sky-400/90 bg-sky-500/[0.03] rounded-lg pointer-events-none transition-shadow ${activeDrag?.which === 'to' ? 'ring-2 ring-sky-400/40 shadow-lg shadow-sky-500/10' : ''
-                    }`}
+                onPointerDown={(e) => handleStartDrag(e, 'to', 'pan')}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                onPointerCancel={handlePointerUp}
+                className={`absolute border-2 border-dashed border-sky-400/90 bg-sky-500/[0.03] rounded-lg pointer-events-auto cursor-move transition-shadow ${
+                    activeDrag?.which === 'to' ? 'ring-2 ring-sky-400/40 shadow-lg shadow-sky-500/10' : ''
+                }`}
+                title="Drag body to reposition To camera anchor"
             >
-                {/* Header Chip / Drag Anchor Handle */}
+                {/* Header Chip */}
                 <div
                     onPointerDown={(e) => handleStartDrag(e, 'to', 'pan')}
-                    onPointerMove={handlePointerMove}
-                    onPointerUp={handlePointerUp}
-                    onPointerCancel={handlePointerUp}
                     className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/50 text-[10px] font-mono text-sky-300 flex items-center gap-1.5 shadow-md pointer-events-auto cursor-move hover:scale-105 transition-transform"
                     title="Drag to reposition To camera anchor"
                 >
@@ -328,8 +408,8 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     {toEp.orbit !== 0 && <span className="text-sky-400/70">• {toEp.orbit}°</span>}
                 </div>
 
-                {/* 8 Scaling Handles on all sides */}
-                {RESIZE_HANDLES.map((h) => (
+                {/* 4 Corner Scaling Handles */}
+                {CORNER_HANDLES.map((h) => (
                     <div
                         key={`to-${h.dir}`}
                         style={{ ...h.style, cursor: h.cursor }}

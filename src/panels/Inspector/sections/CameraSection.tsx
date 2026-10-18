@@ -52,9 +52,9 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
             tilt: 0,
           },
           to: {
-            anchorX: -0.05,
-            anchorY: 0.02,
-            zoom: 1.15,
+            anchorX: 0,
+            anchorY: 0,
+            zoom: 1.2,
             roll: 0,
             orbit: 0,
             tilt: 0,

@@ -40,6 +40,7 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 import { CURATED_SOUNDS } from '../../data/curatedSounds';
 import { STARTER_TEMPLATES, type StarterTemplate } from '../../data/starterTemplates';
+import { createDefaultCameraBlock } from '../../model/defaults';
 
 interface LeftPanelProps {
     activeShot: Shot;
@@ -730,33 +731,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     ...s,
                                     cameraBlocks: [
                                         ...(s.cameraBlocks || []),
-                                        {
-                                            id: camId,
-                                            label: 'Camera Move',
-                                            startMs: 0,
-                                            durationMs: s.durationMs,
-                                            fromFramingId: s.framings[0]?.id || 'f1',
-                                            toFramingId: s.framings[1]?.id || 'f2',
-                                            mode: 'dolly',
-                                            easing: { kind: 'preset', name: 'linear' },
-                                            from: {
-                                                anchorX: 0,
-                                                anchorY: 0,
-                                                zoom: 1,
-                                                roll: 0,
-                                                orbit: 0,
-                                                tilt: 0,
-                                            },
-                                            to: {
-                                                anchorX: -0.05,
-                                                anchorY: 0.02,
-                                                zoom: 1.15,
-                                                roll: 0,
-                                                orbit: 0,
-                                                tilt: 0,
-                                            },
-                                            shake: { from: 0, to: 0 },
-                                        },
+                                        createDefaultCameraBlock(
+                                            camId,
+                                            0,
+                                            s.durationMs,
+                                            s.framings[0]?.id || 'f1',
+                                            s.framings[1]?.id || 'f2'
+                                        ),
                                     ],
                                 }));
                                 selectCameraBlock(camId);
@@ -1090,9 +1071,47 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
                                 {/* Camera track stays visible even before its first move is added. */}
                                 <div
-                                    onClick={() =>
-                                        selectCameraBlock(activeShot.cameraBlocks[0]?.id || null)
-                                    }
+                                    onClick={() => {
+                                        if (activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0) {
+                                            selectCameraBlock(activeShot.cameraBlocks[0].id);
+                                        } else {
+                                            const camId = `cam-blk-${Date.now()}`;
+                                            updateShot(activeShot.id, (s) => ({
+                                                ...s,
+                                                cameraBlocks: [
+                                                    ...(s.cameraBlocks || []),
+                                                    {
+                                                        id: camId,
+                                                        label: 'Camera Move',
+                                                        startMs: 0,
+                                                        durationMs: s.durationMs,
+                                                        fromFramingId: s.framings[0]?.id || 'f1',
+                                                        toFramingId: s.framings[1]?.id || 'f2',
+                                                        mode: 'dolly',
+                                                        easing: { kind: 'preset', name: 'ease-in-out' },
+                                                        from: {
+                                                            anchorX: 0,
+                                                            anchorY: 0,
+                                                            zoom: 1,
+                                                            roll: 0,
+                                                            orbit: 0,
+                                                            tilt: 0,
+                                                        },
+                                                        to: {
+                                                            anchorX: 0,
+                                                            anchorY: 0,
+                                                            zoom: 1.2,
+                                                            roll: 0,
+                                                            orbit: 0,
+                                                            tilt: 0,
+                                                        },
+                                                        shake: { from: 0, to: 0 },
+                                                    },
+                                                ],
+                                            }));
+                                            selectCameraBlock(camId);
+                                        }
+                                    }}
                                     style={{ order: 30 }}
                                     className={`h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] cursor-pointer transition ${selectedCameraBlockId
                                         ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'

@@ -808,6 +808,7 @@ export default function App() {
     setShowSafeArea,
     setShortcutsModalOpen,
     shortcutsModalOpen,
+    currentTimeMs,
   ]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

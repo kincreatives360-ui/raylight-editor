@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/immutability */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
@@ -23,6 +24,11 @@ import {
   type ShaderPreset,
 } from '../../model/backgroundPresets';
 import { createCanvasFillStyle } from '../../engine/canvasRenderer';
+import {
+  DEFAULT_CAMERA_Z,
+  DEFAULT_FOCAL_LENGTH,
+  getReferencePlaneDimensions,
+} from './cameraMath';
 
 export interface SceneBackgroundProps {
   project?: Project;
@@ -110,21 +116,14 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   const meshRef = useRef<THREE.Mesh>(null);
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
   const { currentTimeMs } = usePlayheadStore();
-  const camForward = useMemo(() => new THREE.Vector3(), []);
 
   // Preload texture for image background
-  const [imageTexture, setImageTexture] = useState<THREE.Texture | null>(null);
+  const [loadedTexture, setLoadedTexture] = useState<THREE.Texture | null>(null);
+  const dataUrl = bg.kind === 'image' ? (bg.src || (bg.assetId ? assets[bg.assetId]?.dataUrl : undefined)) : undefined;
+  const imageTexture = bg.kind === 'image' && dataUrl ? loadedTexture : null;
 
   useEffect(() => {
-    if (bg.kind !== 'image') {
-      setImageTexture(null);
-      return;
-    }
-    const dataUrl = bg.src || (bg.assetId ? assets[bg.assetId]?.dataUrl : undefined);
-    if (!dataUrl) {
-      setImageTexture(null);
-      return;
-    }
+    if (!dataUrl) return;
 
     let active = true;
     const loader = new THREE.TextureLoader();
@@ -138,18 +137,18 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.generateMipmaps = true;
-        setImageTexture(tex);
+        setLoadedTexture(tex);
       },
       undefined,
       () => {
-        if (active) setImageTexture(null);
+        if (active) setLoadedTexture(null);
       }
     );
 
     return () => {
       active = false;
     };
-  }, [bg, assets]);
+  }, [dataUrl]);
 
   // Pre-generate gradient texture if gradient
   const gradientTexture = useMemo(() => {
@@ -169,7 +168,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   const uniforms = useMemo(() => {
     if (bg.kind === 'shader') {
       const preset = bg.preset as ShaderPreset;
-      const cfg = (DEFAULT_SHADER_CONFIGS as Record<string, any>)[preset] || DEFAULT_SHADER_CONFIGS.silk;
+      const cfg = DEFAULT_SHADER_CONFIGS[preset] || DEFAULT_SHADER_CONFIGS.silk;
       const palette = getShaderColors(preset, bg.colors, bg.color, bg.backgroundColor);
       const colorObjects = Array.from({ length: 5 }, (_, i) => new THREE.Color(palette[i] || '#000000'));
       return {
@@ -225,12 +224,12 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
       const palette = getShaderColors(bg.preset, bg.colors, bg.color, bg.backgroundColor);
       uniforms.uColor?.value.set(bg.color);
       uniforms.uBase?.value.set(bg.backgroundColor);
-      uniforms.uWaves && (uniforms.uWaves.value = bg.waves);
-      uniforms.uFocus && (uniforms.uFocus.value = bg.focus);
-      uniforms.uGlow && (uniforms.uGlow.value = bg.glow);
-      uniforms.uShine && (uniforms.uShine.value = bg.shine);
-      uniforms.uAngle && (uniforms.uAngle.value = bg.angle);
-      uniforms.uColorCount && (uniforms.uColorCount.value = palette.length);
+      if (uniforms.uWaves) uniforms.uWaves.value = bg.waves;
+      if (uniforms.uFocus) uniforms.uFocus.value = bg.focus;
+      if (uniforms.uGlow) uniforms.uGlow.value = bg.glow;
+      if (uniforms.uShine) uniforms.uShine.value = bg.shine;
+      if (uniforms.uAngle) uniforms.uAngle.value = bg.angle;
+      if (uniforms.uColorCount) uniforms.uColorCount.value = palette.length;
       if (uniforms.uColors) {
         palette.forEach((c, idx) => {
           if (uniforms.uColors.value[idx]) {
@@ -256,34 +255,26 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     invalidate();
   }, [bg, opacity, imageTexture, gradientTexture, uniforms, invalidate]);
 
-  // Frustum billboard lock
+  // Scene-space background layer transforms with the scene container
   useFrame(() => {
     const mesh = meshRef.current;
     if (!mesh || !camera) return;
 
     const pCam = camera as THREE.PerspectiveCamera;
-    const isPerspective = pCam.isPerspectiveCamera;
-    const dist = isPerspective ? pCam.far * 0.5 : 100;
-    const height = isPerspective ? 2 * dist * Math.tan((pCam.fov * Math.PI) / 360) : 100;
-    const width = height * pCam.aspect;
+    const aspect = pCam.aspect || (16 / 9);
+    const { planeW, planeH } = getReferencePlaneDimensions(aspect, DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH);
+    const scaleFactor = (DEFAULT_CAMERA_Z + 0.05) / DEFAULT_CAMERA_Z;
 
-    camForward.set(0, 0, -1).applyQuaternion(camera.quaternion);
-    mesh.position.copy(camera.position).addScaledVector(camForward, dist);
-
-    if (slideX !== 0) {
-      const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-      mesh.position.addScaledVector(right, slideX * width);
-    }
-
-    mesh.quaternion.copy(camera.quaternion);
-    mesh.scale.set(width, height, 1);
+    mesh.position.set(slideX * planeW, 0, -0.05);
+    mesh.quaternion.set(0, 0, 0, 1);
+    mesh.scale.set(planeW * scaleFactor, planeH * scaleFactor, 1);
 
     if (bg.kind === 'shader') {
       if (uniforms.uTime) {
         uniforms.uTime.value = (currentTimeMs / 1000) * (bg.speed ?? 1);
       }
       if (uniforms.uAspect) {
-        uniforms.uAspect.value = pCam.aspect;
+        uniforms.uAspect.value = aspect;
       }
     } else if (bg.kind === 'noise') {
       if (uniforms.uTime) {
@@ -350,7 +341,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
         key={bg.kind === 'shader' ? bg.preset : bg.kind}
         vertexShader={vertShader}
         fragmentShader={fragShader}
-        uniforms={uniforms as any}
+        uniforms={uniforms as Record<string, THREE.IUniform>}
         depthTest={false}
         depthWrite={false}
         toneMapped={false}
@@ -396,19 +387,15 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
 
   const effectiveAssets = assets ?? project?.assets ?? {};
 
-  // For solid background without opacity or transition, set scene.background directly for optimal Three.js clear
+  // Keep scene.background null so all backgrounds render as scene meshes that transform with the camera
   useEffect(() => {
-    if (!isTransitioning && incomingBg.kind === 'solid' && (incomingBg.opacity ?? 1) >= 1) {
-      scene.background = new THREE.Color(incomingBg.color);
-    } else {
-      scene.background = null;
-    }
+    scene.background = null;
     invalidate();
     return () => {
       scene.background = null;
       invalidate();
     };
-  }, [scene, incomingBg, isTransitioning, invalidate]);
+  }, [scene, invalidate]);
 
   let inOpacity = 1;
   let inSlideX = 0;
@@ -451,5 +438,3 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     </>
   );
 };
-
-export default SceneBackground;

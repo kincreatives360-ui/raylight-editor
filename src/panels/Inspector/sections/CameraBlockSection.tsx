@@ -36,8 +36,6 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     const [fromCollapsed, setFromCollapsed] = useState(false);
     const [toCollapsed, setToCollapsed] = useState(false);
 
-    const refStageW = 1920;
-    const refStageH = 1080;
 
     const updateCameraBlock = (
         camBlockId: string,
@@ -58,11 +56,11 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     ) => {
         const fallback: CameraKeyframeEndpoint =
             which === 'from'
-                ? { anchorX: -0.84, anchorY: 0.55, zoom: 1, roll: 0, orbit: 0, tilt: 0 }
+                ? { anchorX: 0, anchorY: 0, zoom: 1, roll: 0, orbit: 0, tilt: 0 }
                 : {
-                    anchorX: -0.795,
-                    anchorY: 0.595,
-                    zoom: 1.1,
+                    anchorX: 0,
+                    anchorY: 0,
+                    zoom: 1.2,
                     roll: 0,
                     orbit: 0,
                     tilt: 0,
@@ -105,7 +103,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <div className="grid grid-cols-6 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg" role="toolbar" aria-label={`${which} endpoint alignment`}>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorX: -0.35 })}
+                                    onClick={() => patchEndpoint({ anchorX: Math.round(-960 + 960 / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Left"
                                     aria-label="Align Left"
@@ -123,7 +121,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorX: 0.35 })}
+                                    onClick={() => patchEndpoint({ anchorX: Math.round(960 - 960 / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Right"
                                     aria-label="Align Right"
@@ -132,7 +130,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorY: -0.35 })}
+                                    onClick={() => patchEndpoint({ anchorY: Math.round(540 - 540 / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Top"
                                     aria-label="Align Top"
@@ -150,7 +148,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorY: 0.35 })}
+                                    onClick={() => patchEndpoint({ anchorY: Math.round(-540 + 540 / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Bottom"
                                     aria-label="Align Bottom"
@@ -166,25 +164,25 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
                                     label="X"
-                                    value={Math.round(ep.anchorX * refStageW)}
-                                    min={-3000}
-                                    max={3000}
-                                    step={10}
+                                    value={Math.round(ep.anchorX)}
+                                    min={-10000}
+                                    max={10000}
+                                    step={1}
                                     onChange={(pxX) =>
                                         patchEndpoint({
-                                            anchorX: Number((pxX / refStageW).toFixed(4)),
+                                            anchorX: Math.round(pxX),
                                         })
                                     }
                                 />
                                 <ScrubInput
                                     label="Y"
-                                    value={Math.round(ep.anchorY * refStageH)}
-                                    min={-3000}
-                                    max={3000}
-                                    step={10}
+                                    value={Math.round(ep.anchorY)}
+                                    min={-10000}
+                                    max={10000}
+                                    step={1}
                                     onChange={(pxY) =>
                                         patchEndpoint({
-                                            anchorY: Number((pxY / refStageH).toFixed(4)),
+                                            anchorY: Math.round(pxY),
                                         })
                                     }
                                 />
@@ -196,13 +194,13 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <span className="text-[10px] text-[#a1a1aa] block">Zoom</span>
                             <ScrubInput
                                 label="⊕"
-                                value={ep.zoom}
-                                min={0.25}
-                                max={4}
-                                step={0.05}
+                                value={Number(ep.zoom.toFixed(2))}
+                                min={0.2}
+                                max={5}
+                                step={0.01}
                                 decimals={2}
                                 unit="x"
-                                onChange={(zoom) => patchEndpoint({ zoom })}
+                                onChange={(zoom) => patchEndpoint({ zoom: Number(zoom.toFixed(2)) })}
                             />
                         </div>
 

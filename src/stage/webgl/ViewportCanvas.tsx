@@ -2,7 +2,7 @@ import React, { useEffect, useMemo } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
-import type { Project } from '../../model/types';
+import type { Project, Background } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
 import type {
     EvaluatedProjectFrame,
@@ -47,7 +47,7 @@ const StudioEnvironment: React.FC = () => {
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    background?: any;
+    background?: Background;
 }> = ({ frame, selectedLayerIds, background }) => {
     const { invalidate } = useThree();
 

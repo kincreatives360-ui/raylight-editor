@@ -102,7 +102,7 @@ function buildAnimatedGifBlob(
     height: number,
     delayCentiseconds: number
 ): Blob {
-    const chunks: any[] = [];
+    const chunks: Uint8Array[] = [];
 
     // Header buffer (Header, LSD, GCT, Netscape extension)
     const header = new Uint8Array(800);
@@ -165,7 +165,7 @@ function buildAnimatedGifBlob(
         frameHeader[fPtr++] = (width >> 8) & 0xff;
         frameHeader[fPtr++] = height & 0xff;
         frameHeader[fPtr++] = (height >> 8) & 0xff;
-        frameHeader[fPtr++] = 0x00;
+        frameHeader[fPtr] = 0x00;
 
         chunks.push(frameHeader);
 
@@ -185,7 +185,7 @@ function buildAnimatedGifBlob(
 
     // 5. GIF Trailer
     chunks.push(new Uint8Array([0x3b]));
-    return new Blob(chunks, { type: 'image/gif' });
+    return new Blob(chunks as BlobPart[], { type: 'image/gif' });
 }
 
 // ============================================================================

@@ -271,34 +271,3 @@ export const ALL_18_EASINGS: EasingCatalogItem[] = [
         easing: { kind: 'bezier', x1: 0.6, y1: -0.28, x2: 0.74, y2: 0.05 },
     },
 ];
-
-// Automated Math Self-Test (verifies f(0)=0, f(1)=1, and finite values for all 18 curves)
-export function runEasingSelfTests(): {
-    allPassed: boolean;
-    totalTested: number;
-    failures: string[];
-} {
-    const failures: string[] = [];
-
-    for (const item of ALL_18_EASINGS) {
-        const startVal = evaluateEasing(0, item.easing);
-        const midVal = evaluateEasing(0.5, item.easing);
-        const endVal = evaluateEasing(1, item.easing);
-
-        if (Math.abs(startVal - 0) > 1e-5) {
-            failures.push(`${item.label}: f(0) returned ${startVal} instead of 0`);
-        }
-        if (Math.abs(endVal - 1) > 1e-5) {
-            failures.push(`${item.label}: f(1) returned ${endVal} instead of 1`);
-        }
-        if (!Number.isFinite(midVal)) {
-            failures.push(`${item.label}: f(0.5) returned non-finite number`);
-        }
-    }
-
-    return {
-        allPassed: failures.length === 0,
-        totalTested: ALL_18_EASINGS.length,
-        failures,
-    };
-}

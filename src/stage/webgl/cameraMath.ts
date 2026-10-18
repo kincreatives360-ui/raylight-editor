@@ -66,9 +66,9 @@ export function evaluateCameraPose(
     );
 
     const zoom = Math.max(0.15, evaluatedCamera?.zoom ?? 1);
-    const targetX = (evaluatedCamera?.target?.x ?? 0) * planeW;
-    // Invert Y because screen/model +Y is down, whereas Three.js +Y is up
-    const targetY = -(evaluatedCamera?.target?.y ?? 0) * planeH;
+    const targetX = ((evaluatedCamera?.target?.x ?? 0) / 1920) * planeW;
+    // Y points UP in world coordinates (1 unit = 1 artboard pixel), and Three.js +Y is UP
+    const targetY = ((evaluatedCamera?.target?.y ?? 0) / 1080) * planeH;
     const targetZ = evaluatedCamera?.target?.z ?? 0;
 
     const rotX =
@@ -81,11 +81,17 @@ export function evaluateCameraPose(
         (defaultCamera.rotation?.z ?? 0) +
         ((evaluatedCamera as EvaluatedCamera)?.rotation?.z ?? 0);
 
+    const dist = baseZ / zoom;
+    const offset = new THREE.Vector3(0, 0, dist);
+    if (rotX !== 0 || rotY !== 0 || rotZ !== 0) {
+        offset.applyEuler(new THREE.Euler(rotX, rotY, rotZ, 'YXZ'));
+    }
+
     return {
         position: {
-            x: (defaultCamera.position?.x ?? 0) + targetX,
-            y: (defaultCamera.position?.y ?? 0) + targetY,
-            z: baseZ / zoom + targetZ,
+            x: (defaultCamera.position?.x ?? 0) + targetX + offset.x,
+            y: (defaultCamera.position?.y ?? 0) + targetY + offset.y,
+            z: targetZ + offset.z,
         },
         rotation: {
             x: rotX,

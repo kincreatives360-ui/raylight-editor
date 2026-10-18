@@ -67,6 +67,26 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         activeTool === 'rectangle' ||
         activeTool === 'line' || activeTool === 'arrow' || activeTool === 'polygon';
 
+    const renderMenuItem = (item: { id: CanvasTool; label: string; key: string }, onClose: () => void) => (
+        <button
+            key={item.id}
+            onClick={() => {
+                setActiveTool(item.id);
+                onClose();
+            }}
+            className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer ${
+                activeTool === item.id
+                    ? 'bg-[#0088ff] text-white'
+                    : 'text-[#d4d4d8] hover:bg-white/5'
+            }`}
+        >
+            <span>{item.label}</span>
+            <span className="text-[10px] font-mono opacity-60">
+                {item.key}
+            </span>
+        </button>
+    );
+
     return (
         <div
             onMouseDown={(e) => e.stopPropagation()}
@@ -141,24 +161,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                     { id: 'camera', label: 'Camera Rig (3D Orbit)', key: 'C' },
                                     { id: 'hand', label: 'Hand Tool (Pan)', key: 'H' },
                                 ] as { id: CanvasTool; label: string; key: string }[]
-                            ).map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => {
-                                        setActiveTool(item.id);
-                                        setPointerMenuOpen(false);
-                                    }}
-                                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer ${activeTool === item.id
-                                            ? 'bg-[#0088ff] text-white'
-                                            : 'text-[#d4d4d8] hover:bg-white/5'
-                                        }`}
-                                >
-                                    <span>{item.label}</span>
-                                    <span className="text-[10px] font-mono opacity-60">
-                                        {item.key}
-                                    </span>
-                                </button>
-                            ))}
+                            ).map((item) => renderMenuItem(item, () => setPointerMenuOpen(false)))}
                         </div>
                     )}
                 </div>
@@ -235,24 +238,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                     { id: 'arrow', label: 'Arrow', key: 'A' },
                                     { id: 'polygon', label: 'Polygon', key: 'P' },
                                 ] as { id: CanvasTool; label: string; key: string }[]
-                            ).map((item) => (
-                                <button
-                                    key={item.id}
-                                    onClick={() => {
-                                        setActiveTool(item.id);
-                                        setShapeMenuOpen(false);
-                                    }}
-                                    className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer ${activeTool === item.id
-                                            ? 'bg-[#0088ff] text-white'
-                                            : 'text-[#d4d4d8] hover:bg-white/5'
-                                        }`}
-                                >
-                                    <span>{item.label}</span>
-                                    <span className="text-[10px] font-mono opacity-60">
-                                        {item.key}
-                                    </span>
-                                </button>
-                            ))}
+                            ).map((item) => renderMenuItem(item, () => setShapeMenuOpen(false)))}
                         </div>
                     )}
                 </div>

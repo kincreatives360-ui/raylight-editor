@@ -73,10 +73,9 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         onChange(clampAndRound(startValRef.current + delta));
     };
 
-    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (activePointerIdRef.current !== e.pointerId) return;
+    const finishPointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (activePointerIdRef.current !== e.pointerId) return false;
         activePointerIdRef.current = null;
-
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                 e.currentTarget.releasePointerCapture(e.pointerId);
@@ -84,9 +83,12 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         } catch {
             // Ignore release failure
         }
-
         commitDragTransaction();
+        return true;
+    };
 
+    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (!finishPointerDrag(e)) return;
         if (!movedRef.current) {
             setInputText(value.toFixed(decimals));
             setIsEditing(true);
@@ -94,16 +96,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     };
 
     const handlePointerCancel = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (activePointerIdRef.current !== e.pointerId) return;
-        activePointerIdRef.current = null;
-        try {
-            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                e.currentTarget.releasePointerCapture(e.pointerId);
-            }
-        } catch {
-            // Ignore
-        }
-        commitDragTransaction();
+        finishPointerDrag(e);
     };
 
     const commitTextInput = () => {

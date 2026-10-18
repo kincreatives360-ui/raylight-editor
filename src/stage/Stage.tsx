@@ -1,5 +1,4 @@
-// src/stage/Stage.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
 import {
     RotateCcw,
     UploadCloud,
@@ -24,6 +23,7 @@ import {
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
+import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
@@ -180,6 +180,90 @@ export const Stage: React.FC<StageProps> = ({
         };
     }, [setActiveTool]);
 
+    // ============================================================================
+    // 3D CAMERA RIG CONTROLLER (Cinema 4D / Blender Style Viewport Navigation)
+    // ============================================================================
+    const updateActiveShotCamera = useCallback((patch: {
+        orbit?: number;
+        tilt?: number;
+        targetX?: number;
+        targetY?: number;
+        zoom?: number;
+    }) => {
+        const currentShot = frame.activeShot;
+        const selectedCamBlock = currentShot.cameraBlocks?.find(
+            (b) => b.id === selectedCameraBlockId
+        );
+
+        if (selectedCamBlock) {
+            const midMs = selectedCamBlock.startMs + selectedCamBlock.durationMs / 2;
+            const which: 'from' | 'to' = frame.shotLocalTimeMs < midMs ? 'from' : 'to';
+            const ep = selectedCamBlock[which] || {
+                anchorX: 0,
+                anchorY: 0,
+                zoom: 1,
+                roll: 0,
+                orbit: 0,
+                tilt: 0,
+            };
+
+            updateShot(
+                currentShot.id,
+                (s) => ({
+                    ...s,
+                    cameraBlocks: (s.cameraBlocks || []).map((cb) =>
+                        cb.id === selectedCamBlock.id
+                            ? {
+                                ...cb,
+                                [which]: {
+                                    ...ep,
+                                    anchorX: patch.targetX !== undefined ? patch.targetX : ep.anchorX,
+                                    anchorY: patch.targetY !== undefined ? patch.targetY : ep.anchorY,
+                                    zoom: patch.zoom !== undefined ? patch.zoom : ep.zoom,
+                                    orbit: patch.orbit !== undefined ? patch.orbit : ep.orbit,
+                                    tilt: patch.tilt !== undefined ? patch.tilt : ep.tilt,
+                                },
+                            }
+                            : cb
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        } else {
+            updateShot(
+                currentShot.id,
+                (s) => {
+                    const framings = [...(s.framings || [])];
+                    const baseF = framings[0] || {
+                        id: 'default',
+                        name: 'Default',
+                        target: { x: 0, y: 0, z: 0 },
+                        zoom: 1,
+                        roll: 0,
+                        orbit: 0,
+                        tilt: 0,
+                    };
+
+                    const updatedF = {
+                        ...baseF,
+                        target: {
+                            ...baseF.target,
+                            x: patch.targetX !== undefined ? patch.targetX : baseF.target.x,
+                            y: patch.targetY !== undefined ? patch.targetY : baseF.target.y,
+                        },
+                        zoom: patch.zoom !== undefined ? patch.zoom : baseF.zoom,
+                        orbit: patch.orbit !== undefined ? patch.orbit : (baseF.orbit ?? 0),
+                        tilt: patch.tilt !== undefined ? patch.tilt : (baseF.tilt ?? 0),
+                    };
+
+                    framings[0] = updatedF;
+                    return { ...s, framings };
+                },
+                { skipHistory: true }
+            );
+        }
+    }, [frame.activeShot, selectedCameraBlockId, frame.shotLocalTimeMs, updateShot]);
+
     // Wheel handler: In camera tool or Alt held -> 3D camera dolly; Cmd/Ctrl zooms canvas; plain scroll pans canvas
     useEffect(() => {
         const el = containerRef.current;
@@ -234,6 +318,7 @@ export const Stage: React.FC<StageProps> = ({
         frame.shotLocalTimeMs,
         beginDragTransaction,
         commitDragTransaction,
+        updateActiveShotCamera,
     ]);
 
     const ratioSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
@@ -250,6 +335,73 @@ export const Stage: React.FC<StageProps> = ({
         frameWidth = viewportSize.width;
         frameHeight = Math.round(frameWidth / targetAspect);
     }
+
+    const isCameraSelected = Boolean(selectedCameraBlockId);
+
+    const effectiveViewportFrame = useMemo(() => {
+        if (isCameraSelected) {
+            const designCamera: EvaluatedCamera = {
+                target: { x: 0, y: 0, z: 0 },
+                rotation: { x: 0, y: 0, z: 0 },
+                zoom: 1,
+                fovDegrees: 27.0006,
+                focalLength: 50,
+                activeMode: 'static',
+            };
+            return {
+                ...frame,
+                camera: designCamera,
+            };
+        }
+        return frame;
+    }, [frame, isCameraSelected]);
+
+    const exteriorSilhouettes = useMemo(() => {
+        const defaultCamera = project.defaultCamera || {
+            position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+            rotation: { x: 0, y: 0, z: 0 },
+            focalLength: DEFAULT_FOCAL_LENGTH,
+        };
+        const activeCamera = effectiveViewportFrame.camera;
+        const cameraPose = evaluateCameraPose(activeCamera, defaultCamera, targetAspect);
+        const refCameraZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
+        const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
+
+        const silhouettes: { id: string; points: string }[] = [];
+
+        for (const evalLayer of frame.layers) {
+            if ((evalLayer.opacity ?? 1) <= 0) continue;
+            const proj = getLayerProjectedCorners(
+                evalLayer,
+                null,
+                frameWidth,
+                frameHeight,
+                targetAspect,
+                cameraPose,
+                refCameraZ,
+                refFocalLength
+            );
+
+            const isOutside = proj.corners.some(
+                (c) => c.x < -0.5 || c.x > frameWidth + 0.5 || c.y < -0.5 || c.y > frameHeight + 0.5
+            );
+
+            if (isOutside) {
+                const pointsStr = proj.corners
+                    .map((c) => `${c.x.toFixed(1)},${c.y.toFixed(1)}`)
+                    .join(' ');
+                silhouettes.push({ id: evalLayer.id, points: pointsStr });
+            }
+        }
+        return silhouettes;
+    }, [
+        frame.layers,
+        effectiveViewportFrame.camera,
+        project.defaultCamera,
+        targetAspect,
+        frameWidth,
+        frameHeight,
+    ]);
 
     const eff = frame.effects.state;
     const effectiveBackground = resolveShotBackground(project, frame.activeShot);
@@ -330,90 +482,6 @@ export const Stage: React.FC<StageProps> = ({
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
-
-    // ============================================================================
-    // 3D CAMERA RIG CONTROLLER (Cinema 4D / Blender Style Viewport Navigation)
-    // ============================================================================
-    const updateActiveShotCamera = (patch: {
-        orbit?: number;
-        tilt?: number;
-        targetX?: number;
-        targetY?: number;
-        zoom?: number;
-    }) => {
-        const currentShot = frame.activeShot;
-        const selectedCamBlock = currentShot.cameraBlocks?.find(
-            (b) => b.id === selectedCameraBlockId
-        );
-
-        if (selectedCamBlock) {
-            const midMs = selectedCamBlock.startMs + selectedCamBlock.durationMs / 2;
-            const which: 'from' | 'to' = frame.shotLocalTimeMs < midMs ? 'from' : 'to';
-            const ep = selectedCamBlock[which] || {
-                anchorX: 0,
-                anchorY: 0,
-                zoom: 1,
-                roll: 0,
-                orbit: 0,
-                tilt: 0,
-            };
-
-            updateShot(
-                currentShot.id,
-                (s) => ({
-                    ...s,
-                    cameraBlocks: (s.cameraBlocks || []).map((cb) =>
-                        cb.id === selectedCamBlock.id
-                            ? {
-                                ...cb,
-                                [which]: {
-                                    ...ep,
-                                    anchorX: patch.targetX !== undefined ? patch.targetX : ep.anchorX,
-                                    anchorY: patch.targetY !== undefined ? patch.targetY : ep.anchorY,
-                                    zoom: patch.zoom !== undefined ? patch.zoom : ep.zoom,
-                                    orbit: patch.orbit !== undefined ? patch.orbit : ep.orbit,
-                                    tilt: patch.tilt !== undefined ? patch.tilt : ep.tilt,
-                                },
-                            }
-                            : cb
-                    ),
-                }),
-                { skipHistory: true }
-            );
-        } else {
-            updateShot(
-                currentShot.id,
-                (s) => {
-                    const framings = [...(s.framings || [])];
-                    const baseF = framings[0] || {
-                        id: 'default',
-                        name: 'Default',
-                        target: { x: 0, y: 0, z: 0 },
-                        zoom: 1,
-                        roll: 0,
-                        orbit: 0,
-                        tilt: 0,
-                    };
-
-                    const updatedF = {
-                        ...baseF,
-                        target: {
-                            ...baseF.target,
-                            x: patch.targetX !== undefined ? patch.targetX : baseF.target.x,
-                            y: patch.targetY !== undefined ? patch.targetY : baseF.target.y,
-                        },
-                        zoom: patch.zoom !== undefined ? patch.zoom : baseF.zoom,
-                        orbit: patch.orbit !== undefined ? patch.orbit : (baseF.orbit ?? 0),
-                        tilt: patch.tilt !== undefined ? patch.tilt : (baseF.tilt ?? 0),
-                    };
-
-                    framings[0] = updatedF;
-                    return { ...s, framings };
-                },
-                { skipHistory: true }
-            );
-        }
-    };
 
     const handleSetOrientation = (orbitDeg: number, tiltDeg: number) => {
         beginDragTransaction();
@@ -872,11 +940,9 @@ export const Stage: React.FC<StageProps> = ({
             );
         }
 
-        // 1. Dragged from LeftPanel Assets library
-        const assetId = e.dataTransfer.getData('application/x-raylight-asset-id');
-        if (assetId && project.assets[assetId]) {
-            const asset = project.assets[assetId];
-            const assetAspect = (asset.width || 1920) / (asset.height || 1080);
+        // Helper: compute fitted image dimensions preserving aspect ratio
+        const computeFittedImageDimensions = (assetWidth?: number, assetHeight?: number) => {
+            const assetAspect = (assetWidth || 1920) / (assetHeight || 1080);
             const frameAspect = frameWidth / frameHeight;
             let w = 0.55;
             let h = (w * frameAspect) / assetAspect;
@@ -884,12 +950,20 @@ export const Stage: React.FC<StageProps> = ({
                 h = 0.8;
                 w = (h * assetAspect) / frameAspect;
             }
+            return { width: Number(w.toFixed(3)), height: Number(h.toFixed(3)) };
+        };
+
+        // 1. Dragged from LeftPanel Assets library
+        const assetId = e.dataTransfer.getData('application/x-raylight-asset-id');
+        if (assetId && project.assets[assetId]) {
+            const asset = project.assets[assetId];
+            const size = computeFittedImageDimensions(asset.width, asset.height);
 
             const newLayer = addLayerToShot(frame.activeShot.id, 'image', {
                 name: asset.name,
                 assetId: asset.id,
                 position: { x: dropX, y: dropY, z: 0 },
-                size: { width: Number(w.toFixed(3)), height: Number(h.toFixed(3)) },
+                size,
                 rotation: { x: 0, y: 0, z: 0 },
                 device: undefined,
             });
@@ -932,21 +1006,13 @@ export const Stage: React.FC<StageProps> = ({
                         { skipHistory: true }
                     );
 
-                    const assetAspect =
-                        (assetRecord.width || 1920) / (assetRecord.height || 1080);
-                    const frameAspect = frameWidth / frameHeight;
-                    let w = 0.55;
-                    let h = (w * frameAspect) / assetAspect;
-                    if (h > 0.8) {
-                        h = 0.8;
-                        w = (h * assetAspect) / frameAspect;
-                    }
+                    const size = computeFittedImageDimensions(assetRecord.width, assetRecord.height);
 
                     const newLayer = addLayerToShot(frame.activeShot.id, 'image', {
                         name: file.name.replace(/\.[^/.]+$/, '') || 'Dropped image',
                         assetId: assetRecord.id,
                         position: { x: dropX, y: dropY, z: 0 },
-                        size: { width: Number(w.toFixed(3)), height: Number(h.toFixed(3)) },
+                        size,
                         rotation: { x: 0, y: 0, z: 0 },
                         device: undefined,
                     });
@@ -1041,11 +1107,33 @@ export const Stage: React.FC<StageProps> = ({
                         boxShadow: 'none',
                     }}
                 >
+                    {/* EXTERIOR SILHOUETTES: Rendered on editor background outside the artboard */}
+                    {exteriorSilhouettes.length > 0 && (
+                        <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none z-10">
+                            <defs>
+                                <mask id="outside-artboard-mask">
+                                    <rect x="-50000" y="-50000" width="100000" height="100000" fill="white" />
+                                    <rect x="0" y="0" width={frameWidth} height={frameHeight} fill="black" />
+                                </mask>
+                            </defs>
+                            <g mask="url(#outside-artboard-mask)">
+                                {exteriorSilhouettes.map((sil) => (
+                                    <polygon
+                                        key={`sil-${sil.id}`}
+                                        points={sil.points}
+                                        fill="#52525b"
+                                        fillOpacity={0.4}
+                                    />
+                                ))}
+                            </g>
+                        </svg>
+                    )}
+
                     {/* PRIMARY 3D VIEWPORT CANVAS (Three.js / React Three Fiber - Raylight Engine) */}
-                    <div className="absolute inset-0 overflow-hidden pointer-events-auto">
+                    <div className="absolute inset-0 overflow-hidden pointer-events-auto border border-black/80 shadow-2xl">
                         <ViewportCanvas
                             project={project}
-                            frame={frame}
+                            frame={effectiveViewportFrame}
                             selectedLayerIds={selectedLayerIds}
                             onSelectLayer={handleSelectLayerWithDeepSelect}
                             onPointerMissed={() => clearLayerSelection()}
@@ -1203,7 +1291,7 @@ export const Stage: React.FC<StageProps> = ({
 
                     {/* TOP SURFACE: 3D-Aware Selection Gizmo & Multi-Select Overlay */}
                     <SelectionOverlay
-                        frame={frame}
+                        frame={effectiveViewportFrame}
                         selectedLayerIds={selectedLayerIds}
                         frameWidth={frameWidth}
                         frameHeight={frameHeight}
@@ -1217,13 +1305,13 @@ export const Stage: React.FC<StageProps> = ({
 
             {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
             <OrientationGizmo
-                cameraRotation={frame.camera.rotation}
+                cameraRotation={effectiveViewportFrame.camera.rotation}
                 onSetOrientation={handleSetOrientation}
                 onDragStart={beginDragTransaction}
                 onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
                 onDragEnd={commitDragTransaction}
                 onResetCamera={handleResetCamera}
-                currentZoom={frame.camera.zoom}
+                currentZoom={effectiveViewportFrame.camera.zoom}
             />
 
             {/* Top-Center Camera Tool Floating Pill (when camera tool is active) */}
