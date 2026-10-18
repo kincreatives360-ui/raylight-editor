@@ -391,10 +391,14 @@ export async function runVideoExportPipeline(
     // CRITICAL FIX: Mix down project audio tracks and attach to the recording stream
     let audioContext: AudioContext | null = null;
     let audioDest: MediaStreamAudioDestinationNode | null = null;
-    const activeAudioClips = (project.audio?.clips || []).filter(
-        (clip) => !clip.muted && (clip.volume ?? 1) > 0 && clip.dataUrl
-    );
+    const isProjectAudioMuted = !project.audio || project.audio.muted || (project.audio.masterVolume ?? 1) <= 0;
+    const activeAudioClips = isProjectAudioMuted
+        ? []
+        : (project.audio?.clips || []).filter(
+            (clip) => !clip.muted && (clip.volume ?? 1) > 0 && clip.dataUrl
+        );
 
+    const clipBuffers = new Map<string, AudioBuffer>();
     if (activeAudioClips.length > 0 && typeof AudioContext !== 'undefined') {
         try {
             const AudioContextClass =
@@ -405,6 +409,17 @@ export async function runVideoExportPipeline(
             const audioTrack = audioDest.stream.getAudioTracks()[0];
             if (audioTrack) {
                 stream.addTrack(audioTrack);
+            }
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            for (const clip of activeAudioClips) {
+                if (clip.dataUrl && !clipBuffers.has(clip.dataUrl)) {
+                    const buf = await decodeAudioFromDataUrl(clip.dataUrl);
+                    if (buf) {
+                        clipBuffers.set(clip.dataUrl, buf);
+                    }
+                }
             }
         } catch (e) {
             console.warn('[Exporter] Audio track integration skipped:', e);
@@ -476,35 +491,7 @@ export async function runVideoExportPipeline(
 
         recorder.start();
 
-        // Schedule all synchronized audio voices into the audio destination
-        if (audioContext && audioDest) {
-            if (audioContext.state === 'suspended') {
-                await audioContext.resume();
-            }
-            for (const clip of activeAudioClips) {
-                if (!clip.dataUrl) continue;
-                const buffer = await decodeAudioFromDataUrl(clip.dataUrl);
-                if (!buffer || !audioContext || !audioDest) continue;
-                const source = audioContext.createBufferSource();
-                source.buffer = buffer;
-                const gain = audioContext.createGain();
-                const clipVol = (clip.volume ?? 1) * (project.audio?.masterVolume ?? 1);
-                gain.gain.setValueAtTime(clipVol, audioContext.currentTime);
-                source.connect(gain);
-                gain.connect(audioDest);
-
-                const clipRelStart = clip.startMs - startMs;
-                const scheduledStart = audioContext.currentTime + Math.max(0, clipRelStart / 1000);
-                const bufferOffset = Math.max(0, (clip.offsetMs || 0) + Math.max(0, -clipRelStart)) / 1000;
-                const playDuration = Math.max(0.05, clip.durationMs - Math.max(0, -clipRelStart)) / 1000;
-
-                if (playDuration > 0 && bufferOffset < buffer.duration) {
-                    source.start(scheduledStart, bufferOffset, playDuration);
-                }
-            }
-        }
-
-        const frameDelayMs = Math.max(8, Math.round(1000 / fps));
+        let baseAudioTime = 0;
 
         for (let f = 0; f <= totalFrames; f++) {
             if (abortSignal?.aborted) {
@@ -536,6 +523,38 @@ export async function runVideoExportPipeline(
                 renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
             }
 
+            if (f === 0) {
+                baseAudioTime = audioContext ? audioContext.currentTime : performance.now() / 1000;
+                if (audioContext && audioDest) {
+                    for (const clip of activeAudioClips) {
+                        const clipEnd = clip.startMs + clip.durationMs;
+                        if (clipEnd <= startMs || clip.startMs >= endMs) continue;
+
+                        const buffer = clip.dataUrl ? clipBuffers.get(clip.dataUrl) : null;
+                        if (!buffer) continue;
+
+                        const source = audioContext.createBufferSource();
+                        source.buffer = buffer;
+                        const gain = audioContext.createGain();
+                        const clipVol = (clip.volume ?? 1) * (project.audio?.masterVolume ?? 1);
+                        gain.gain.setValueAtTime(clipVol, baseAudioTime);
+                        source.connect(gain);
+                        gain.connect(audioDest);
+
+                        const effectiveStartMs = Math.max(startMs, clip.startMs);
+                        const effectiveEndMs = Math.min(endMs, clipEnd);
+                        const playDuration = Math.max(0, (effectiveEndMs - effectiveStartMs) / 1000);
+                        const scheduledStart = baseAudioTime + Math.max(0, (clip.startMs - startMs) / 1000);
+                        const elapsedBeforeStart = Math.max(0, startMs - clip.startMs);
+                        const bufferOffset = ((clip.offsetMs || 0) + elapsedBeforeStart) / 1000;
+
+                        if (playDuration > 0 && bufferOffset < buffer.duration) {
+                            source.start(scheduledStart, bufferOffset, playDuration);
+                        }
+                    }
+                }
+            }
+
             const percent = Math.round((f / totalFrames) * 100);
             onProgress({
                 frameIndex: f,
@@ -544,7 +563,14 @@ export async function runVideoExportPipeline(
                 statusText: `Rendering ${settings.resolution} Frame ${f}/${totalFrames} (${percent}%)`,
             });
 
-            await new Promise((r) => setTimeout(r, frameDelayMs));
+            if (f < totalFrames) {
+                const nextFrameTargetTime = baseAudioTime + (f + 1) / fps;
+                const currentAudioTime = audioContext ? audioContext.currentTime : performance.now() / 1000;
+                const delayMs = Math.max(0, (nextFrameTargetTime - currentAudioTime) * 1000);
+                if (delayMs > 0) {
+                    await new Promise((r) => setTimeout(r, delayMs));
+                }
+            }
         }
 
         const activeRecorder = recorder;

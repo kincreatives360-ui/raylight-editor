@@ -311,13 +311,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     startRename(layer.id, layer.name);
                 }}
                 role="treeitem"
-                tabIndex={isSelected ? 0 : -1}
+                tabIndex={0}
                 aria-selected={isSelected}
                 aria-label={`${layer.name}, ${layer.kind} layer`}
                 onKeyDown={(e) => {
+                    if (e.target !== e.currentTarget) return;
                     if (isEditing) return;
                     if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
+                        e.stopPropagation();
                         setInspectorTab('layer');
                         if (shot.id !== activeShot.id) {
                             selectShot(shot.id, layer.id);
@@ -327,6 +329,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         }
                     } else if (e.key === 'F2') {
                         e.preventDefault();
+                        e.stopPropagation();
                         startRename(layer.id, layer.name);
                     }
                 }}

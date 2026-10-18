@@ -97,6 +97,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       aria-labelledby="shortcuts-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all animate-in fade-in duration-150"
       onClick={handleClose}
+      onKeyDown={(e) => {
+        if (e.key === 'Escape') {
+          e.stopPropagation();
+          handleClose();
+        }
+      }}
     >
       <div
         className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs"

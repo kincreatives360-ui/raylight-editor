@@ -8,6 +8,9 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { evaluateEasing } from '../../engine/easing';
 
+const MIN_TIMELINE_ZOOM = 0.8;
+const MAX_TIMELINE_ZOOM = 2.4;
+
 interface TimelineProps {
     totalDurationMs: number;
     hoverTimeMs?: number | null;
@@ -69,6 +72,46 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     } = useSelectionStore();
 
     const trackRef = useRef<HTMLDivElement | null>(null);
+    const timelineZoomRef = useRef(timelineZoom);
+    useEffect(() => {
+        timelineZoomRef.current = timelineZoom;
+    }, [timelineZoom]);
+
+    useEffect(() => {
+        const container = trackRef.current;
+        if (!container) return;
+
+        const handleWheel = (event: WheelEvent) => {
+            if (event.ctrlKey || event.metaKey) {
+                event.preventDefault();
+                const rect = container.getBoundingClientRect();
+                const mouseX = event.clientX - rect.left;
+                const timelineX = mouseX + container.scrollLeft;
+
+                const zoomDelta = event.deltaY < 0 ? 0.12 : -0.12;
+                const currentZoom = timelineZoomRef.current;
+                const nextZoom = Math.max(
+                    MIN_TIMELINE_ZOOM,
+                    Math.min(MAX_TIMELINE_ZOOM, Number((currentZoom + zoomDelta).toFixed(2)))
+                );
+                if (nextZoom === currentZoom) return;
+
+                const scaleRatio = nextZoom / currentZoom;
+                setTimelineZoom(nextZoom);
+
+                requestAnimationFrame(() => {
+                    if (trackRef.current) {
+                        trackRef.current.scrollLeft = Math.max(0, timelineX * scaleRatio - mouseX);
+                    }
+                });
+            }
+        };
+
+        container.addEventListener('wheel', handleWheel, { passive: false });
+        return () => {
+            container.removeEventListener('wheel', handleWheel);
+        };
+    }, [setTimelineZoom]);
     const shotDragRef = useRef<{
         shotId: string;
         index: number;
@@ -902,10 +945,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             if (mode === 'move') {
                 nextStart = Math.max(0, origStart + deltaMs);
             } else if (mode === 'left') {
-                nextStart = Math.max(0, Math.min(origStart + origDur - 100, origStart + deltaMs));
+                const minStart = Math.max(0, origStart - origOffset);
+                const maxStart = origStart + origDur - 100;
+                nextStart = Math.max(minStart, Math.min(maxStart, origStart + deltaMs));
                 const diff = nextStart - origStart;
-                nextDur = Math.max(100, origDur - diff);
-                nextOffset = Math.max(0, origOffset + diff);
+                nextDur = origDur - diff;
+                nextOffset = origOffset + diff;
             } else if (mode === 'right') {
                 nextDur = Math.max(100, origDur + deltaMs);
             }
@@ -955,30 +1000,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         }));
     };
 
-    // 10. Cursor-Anchored Horizontal Zoom (Ctrl/Cmd + Wheel)
-    const handleTimelineWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-        if (event.ctrlKey || event.metaKey) {
-            event.preventDefault();
-            const container = trackRef.current;
-            if (!container) return;
-            const rect = container.getBoundingClientRect();
-            const mouseX = event.clientX - rect.left;
-            const timelineX = mouseX + container.scrollLeft;
-
-            const zoomDelta = event.deltaY < 0 ? 0.12 : -0.12;
-            const nextZoom = Math.max(0.5, Math.min(3.0, Number((timelineZoom + zoomDelta).toFixed(2))));
-            if (nextZoom === timelineZoom) return;
-
-            const scaleRatio = nextZoom / timelineZoom;
-            setTimelineZoom(nextZoom);
-
-            requestAnimationFrame(() => {
-                if (trackRef.current) {
-                    trackRef.current.scrollLeft = Math.max(0, timelineX * scaleRatio - mouseX);
-                }
-            });
-        }
-    };
+    // 10. Cursor-Anchored Horizontal Zoom handled via native wheel listener on trackRef
 
     const hoverDisplayTimeMs = hoverTimeMs === null
         ? null
@@ -1078,14 +1100,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         <div
                             className="h-full rounded-full bg-[#0088ff]"
                             style={{
-                                width: `${((timelineZoom - 0.8) / (2.4 - 0.8)) * 100}%`,
+                                width: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
                             }}
                         />
                         <input
                             aria-label="Timeline Zoom"
                             type="range"
-                            min={0.8}
-                            max={2.4}
+                            min={MIN_TIMELINE_ZOOM}
+                            max={MAX_TIMELINE_ZOOM}
                             step={0.05}
                             value={timelineZoom}
                             onChange={(e) => setTimelineZoom(Number(e.target.value))}
@@ -1094,7 +1116,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         <div
                             className="w-3.5 h-3.5 rounded-full bg-white shadow pointer-events-none absolute -ml-1.5"
                             style={{
-                                left: `${((timelineZoom - 0.8) / (2.4 - 0.8)) * 100}%`,
+                                left: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
                             }}
                         />
                     </div>
@@ -1107,7 +1129,6 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 onScroll={(e) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
                 }}
-                onWheel={handleTimelineWheel}
                 onPointerMove={handleTimelinePointerMove}
                 onPointerLeave={handleTimelinePointerLeave}
                 onClick={handleTimelineClick}
@@ -1220,6 +1241,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <span className="truncate pointer-events-none pl-1">{clip.name}</span>
                                             <button
                                                 type="button"
+                                                onPointerDown={(e) => e.stopPropagation()}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     deleteAudioClip(clip.id);
@@ -1263,6 +1285,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         <span className="truncate pointer-events-none pl-1">{clip.name}</span>
                                         <button
                                             type="button"
+                                            onPointerDown={(e) => e.stopPropagation()}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 deleteAudioClip(clip.id);

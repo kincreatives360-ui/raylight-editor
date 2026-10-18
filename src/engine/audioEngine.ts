@@ -4,6 +4,7 @@ import type { AudioClip, ProjectAudio } from '../model/types';
 // Audio Context Singleton
 let audioCtx: AudioContext | null = null;
 const audioBufferCache = new Map<string, AudioBuffer>();
+const inFlightDecodes = new Set<string>();
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
@@ -168,7 +169,13 @@ export function syncAudioPlayback(
       if (clip.dataUrl) {
         if (!audioBufferCache.has(clip.dataUrl)) {
           // Preload into cache so it will be ready to play on upcoming playback ticks
-          void decodeAudioFromDataUrl(clip.dataUrl);
+          if (!inFlightDecodes.has(clip.dataUrl)) {
+            inFlightDecodes.add(clip.dataUrl);
+            void decodeAudioFromDataUrl(clip.dataUrl).finally(() => {
+              inFlightDecodes.delete(clip.dataUrl!);
+              lastSyncedTimeMs = -1;
+            });
+          }
         } else {
           // Play decoded user audio
           const buffer = audioBufferCache.get(clip.dataUrl)!;
