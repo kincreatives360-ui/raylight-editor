@@ -23,6 +23,7 @@ import {
     ArrowRight,
     Grid3X3,
     HelpCircle,
+    Camera,
 } from 'lucide-react';
 import type { Layer } from '../model/types';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
@@ -137,6 +138,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                 [
                                     { id: 'select', label: 'Select (3D Plane)', key: 'V' },
                                     { id: 'move', label: 'Move (Screen Space)', key: 'G' },
+                                    { id: 'camera', label: 'Camera Rig (3D Orbit)', key: 'C' },
                                     { id: 'hand', label: 'Hand Tool (Pan)', key: 'H' },
                                 ] as { id: CanvasTool; label: string; key: string }[]
                             ).map((item) => (
@@ -161,7 +163,21 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     )}
                 </div>
 
-                {/* 2. 3D Tilt Tool (Y) */}
+                {/* 2. 3D Camera Rig Tool (C) - C4D / Blender style Orbit, Pan, Dolly */}
+                <button
+                    type="button"
+                    onClick={() => setActiveTool('camera')}
+                    aria-label="Camera Navigation Tool (C) - Left-drag: Orbit | Middle-drag: Pan | Right-drag: Dolly"
+                    title="Camera Navigation Tool (C) - Left-drag: Orbit | Middle-drag: Pan | Right-drag: Dolly"
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'camera'
+                            ? 'bg-[#0088ff] text-white shadow-sm ring-1 ring-sky-300'
+                            : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                        }`}
+                >
+                    <Camera className="w-3.5 h-3.5" />
+                </button>
+
+                {/* 3. 3D Tilt Tool (Y) */}
                 <button
                     type="button"
                     onClick={() => setActiveTool('tilt')}
@@ -175,7 +191,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     <Rotate3d className="w-3.5 h-3.5" />
                 </button>
 
-                {/* 3. Shape Tool (Circle / Rectangle / Line) + Chevron */}
+                {/* 4. Shape Tool (Circle / Rectangle / Line) + Chevron */}
                 <div className="relative flex items-center">
                     <button
                         type="button"

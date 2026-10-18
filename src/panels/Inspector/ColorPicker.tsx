@@ -104,6 +104,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         setHsv(hexToHsv(color));
     }
 
+    const hsvRef = useRef<Hsv>(hsv);
+    hsvRef.current = hsv;
+
     useEffect(() => {
         if (!open) return;
         const updatePosition = () => {
@@ -119,11 +122,16 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         window.addEventListener('resize', updatePosition);
         window.addEventListener('scroll', updatePosition, true);
         const onPointerDown = (event: PointerEvent) => {
-            const target = event.target as Node;
-            if (!anchorRef.current?.contains(target) && !popupRef.current?.contains(target)) {
-                setOpen(false);
-                onExitGradient?.();
+            const target = event.target as HTMLElement | null;
+            if (!target) return;
+            if (anchorRef.current?.contains(target) || popupRef.current?.contains(target)) {
+                return;
             }
+            if (target.closest && target.closest('[data-raylight-color-picker]')) {
+                return;
+            }
+            setOpen(false);
+            onExitGradient?.();
         };
         window.addEventListener('pointerdown', onPointerDown);
         return () => {
@@ -133,31 +141,52 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         };
     }, [open, pickerMode, onExitGradient]);
 
-    useEffect(() => {
+    const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // ignore
+        }
+        setDraggingSquare(true);
+        const rect = event.currentTarget.getBoundingClientRect();
+        const next = {
+            ...hsvRef.current,
+            s: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+            v: 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
+        };
+        setHsv(next);
+        const nextColor = hsvToHex(next);
+        setHexDraft(nextColor);
+        onChange(nextColor);
+    };
+
+    const handleSquarePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
         if (!draggingSquare) return;
-        const updateFromPointer = (event: PointerEvent) => {
-            const rect = squareRef.current?.getBoundingClientRect();
-            if (!rect) return;
-            const next = {
-                ...hsv,
-                s: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
-                v: 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
-            };
-            setHsv(next);
-            const nextColor = hsvToHex(next);
-            setHexDraft(nextColor);
-            onChange(nextColor);
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        const next = {
+            ...hsvRef.current,
+            s: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)),
+            v: 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)),
         };
-        const stop = () => setDraggingSquare(false);
-        window.addEventListener('pointermove', updateFromPointer);
-        window.addEventListener('pointerup', stop, { once: true });
-        window.addEventListener('pointercancel', stop, { once: true });
-        return () => {
-            window.removeEventListener('pointermove', updateFromPointer);
-            window.removeEventListener('pointerup', stop);
-            window.removeEventListener('pointercancel', stop);
-        };
-    }, [draggingSquare, hsv, onChange]);
+        setHsv(next);
+        const nextColor = hsvToHex(next);
+        setHexDraft(nextColor);
+        onChange(nextColor);
+    };
+
+    const handleSquarePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+        setDraggingSquare(false);
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // ignore
+        }
+    };
 
     const commitHex = (value: string) => {
         const nextColor = normalizeHex(value);
@@ -186,6 +215,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         <div
             ref={popupRef}
             id={`raylight-color-picker-${pickerId}`}
+            data-raylight-color-picker={pickerId}
             role="dialog"
             aria-label={`${label} picker`}
             style={{ left: position.left, top: position.top }}
@@ -231,19 +261,21 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         />
                     </label>
                     <div className="flex h-[205px] gap-3">
-                        <div ref={squareRef} role="slider" aria-label="Saturation and brightness" aria-valuetext={hexDraft} onPointerDown={(event) => {
-                            event.preventDefault();
-                            setDraggingSquare(true);
-                            const rect = event.currentTarget.getBoundingClientRect();
-                            const next = { ...hsv, s: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), v: 1 - Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) };
-                            setHsv(next);
-                            const nextColor = hsvToHex(next);
-                            setHexDraft(nextColor);
-                            onChange(nextColor);
-                        }} className="relative min-w-0 flex-1 touch-none cursor-crosshair rounded-xl" style={{ backgroundColor: hueColor, backgroundImage: 'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)' }}>
+                        <div
+                            ref={squareRef}
+                            role="slider"
+                            aria-label="Saturation and brightness"
+                            aria-valuetext={hexDraft}
+                            onPointerDown={handleSquarePointerDown}
+                            onPointerMove={handleSquarePointerMove}
+                            onPointerUp={handleSquarePointerUp}
+                            onPointerCancel={handleSquarePointerUp}
+                            className="relative min-w-0 flex-1 touch-none cursor-crosshair rounded-xl select-none"
+                            style={{ backgroundColor: hueColor, backgroundImage: 'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)' }}
+                        >
                             <span className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_5px_#000]" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
                         </div>
-                        <div className="relative h-full w-[17px] shrink-0 rounded-full" style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}>
+                        <div className="relative h-full w-[17px] shrink-0 rounded-full select-none" style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}>
                             <input aria-label="Hue" type="range" min="0" max="359" value={Math.round(hsv.h)} onChange={(event) => {
                                 const next = { ...hsv, h: Number(event.target.value) };
                                 setHsv(next);
@@ -283,7 +315,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             const at = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
                             updateStop(Number(raw), { at });
                         }} onPointerUp={(event) => { delete event.currentTarget.dataset.dragStop; }} onPointerCancel={(event) => { delete event.currentTarget.dataset.dragStop; }}>
-                            {gradient.stops.map((stop, index) => <circle key={`${index}-${stop.at}`} cx={stop.at * 300} cy="18" r="7" fill={stop.color} stroke="white" strokeWidth="2" />)}
+                            {gradient.stops.map((stop, index) => <circle key={`gradient-stop-${index}`} cx={stop.at * 300} cy="18" r="7" fill={stop.color} stroke="white" strokeWidth="2" className="cursor-pointer" />)}
                         </svg>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[#a1a1aa]">

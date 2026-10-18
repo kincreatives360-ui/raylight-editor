@@ -19,6 +19,7 @@ import {
     Square,
     Circle,
     Layers,
+    Camera,
 } from 'lucide-react';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
@@ -28,10 +29,13 @@ import { useSelectionStore } from '../store/useSelectionStore';
 import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
 import { SelectionOverlay } from './SelectionOverlay';
 import { Guides } from './Guides';
+import { OrientationGizmo } from './OrientationGizmo';
+import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { ASPECT_RATIO_CONFIG, type SnapGuideLine } from './stageUtils';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
+import { radToDeg } from '../model/defaults';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
@@ -89,6 +93,7 @@ export const Stage: React.FC<StageProps> = ({
         gradientEditorActive,
         gradientEditorAngle,
         setGradientEditorAngle,
+        selectedCameraBlockId,
     } = useSelectionStore();
 
     const containerRef = useRef<HTMLDivElement | null>(null);
@@ -151,12 +156,18 @@ export const Stage: React.FC<StageProps> = ({
         return () => observer.disconnect();
     }, []);
 
-    // Track Spacebar hold for temporary Hand panning
+    // Track Spacebar hold for temporary Hand panning and C/V/H/Y tool shortcuts
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             const tag = document.activeElement?.tagName;
             if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
             if (e.code === 'Space') setIsSpaceHeld(true);
+            if (!e.metaKey && !e.ctrlKey) {
+                if (e.key === 'c' || e.key === 'C') setActiveTool('camera');
+                if (e.key === 'v' || e.key === 'V') setActiveTool('select');
+                if (e.key === 'h' || e.key === 'H') setActiveTool('hand');
+                if (e.key === 'y' || e.key === 'Y') setActiveTool('tilt');
+            }
         };
         const onKeyUp = (e: KeyboardEvent) => {
             if (e.code === 'Space') setIsSpaceHeld(false);
@@ -167,15 +178,35 @@ export const Stage: React.FC<StageProps> = ({
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('keyup', onKeyUp);
         };
-    }, []);
+    }, [setActiveTool]);
 
-    // Wheel handler: Cmd/Ctrl + Scroll (or pinch) zooms; plain scroll pans
+    // Wheel handler: In camera tool or Alt held -> 3D camera dolly; Cmd/Ctrl zooms canvas; plain scroll pans canvas
     useEffect(() => {
         const el = containerRef.current;
         if (!el) return;
 
         const handleWheel = (e: WheelEvent) => {
             e.preventDefault();
+
+            // 1. Camera Navigation Tool (C) or Alt + Wheel: 3D Camera Dolly (Physical Z push)
+            if (activeTool === 'camera' || e.altKey) {
+                const zoomFactor = e.deltaY < 0 ? 1.06 : 0.94;
+                const currentShot = frame.activeShot;
+                const selectedCamBlock = currentShot.cameraBlocks?.find(
+                    (b) => b.id === selectedCameraBlockId
+                );
+                const baseZoom =
+                    selectedCamBlock?.to?.zoom ??
+                    currentShot.framings?.[0]?.zoom ??
+                    frame.camera.zoom;
+                const nextZoom = Number(
+                    Math.max(0.2, Math.min(5.0, baseZoom * zoomFactor)).toFixed(3)
+                );
+                updateActiveShotCamera({ zoom: nextZoom });
+                return;
+            }
+
+            // 2. 2D Workspace Canvas Pan & Zoom
             if (e.metaKey || e.ctrlKey) {
                 const zoomFactor = e.deltaY < 0 ? 1.08 : 0.92;
                 setCanvasZoom((prev) => prev * zoomFactor);
@@ -189,7 +220,7 @@ export const Stage: React.FC<StageProps> = ({
 
         el.addEventListener('wheel', handleWheel, { passive: false });
         return () => el.removeEventListener('wheel', handleWheel);
-    }, [setCanvasZoom, setCanvasPan]);
+    }, [setCanvasZoom, setCanvasPan, activeTool, frame.activeShot, selectedCameraBlockId, frame.camera.zoom]);
 
     const ratioSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
     const targetAspect = ratioSpec.widthRatio / ratioSpec.heightRatio;
@@ -285,9 +316,198 @@ export const Stage: React.FC<StageProps> = ({
     );
 
     // ============================================================================
-    // WORKSPACE MOUSE DOWN: Hand Pan, Click-and-Drag Layer Creation, or Deselect
+    // 3D CAMERA RIG CONTROLLER (Cinema 4D / Blender Style Viewport Navigation)
+    // ============================================================================
+    const updateActiveShotCamera = (patch: {
+        orbit?: number;
+        tilt?: number;
+        targetX?: number;
+        targetY?: number;
+        zoom?: number;
+    }) => {
+        const currentShot = frame.activeShot;
+        const selectedCamBlock = currentShot.cameraBlocks?.find(
+            (b) => b.id === selectedCameraBlockId
+        );
+
+        if (selectedCamBlock) {
+            const midMs = selectedCamBlock.startMs + selectedCamBlock.durationMs / 2;
+            const which: 'from' | 'to' = frame.shotLocalTimeMs < midMs ? 'from' : 'to';
+            const ep = selectedCamBlock[which] || {
+                anchorX: 0,
+                anchorY: 0,
+                zoom: 1,
+                roll: 0,
+                orbit: 0,
+                tilt: 0,
+            };
+
+            updateShot(
+                currentShot.id,
+                (s) => ({
+                    ...s,
+                    cameraBlocks: (s.cameraBlocks || []).map((cb) =>
+                        cb.id === selectedCamBlock.id
+                            ? {
+                                ...cb,
+                                [which]: {
+                                    ...ep,
+                                    anchorX: patch.targetX !== undefined ? patch.targetX : ep.anchorX,
+                                    anchorY: patch.targetY !== undefined ? patch.targetY : ep.anchorY,
+                                    zoom: patch.zoom !== undefined ? patch.zoom : ep.zoom,
+                                    orbit: patch.orbit !== undefined ? patch.orbit : ep.orbit,
+                                    tilt: patch.tilt !== undefined ? patch.tilt : ep.tilt,
+                                },
+                            }
+                            : cb
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        } else {
+            updateShot(
+                currentShot.id,
+                (s) => {
+                    const framings = [...(s.framings || [])];
+                    const baseF = framings[0] || {
+                        id: 'default',
+                        name: 'Default',
+                        target: { x: 0, y: 0, z: 0 },
+                        zoom: 1,
+                        roll: 0,
+                        orbit: 0,
+                        tilt: 0,
+                    };
+
+                    const updatedF = {
+                        ...baseF,
+                        target: {
+                            ...baseF.target,
+                            x: patch.targetX !== undefined ? patch.targetX : baseF.target.x,
+                            y: patch.targetY !== undefined ? patch.targetY : baseF.target.y,
+                        },
+                        zoom: patch.zoom !== undefined ? patch.zoom : baseF.zoom,
+                        orbit: patch.orbit !== undefined ? patch.orbit : (baseF.orbit ?? 0),
+                        tilt: patch.tilt !== undefined ? patch.tilt : (baseF.tilt ?? 0),
+                    };
+
+                    framings[0] = updatedF;
+                    return { ...s, framings };
+                },
+                { skipHistory: true }
+            );
+        }
+    };
+
+    const handleSetOrientation = (orbitDeg: number, tiltDeg: number) => {
+        beginDragTransaction();
+        updateActiveShotCamera({ orbit: orbitDeg, tilt: tiltDeg });
+        commitDragTransaction();
+    };
+
+    const handleResetCamera = () => {
+        beginDragTransaction();
+        updateActiveShotCamera({
+            orbit: 0,
+            tilt: 0,
+            targetX: 0,
+            targetY: 0,
+            zoom: 1,
+        });
+        commitDragTransaction();
+    };
+
+    // ============================================================================
+    // WORKSPACE MOUSE DOWN: Camera Orbit/Pan/Dolly, Hand Pan, Drawing, or Deselect
     // ============================================================================
     const handleWorkspaceMouseDown = (e: React.MouseEvent) => {
+        // 0. Dedicated Camera Navigation Tool (C) OR Alt + Drag in Select Tool
+        // Left-drag: Orbit | Middle-drag (or Shift+Left-drag): Pan | Right-drag: Dolly
+        const isCameraAction = activeTool === 'camera' || (e.altKey && !isSpaceHeld);
+        if (isCameraAction) {
+            e.preventDefault();
+            e.stopPropagation();
+
+            const isPanAction = e.button === 1 || (e.button === 0 && e.shiftKey);
+            const isDollyAction = e.button === 2;
+            const isOrbitAction = e.button === 0 && !e.shiftKey;
+
+            const startX = e.clientX;
+            const startY = e.clientY;
+
+            const currentShot = frame.activeShot;
+            const selectedCamBlock = currentShot.cameraBlocks?.find(
+                (b) => b.id === selectedCameraBlockId
+            );
+            const midMs = selectedCamBlock
+                ? selectedCamBlock.startMs + selectedCamBlock.durationMs / 2
+                : 0;
+            const which: 'from' | 'to' = frame.shotLocalTimeMs < midMs ? 'from' : 'to';
+            const activeEp = selectedCamBlock ? selectedCamBlock[which] : null;
+
+            const baseFraming = currentShot.framings?.[0];
+            const startOrbit = activeEp
+                ? activeEp.orbit
+                : (baseFraming?.orbit ?? Math.round(radToDeg(frame.camera.rotation.y)));
+            const startTilt = activeEp
+                ? activeEp.tilt
+                : (baseFraming?.tilt ?? Math.round(radToDeg(frame.camera.rotation.x)));
+            const startTargetX = activeEp
+                ? activeEp.anchorX
+                : (baseFraming?.target.x ?? frame.camera.target.x);
+            const startTargetY = activeEp
+                ? activeEp.anchorY
+                : (baseFraming?.target.y ?? frame.camera.target.y);
+            const startZoom = activeEp
+                ? activeEp.zoom
+                : (baseFraming?.zoom ?? frame.camera.zoom);
+
+            beginDragTransaction();
+
+            const onMove = (moveEv: MouseEvent) => {
+                const deltaX = moveEv.clientX - startX;
+                const deltaY = moveEv.clientY - startY;
+
+                if (isOrbitAction) {
+                    const deltaOrbit = deltaX * 0.4;
+                    const deltaTilt = -deltaY * 0.4;
+                    const nextOrbit = Math.round((startOrbit + deltaOrbit + 360) % 360);
+                    const nextTilt = Math.max(
+                        -85,
+                        Math.min(85, Math.round(startTilt + deltaTilt))
+                    );
+                    updateActiveShotCamera({ orbit: nextOrbit, tilt: nextTilt });
+                } else if (isPanAction) {
+                    const panFactor = 1 / (Math.max(0.2, startZoom) * canvasZoom);
+                    const deltaNormX = (deltaX / frameWidth) * panFactor;
+                    const deltaNormY = (deltaY / frameHeight) * panFactor;
+                    const nextTargetX = Number(
+                        Math.max(-2.5, Math.min(2.5, startTargetX - deltaNormX)).toFixed(4)
+                    );
+                    const nextTargetY = Number(
+                        Math.max(-2.5, Math.min(2.5, startTargetY - deltaNormY)).toFixed(4)
+                    );
+                    updateActiveShotCamera({ targetX: nextTargetX, targetY: nextTargetY });
+                } else if (isDollyAction) {
+                    const zoomFactor = Math.pow(1.006, -deltaY);
+                    const nextZoom = Number(
+                        Math.max(0.2, Math.min(5.0, startZoom * zoomFactor)).toFixed(3)
+                    );
+                    updateActiveShotCamera({ zoom: nextZoom });
+                }
+            };
+
+            const onUp = () => {
+                window.removeEventListener('mousemove', onMove);
+                window.removeEventListener('mouseup', onUp);
+                commitDragTransaction();
+            };
+
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', onUp);
+            return;
+        }
+
         // 1. Hand Tool or Spacebar held or Middle-Click -> Pan Canvas
         if (activeTool === 'hand' || isSpaceHeld || e.button === 1) {
             e.preventDefault();
@@ -726,6 +946,11 @@ export const Stage: React.FC<StageProps> = ({
     // RIGHT-CLICK CONTEXT MENU (Audit Section 6.4)
     // ============================================================================
     const handleContextMenu = (e: React.MouseEvent) => {
+        if (activeTool === 'camera' || e.altKey) {
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+        }
         e.preventDefault();
         e.stopPropagation();
 
@@ -771,9 +996,11 @@ export const Stage: React.FC<StageProps> = ({
             onDrop={handleCanvasDrop}
             className={`flex-1 bg-[#242424] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
-                    : isCreationTool
-                        ? 'cursor-crosshair'
-                        : 'cursor-default'
+                    : activeTool === 'camera'
+                        ? 'cursor-move active:cursor-grabbing'
+                        : isCreationTool
+                            ? 'cursor-crosshair'
+                            : 'cursor-default'
                 }`}
         >
             {/* PAN & ZOOM WORKSPACE TRANSFORM WRAPPER */}
@@ -813,12 +1040,8 @@ export const Stage: React.FC<StageProps> = ({
                     {showGradientAngleControl && (
                         <svg
                             aria-label="Drag to set gradient direction"
-                            className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none"
+                            className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none pointer-events-none"
                             viewBox={`0 0 ${frameWidth} ${frameHeight}`}
-                            onPointerDown={handleGradientAnglePointerDown}
-                            onPointerMove={handleGradientAnglePointerMove}
-                            onPointerUp={handleGradientAnglePointerUp}
-                            onPointerCancel={handleGradientAnglePointerCancel}
                         >
                             {(() => {
                                 const radians = gradientEditorAngle * Math.PI / 180;
@@ -832,11 +1055,17 @@ export const Stage: React.FC<StageProps> = ({
                                 const x2 = cx + dx;
                                 const y2 = cy + dy;
                                 return (
-                                    <g>
-                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="20" className="cursor-crosshair" />
+                                    <g
+                                        className="pointer-events-auto"
+                                        onPointerDown={handleGradientAnglePointerDown}
+                                        onPointerMove={handleGradientAnglePointerMove}
+                                        onPointerUp={handleGradientAnglePointerUp}
+                                        onPointerCancel={handleGradientAnglePointerCancel}
+                                    >
+                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" className="cursor-crosshair pointer-events-auto" />
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" className="pointer-events-none drop-shadow" />
-                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="pointer-events-none" />
-                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="pointer-events-none" />
+                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
+                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
                                         <text x={frameWidth / 2 + 10} y={frameHeight / 2 - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
                                     </g>
                                 );
@@ -946,6 +1175,16 @@ export const Stage: React.FC<StageProps> = ({
                         />
                     )}
 
+                    {/* Visual Camera Move Framing Rectangles (From/To) */}
+                    <CameraFramingOverlay
+                        shot={frame.activeShot}
+                        selectedCameraBlockId={selectedCameraBlockId}
+                        frameWidth={frameWidth}
+                        frameHeight={frameHeight}
+                        cameraZoom={frame.camera.zoom}
+                        canvasZoom={canvasZoom}
+                    />
+
                     {/* TOP SURFACE: 3D-Aware Selection Gizmo & Multi-Select Overlay */}
                     <SelectionOverlay
                         frame={frame}
@@ -959,6 +1198,40 @@ export const Stage: React.FC<StageProps> = ({
                     />
                 </div>
             </div>
+
+            {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
+            <OrientationGizmo
+                cameraRotation={frame.camera.rotation}
+                onSetOrientation={handleSetOrientation}
+                onResetCamera={handleResetCamera}
+                currentZoom={frame.camera.zoom}
+            />
+
+            {/* Top-Center Camera Tool Floating Pill (when camera tool is active) */}
+            {activeTool === 'camera' && !isAnimateMode && (
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[#16161a]/95 backdrop-blur-xl border border-sky-400/40 text-[11px] font-medium text-white flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
+                    <div className="flex items-center gap-1.5 text-sky-400">
+                        <Camera className="w-3.5 h-3.5" />
+                        <span className="font-semibold">Camera Tool (C)</span>
+                    </div>
+                    <div className="text-[10px] text-gray-400 font-mono hidden sm:flex items-center gap-2">
+                        <span>Left-drag: Orbit</span>
+                        <span>•</span>
+                        <span>Middle: Pan</span>
+                        <span>•</span>
+                        <span>Right: Dolly</span>
+                    </div>
+                    <button
+                        type="button"
+                        onClick={handleResetCamera}
+                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-gray-200 cursor-pointer transition flex items-center gap-1"
+                        title="Reset Camera Pose to Default"
+                    >
+                        <RotateCcw className="w-2.5 h-2.5" />
+                        <span>Reset</span>
+                    </button>
+                </div>
+            )}
 
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (

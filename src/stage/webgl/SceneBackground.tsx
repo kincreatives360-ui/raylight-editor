@@ -106,7 +106,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   slideX = 0,
   assets = {},
 }) => {
-  const { camera } = useThree();
+  const { camera, invalidate } = useThree();
   const meshRef = useRef<THREE.Mesh>(null);
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
   const { currentTimeMs } = usePlayheadStore();
@@ -253,7 +253,8 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
       if (uniforms.uTexture) uniforms.uTexture.value = gradientTexture;
       if (uniforms.uOpacity) uniforms.uOpacity.value = opacity;
     }
-  }, [bg, opacity, imageTexture, gradientTexture, uniforms]);
+    invalidate();
+  }, [bg, opacity, imageTexture, gradientTexture, uniforms, invalidate]);
 
   // Frustum billboard lock
   useFrame(() => {
@@ -367,7 +368,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   background,
   assets,
 }) => {
-  const { scene } = useThree();
+  const { scene, invalidate } = useThree();
   const targetShot = activeShot ?? shot ?? frame?.activeShot ?? project?.shots[0];
 
   const incomingBg: Background = useMemo(() => {
@@ -402,10 +403,12 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
     } else {
       scene.background = null;
     }
+    invalidate();
     return () => {
       scene.background = null;
+      invalidate();
     };
-  }, [scene, incomingBg, isTransitioning]);
+  }, [scene, incomingBg, isTransitioning, invalidate]);
 
   let inOpacity = 1;
   let inSlideX = 0;

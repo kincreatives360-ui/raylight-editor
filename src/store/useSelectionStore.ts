@@ -14,6 +14,7 @@ export type CanvasTool =
     | 'select'
     | 'move'
     | 'tilt'
+    | 'camera'
     | 'hand'
     | 'text'
     | 'image'

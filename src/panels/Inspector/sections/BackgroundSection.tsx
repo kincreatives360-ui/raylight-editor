@@ -103,7 +103,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     scope = 'project',
     activeShot,
 }) => {
-    const { project, updateProject, updateShot } = useProjectStore();
+    const { project, updateProject, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
     const {
         gradientEditorActive,
         setGradientEditor,
@@ -111,7 +111,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     } = useSelectionStore();
 
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const gradientBarRef = useRef<HTMLDivElement>(null);
     const [selectedStopIdx, setSelectedStopIdx] = useState<number>(0);
+    const [draggingStopIdx, setDraggingStopIdx] = useState<number | null>(null);
     const [colorSubTab, setColorSubTab] = useState<'solid' | 'gradient'>('solid');
     const [selectedPaletteIdx, setSelectedPaletteIdx] = useState<number>(0);
 
@@ -124,19 +126,87 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         ? resolveShotBackground(project, activeShot)
         : project.background;
 
-    const setBackground = (bg: Background) => {
+    const setBackground = (bg: Background, options?: { skipHistory?: boolean }) => {
         if (isShotScope && activeShot) {
-            updateShot(activeShot.id, (shot) => ({
-                ...shot,
-                useProjectBackground: false,
-                background: bg,
-            }));
+            updateShot(
+                activeShot.id,
+                (shot) => ({
+                    ...shot,
+                    useProjectBackground: false,
+                    background: bg,
+                }),
+                options
+            );
         } else {
-            updateProject((p) => ({
-                ...p,
-                background: bg,
-            }));
+            updateProject(
+                (p) => ({
+                    ...p,
+                    background: bg,
+                }),
+                options
+            );
+            // Keep activeShot in sync if it has a direct background object
+            if (activeShot?.background) {
+                updateShot(
+                    activeShot.id,
+                    (shot) => ({
+                        ...shot,
+                        background: bg,
+                    }),
+                    options
+                );
+            }
         }
+    };
+
+    const handleStopPointerDown = (idx: number, e: React.PointerEvent<HTMLButtonElement>) => {
+        e.preventDefault();
+        e.stopPropagation();
+        try {
+            e.currentTarget.setPointerCapture(e.pointerId);
+        } catch {
+            // ignore
+        }
+        beginDragTransaction();
+        setSelectedStopIdx(idx);
+        setDraggingStopIdx(idx);
+    };
+
+    const handleStopPointerMove = (idx: number, e: React.PointerEvent<HTMLButtonElement>) => {
+        if (draggingStopIdx !== idx || !gradientBarRef.current || effectiveBg.kind !== 'gradient') return;
+        e.preventDefault();
+        const rect = gradientBarRef.current.getBoundingClientRect();
+        if (!rect.width) return;
+        const at = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+        const roundedAt = Number(at.toFixed(3));
+        const stops = [...effectiveBg.stops];
+        stops[idx] = { ...stops[idx], at: roundedAt };
+        setBackground({ ...effectiveBg, stops }, { skipHistory: true });
+    };
+
+    const handleStopPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+        setDraggingStopIdx(null);
+        try {
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+            }
+        } catch {
+            // ignore
+        }
+        if (effectiveBg.kind === 'gradient') {
+            const currentSelected = effectiveBg.stops[selectedStopIdx];
+            const sortedStops = [...effectiveBg.stops].sort((a, b) => a.at - b.at);
+            if (currentSelected) {
+                const newIdx = sortedStops.findIndex(
+                    (s) => s.at === currentSelected.at && s.color === currentSelected.color
+                );
+                if (newIdx !== -1) {
+                    setSelectedStopIdx(newIdx);
+                }
+            }
+            setBackground({ ...effectiveBg, stops: sortedStops });
+        }
+        commitDragTransaction();
     };
 
     const handleRevertToProject = () => {
@@ -245,11 +315,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         : undefined;
 
     return (
-        <div className="flex flex-col gap-3 p-3 bg-[#141416] border-b border-white/[0.06] text-xs">
+        <div className="flex flex-col gap-3 p-3 bg-[var(--bg-panel)] border-b border-[var(--border-subtle)] text-xs text-[var(--text-secondary)]">
             {/* Header: Scope, Override Status */}
             <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-medium text-[#d4d4d8]">
-                    <Palette className="w-3.5 h-3.5 text-[#0088ff]" />
+                <div className="flex items-center gap-1.5 font-medium text-[var(--text-primary)]">
+                    <Palette className="w-3.5 h-3.5 text-[var(--accent-primary)]" />
                     <span>{isShotScope ? 'Shot Background' : 'Canvas Background'}</span>
                 </div>
 
@@ -259,20 +329,20 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             <button
                                 type="button"
                                 onClick={handleRevertToProject}
-                                className="text-[10px] text-[#0088ff] hover:underline cursor-pointer"
+                                className="text-[11px] text-[var(--accent-primary)] hover:underline cursor-pointer font-medium focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none rounded px-1"
                                 title="Revert to project background"
                             >
                                 Reset to Project
                             </button>
                         ) : (
-                            <span className="text-[10px] text-[#71717a]">Using Project</span>
+                            <span className="text-[11px] text-[var(--text-disabled)]">Using Project</span>
                         )}
                     </div>
                 )}
             </div>
 
             {/* Top Navigation Tabs: Color | Shader | Image | Alpha */}
-            <div className="grid grid-cols-4 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06] text-[11px]">
+            <div className="grid grid-cols-4 bg-[var(--bg-subtle)] p-0.5 rounded-lg border border-[var(--border-subtle)] text-[11px]">
                 {(['color', 'shader', 'image', 'alpha'] as const).map((tab) => {
                     const isActive = mainTab === tab;
                     return (
@@ -280,9 +350,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             key={tab}
                             type="button"
                             onClick={() => handleTabChange(tab)}
-                            className={`py-1 rounded font-medium capitalize transition cursor-pointer text-center ${isActive
-                                ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                : 'text-[#a1a1aa] hover:text-white'
+                            className={`py-1 rounded font-medium capitalize transition cursor-pointer text-center focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${isActive
+                                ? 'bg-[var(--bg-muted)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                 }`}
                         >
                             {tab === 'alpha' ? 'Alpha' : tab}
@@ -296,8 +366,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                 <div className="flex flex-col gap-3">
                     {/* Sub-toggle: Solid vs Gradient */}
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[#a1a1aa] font-medium">Style</span>
-                        <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
+                        <span className="text-[11px] text-[var(--text-muted)] font-medium">Style</span>
+                        <div className="flex items-center gap-1 bg-[var(--bg-subtle)] p-0.5 rounded-lg border border-[var(--border-subtle)]">
                             <button
                                 type="button"
                                 onClick={() => {
@@ -309,9 +379,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                             : '#0c0e17';
                                     setBackground({ kind: 'solid', color: col });
                                 }}
-                                className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${effectiveBg.kind === 'solid'
-                                    ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                    : 'text-[#a1a1aa] hover:text-white'
+                                className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${effectiveBg.kind === 'solid'
+                                    ? 'bg-[var(--bg-muted)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                     }`}
                             >
                                 Solid
@@ -330,9 +400,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                         ],
                                     });
                                 }}
-                                className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${effectiveBg.kind === 'gradient'
-                                    ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                    : 'text-[#a1a1aa] hover:text-white'
+                                className={`px-2.5 py-0.5 rounded text-[11px] font-medium transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${effectiveBg.kind === 'gradient'
+                                    ? 'bg-[var(--bg-muted)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                    : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                     }`}
                             >
                                 Gradient
@@ -346,6 +416,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             <ColorPicker
                                 label="Fill Color"
                                 color={effectiveBg.color}
+                                showGradientMode={false}
                                 onChange={(c) => setBackground({ ...effectiveBg, color: c })}
                             />
                             <ScrubInput
@@ -357,13 +428,13 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 unit="%"
                                 onChange={(val) => setBackground({ ...effectiveBg, opacity: val / 100 })}
                             />
-                            <div className="flex items-center gap-1 pt-1 overflow-x-auto">
+                            <div className="flex items-center gap-1.5 pt-1 overflow-x-auto">
                                 {RAYLIGHT_COLOR_PALETTE.map((hex) => (
                                     <button
                                         key={hex}
                                         type="button"
                                         onClick={() => setBackground({ ...effectiveBg, color: hex })}
-                                        className="w-5 h-5 rounded-full border border-white/20 shrink-0 hover:scale-110 transition cursor-pointer shadow-sm"
+                                        className="w-5 h-5 rounded-full border border-white/20 shrink-0 hover:scale-110 transition cursor-pointer shadow-sm focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none"
                                         style={{ backgroundColor: hex }}
                                         title={hex}
                                     />
@@ -377,16 +448,16 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                         <div className="flex flex-col gap-3">
                             {/* Gradient Type */}
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-[#a1a1aa] font-medium">Type</span>
-                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
+                                <span className="text-[11px] text-[var(--text-muted)] font-medium">Type</span>
+                                <div className="flex items-center gap-1 bg-[var(--bg-subtle)] p-0.5 rounded-lg border border-[var(--border-subtle)]">
                                     {(['linear', 'radial', 'angular'] as const).map((gt) => (
                                         <button
                                             key={gt}
                                             type="button"
                                             onClick={() => setBackground({ ...effectiveBg, gradientType: gt })}
-                                            className={`px-2 py-0.5 rounded text-[10px] font-medium capitalize transition cursor-pointer ${(effectiveBg.gradientType ?? 'linear') === gt
-                                                ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                                : 'text-[#a1a1aa] hover:text-white'
+                                            className={`px-2.5 py-0.5 rounded text-[11px] font-medium capitalize transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${(effectiveBg.gradientType ?? 'linear') === gt
+                                                ? 'bg-[var(--bg-muted)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                                 }`}
                                         >
                                             {gt}
@@ -415,9 +486,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => setGradientEditor(!gradientEditorActive)}
-                                        className={`p-1.5 rounded-lg border border-white/[0.08] transition cursor-pointer ${gradientEditorActive
-                                            ? 'bg-[#0088ff] text-white'
-                                            : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white'
+                                        className={`p-1.5 rounded-lg border transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${gradientEditorActive
+                                            ? 'bg-[var(--accent-primary)] text-white border-[var(--accent-primary)] shadow-sm'
+                                            : 'bg-[var(--bg-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] border-[var(--border-subtle)]'
                                             }`}
                                         title={gradientEditorActive ? 'Hide on-canvas compass' : 'Edit angle on canvas'}
                                     >
@@ -428,8 +499,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
                             {/* Multi-Stop Gradient Preview Bar */}
                             <div className="flex flex-col gap-1.5">
-                                <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                                    <span>Color Stops</span>
+                                <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
+                                    <span className="font-medium">Color Stops</span>
                                     <button
                                         type="button"
                                         onClick={() => {
@@ -438,7 +509,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                             stops.sort((a, b) => a.at - b.at);
                                             setBackground({ ...effectiveBg, stops });
                                         }}
-                                        className="flex items-center gap-0.5 text-[#0088ff] hover:underline cursor-pointer"
+                                        className="flex items-center gap-0.5 text-[var(--accent-primary)] hover:underline cursor-pointer font-medium focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none rounded"
                                     >
                                         <Plus className="w-3 h-3" />
                                         <span>Add Stop</span>
@@ -446,27 +517,44 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 </div>
 
                                 <div
-                                    className="h-4 rounded border border-white/20 relative cursor-pointer"
+                                    ref={gradientBarRef}
+                                    className="h-4 rounded border border-[var(--border-medium)] relative cursor-pointer select-none touch-none shadow-inner"
                                     style={{
                                         background: `linear-gradient(90deg, ${effectiveBg.stops
                                             .map((s) => `${s.color} ${(s.at * 100).toFixed(0)}%`)
                                             .join(', ')})`,
+                                    }}
+                                    onClick={(e) => {
+                                        if (!gradientBarRef.current) return;
+                                        const rect = gradientBarRef.current.getBoundingClientRect();
+                                        if (!rect.width) return;
+                                        const at = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                                        let nearestIdx = 0;
+                                        let minDiff = 999;
+                                        effectiveBg.stops.forEach((s, i) => {
+                                            const diff = Math.abs(s.at - at);
+                                            if (diff < minDiff) {
+                                                minDiff = diff;
+                                                nearestIdx = i;
+                                            }
+                                        });
+                                        setSelectedStopIdx(nearestIdx);
                                     }}
                                 >
                                     {effectiveBg.stops.map((stop, idx) => (
                                         <button
                                             key={idx}
                                             type="button"
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedStopIdx(idx);
-                                            }}
-                                            className={`absolute top-0 bottom-0 w-3 -ml-1.5 rounded-sm border shadow transition cursor-pointer ${selectedStopIdx === idx
-                                                ? 'border-white bg-white scale-110 z-10'
-                                                : 'border-black bg-white/70 hover:scale-105'
+                                            onPointerDown={(e) => handleStopPointerDown(idx, e)}
+                                            onPointerMove={(e) => handleStopPointerMove(idx, e)}
+                                            onPointerUp={handleStopPointerUp}
+                                            onPointerCancel={handleStopPointerUp}
+                                            className={`absolute top-0 bottom-0 w-3.5 -ml-1.75 rounded-sm border shadow-md transition-transform cursor-ew-resize touch-none focus-visible:ring-2 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${selectedStopIdx === idx
+                                                ? 'border-white bg-white scale-125 z-10 ring-2 ring-[var(--accent-primary)]'
+                                                : 'border-black bg-white/85 hover:scale-110'
                                                 }`}
                                             style={{ left: `${stop.at * 100}%` }}
-                                            title={`Stop ${idx + 1}: ${Math.round(stop.at * 100)}%`}
+                                            title={`Stop ${idx + 1}: ${Math.round(stop.at * 100)}% (Drag to adjust position)`}
                                         />
                                     ))}
                                 </div>
@@ -474,11 +562,12 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
                             {/* Selected Stop Details */}
                             {effectiveBg.stops[selectedStopIdx] && (
-                                <div className="flex items-center gap-2 p-2 bg-[#1c1c1f] rounded-lg border border-white/[0.06]">
+                                <div className="flex items-center gap-2 p-2 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border-subtle)]">
                                     <div className="flex-1">
                                         <ColorPicker
                                             label={`Stop #${selectedStopIdx + 1}`}
                                             color={effectiveBg.stops[selectedStopIdx].color}
+                                            showGradientMode={false}
                                             onChange={(c) => {
                                                 const stops = [...effectiveBg.stops];
                                                 stops[selectedStopIdx] = { ...stops[selectedStopIdx], color: c };
@@ -509,7 +598,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                                 setSelectedStopIdx(Math.max(0, selectedStopIdx - 1));
                                                 setBackground({ ...effectiveBg, stops });
                                             }}
-                                            className="p-1.5 text-[#ef4444] hover:bg-white/5 rounded cursor-pointer"
+                                            className="p-1.5 text-[var(--accent-danger)] hover:bg-[var(--bg-hover)] rounded cursor-pointer transition focus-visible:ring-1 focus-visible:ring-[var(--accent-danger)] focus-visible:outline-none"
                                             title="Delete Stop"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
@@ -519,8 +608,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             )}
 
                             {/* Designer Gradient Presets */}
-                            <div className="flex flex-col gap-1 pt-1">
-                                <span className="text-[10px] text-[#71717a]">Presets</span>
+                            <div className="flex flex-col gap-1.5 pt-1">
+                                <span className="text-[11px] text-[var(--text-muted)] font-medium">Presets</span>
                                 <div className="grid grid-cols-4 gap-1.5">
                                     {GRADIENT_PRESETS.map((preset) => (
                                         <button
@@ -534,7 +623,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                                     stops: preset.stops,
                                                 })
                                             }
-                                            className="h-6 rounded border border-white/10 hover:border-white/40 transition cursor-pointer shadow-sm relative group overflow-hidden"
+                                            className="h-6 rounded border border-[var(--border-subtle)] hover:border-[var(--border-medium)] transition cursor-pointer shadow-sm relative group overflow-hidden focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none"
                                             style={{
                                                 background: `linear-gradient(${preset.angle}deg, ${preset.stops
                                                     .map((s) => `${s.color} ${(s.at * 100).toFixed(0)}%`)
@@ -555,13 +644,13 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                 <div className="flex flex-col gap-3">
                     {/* Preset Picker Grid */}
                     <div className="flex flex-col gap-1.5">
-                        <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
+                        <div className="flex items-center justify-between text-[11px] text-[var(--text-muted)]">
                             <span className="font-medium">Preset</span>
-                            <span className="text-[#0088ff] font-semibold">
+                            <span className="text-[var(--accent-primary)] font-semibold">
                                 {currentShaderMeta?.label || 'Silk'}
                             </span>
                         </div>
-                        <div className="grid grid-cols-3 gap-1 bg-[#101012] p-1 rounded-lg border border-white/[0.06] max-h-40 overflow-y-auto">
+                        <div className="grid grid-cols-3 gap-1 bg-[var(--bg-canvas)] p-1 rounded-lg border border-[var(--border-subtle)] max-h-40 overflow-y-auto">
                             {SHADER_PRESETS.map((p) => {
                                 const isCurrent = effectiveBg.kind === 'shader' && effectiveBg.preset === p;
                                 const meta = (SHADER_PRESET_METADATA as Record<string, any>)[p];
@@ -571,25 +660,25 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                         key={p}
                                         type="button"
                                         onClick={() => handleSelectShaderPreset(p)}
-                                        className={`flex flex-col items-start p-1.5 rounded transition text-left cursor-pointer border ${isCurrent
-                                            ? 'bg-[#242428] border-[#0088ff] text-white shadow-sm'
-                                            : 'bg-[#18181b] border-transparent text-[#a1a1aa] hover:text-white hover:border-white/10'
+                                        className={`flex flex-col items-start p-1.5 rounded transition text-left cursor-pointer border focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${isCurrent
+                                            ? 'bg-[var(--bg-muted)] border-[var(--accent-primary)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                            : 'bg-[var(--bg-surface)] border-[var(--border-subtle)] text-[var(--text-muted)] hover:text-[var(--text-primary)] hover:border-[var(--border-medium)]'
                                             }`}
                                         title={meta?.description}
                                     >
-                                        <div className="flex items-center gap-1 w-full">
+                                        <div className="flex items-center gap-1.5 w-full">
                                             <div
-                                                className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/20"
+                                                className="w-2.5 h-2.5 rounded-full shrink-0 border border-white/20 shadow-xs"
                                                 style={{ backgroundColor: cfg?.color }}
                                             />
-                                            <span className="text-[10px] font-semibold truncate flex-1">{meta?.label}</span>
+                                            <span className="text-[11px] font-medium truncate flex-1">{meta?.label}</span>
                                         </div>
                                     </button>
                                 );
                             })}
                         </div>
                         {currentShaderMeta && (
-                            <p className="text-[10px] text-[#71717a] italic">
+                            <p className="text-[11px] text-[var(--text-disabled)] italic">
                                 {currentShaderMeta.description}
                             </p>
                         )}
@@ -600,15 +689,15 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             {/* Color Controls: Accent vs Palette */}
                             {isPaletteShader(effectiveBg.preset) ? (
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10px] text-[#a1a1aa] font-medium">Palette Spots (5 max)</span>
-                                    <div className="flex items-center gap-1.5 p-1.5 bg-[#1c1c1f] rounded-lg border border-white/[0.06]">
+                                    <span className="text-[11px] text-[var(--text-muted)] font-medium">Palette Spots (5 max)</span>
+                                    <div className="flex items-center gap-1.5 p-1.5 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border-subtle)]">
                                         {effectiveBg.colors.slice(0, 5).map((col, idx) => (
                                             <button
                                                 key={idx}
                                                 type="button"
                                                 onClick={() => setSelectedPaletteIdx(idx)}
-                                                className={`w-6 h-6 rounded-md border transition cursor-pointer shadow-sm ${selectedPaletteIdx === idx
-                                                    ? 'border-white scale-110 ring-1 ring-[#0088ff]'
+                                                className={`w-6 h-6 rounded-md border transition cursor-pointer shadow-sm focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${selectedPaletteIdx === idx
+                                                    ? 'border-white scale-110 ring-2 ring-[var(--accent-primary)]'
                                                     : 'border-white/20 hover:scale-105'
                                                     }`}
                                                 style={{ backgroundColor: col }}
@@ -620,6 +709,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                         <ColorPicker
                                             label={`Spot #${selectedPaletteIdx + 1}`}
                                             color={effectiveBg.colors[selectedPaletteIdx]}
+                                            showGradientMode={false}
                                             onChange={(c) => {
                                                 const colors = [...effectiveBg.colors];
                                                 colors[selectedPaletteIdx] = c;
@@ -632,6 +722,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 <ColorPicker
                                     label="Accent Color"
                                     color={effectiveBg.color}
+                                    showGradientMode={false}
                                     onChange={(c) => setBackground({ ...effectiveBg, color: c })}
                                 />
                             )}
@@ -641,13 +732,14 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 <ColorPicker
                                     label="Base Background"
                                     color={effectiveBg.backgroundColor}
+                                    showGradientMode={false}
                                     onChange={(c) => setBackground({ ...effectiveBg, backgroundColor: c })}
                                 />
                             )}
 
                             {/* 2-Column Dynamic Scrubbers Grid */}
-                            <div className="flex flex-col gap-2 pt-1 border-t border-white/[0.06]">
-                                <span className="text-[10px] text-[#a1a1aa] font-medium">Uniform Parameters</span>
+                            <div className="flex flex-col gap-2 pt-1 border-t border-[var(--border-subtle)]">
+                                <span className="text-[11px] text-[var(--text-muted)] font-medium">Uniform Parameters</span>
                                 <div className="grid grid-cols-2 gap-2">
                                     {/* Speed */}
                                     <ScrubInput
@@ -744,16 +836,16 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
                     {effectiveBg.kind === 'image' && (effectiveBg.src || effectiveBg.assetId) ? (
                         <div className="flex flex-col gap-2.5">
-                            <div className="flex items-center justify-between p-2 bg-[#1c1c1f] rounded-lg border border-white/[0.06]">
+                            <div className="flex items-center justify-between p-2 bg-[var(--bg-subtle)] rounded-lg border border-[var(--border-subtle)]">
                                 <div className="flex items-center gap-2">
                                     <div
-                                        className="w-8 h-8 rounded bg-cover bg-center border border-white/10 shrink-0"
+                                        className="w-8 h-8 rounded bg-cover bg-center border border-white/10 shrink-0 shadow-xs"
                                         style={{
                                             backgroundImage: `url(${effectiveBg.src || (effectiveBg.assetId ? project.assets[effectiveBg.assetId]?.dataUrl : '')
                                                 })`,
                                         }}
                                     />
-                                    <span className="text-[11px] text-[#e4e4e7] truncate max-w-[120px]">
+                                    <span className="text-[11px] text-[var(--text-primary)] font-medium truncate max-w-[120px]">
                                         {effectiveBg.assetId
                                             ? project.assets[effectiveBg.assetId]?.name || 'Background Image'
                                             : 'Custom Image'}
@@ -763,14 +855,14 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => fileInputRef.current?.click()}
-                                        className="px-2 py-1 bg-white/5 hover:bg-white/10 text-white rounded text-[10px] cursor-pointer"
+                                        className="px-2 py-1 bg-[var(--bg-hover)] hover:bg-[var(--bg-active)] text-[var(--text-primary)] rounded text-[11px] font-medium cursor-pointer transition focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none"
                                     >
                                         Replace
                                     </button>
                                     <button
                                         type="button"
                                         onClick={() => setBackground({ kind: 'image', color: '#000000', fit: 'cover' })}
-                                        className="p-1 text-[#ef4444] hover:bg-white/5 rounded cursor-pointer"
+                                        className="p-1 text-[var(--accent-danger)] hover:bg-[var(--bg-hover)] rounded cursor-pointer transition focus-visible:ring-1 focus-visible:ring-[var(--accent-danger)] focus-visible:outline-none"
                                         title="Clear Image"
                                     >
                                         <Trash2 className="w-3.5 h-3.5" />
@@ -780,8 +872,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
                             {/* Fit Mode */}
                             <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-[#a1a1aa] font-medium">Sizing Fit</span>
-                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
+                                <span className="text-[11px] text-[var(--text-muted)] font-medium">Sizing Fit</span>
+                                <div className="flex items-center gap-1 bg-[var(--bg-subtle)] p-0.5 rounded-lg border border-[var(--border-subtle)]">
                                     {(['cover', 'contain'] as const).map((fit) => (
                                         <button
                                             key={fit}
@@ -791,9 +883,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                                     setBackground({ ...effectiveBg, fit });
                                                 }
                                             }}
-                                            className={`px-2 py-0.5 rounded text-[10px] font-medium capitalize transition cursor-pointer ${(effectiveBg.kind === 'image' ? effectiveBg.fit ?? 'cover' : 'cover') === fit
-                                                ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                                : 'text-[#a1a1aa] hover:text-white'
+                                            className={`px-2.5 py-0.5 rounded text-[11px] font-medium capitalize transition cursor-pointer focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none ${(effectiveBg.kind === 'image' ? effectiveBg.fit ?? 'cover' : 'cover') === fit
+                                                ? 'bg-[var(--bg-muted)] text-[var(--text-primary)] shadow-sm font-semibold'
+                                                : 'text-[var(--text-muted)] hover:text-[var(--text-primary)]'
                                                 }`}
                                         >
                                             {fit === 'cover' ? 'Fill' : 'Fit'}
@@ -807,6 +899,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 <ColorPicker
                                     label="Backdrop Fill"
                                     color={effectiveBg.color || '#000000'}
+                                    showGradientMode={false}
                                     onChange={(c) => {
                                         if (effectiveBg.kind === 'image') {
                                             setBackground({ ...effectiveBg, color: c });
@@ -849,11 +942,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                         <button
                             type="button"
                             onClick={() => fileInputRef.current?.click()}
-                            className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-white/10 hover:border-[#0088ff]/50 rounded-lg transition cursor-pointer group"
+                            className="flex flex-col items-center justify-center p-6 border-2 border-dashed border-[var(--border-medium)] hover:border-[var(--accent-primary)]/70 rounded-lg transition cursor-pointer group focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] focus-visible:outline-none"
                         >
-                            <Upload className="w-5 h-5 text-[#a1a1aa] group-hover:text-[#0088ff] mb-1.5 transition" />
-                            <span className="text-[11px] font-medium text-white">Upload Background Image</span>
-                            <span className="text-[10px] text-[#71717a]">PNG, JPG, WebP supported</span>
+                            <Upload className="w-5 h-5 text-[var(--text-muted)] group-hover:text-[var(--accent-primary)] mb-1.5 transition" />
+                            <span className="text-[11px] font-medium text-[var(--text-primary)]">Upload Background Image</span>
+                            <span className="text-[11px] text-[var(--text-disabled)] mt-0.5">PNG, JPG, WebP supported</span>
                         </button>
                     )}
                 </div>
@@ -861,9 +954,9 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
             {/* --- TAB 4: ALPHA (TRANSPARENT CHECKERBOARD) --- */}
             {mainTab === 'alpha' && (
-                <div className="flex flex-col items-center justify-center p-4 bg-[#101012] rounded-lg border border-white/[0.06] text-center gap-2">
+                <div className="flex flex-col items-center justify-center p-4 bg-[var(--bg-canvas)] rounded-lg border border-[var(--border-subtle)] text-center gap-2">
                     <div
-                        className="w-16 h-12 rounded border border-white/20 shadow-inner"
+                        className="w-16 h-12 rounded border border-[var(--border-medium)] shadow-inner"
                         style={{
                             backgroundImage: `linear-gradient(45deg, #1c1c1f 25%, transparent 25%), linear-gradient(-45deg, #1c1c1f 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #1c1c1f 75%), linear-gradient(-45deg, transparent 75%, #1c1c1f 75%)`,
                             backgroundSize: '12px 12px',
@@ -871,8 +964,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             backgroundColor: '#0c0c0e',
                         }}
                     />
-                    <span className="font-semibold text-white text-[11px]">Alpha Transparency Active</span>
-                    <p className="text-[10px] text-[#71717a] max-w-[220px]">
+                    <span className="font-semibold text-[var(--text-primary)] text-[12px]">Alpha Transparency Active</span>
+                    <p className="text-[11px] text-[var(--text-muted)] max-w-[220px] leading-relaxed">
                         The background is transparent. Exported videos and frame PNGs will retain full alpha channels.
                     </p>
                 </div>

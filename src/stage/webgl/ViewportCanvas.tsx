@@ -47,12 +47,13 @@ const StudioEnvironment: React.FC = () => {
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-}> = ({ frame, selectedLayerIds }) => {
+    background?: any;
+}> = ({ frame, selectedLayerIds, background }) => {
     const { invalidate } = useThree();
 
     useEffect(() => {
         invalidate();
-    }, [frame, selectedLayerIds, invalidate]);
+    }, [frame, selectedLayerIds, background, invalidate]);
 
     return null;
 };
@@ -118,6 +119,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <ViewportRenderBridge
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
+                    background={activeBackground}
                 />
                 <WebGLContextGuard />
 

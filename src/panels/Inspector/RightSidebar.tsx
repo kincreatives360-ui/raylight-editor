@@ -378,8 +378,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     </div>
 
                     {/* Lens (focal length) */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Lens</span>
+                    <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[10px] text-[#a1a1aa]">Lens</span>
+                            <span className="text-[10px] font-mono text-[#38bdf8]">
+                                {project.defaultCamera?.focalLength ?? 50}mm
+                            </span>
+                        </div>
                         <ScrubInput
                             label="F"
                             value={project.defaultCamera?.focalLength ?? 50}
@@ -406,6 +411,44 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 }))
                             }
                         />
+                        <div className="grid grid-cols-4 gap-1 pt-0.5">
+                            {[
+                                { mm: 24, label: '24mm' },
+                                { mm: 35, label: '35mm' },
+                                { mm: 50, label: '50mm' },
+                                { mm: 85, label: '85mm' },
+                            ].map((preset) => (
+                                <button
+                                    key={preset.mm}
+                                    type="button"
+                                    onClick={() =>
+                                        updateProject((p) => ({
+                                            ...p,
+                                            defaultCamera: {
+                                                position: p.defaultCamera?.position ?? {
+                                                    x: 0,
+                                                    y: 0,
+                                                    z: 2.65,
+                                                },
+                                                rotation: p.defaultCamera?.rotation ?? {
+                                                    x: 0,
+                                                    y: 0,
+                                                    z: 0,
+                                                },
+                                                focalLength: preset.mm,
+                                            },
+                                        }))
+                                    }
+                                    className={`py-1 rounded text-[10px] font-mono cursor-pointer transition ${
+                                        (project.defaultCamera?.focalLength ?? 50) === preset.mm
+                                            ? 'bg-[#0088ff] text-white font-semibold'
+                                            : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white hover:bg-white/10'
+                                    }`}
+                                >
+                                    {preset.label}
+                                </button>
+                            ))}
+                        </div>
                     </div>
 
                     {/* Unified Project Background Section */}
@@ -1717,7 +1760,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             </div>
 
                             {/* 2. STAGE / SHOT BACKGROUND */}
-                            <BackgroundSection activeShot={activeShot} />
+                            <BackgroundSection scope="shot" activeShot={activeShot} />
 
                             {/* 3. CAMERA RIG & FRAMING */}
                             <CameraSection activeShot={activeShot} />
