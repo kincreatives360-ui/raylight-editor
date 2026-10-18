@@ -1,5 +1,4 @@
-// src/panels/LeftPanel/LeftPanel.tsx
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
     Search,
     X,
@@ -23,7 +22,15 @@ import {
     VolumeX,
     PanelLeftClose,
     Play,
+    Pause,
     Upload,
+    LayoutTemplate,
+    Sparkles,
+    Check,
+    Smartphone,
+    Laptop,
+    Tv,
+    Flame,
 } from 'lucide-react';
 import type { Shot, Layer, Group, AudioClip } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
@@ -31,6 +38,8 @@ import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
+import { CURATED_SOUNDS } from '../../data/curatedSounds';
+import { STARTER_TEMPLATES, type StarterTemplate } from '../../data/starterTemplates';
 
 interface LeftPanelProps {
     activeShot: Shot;
@@ -57,6 +66,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         addShot,
         duplicateShot,
         deleteShot,
+        loadProjectJson,
     } = useProjectStore();
 
     const {
@@ -85,9 +95,130 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
     const { currentTimeMs, setCurrentTimeMs } = usePlayheadStore();
 
-    const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio'>('file');
+    const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio' | 'templates'>('file');
+    const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>('All');
+    const [loadedTemplateId, setLoadedTemplateId] = useState<string | null>(null);
     const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
+    const [soundSearchQuery, setSoundSearchQuery] = useState<string>('');
     const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
+    const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+    const filteredTemplates = useMemo(() => {
+        return STARTER_TEMPLATES.filter((tpl) => {
+            if (selectedTemplateCategory !== 'All' && tpl.category !== selectedTemplateCategory) {
+                return false;
+            }
+            return true;
+        });
+    }, [selectedTemplateCategory]);
+
+    const handleLoadTemplate = (tpl: StarterTemplate) => {
+        const hasExistingContent = project.shots.length > 1 || (project.shots[0]?.layers && project.shots[0].layers.length > 0);
+        if (hasExistingContent) {
+            const confirmMsg = `Load "${tpl.name}"? This will replace your current workspace.`;
+            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) {
+                return;
+            }
+        }
+        const newProject = tpl.getProject();
+        const result = loadProjectJson(newProject);
+        if (result.success) {
+            if (newProject.shots.length > 0) {
+                selectShot(newProject.shots[0].id);
+            }
+            setSelectedLayerIds([]);
+            setCurrentTimeMs(0);
+            setLoadedTemplateId(tpl.id);
+            setTimeout(() => setLoadedTemplateId(null), 2500);
+        }
+    };
+
+    useEffect(() => {
+        return () => {
+            if (activeAudioRef.current) {
+                activeAudioRef.current.pause();
+                activeAudioRef.current = null;
+            }
+        };
+    }, []);
+
+    const handleTogglePreviewSound = (id: string, src: string) => {
+        if (playingSfxId === id) {
+            if (activeAudioRef.current) {
+                activeAudioRef.current.pause();
+                activeAudioRef.current = null;
+            }
+            setPlayingSfxId(null);
+            return;
+        }
+
+        if (activeAudioRef.current) {
+            activeAudioRef.current.pause();
+            activeAudioRef.current = null;
+        }
+
+        const audio = new Audio(src);
+        activeAudioRef.current = audio;
+        setPlayingSfxId(id);
+        audio.onended = () => {
+            if (activeAudioRef.current === audio) {
+                activeAudioRef.current = null;
+                setPlayingSfxId(null);
+            }
+        };
+        audio.onerror = () => {
+            if (activeAudioRef.current === audio) {
+                activeAudioRef.current = null;
+                setPlayingSfxId(null);
+            }
+        };
+        audio.play().catch(() => {
+            setPlayingSfxId(null);
+        });
+    };
+
+    const filteredCuratedSounds = useMemo(() => {
+        const list: {
+            id: string;
+            name: string;
+            category: string;
+            durationMs: number;
+            description: string;
+            getUrl: () => string;
+        }[] = [
+            ...CURATED_SOUNDS.map((s) => ({
+                id: s.slug,
+                name: s.name,
+                category: s.category.charAt(0).toUpperCase() + s.category.slice(1),
+                durationMs: s.durationMs,
+                description: `${s.category} sound effect`,
+                getUrl: () => s.src,
+            })),
+            ...BUILTIN_SOUND_PACKS.map((s) => ({
+                id: s.id,
+                name: s.name,
+                category: s.category,
+                durationMs: s.durationMs,
+                description: s.description,
+                getUrl: () => s.generateWavDataUrl(),
+            })),
+        ];
+
+        const q = soundSearchQuery.trim().toLowerCase();
+        return list.filter((item) => {
+            const matchesCategory =
+                selectedSfxCategory === 'All' ||
+                item.category.toLowerCase() === selectedSfxCategory.toLowerCase();
+            if (!matchesCategory) return false;
+            if (!q) return true;
+            return (
+                item.name.toLowerCase().includes(q) ||
+                item.category.toLowerCase().includes(q) ||
+                item.description.toLowerCase().includes(q)
+            );
+        });
+    }, [soundSearchQuery, selectedSfxCategory]);
+
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedShots, setCollapsedShots] = useState<Record<string, boolean>>(
@@ -677,6 +808,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <Music className="w-3 h-3 text-[#38bdf8]" />
                         <span>SFX</span>
                     </button>
+                    <button
+                        role="tab"
+                        aria-selected={activeTab === 'templates'}
+                        onClick={() => setActiveTab('templates')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'templates'
+                            ? 'bg-[#1f1f23] text-white'
+                            : 'text-[#a1a1aa] hover:text-white'
+                            }`}
+                    >
+                        <LayoutTemplate className="w-3 h-3 text-[#f59e0b]" />
+                        <span>Templates</span>
+                    </button>
                 </div>
 
                 <button
@@ -1048,7 +1191,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                                 <span className="w-1.5 h-1.5 rotate-45 bg-[#8b5cf6] shrink-0" />
                                                                 <span>Presets</span>
                                                             </div>
-                                                            <span className="text-[9px] font-mono opacity-50">
+                                                            <span className="text-[10px] font-mono tracking-tight opacity-60">
                                                                 In/Out
                                                             </span>
                                                         </div>
@@ -1165,9 +1308,30 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         </div>
                     )}
 
+                    {/* Sound Search Bar */}
+                    <div className="relative">
+                        <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        <input
+                            type="text"
+                            placeholder="Search 150+ sound effects..."
+                            value={soundSearchQuery}
+                            onChange={(e) => setSoundSearchQuery(e.target.value)}
+                            className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
+                        />
+                        {soundSearchQuery && (
+                            <button
+                                type="button"
+                                onClick={() => setSoundSearchQuery('')}
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
+                            >
+                                <X className="w-3 h-3" />
+                            </button>
+                        )}
+                    </div>
+
                     {/* Category Filter Pills */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar">
-                        {['All', 'Transition', 'UI & Tactile', 'Impact & FX', 'Notification'].map((cat) => (
+                        {['All', 'Ambience', 'Click', 'Glitch', 'Impact', 'Pop', 'Riser', 'Slide', 'Typing', 'UI', 'Whoosh'].map((cat) => (
                             <button
                                 key={cat}
                                 type="button"
@@ -1182,60 +1346,65 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         ))}
                     </div>
 
+                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center">
+                        <span>Curated Sound FX Library</span>
+                        <span>{filteredCuratedSounds.length} sounds</span>
+                    </div>
+
                     {/* SFX List */}
-                    <div className="flex-1 overflow-y-auto space-y-2">
-                        {BUILTIN_SOUND_PACKS.filter(
-                            (s) => selectedSfxCategory === 'All' || s.category === selectedSfxCategory
-                        ).map((sound) => {
+                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+                        {filteredCuratedSounds.map((sound) => {
                             const isPlaying = playingSfxId === sound.id;
+                            const durationFormatted = sound.durationMs >= 1000
+                                ? `${(sound.durationMs / 1000).toFixed(1)}s`
+                                : `${sound.durationMs}ms`;
+
                             return (
                                 <div
                                     key={sound.id}
-                                    className="p-2.5 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                    className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
                                 >
                                     <div className="min-w-0 flex-1">
                                         <div className="flex items-center gap-1.5">
                                             <span className="text-xs font-semibold text-white truncate">
                                                 {sound.name}
                                             </span>
-                                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-[#a1a1aa] font-mono">
-                                                {sound.durationMs}ms
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
+                                                {durationFormatted}
                                             </span>
                                         </div>
-                                        <p className="text-[10px] text-[#a1a1aa] line-clamp-1 mt-0.5">
-                                            {sound.description}
-                                        </p>
+                                        <div className="flex items-center gap-1.5 mt-0.5">
+                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
+                                                {sound.category}
+                                            </span>
+                                        </div>
                                     </div>
 
                                     <div className="flex items-center gap-1 shrink-0">
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                const url = sound.generateWavDataUrl();
-                                                const audio = new Audio(url);
-                                                setPlayingSfxId(sound.id);
-                                                audio.onended = () => setPlayingSfxId(null);
-                                                audio.onerror = () => setPlayingSfxId(null);
-                                                audio.play().catch(() => setPlayingSfxId(null));
-                                            }}
-                                            title="Preview Sound"
-                                            aria-label={`Preview ${sound.name}`}
+                                            onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
+                                            title={isPlaying ? "Pause Preview" : "Preview Sound"}
+                                            aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
                                             className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
                                                 ? 'bg-[#0088ff] text-white border-[#38bdf8]'
                                                 : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
                                                 }`}
                                         >
-                                            <Play className={`w-3.5 h-3.5 ${isPlaying ? 'fill-current' : ''}`} />
+                                            {isPlaying ? (
+                                                <Pause className="w-3.5 h-3.5 fill-current" />
+                                            ) : (
+                                                <Play className="w-3.5 h-3.5 fill-current" />
+                                            )}
                                         </button>
 
                                         <button
                                             type="button"
                                             onClick={() => {
-                                                const dataUrl = sound.generateWavDataUrl();
                                                 const clip: AudioClip = {
                                                     id: `sfx-${sound.id}-${Date.now()}`,
                                                     name: sound.name,
-                                                    dataUrl,
+                                                    dataUrl: sound.getUrl(),
                                                     startMs: currentTimeMs,
                                                     durationMs: sound.durationMs,
                                                     offsetMs: 0,
@@ -1258,6 +1427,112 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             <Plus className="w-3.5 h-3.5" />
                                         </button>
                                     </div>
+                                </div>
+                            );
+                        })}
+                        {filteredCuratedSounds.length === 0 && (
+                            <div className="py-8 text-center text-xs text-[#71717a]">
+                                No sound effects match &quot;{soundSearchQuery}&quot;
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* TEMPLATES TAB */}
+            {activeTab === 'templates' && (
+                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
+                        {['All', 'Device Showcase', 'Product Walkthrough', 'Cinematic Studio', 'Social & Vertical'].map((cat) => (
+                            <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setSelectedTemplateCategory(cat)}
+                                className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedTemplateCategory === cat
+                                    ? 'bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/40'
+                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                    }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+
+                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center shrink-0">
+                        <span>Curated Starters</span>
+                        <span>{filteredTemplates.length} templates</span>
+                    </div>
+
+                    {/* Template Cards List */}
+                    <div className="flex-1 overflow-y-auto space-y-3 pr-0.5">
+                        {filteredTemplates.map((tpl) => {
+                            const isLoaded = loadedTemplateId === tpl.id;
+                            const IconComponent = tpl.id.includes('iphone')
+                                ? Smartphone
+                                : tpl.id.includes('macbook')
+                                    ? Laptop
+                                    : tpl.id.includes('neon')
+                                        ? Flame
+                                        : Tv;
+
+                            return (
+                                <div
+                                    key={tpl.id}
+                                    className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition flex flex-col gap-2.5 group shadow-sm"
+                                >
+                                    {/* Visual Banner Preview */}
+                                    <div className={`h-20 rounded-lg bg-gradient-to-br ${tpl.thumbnailColor} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
+                                        <div className="flex items-center gap-2 z-10">
+                                            <div className="w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
+                                                <IconComponent className="w-4 h-4 text-amber-400" />
+                                            </div>
+                                            <div>
+                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-[#d4d4d8] font-mono uppercase tracking-wider backdrop-blur-sm border border-white/10">
+                                                    {tpl.badge}
+                                                </span>
+                                            </div>
+                                        </div>
+                                        <div className="z-10 flex items-center gap-1">
+                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
+                                                {tpl.aspectRatio}
+                                            </span>
+                                        </div>
+                                        {/* Subtle ambient glow decoration */}
+                                        <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
+                                    </div>
+
+                                    {/* Details */}
+                                    <div>
+                                        <h4 className="text-xs font-semibold text-white tracking-tight group-hover:text-amber-400 transition-colors">
+                                            {tpl.name}
+                                        </h4>
+                                        <p className="text-[11px] text-[#a1a1aa] mt-1 line-clamp-2 leading-relaxed">
+                                            {tpl.description}
+                                        </p>
+                                    </div>
+
+                                    {/* Action Button */}
+                                    <button
+                                        type="button"
+                                        onClick={() => handleLoadTemplate(tpl)}
+                                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm ${isLoaded
+                                            ? 'bg-emerald-600 text-white border border-emerald-500'
+                                            : 'bg-[#f59e0b] hover:bg-[#d97706] text-black hover:text-black font-medium'
+                                            }`}
+                                    >
+                                        {isLoaded ? (
+                                            <>
+                                                <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                                                <span>Template Loaded!</span>
+                                            </>
+                                        ) : (
+                                            <>
+                                                <Sparkles className="w-3.5 h-3.5 fill-current" />
+                                                <span>Use Template</span>
+                                            </>
+                                        )}
+                                    </button>
                                 </div>
                             );
                         })}

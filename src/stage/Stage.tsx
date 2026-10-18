@@ -63,6 +63,7 @@ export const Stage: React.FC<StageProps> = ({
     const {
         addLayerToShot,
         updateProject,
+        updateShot,
         addMultipleLayersToShot,
         deleteLayerFromShot,
         duplicateLayerInShot,
@@ -207,9 +208,9 @@ export const Stage: React.FC<StageProps> = ({
 
     const eff = frame.effects.state;
     const effectiveBackground = resolveShotBackground(project, frame.activeShot);
+    const isTransparentBg = effectiveBackground.kind === 'transparent';
     const showGradientAngleControl = gradientEditorActive
         && effectiveBackground.kind === 'gradient'
-        && effectiveBackground.source === 'color'
         && effectiveBackground.gradientType !== 'radial';
 
     const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -219,8 +220,36 @@ export const Stage: React.FC<StageProps> = ({
         const x = ((event.clientX - rect.left) / rect.width) * frameWidth - frameWidth / 2;
         const y = ((event.clientY - rect.top) / rect.height) * frameHeight - frameHeight / 2;
         if (Math.hypot(x, y) < 8) return;
-        const angle = (Math.atan2(x, -y) * 180 / Math.PI + 360) % 360;
-        setGradientEditorAngle(Number(angle.toFixed(1)));
+        const angle = Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360);
+        setGradientEditorAngle(angle);
+
+        const halfLen = Math.hypot(frameWidth, frameHeight) / 2;
+        const rad = (angle * Math.PI) / 180;
+        const dx = Math.sin(rad) * halfLen;
+        const dy = -Math.cos(rad) * halfLen;
+        const cx = frameWidth / 2;
+        const cy = frameHeight / 2;
+        const handles = {
+            start: { x: (cx - dx) / frameWidth, y: (cy - dy) / frameHeight },
+            end: { x: (cx + dx) / frameWidth, y: (cy + dy) / frameHeight },
+        };
+
+        const currentShot = frame.activeShot;
+        if (currentShot.useProjectBackground === false && currentShot.background?.kind === 'gradient') {
+            updateShot(currentShot.id, (s) => ({
+                ...s,
+                background: s.background?.kind === 'gradient'
+                    ? { ...s.background, angle, handles }
+                    : s.background,
+            }));
+        } else if (project.background.kind === 'gradient') {
+            updateProject((p) => ({
+                ...p,
+                background: p.background.kind === 'gradient'
+                    ? { ...p.background, angle, handles }
+                    : p.background,
+            }));
+        }
     };
 
     const handleGradientAnglePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
@@ -758,7 +787,10 @@ export const Stage: React.FC<StageProps> = ({
                 {/* THE STAGE FRAME */}
                 <div
                     ref={stageFrameRef}
-                    className="relative bg-[#070707] transition-[width,height] duration-150 overflow-visible"
+                    className={`relative transition-[width,height] duration-150 overflow-visible ${isTransparentBg
+                        ? 'bg-[repeating-conic-gradient(#1c1c21_0%_25%,#101014_0%_50%)] bg-[size:20px_20px]'
+                        : 'bg-[#070707]'
+                        }`}
                     style={{
                         width: `${frameWidth}px`,
                         height: `${frameHeight}px`,

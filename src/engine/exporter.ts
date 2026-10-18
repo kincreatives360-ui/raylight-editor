@@ -17,7 +17,7 @@ export type ExportScope = 'entire' | 'shot';
 export interface ExportSettings {
     format: ExportFormat;
     resolution: ExportResolution;
-    fps: 30 | 60;
+    fps: 24 | 30 | 60;
     quality: ExportQuality;
     scope: ExportScope;
     selectedShotId?: string;
@@ -372,12 +372,14 @@ export async function runVideoExportPipeline(
                 MediaRecorder.isTypeSupported(m)
         ) || '';
 
-    const bitrate =
-        settings.quality === 'studio'
+    const bitrateMultiplier = settings.resolution === '4k' ? 2.5 : 1;
+    const bitrate = Math.round(
+        (settings.quality === 'studio'
             ? 18_000_000
             : settings.quality === 'social'
                 ? 10_000_000
-                : 5_000_000;
+                : 5_000_000) * bitrateMultiplier
+    );
 
     if (
         typeof canvas.captureStream !== 'function' ||

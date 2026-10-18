@@ -269,7 +269,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                             background: `linear-gradient(${preset.angle}deg, ${preset.stops[0].color}, ${preset.stops[1].color})`,
                                         }}
                                     />
-                                    <span className="truncate text-[9px] text-[#a1a1aa]">
+                                    <span className="truncate text-[10px] text-[#a1a1aa] tracking-tight">
                                         {preset.name}
                                     </span>
                                 </button>

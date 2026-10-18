@@ -1,6 +1,18 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
 :root {
+  /* Impeccable Live Scaling Parameter */
+  --p-scale: 1;
+
+  /* Typography Font Stacks */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
   /* Surface Tokens */
   --bg-canvas: #07080d;
   --bg-app: #0b0b0d;
@@ -46,18 +58,112 @@ button,
   user-select: none;
 }
 
-input, textarea, [contenteditable="true"], .select-text {
+/* Browser surfaces: selection, caret, custom scrollbars, link underline offset */
+::selection {
+  background-color: var(--accent-selection);
+  color: #ffffff;
+}
+
+::-moz-selection {
+  background-color: var(--accent-selection);
+  color: #ffffff;
+}
+
+input, textarea, [contenteditable="true"] {
   user-select: text;
+  caret-color: var(--accent-primary);
+}
+
+a {
+  text-underline-offset: 3px;
+  text-decoration-thickness: 1px;
 }
 
 body {
   margin: 0;
   background-color: var(--bg-canvas);
   color: var(--text-primary);
-  font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans);
   overflow: hidden;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+/* Tabular figures for data, time, dimensions, coordinates, and scrubbers */
+.font-mono,
+code,
+kbd,
+samp {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum", "zero";
+  font-variant-numeric: tabular-nums;
+}
+
+/* Impeccable Typography Role Classes */
+.typeset-display {
+  font-size: calc(18px * var(--p-scale, 1));
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  line-height: 1.25;
+  color: var(--text-primary);
+}
+
+.typeset-heading {
+  font-size: calc(13px * var(--p-scale, 1));
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.35;
+  color: var(--text-primary);
+}
+
+.typeset-section {
+  font-size: calc(10.5px * var(--p-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  color: var(--text-muted);
+}
+
+.typeset-label {
+  font-size: calc(11px * var(--p-scale, 1));
+  font-weight: 500;
+  letter-spacing: -0.005em;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
+.typeset-body {
+  font-size: calc(12px * var(--p-scale, 1));
+  font-weight: 400;
+  letter-spacing: -0.01em;
+  line-height: 1.45;
+  color: var(--text-secondary);
+}
+
+.typeset-data {
+  font-family: var(--font-mono);
+  font-size: calc(11px * var(--p-scale, 1));
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum", "zero";
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+.typeset-keycap {
+  font-family: var(--font-mono);
+  font-size: calc(9.5px * var(--p-scale, 1));
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--text-subtle);
+  background-color: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 4px;
+  padding: 2px 5px;
 }
 
 /* Accessible focus rings */

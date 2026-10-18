@@ -161,7 +161,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             style={{ touchAction: 'none' }}
             className="h-7 px-2.5 rounded-lg bg-[#1c1c1f] hover:bg-[#242429] border border-transparent focus-visible:outline-none focus-visible:border-[#0088ff] focus-visible:ring-1 focus-visible:ring-[#0088ff] flex items-center gap-2 cursor-ew-resize select-none transition"
         >
-            <span className="text-[11px] text-[#a1a1aa] font-medium shrink-0">
+            <span className="text-[11px] text-[#a1a1aa] font-medium tracking-tight shrink-0 select-none">
                 {label}
             </span>
 
@@ -176,10 +176,10 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                         if (e.key === 'Enter') commitTextInput();
                         if (e.key === 'Escape') setIsEditing(false);
                     }}
-                    className="w-full bg-transparent text-[11px] font-mono text-white outline-none"
+                    className="w-full bg-transparent text-[11px] font-mono tabular-nums text-white outline-none tracking-tight"
                 />
             ) : (
-                <span className="text-[11px] font-mono text-[#e4e4e7] truncate">
+                <span className="text-[11px] font-mono tabular-nums text-[#f4f4f5] truncate tracking-tight">
                     {value.toFixed(decimals)}
                     {unit}
                 </span>

@@ -150,6 +150,7 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
 
 // Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
 export function saveProjectToBrowser(project: Project): void {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
     // 1. Dual-write to IndexedDB for unlimited asset quota
     void saveProjectToIndexedDB(project);
 
@@ -189,6 +190,7 @@ export function saveProjectToBrowser(project: Project): void {
 
 // Load auto-saved project from browser local storage (synchronous initial load)
 export function loadProjectFromBrowser(): Project | null {
+    if (typeof window === 'undefined' || typeof localStorage === 'undefined') return null;
     try {
         const raw = localStorage.getItem(AUTO_SAVE_KEY);
         if (!raw) return null;

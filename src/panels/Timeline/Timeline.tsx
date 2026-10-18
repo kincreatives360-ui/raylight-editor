@@ -1,6 +1,6 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Scissors } from 'lucide-react';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
@@ -29,6 +29,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         updateLayer,
         addShot,
         addLayerToShot,
+        splitAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
     } = useProjectStore();
@@ -1088,6 +1089,15 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
                         )}
                     </button>
+                    <button
+                        type="button"
+                        onClick={() => splitAtPlayhead(currentTimeMs)}
+                        aria-label="Split clip at playhead"
+                        title="Split Clip at Playhead (S)"
+                        className="w-5 h-5 rounded-full border border-white/20 hover:border-white/60 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
+                    >
+                        <Scissors className="w-2.5 h-2.5" />
+                    </button>
                     <div className="flex items-center gap-1 font-mono text-[10px] text-[#a1a1aa] tracking-tight tabular-nums select-none">
                         <span className="text-white font-medium">{(currentTimeMs / 1000).toFixed(2)}s</span>
                         <span className="text-white/30">/</span>
@@ -1182,7 +1192,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     <div className="py-2 flex-1 relative flex flex-col">
                     {(project.audio?.clips?.length || 0) > 0 && (
                         <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
-                            <span className="absolute left-2 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
+                            <span className="absolute left-2 top-1 text-[10px] uppercase tracking-wider font-semibold text-slate-400 z-10">Media</span>
                             <button
                                 type="button"
                                 onPointerDown={(e) => e.stopPropagation()}
@@ -1227,7 +1237,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 setCurrentTimeMs(visibleStart);
                                             }}
                                             style={{ left: `${left}px`, width: `${width}px` }}
-                                            className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[9px] truncate cursor-grab active:cursor-grabbing transition select-none ${
+                                            className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none ${
                                                 clip.muted || project.audio?.muted
                                                     ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
                                                     : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
@@ -1271,7 +1281,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             setCurrentTimeMs(Math.max(0, clipStart));
                                         }}
                                         style={{ left: `${left}px`, width: `${width}px` }}
-                                        className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[9px] truncate cursor-grab active:cursor-grabbing transition select-none ${
+                                        className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none ${
                                             clip.muted || project.audio?.muted
                                                 ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
                                                 : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
@@ -1647,7 +1657,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     left: `${entStartMs * pxPerMs}px`,
                                                                     width: `${Math.max(28, entDurMs * pxPerMs)}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab active:cursor-grabbing transition ${isSelected &&
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected &&
                                                                         selectedPresetType === 'entrance'
                                                                         ? 'border-purple-300 bg-purple-700 text-white shadow'
                                                                         : 'border-[#8b5cf6] bg-[#341a63]/90 text-purple-200 hover:border-purple-400'
@@ -1702,7 +1712,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     left: `${extStartMs * pxPerMs}px`,
                                                                     width: `${Math.max(28, extDurMs * pxPerMs)}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
                                                                         ? 'border-pink-300 bg-pink-700 text-white shadow'
                                                                         : 'border-[#ec4899] bg-[#591636]/90 text-pink-200 hover:border-pink-400'
                                                                     }`}
@@ -1763,7 +1773,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                         blk.durationMs * pxPerMs
                                                                     )}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[9px] cursor-grab transition relative ${selectedBlockId === blk.id
+                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition relative ${selectedBlockId === blk.id
                                                                         ? 'border-[#c084fc] bg-[#581c87] text-white'
                                                                         : 'border-[#7c3aed] bg-[#2a1452]/90 text-purple-200 hover:border-[#a855f7]'
                                                                     }`}

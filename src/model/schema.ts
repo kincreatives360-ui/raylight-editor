@@ -38,21 +38,72 @@ export const FillSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
+export const ShaderPresetSchema = z.enum([
+  'silk',
+  'undertones',
+  'mosaic',
+  'meshGradient',
+  'warp',
+  'grainGradient',
+  'prism',
+  'halo',
+  'shift',
+  'lineScreen',
+  'dotMatrix',
+  'watercolor',
+  'voxels',
+]);
+
 export const BackgroundSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('solid'),
     color: z.string(),
+    opacity: z.number().min(0).max(1).optional(),
   }),
   z.object({
     kind: z.literal('gradient'),
     angle: z.number(),
     stops: z.array(GradientStopSchema).min(2),
     source: z.enum(['color', 'shader']).optional(),
-    gradientType: z.enum(['linear', 'radial']).optional(),
+    gradientType: z.enum(['linear', 'radial', 'angular']).optional(),
+    handles: z
+      .object({
+        start: z.object({ x: z.number(), y: z.number() }),
+        end: z.object({ x: z.number(), y: z.number() }),
+        width: z.number().optional(),
+      })
+      .optional(),
+  }),
+  z.object({
+    kind: z.literal('noise'),
+    baseColor: z.string(),
+    intensity: z.number().min(0).max(1),
+  }),
+  z.object({
+    kind: z.literal('shader'),
+    preset: ShaderPresetSchema,
+    color: z.string(),
+    colors: z.array(z.string()).default([]),
+    backgroundColor: z.string().default('#000102'),
+    speed: z.number().min(0).max(3).default(1),
+    waves: z.number().min(0.25).max(2.5).default(1),
+    focus: z.number().min(0.2).max(2).default(1),
+    glow: z.number().min(0).max(2).default(1),
+    shine: z.number().min(0).max(2).default(1),
+    angle: z.number().min(-90).max(90).default(28),
   }),
   z.object({
     kind: z.literal('image'),
-    assetId: z.string(),
+    assetId: z.string().optional(),
+    src: z.string().optional(),
+    color: z.string().optional(),
+    fit: z.enum(['cover', 'contain']).optional(),
+    dim: z.number().min(0).max(1).optional(),
+    blur: z.number().min(0).max(100).optional(),
+    opacity: z.number().min(0).max(1).optional(),
+  }),
+  z.object({
+    kind: z.literal('transparent'),
   }),
 ]);
 
@@ -84,7 +135,15 @@ export const SpringEasingNameSchema = z.enum([
   'quick',
   'bouncy',
   'slow',
+  'snappy',
+  'stiff',
 ]);
+
+export const SpringConfigSchema = z.object({
+  stiffness: z.number().min(1).max(1000).optional(),
+  damping: z.number().min(1).max(200).optional(),
+  mass: z.number().min(0.1).max(50).optional(),
+});
 
 export const EasingSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -94,6 +153,7 @@ export const EasingSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('spring'),
     name: SpringEasingNameSchema,
+    config: SpringConfigSchema.optional(),
   }),
   z.object({
     kind: z.literal('bezier'),
@@ -236,11 +296,12 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
     .optional(),
   device: z
     .object({
-      type: z.enum(['iphone', 'ipad', 'macbook', 'browser']),
-      color: z.enum(['silver', 'black']),
+      type: z.enum(['iphone', 'ipad', 'macbook', 'browser', 'samsung-galaxy', 'display']),
+      color: z.enum(['silver', 'black', 'space-black', 'titanium', 'midnight']),
       gloss: z.number().min(0).max(1),
       lidAngle: z.number().optional(),
       screenGlow: z.number().optional(),
+      glare: z.number().optional(),
     })
     .optional(),
 });
@@ -546,7 +607,7 @@ export const ProjectSchema = z.object({
     '2:3',
     '4:5',
   ]),
-  fps: z.union([z.literal(30), z.literal(60)]),
+  fps: z.union([z.literal(24), z.literal(30), z.literal(60)]),
   background: BackgroundSchema,
   defaultCamera: z
     .object({

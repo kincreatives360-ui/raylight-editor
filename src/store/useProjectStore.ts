@@ -11,6 +11,7 @@ import type {
     ShapeLayer,
     TextLayer,
     AssetRecord,
+    AudioClip,
 } from '../model/types';
 import { isBlankProjectState } from '../model/types';
 import {
@@ -122,6 +123,8 @@ interface ProjectStore {
     duplicateShot: (shotId: string) => Shot | null;
     deleteShot: (shotId: string) => void;
     splitShotAtPlayhead: (shotId: string, globalTimeMs: number) => Shot | null;
+    splitAudioClipAtPlayhead: (clipId: string, globalTimeMs: number) => AudioClip | null;
+    splitAtPlayhead: (globalTimeMs: number) => boolean;
 
     beginDragTransaction: () => void;
     commitDragTransaction: () => void;
@@ -647,6 +650,76 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         });
 
         return secondShot;
+    },
+
+    splitAudioClipAtPlayhead: (clipId, globalTimeMs) => {
+        const state = get();
+        const clips = state.project.audio?.clips || [];
+        const target = clips.find((c) => c.id === clipId);
+        if (!target) return null;
+
+        const splitOffsetMs = globalTimeMs - target.startMs;
+        if (splitOffsetMs < 100 || splitOffsetMs > target.durationMs - 100) {
+            return null;
+        }
+
+        const firstDuration = splitOffsetMs;
+        const secondDuration = target.durationMs - splitOffsetMs;
+
+        const secondClip: AudioClip = {
+            ...target,
+            id: `audio-clip-${Date.now()}`,
+            name: `${target.name} (Part 2)`,
+            startMs: globalTimeMs,
+            durationMs: secondDuration,
+            offsetMs: (target.offsetMs || 0) + firstDuration,
+        };
+
+        const updatedFirst: AudioClip = {
+            ...target,
+            durationMs: firstDuration,
+        };
+
+        get().updateProject((proj) => {
+            const currentClips = proj.audio?.clips || [];
+            const idx = currentClips.findIndex((c) => c.id === clipId);
+            if (idx === -1) return proj;
+            const nextClips = [...currentClips];
+            nextClips.splice(idx, 1, updatedFirst, secondClip);
+            return {
+                ...proj,
+                audio: {
+                    ...(proj.audio || { muted: false, masterVolume: 1 }),
+                    clips: nextClips,
+                },
+            };
+        });
+
+        return secondClip;
+    },
+
+    splitAtPlayhead: (globalTimeMs) => {
+        const state = get();
+        // Check if there is an audio clip under the playhead
+        const audioClips = state.project.audio?.clips || [];
+        const activeClip = audioClips.find(
+            (c) => globalTimeMs > c.startMs + 100 && globalTimeMs < c.startMs + c.durationMs - 100
+        );
+        if (activeClip) {
+            const res = get().splitAudioClipAtPlayhead(activeClip.id, globalTimeMs);
+            if (res) return true;
+        }
+
+        // Otherwise find the active shot under playhead
+        const activeShot = state.project.shots.find(
+            (s) => globalTimeMs > s.startMs + 200 && globalTimeMs < s.startMs + s.durationMs - 200
+        );
+        if (activeShot) {
+            const res = get().splitShotAtPlayhead(activeShot.id, globalTimeMs);
+            if (res) return true;
+        }
+
+        return false;
     },
 
     beginDragTransaction: () =>

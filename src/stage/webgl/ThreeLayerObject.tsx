@@ -189,6 +189,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const isIpad = device?.type === 'ipad';
     const isMacbook = device?.type === 'macbook';
     const isBrowser = device?.type === 'browser';
+    const isSamsung = device?.type === 'samsung-galaxy';
+    const isDisplay = device?.type === 'display';
 
     const [loadedImageState, setLoadedImageState] = useState<{
         url: string;
@@ -340,6 +342,45 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     imgL.name,
                     totalBlurPx
                 );
+            }
+
+            // Draw Dynamic Island / Camera punch hole for phones
+            if (isPhone) {
+                const pillW = canvasW * 0.28;
+                const pillH = canvasH * 0.038;
+                const pillX = (canvasW - pillW) / 2;
+                const pillY = canvasH * 0.024;
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
+                ctx.fill();
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath();
+                ctx.arc(pillX + pillW * 0.78, pillY + pillH * 0.5, pillH * 0.26, 0, Math.PI * 2);
+                ctx.fill();
+            } else if (isSamsung) {
+                const holeR = Math.max(5, canvasW * 0.018);
+                const holeX = canvasW * 0.5;
+                const holeY = canvasH * 0.035;
+                ctx.fillStyle = '#000000';
+                ctx.beginPath();
+                ctx.arc(holeX, holeY, holeR, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.fillStyle = '#0f172a';
+                ctx.beginPath();
+                ctx.arc(holeX, holeY, holeR * 0.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // Screen Glare & Specular Reflection
+            if (device?.glare && device.glare > 0) {
+                const glareVal = Math.min(1, Math.max(0, device.glare));
+                const glareGrad = ctx.createLinearGradient(0, topBarH, canvasW * 1.25, canvasH);
+                glareGrad.addColorStop(0, `rgba(255,255,255,${0.28 * glareVal})`);
+                glareGrad.addColorStop(0.35, `rgba(255,255,255,${0.09 * glareVal})`);
+                glareGrad.addColorStop(0.55, 'rgba(255,255,255,0)');
+                ctx.fillStyle = glareGrad;
+                ctx.fillRect(0, topBarH, canvasW, canvasH - topBarH);
             }
 
             if (evalLayer.shimmerProgress > 0 && evalLayer.shimmerProgress < 1) {
@@ -671,7 +712,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Surface material response:
     // Device screen gets glass finish (low roughness, subtle specular reflection for blooming highlights)
-    const isDeviceScreen = isPhone || isIpad || isMacbook;
+    const isDeviceScreen = isPhone || isIpad || isMacbook || isSamsung || isDisplay;
     const defaultRoughness = isDeviceScreen
         ? 0.08
         : (layer.kind === 'image' || layer.kind === 'video' ? 0.24 : 0.45);
@@ -681,6 +722,18 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const surfaceRoughness = layer.material?.roughness ?? defaultRoughness;
     const surfaceMetalness = layer.material?.metalness ?? defaultMetalness;
+
+    const getChassisHexColor = (color?: string) => {
+        switch (color) {
+            case 'silver': return '#e2e8f0';
+            case 'black': return '#18181c';
+            case 'space-black': return '#121316';
+            case 'titanium': return '#484745';
+            case 'midnight': return '#161c28';
+            default: return '#18181c';
+        }
+    };
+    const chassisHex = getChassisHexColor(device?.color);
 
     return (
         <group
@@ -695,13 +748,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey);
             }}
         >
-            {/* 1. 3D IPHONE / IPAD CHASSIS */}
-            {(isPhone || isIpad) && (
+            {/* 1. 3D IPHONE / IPAD / SAMSUNG GALAXY CHASSIS */}
+            {(isPhone || isIpad || isSamsung) && (
                 <group position={[0, 0, -0.035]}>
                     <mesh castShadow receiveShadow>
                         <extrudeGeometry args={[roundedShape, phoneExtrudeSettings]} />
                         <meshStandardMaterial
-                            color={device?.color === 'black' ? '#18181c' : '#2d3039'}
+                            color={chassisHex}
                             metalness={0.94}
                             roughness={chassisRoughness}
                             envMapIntensity={1.4}
@@ -721,10 +774,44 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     >
                         <boxGeometry args={[meshW * 1.08, meshH * 0.85, 0.022]} />
                         <meshStandardMaterial
-                            color={device?.color === 'black' ? '#1f2026' : '#32353e'}
+                            color={chassisHex}
                             metalness={0.9}
                             roughness={0.28}
                             envMapIntensity={1.2}
+                        />
+                    </mesh>
+                </group>
+            )}
+
+            {/* 3. 3D PRO / STUDIO DISPLAY CHASSIS & STAND */}
+            {isDisplay && (
+                <group position={[0, 0, -0.02]}>
+                    {/* Bezel frame around display */}
+                    <mesh castShadow receiveShadow>
+                        <boxGeometry args={[meshW * 1.04, meshH * 1.04, 0.02]} />
+                        <meshStandardMaterial
+                            color={chassisHex}
+                            metalness={0.92}
+                            roughness={0.24}
+                            envMapIntensity={1.3}
+                        />
+                    </mesh>
+                    {/* Stand column */}
+                    <mesh position={[0, -meshH * 0.45, -0.06]} rotation={[0.08, 0, 0]} castShadow>
+                        <boxGeometry args={[meshW * 0.12, meshH * 0.48, 0.025]} />
+                        <meshStandardMaterial
+                            color={device?.color === 'silver' ? '#e2e8f0' : '#27272a'}
+                            metalness={0.95}
+                            roughness={0.2}
+                        />
+                    </mesh>
+                    {/* Stand base plate foot */}
+                    <mesh position={[0, -meshH * 0.68, 0.04]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
+                        <boxGeometry args={[meshW * 0.36, meshH * 0.28, 0.015]} />
+                        <meshStandardMaterial
+                            color={device?.color === 'silver' ? '#e2e8f0' : '#27272a'}
+                            metalness={0.95}
+                            roughness={0.2}
                         />
                     </mesh>
                 </group>

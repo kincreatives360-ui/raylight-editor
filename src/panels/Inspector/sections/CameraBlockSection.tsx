@@ -426,12 +426,29 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             }}
                             className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
                         >
-                            <option value="preset:linear">Linear</option>
-                            <option value="preset:ease-in-out">Ease in and out</option>
-                            <option value="preset:ease-out">Ease out</option>
-                            <option value="preset:ease-out-expo">Ease out expo</option>
-                            <option value="spring:gentle">Spring: Gentle</option>
-                            <option value="bezier">Custom Cubic-Bezier</option>
+                            <optgroup label="Physics Springs">
+                                <option value="spring:gentle">Spring: Gentle</option>
+                                <option value="spring:quick">Spring: Quick</option>
+                                <option value="spring:bouncy">Spring: Bouncy</option>
+                                <option value="spring:slow">Spring: Slow</option>
+                                <option value="spring:snappy">Spring: Snappy</option>
+                                <option value="spring:stiff">Spring: Stiff</option>
+                            </optgroup>
+                            <optgroup label="Standard Presets">
+                                <option value="preset:linear">Linear</option>
+                                <option value="preset:ease">Standard Ease</option>
+                                <option value="preset:ease-in">Ease In</option>
+                                <option value="preset:ease-out">Ease Out</option>
+                                <option value="preset:ease-in-out">Ease In-Out</option>
+                                <option value="preset:ease-in-expo">Ease In Expo</option>
+                                <option value="preset:ease-out-expo">Ease Out Expo</option>
+                                <option value="preset:ease-in-back">Ease In Back</option>
+                                <option value="preset:ease-out-back">Ease Out Back</option>
+                                <option value="preset:bounce">Bounce</option>
+                            </optgroup>
+                            <optgroup label="Custom Curves">
+                                <option value="bezier">Custom Cubic Bezier</option>
+                            </optgroup>
                         </select>
                         <button
                             type="button"
@@ -451,6 +468,114 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <X className="w-3.5 h-3.5" />
                         </button>
                     </div>
+
+                    {/* Spring Physics Parameters Slider Tuning */}
+                    {activeCameraBlock.easing.kind === 'spring' && (
+                        <div className="p-2 rounded-lg bg-[#141416] border border-white/[0.06] space-y-1.5 mt-2">
+                            <div className="flex items-center justify-between text-[10px] text-[#38bdf8] font-medium">
+                                <span>Spring Physics Tuning</span>
+                                <span className="text-[10px] text-[#a1a1aa] font-mono capitalize tracking-tight">{activeCameraBlock.easing.name}</span>
+                            </div>
+                            <div className="grid grid-cols-3 gap-1">
+                                <ScrubInput
+                                    label="Stiff"
+                                    value={activeCameraBlock.easing.config?.stiffness ?? 180}
+                                    min={20}
+                                    max={400}
+                                    step={5}
+                                    onChange={(stiffness) =>
+                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                            ...cb,
+                                            easing: {
+                                                ...cb.easing,
+                                                kind: 'spring',
+                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
+                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), stiffness },
+                                            },
+                                        }))
+                                    }
+                                />
+                                <ScrubInput
+                                    label="Damp"
+                                    value={activeCameraBlock.easing.config?.damping ?? 18}
+                                    min={1}
+                                    max={50}
+                                    step={1}
+                                    onChange={(damping) =>
+                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                            ...cb,
+                                            easing: {
+                                                ...cb.easing,
+                                                kind: 'spring',
+                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
+                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), damping },
+                                            },
+                                        }))
+                                    }
+                                />
+                                <ScrubInput
+                                    label="Mass"
+                                    value={Math.round((activeCameraBlock.easing.config?.mass ?? 1) * 10)}
+                                    min={1}
+                                    max={50}
+                                    step={1}
+                                    unit="x"
+                                    onChange={(massVal) =>
+                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                            ...cb,
+                                            easing: {
+                                                ...cb.easing,
+                                                kind: 'spring',
+                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
+                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), mass: Number((massVal / 10).toFixed(1)) },
+                                            },
+                                        }))
+                                    }
+                                />
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Bezier Handles Tuning */}
+                    {activeCameraBlock.easing.kind === 'bezier' && (
+                        <div className="p-2 rounded-lg bg-[#141416] border border-white/[0.06] space-y-1.5 mt-2">
+                            <div className="flex items-center justify-between text-[10px] text-[#38bdf8] font-medium">
+                                <span>Cubic Bezier Curve Handles</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-1.5">
+                                <ScrubInput
+                                    label="X1"
+                                    value={Math.round(activeCameraBlock.easing.x1 * 100)}
+                                    min={0}
+                                    max={100}
+                                    step={1}
+                                    unit="%"
+                                    onChange={(val) => {
+                                        const x1 = Number((val / 100).toFixed(2));
+                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                            ...cb,
+                                            easing: cb.easing.kind === 'bezier' ? { ...cb.easing, x1 } : cb.easing,
+                                        }));
+                                    }}
+                                />
+                                <ScrubInput
+                                    label="Y1"
+                                    value={Math.round(activeCameraBlock.easing.y1 * 100)}
+                                    min={-100}
+                                    max={200}
+                                    step={1}
+                                    unit="%"
+                                    onChange={(val) => {
+                                        const y1 = Number((val / 100).toFixed(2));
+                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                            ...cb,
+                                            easing: cb.easing.kind === 'bezier' ? { ...cb.easing, y1 } : cb.easing,
+                                        }));
+                                    }}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </div>
         </div>

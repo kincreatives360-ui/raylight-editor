@@ -84,15 +84,21 @@ export async function preloadProjectImages(project: Project): Promise<void> {
   for (const a of Object.values(project.assets || {})) {
     if (a?.dataUrl) urls.add(a.dataUrl);
   }
-  if (project.background?.kind === 'image' && project.background.assetId) {
-    const bgAsset = project.assets?.[project.background.assetId];
-    if (bgAsset?.dataUrl) urls.add(bgAsset.dataUrl);
+  if (project.background?.kind === 'image') {
+    if (project.background.src) urls.add(project.background.src);
+    if (project.background.assetId) {
+      const bgAsset = project.assets?.[project.background.assetId];
+      if (bgAsset?.dataUrl) urls.add(bgAsset.dataUrl);
+    }
   }
   if (project.shots) {
     for (const shot of project.shots) {
-      if (shot.background?.kind === 'image' && shot.background.assetId) {
-        const shotBgAsset = project.assets?.[shot.background.assetId];
-        if (shotBgAsset?.dataUrl) urls.add(shotBgAsset.dataUrl);
+      if (shot.background?.kind === 'image') {
+        if (shot.background.src) urls.add(shot.background.src);
+        if (shot.background.assetId) {
+          const shotBgAsset = project.assets?.[shot.background.assetId];
+          if (shotBgAsset?.dataUrl) urls.add(shotBgAsset.dataUrl);
+        }
       }
     }
   }
@@ -196,12 +202,34 @@ export function createCanvasFillStyle(
     return hexToRgba(fill.color, fill.opacity * opacityMultiplier);
   }
   const isRadial = fill.kind === 'gradient' && fill.gradientType === 'radial';
+  const isAngular = fill.kind === 'gradient' && fill.gradientType === 'angular';
+  const handles = 'handles' in fill ? fill.handles : undefined;
   const cx = w / 2;
   const cy = h / 2;
   const len = Math.hypot(w, h) / 2;
   let grad: CanvasGradient;
-  if (isRadial) {
+
+  if (handles) {
+    if (isRadial) {
+      const rx = handles.start.x * w;
+      const ry = handles.start.y * h;
+      const ex = handles.end.x * w;
+      const ey = handles.end.y * h;
+      const radius = Math.hypot(ex - rx, ey - ry);
+      grad = ctx.createRadialGradient(rx, ry, 0, rx, ry, Math.max(1, radius));
+    } else {
+      grad = ctx.createLinearGradient(
+        handles.start.x * w,
+        handles.start.y * h,
+        handles.end.x * w,
+        handles.end.y * h
+      );
+    }
+  } else if (isRadial) {
     grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
+  } else if (isAngular && typeof ctx.createConicGradient === 'function') {
+    const rad = ((fill.angle - 90) * Math.PI) / 180;
+    grad = ctx.createConicGradient(rad, cx, cy);
   } else {
     const rad = ((fill.angle - 90) * Math.PI) / 180;
     grad = ctx.createLinearGradient(
@@ -922,6 +950,149 @@ function renderSceneLightSources(
   ctx.restore();
 }
 
+function renderSingleBackground(
+  ctx: CanvasRenderingContext2D,
+  project: Project,
+  bg: Background,
+  canvasW: number,
+  canvasH: number,
+  alpha = 1,
+  offsetX = 0
+): void {
+  if (bg.kind === 'transparent') {
+    return;
+  }
+
+  ctx.save();
+  ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
+  if (offsetX !== 0) {
+    ctx.translate(offsetX, 0);
+  }
+
+  if (bg.kind === 'solid') {
+    const opacity = bg.opacity ?? 1;
+    ctx.fillStyle = hexToRgba(bg.color, opacity);
+    ctx.fillRect(0, 0, canvasW, canvasH);
+  } else if (bg.kind === 'gradient') {
+    ctx.fillStyle = createCanvasFillStyle(
+      ctx,
+      {
+        kind: 'gradient',
+        angle: bg.angle,
+        stops: bg.stops,
+        gradientType: bg.gradientType,
+        handles: bg.handles,
+      },
+      canvasW,
+      canvasH,
+      1
+    );
+    ctx.fillRect(0, 0, canvasW, canvasH);
+  } else if (bg.kind === 'noise') {
+    ctx.fillStyle = bg.baseColor || '#0a0a0c';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    const noiseIntensity = Math.max(0, Math.min(1, bg.intensity ?? 0.2));
+    if (noiseIntensity > 0) {
+      const dotsCount = Math.min(2500, Math.round((canvasW * canvasH) / 600));
+      ctx.fillStyle = `rgba(255,255,255,${(noiseIntensity * 0.25).toFixed(3)})`;
+      let seed = 1234567;
+      for (let i = 0; i < dotsCount; i++) {
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        const gx = (seed / 4294967296) * canvasW;
+        seed = (seed * 1664525 + 1013904223) % 4294967296;
+        const gy = (seed / 4294967296) * canvasH;
+        ctx.fillRect(gx, gy, 1.5, 1.5);
+      }
+    }
+  } else if (bg.kind === 'shader') {
+    const baseColor = bg.backgroundColor || '#000102';
+    ctx.fillStyle = baseColor;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+
+    const colors = bg.colors && bg.colors.length > 0 ? bg.colors : [bg.color, bg.backgroundColor];
+    const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
+    colors.forEach((c, idx) => {
+      grad.addColorStop(idx / Math.max(1, colors.length - 1), c);
+    });
+    ctx.globalAlpha *= 0.75;
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+  } else if (bg.kind === 'image') {
+    const dataUrl = bg.src || (bg.assetId ? project.assets[bg.assetId]?.dataUrl : undefined);
+    const backdropColor = bg.color || '#000000';
+
+    if (bg.fit === 'contain') {
+      ctx.fillStyle = backdropColor;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
+
+    if (dataUrl) {
+      const img = imageElementCache.get(dataUrl);
+      const imgOpacity = bg.opacity ?? 1;
+      ctx.globalAlpha *= imgOpacity;
+
+      if (bg.blur && bg.blur > 0) {
+        ctx.filter = `blur(${bg.blur}px)`;
+      }
+
+      if (img && img.complete) {
+        const imgW = img.naturalWidth || img.width;
+        const imgH = img.naturalHeight || img.height;
+        if (imgW > 0 && imgH > 0) {
+          const canvasAspect = canvasW / canvasH;
+          if (bg.fit === 'contain') {
+            const imgAspect = imgW / imgH;
+            let dw = canvasW;
+            let dh = canvasH;
+            let dx = 0;
+            let dy = 0;
+            if (imgAspect > canvasAspect) {
+              dh = canvasW / imgAspect;
+              dy = (canvasH - dh) / 2;
+            } else {
+              dw = canvasH * imgAspect;
+              dx = (canvasW - dw) / 2;
+            }
+            ctx.drawImage(img, 0, 0, imgW, imgH, dx, dy, dw, dh);
+          } else {
+            const crop = calculateCoverCrop(imgW, imgH, canvasAspect);
+            ctx.drawImage(
+              img,
+              crop.sx,
+              crop.sy,
+              crop.sw,
+              crop.sh,
+              0,
+              0,
+              canvasW,
+              canvasH
+            );
+          }
+        } else {
+          ctx.drawImage(img, 0, 0, canvasW, canvasH);
+        }
+      } else {
+        ctx.fillStyle = backdropColor;
+        ctx.fillRect(0, 0, canvasW, canvasH);
+      }
+    } else {
+      ctx.fillStyle = backdropColor;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
+
+    if (bg.dim && bg.dim > 0) {
+      ctx.filter = 'none';
+      ctx.fillStyle = `rgba(0, 0, 0, ${Math.min(1, bg.dim)})`;
+      ctx.fillRect(0, 0, canvasW, canvasH);
+    }
+  } else {
+    ctx.fillStyle = '#0a0a0c';
+    ctx.fillRect(0, 0, canvasW, canvasH);
+  }
+
+  ctx.restore();
+}
+
 export function renderProjectFrameToCanvas(
   ctx: CanvasRenderingContext2D,
   project: Project,
@@ -947,63 +1118,8 @@ export function renderProjectFrameToCanvas(
   ctx.save();
   ctx.clearRect(0, 0, canvasW, canvasH);
 
-  // 1. Unlit Stage Background (exact solid color, gradient, or cover-cropped image)
-  const bg = resolveShotBackground(project, frame.activeShot);
-  if (bg.kind === 'solid') {
-    ctx.fillStyle = bg.color;
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  } else if (bg.kind === 'gradient') {
-    ctx.fillStyle = createCanvasFillStyle(
-      ctx,
-      {
-        kind: 'gradient',
-        angle: bg.angle,
-        stops: bg.stops,
-        gradientType: bg.gradientType,
-      },
-      canvasW,
-      canvasH,
-      1
-    );
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  } else if (bg.kind === 'image') {
-    const asset = project.assets[bg.assetId];
-    if (asset?.dataUrl) {
-      const img = imageElementCache.get(asset.dataUrl);
-      if (img && img.complete) {
-        const imgW = img.naturalWidth || img.width;
-        const imgH = img.naturalHeight || img.height;
-        if (imgW > 0 && imgH > 0) {
-          const canvasAspect = canvasW / canvasH;
-          const crop = calculateCoverCrop(imgW, imgH, canvasAspect);
-          ctx.drawImage(
-            img,
-            crop.sx,
-            crop.sy,
-            crop.sw,
-            crop.sh,
-            0,
-            0,
-            canvasW,
-            canvasH
-          );
-        } else {
-          ctx.drawImage(img, 0, 0, canvasW, canvasH);
-        }
-      } else {
-        ctx.fillStyle = '#0a0a0c';
-        ctx.fillRect(0, 0, canvasW, canvasH);
-      }
-    } else {
-      ctx.fillStyle = '#0a0a0c';
-      ctx.fillRect(0, 0, canvasW, canvasH);
-    }
-  } else {
-    ctx.fillStyle = '#0a0a0c';
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  }
-
-  // 2. Shot Transition Compositing (Crossfade / Slide / Push)
+  // 1. Stage Background & Shot Transition Compositing
+  const incomingBg = resolveShotBackground(project, frame.activeShot);
   const transType = frame.shotTransition.type;
   const transProgress = frame.shotTransition.progress;
   const outgoing = frame.shotTransition.outgoingFrame;
@@ -1025,6 +1141,10 @@ export function renderProjectFrameToCanvas(
       incomingSlideX = (1 - transProgress) * canvasW;
     }
 
+    const outgoingBg = resolveShotBackground(project, outgoing.activeShot);
+    renderSingleBackground(ctx, project, outgoingBg, canvasW, canvasH, outgoingOpacity, outgoingSlideX);
+    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, incomingOpacity, incomingSlideX);
+
     ctx.save();
     ctx.globalAlpha = outgoingOpacity;
     if (outgoingSlideX !== 0) ctx.translate(outgoingSlideX, 0);
@@ -1040,11 +1160,7 @@ export function renderProjectFrameToCanvas(
     );
     ctx.restore();
   } else {
-    incomingOpacity = transType === 'crossfade' ? transProgress : 1;
-    incomingSlideX =
-      transType === 'slide' || transType === 'push'
-        ? (1 - transProgress) * canvasW * 0.25
-        : 0;
+    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, 1, 0);
   }
 
   ctx.save();

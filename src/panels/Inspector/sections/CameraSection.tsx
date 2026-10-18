@@ -106,7 +106,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
                   <div className="text-[11px] font-medium text-white truncate">
                     {cb.label || `Move #${idx + 1}`}
                   </div>
-                  <div className="text-[9px] text-[#a1a1aa]">
+                  <div className="text-[10px] text-[#a1a1aa] font-mono tabular-nums tracking-tight">
                     {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
                   </div>
                 </div>
@@ -147,7 +147,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
             <span className="text-[10px] font-semibold text-[#0088ff]">
               Active Move Settings
             </span>
-            <span className="text-[9px] text-[#a1a1aa] capitalize">
+            <span className="text-[10px] text-[#a1a1aa] font-medium capitalize tracking-tight">
               {selectedBlock.mode}
             </span>
           </div>

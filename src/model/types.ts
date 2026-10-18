@@ -56,27 +56,66 @@ export type Fill =
     gradientType?: 'linear' | 'radial';
   };
 
+import type { ShaderPreset } from './backgroundPresets';
+export type { ShaderPreset };
+
 /**
- * Scene / stage background.
- * - solid  → "Color" in Raylight UI
- * - gradient → "Shader" (procedural gradient) in Raylight UI
- * - image  → "Image" in Raylight UI
+ * Scene / stage background with full Raylight production parity.
+ * - solid       → Solid color
+ * - gradient    → Linear, radial, or angular (conic) multi-stop gradient with optional canvas handles
+ * - noise       → Procedural film noise on base color
+ * - shader      → 13 GPU-accelerated procedural fragment shaders
+ * - image       → High-performance image with GPU mipmap Poisson blur, cover/contain fit & dimming
+ * - transparent → Alpha transparency with dark studio checkerboard
  */
 export type Background =
   | {
     kind: 'solid';
     color: string;
+    opacity?: number;
   }
   | {
     kind: 'gradient';
     angle: number;
     stops: GradientStop[];
     source?: 'color' | 'shader';
-    gradientType?: 'linear' | 'radial';
+    gradientType?: 'linear' | 'radial' | 'angular';
+    handles?: {
+      start: { x: number; y: number };
+      end: { x: number; y: number };
+      width?: number;
+    };
+  }
+  | {
+    kind: 'noise';
+    baseColor: string;
+    intensity: number;
+  }
+  | {
+    kind: 'shader';
+    preset: ShaderPreset;
+    color: string;
+    colors: string[];
+    backgroundColor: string;
+    speed: number;
+    waves: number;
+    focus: number;
+    glow: number;
+    shine: number;
+    angle: number;
   }
   | {
     kind: 'image';
-    assetId: string;
+    assetId?: string;
+    src?: string;
+    color?: string; // Backdrop letterbox fill color (default #000000)
+    fit?: 'cover' | 'contain';
+    dim?: number; // 0 to 1
+    blur?: number; // 0 to 1 (or px)
+    opacity?: number;
+  }
+  | {
+    kind: 'transparent';
   };
 
 /** Raylight.app-style quick color swatches (bottom row of the color picker). */
@@ -92,11 +131,17 @@ export const RAYLIGHT_COLOR_PALETTE: string[] = [
   '#ef4444', // red
 ];
 
-export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow';
+export type SpringEasingName = 'gentle' | 'quick' | 'bouncy' | 'slow' | 'snappy' | 'stiff';
+
+export interface SpringConfig {
+  stiffness?: number;
+  damping?: number;
+  mass?: number;
+}
 
 export type Easing =
   | { kind: 'preset'; name: PresetEasingName }
-  | { kind: 'spring'; name: SpringEasingName }
+  | { kind: 'spring'; name: SpringEasingName; config?: SpringConfig }
   | { kind: 'bezier'; x1: number; y1: number; x2: number; y2: number };
 
 export type TransitionType =
@@ -153,11 +198,12 @@ export interface LayerEffects {
 }
 
 export interface DeviceFrame {
-  type: 'iphone' | 'ipad' | 'macbook' | 'browser';
-  color: 'silver' | 'black';
+  type: 'iphone' | 'ipad' | 'macbook' | 'browser' | 'samsung-galaxy' | 'display';
+  color: 'silver' | 'black' | 'space-black' | 'titanium' | 'midnight';
   gloss: number;
   lidAngle?: number;
   screenGlow?: number;
+  glare?: number;
 }
 
 export interface LayerBase {
@@ -532,7 +578,7 @@ export interface Project {
   updatedAt: string;
   createdAt?: string;
   aspectRatio: AspectRatio;
-  fps: 30 | 60;
+  fps: 24 | 30 | 60;
   background: Background;
   defaultCamera?: {
     position: Vec3;
@@ -562,9 +608,9 @@ export function isBlankProjectState(project: Project): boolean {
 }
 
 /** Resolve the effective background for a shot (project vs shot override). */
-export function resolveShotBackground(project: Project, shot: Shot): Background {
-  if (shot.useProjectBackground !== false) {
-    return project.background;
+export function resolveShotBackground(project: Project, shot?: Shot): Background {
+  if (!shot || shot.useProjectBackground !== false) {
+    return project?.background ?? { kind: 'solid', color: '#0c0e17' };
   }
-  return shot.background ?? project.background;
+  return shot.background ?? project?.background ?? { kind: 'solid', color: '#0c0e17' };
 }

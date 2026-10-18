@@ -62,7 +62,6 @@ import { LightingSection } from './sections/LightingSection';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
-import { readImageFileWithThumbnail } from '../../engine/figmaSvgImporter';
 
 const ALL_BLEND_MODES: BlendMode[] = [
     'normal',
@@ -118,15 +117,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [customFonts, setCustomFonts] = useState<string[]>([]);
 
     const fontInputRef = useRef<HTMLInputElement>(null);
-    const projectBgFileRef = useRef<HTMLInputElement>(null);
-
-    const currentBgColor = project.background.kind === 'solid' ? project.background.color : '#000000';
-    const [bgColorDraft, setBgColorDraft] = useState(currentBgColor);
-    const [previousBgColor, setPreviousBgColor] = useState(currentBgColor);
-    if (currentBgColor !== previousBgColor) {
-        setPreviousBgColor(currentBgColor);
-        setBgColorDraft(currentBgColor);
-    }
 
     const refStageW = 1920;
     const refStageH = 1080;
@@ -153,16 +143,18 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     };
 
     const handleSetDeviceType = (type: 'none' | DeviceFrameType['type']) => {
-        if (!selectedLayer || selectedLayer.kind !== 'image') return;
+        if (!selectedLayer || (selectedLayer.kind !== 'image' && selectedLayer.kind !== 'video')) return;
         updateLayer(activeShot.id, selectedLayer.id, (l) => {
-            if (l.kind !== 'image') return l;
+            if (l.kind !== 'image' && l.kind !== 'video') return l;
             if (type === 'none') return { ...l, device: undefined };
             const defaultSize =
-                type === 'iphone'
+                type === 'iphone' || type === 'samsung-galaxy'
                     ? { width: 0.28, height: 0.58 }
                     : type === 'ipad'
                         ? { width: 0.48, height: 0.56 }
-                        : { width: 0.64, height: 0.56 };
+                        : type === 'display'
+                            ? { width: 0.72, height: 0.48 }
+                            : { width: 0.64, height: 0.56 };
             return {
                 ...l,
                 size: defaultSize,
@@ -170,6 +162,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     type,
                     color: l.device?.color || 'silver',
                     gloss: l.device?.gloss ?? 0.78,
+                    glare: l.device?.glare ?? 0.35,
                     lidAngle: l.device?.lidAngle ?? 100,
                     screenGlow: l.device?.screenGlow ?? 0.4,
                 },
@@ -196,23 +189,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             );
         } catch (err) {
             console.error('Failed to load custom font:', err);
-        }
-    };
-
-    const handlePickProjectBgImage = async (file: File | null) => {
-        if (!file) return;
-        try {
-            const asset = await readImageFileWithThumbnail(file);
-            updateProject((p) => ({
-                ...p,
-                assets: {
-                    ...p.assets,
-                    [asset.id]: asset,
-                },
-                background: { kind: 'image', assetId: asset.id },
-            }));
-        } catch (error) {
-            console.error('Failed to load project background image:', error);
         }
     };
 
@@ -299,13 +275,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 type="file"
                 accept=".ttf,.otf,.woff,.woff2"
                 onChange={handleFontFileUpload}
-                className="hidden"
-            />
-            <input
-                ref={projectBgFileRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => handlePickProjectBgImage(e.target.files?.[0] || null)}
                 className="hidden"
             />
 
@@ -439,258 +408,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         />
                     </div>
 
-                    {/* Background type + color */}
-                    <div className="space-y-1.5">
-                        <span className="text-[10px] text-[#a1a1aa]">Background</span>
-                        <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
-                            {(
-                                [
-                                    { key: 'solid', label: 'Color' },
-                                    { key: 'image', label: 'Image' },
-                                    { key: 'gradient', label: 'Shader' },
-                                ] as const
-                            ).map(({ key, label }) => (
-                                <button
-                                    key={key}
-                                    type="button"
-                                    onClick={() => {
-                                        if (key === 'solid') {
-                                            const color =
-                                                project.background.kind === 'solid'
-                                                    ? project.background.color
-                                                    : project.background.kind === 'gradient'
-                                                        ? project.background.stops[0]?.color ??
-                                                        '#0A0A0C'
-                                                        : '#0A0A0C';
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: { kind: 'solid', color },
-                                            }));
-                                        } else if (key === 'gradient') {
-                                            const color =
-                                                project.background.kind === 'solid'
-                                                    ? project.background.color
-                                                    : '#0a0a0c';
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: {
-                                                    kind: 'gradient',
-                                                    angle: 135,
-                                                    stops: [
-                                                        { at: 0, color },
-                                                        { at: 1, color: '#000000' },
-                                                    ],
-                                                },
-                                            }));
-                                        } else {
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: {
-                                                    kind: 'image',
-                                                    assetId:
-                                                        p.background.kind === 'image'
-                                                            ? p.background.assetId
-                                                            : '',
-                                                },
-                                            }));
-                                        }
-                                    }}
-                                    className={`flex-1 px-2 py-1 rounded-md text-[10px] font-medium transition cursor-pointer ${(key === 'solid' && project.background.kind === 'solid') ||
-                                        (key === 'gradient' &&
-                                            project.background.kind === 'gradient') ||
-                                        (key === 'image' && project.background.kind === 'image')
-                                        ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                        : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                >
-                                    {label}
-                                </button>
-                            ))}
-                        </div>
-
-                        {project.background.kind === 'solid' && (
-                            <div className="flex items-center gap-2 pt-0.5">
-                                <div className="relative shrink-0">
-                                    <ColorField
-
-                                        value={project.background.color}
-                                        onChange={(e) =>
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: {
-                                                    kind: 'solid',
-                                                    color: e.target.value,
-                                                },
-                                            }))
-                                        }
-                                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                                    />
-                                    <div
-                                        className="w-7 h-7 rounded-lg border border-white/10"
-                                        style={{ backgroundColor: project.background.color }}
-                                    />
-                                </div>
-                                <input
-                                    type="text"
-                                    value={bgColorDraft}
-                                    onChange={(e) => {
-                                        const raw = e.target.value;
-                                        setBgColorDraft(raw);
-                                        let v = raw.trim();
-                                        if (!v.startsWith('#')) v = `#${v}`;
-                                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: { kind: 'solid', color: v },
-                                            }));
-                                        }
-                                    }}
-                                    onBlur={() => {
-                                        let v = bgColorDraft.trim();
-                                        if (!v.startsWith('#')) v = `#${v}`;
-                                        if (/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(v)) {
-                                            updateProject((p) => ({
-                                                ...p,
-                                                background: { kind: 'solid', color: v },
-                                            }));
-                                            setBgColorDraft(v);
-                                        } else if (project.background.kind === 'solid') {
-                                            setBgColorDraft(project.background.color);
-                                        }
-                                    }}
-                                    className="flex-1 h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] font-mono text-white outline-none"
-                                    spellCheck={false}
-                                />
-                            </div>
-                        )}
-
-                        {project.background.kind === 'gradient' && (
-                            <div className="space-y-2 pt-1">
-                                <div className="flex items-center gap-2">
-                                    <div className="flex items-center gap-1.5 flex-1">
-                                        <ColorField
-
-                                            value={project.background.stops[0]?.color ?? '#0a0a0c'}
-                                            onChange={(e) => {
-                                                if (project.background.kind !== 'gradient') return;
-                                                const stops = [...project.background.stops];
-                                                if (!stops[0]) stops[0] = { at: 0, color: '#0a0a0c' };
-                                                stops[0] = {
-                                                    ...stops[0],
-                                                    at: 0,
-                                                    color: e.target.value,
-                                                };
-                                                updateProject((p) => {
-                                                    if (p.background.kind !== 'gradient') return p;
-                                                    return {
-                                                        ...p,
-                                                        background: {
-                                                            ...p.background,
-                                                            stops,
-                                                        },
-                                                    };
-                                                });
-                                            }}
-                                            className="w-6 h-6 rounded border border-white/10 cursor-pointer"
-                                            title="Start Color"
-                                        />
-                                        <ColorField
-
-                                            value={project.background.stops[1]?.color ?? '#000000'}
-                                            onChange={(e) => {
-                                                if (project.background.kind !== 'gradient') return;
-                                                const stops = [...project.background.stops];
-                                                if (!stops[1]) stops[1] = { at: 1, color: '#000000' };
-                                                stops[1] = {
-                                                    ...stops[1],
-                                                    at: 1,
-                                                    color: e.target.value,
-                                                };
-                                                updateProject((p) => {
-                                                    if (p.background.kind !== 'gradient') return p;
-                                                    return {
-                                                        ...p,
-                                                        background: {
-                                                            ...p.background,
-                                                            stops,
-                                                        },
-                                                    };
-                                                });
-                                            }}
-                                            className="w-6 h-6 rounded border border-white/10 cursor-pointer"
-                                            title="End Color"
-                                        />
-                                    </div>
-                                    <div className="w-24">
-                                        <ScrubInput
-                                            label="∠"
-                                            value={project.background.angle ?? 135}
-                                            min={0}
-                                            max={360}
-                                            step={5}
-                                            unit="°"
-                                            onChange={(angle) =>
-                                                updateProject((p) => {
-                                                    if (p.background.kind !== 'gradient') return p;
-                                                    return {
-                                                        ...p,
-                                                        background: {
-                                                            ...p.background,
-                                                            angle,
-                                                        },
-                                                    };
-                                                })
-                                            }
-                                        />
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
-                        {project.background.kind === 'image' && (
-                            <div className="space-y-2 pt-1">
-                                {project.background.assetId &&
-                                    project.assets[project.background.assetId]?.dataUrl ? (
-                                    <div className="relative w-full h-16 rounded-lg overflow-hidden border border-white/10 group">
-                                        <img
-                                            src={project.assets[project.background.assetId].dataUrl}
-                                            alt="Background"
-                                            className="w-full h-full object-cover"
-                                        />
-                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 flex items-center justify-center gap-2 transition">
-                                            <button
-                                                type="button"
-                                                onClick={() => projectBgFileRef.current?.click()}
-                                                className="px-2 py-1 rounded bg-[#1c1c1f] text-[10px] text-white hover:bg-white/20"
-                                            >
-                                                Change
-                                            </button>
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    updateProject((p) => ({
-                                                        ...p,
-                                                        background: { kind: 'image', assetId: '' },
-                                                    }))
-                                                }
-                                                className="p-1 rounded bg-rose-500/80 text-white"
-                                            >
-                                                <X className="w-3 h-3" />
-                                            </button>
-                                        </div>
-                                    </div>
-                                ) : (
-                                    <button
-                                        type="button"
-                                        onClick={() => projectBgFileRef.current?.click()}
-                                        className="w-full h-12 rounded-lg border border-dashed border-white/20 hover:border-[#0088ff] text-[#a1a1aa] hover:text-white flex items-center justify-center gap-1.5 transition text-[11px]"
-                                    >
-                                        <Upload className="w-3.5 h-3.5" />
-                                        <span>Upload Background Image</span>
-                                    </button>
-                                )}
-                            </div>
-                        )}
+                    {/* Unified Project Background Section */}
+                    <div className="rounded-lg border border-white/[0.06] overflow-hidden bg-black/20">
+                        <BackgroundSection scope="project" activeShot={activeShot} />
                     </div>
 
                     {/* FPS */}
@@ -781,10 +501,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             <div className="p-3.5 space-y-2.5">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5">
-                                        <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[9px] font-semibold uppercase tracking-wider text-[#0088ff]">
+                                        <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[10px] font-semibold uppercase tracking-wider text-[#0088ff]">
                                             {selectedLayer.kind}
                                         </span>
-                                        <span className="text-[10px] text-[#a1a1aa]">
+                                        <span className="text-[10px] text-[#a1a1aa] font-mono">
                                             #{selectedLayer.order}
                                         </span>
                                     </div>
@@ -930,6 +650,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     'iphone',
                                                     'ipad',
                                                     'macbook',
+                                                    'samsung-galaxy',
+                                                    'display',
                                                     'browser',
                                                 ] as const
                                             ).map((dev) => (
@@ -947,7 +669,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 >
                                                     {dev === 'none'
                                                         ? 'Bare Screenshot'
-                                                        : `${dev} 3D Frame`}
+                                                        : dev === 'samsung-galaxy'
+                                                            ? 'Samsung Galaxy Ultra'
+                                                            : dev === 'display'
+                                                                ? 'Pro Display XDR'
+                                                                : `${dev} 3D Frame`}
                                                 </button>
                                             ))}
                                         </div>
@@ -961,8 +687,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     <Laptop className="w-3 h-3 text-[#0088ff]" />
                                                     Frame Details
                                                 </span>
-                                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded">
-                                                    {(['silver', 'black'] as const).map((clr) => (
+                                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded flex-wrap justify-end">
+                                                    {(['silver', 'black', 'space-black', 'titanium', 'midnight'] as const).map((clr) => (
                                                         <button
                                                             key={clr}
                                                             type="button"
@@ -971,7 +697,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                                     activeShot.id,
                                                                     selectedLayer.id,
                                                                     (l) =>
-                                                                        l.kind === 'image' && l.device
+                                                                        (l.kind === 'image' || l.kind === 'video') && l.device
                                                                             ? {
                                                                                 ...l,
                                                                                 device: { ...l.device, color: clr },
@@ -979,18 +705,18 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                                             : l
                                                                 )
                                                             }
-                                                            className={`px-1.5 py-0.5 rounded text-[9px] capitalize cursor-pointer ${selectedLayer.device?.color === clr
+                                                            className={`px-2 py-0.5 rounded text-[10px] capitalize cursor-pointer transition ${selectedLayer.device?.color === clr
                                                                 ? 'bg-[#2a2a30] text-white font-medium'
                                                                 : 'text-[#a1a1aa] hover:text-white'
                                                                 }`}
                                                         >
-                                                            {clr}
+                                                            {clr.replace('-', ' ')}
                                                         </button>
                                                     ))}
                                                 </div>
                                             </div>
 
-                                            <div className="grid grid-cols-2 gap-1.5">
+                                            <div className="grid grid-cols-3 gap-1">
                                                 <ScrubInput
                                                     label="Gloss"
                                                     value={selectedLayer.device.gloss}
@@ -1000,8 +726,23 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     decimals={2}
                                                     onChange={(gloss) =>
                                                         updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'image' && l.device
+                                                            (l.kind === 'image' || l.kind === 'video') && l.device
                                                                 ? { ...l, device: { ...l.device, gloss } }
+                                                                : l
+                                                        )
+                                                    }
+                                                />
+                                                <ScrubInput
+                                                    label="Glare"
+                                                    value={selectedLayer.device.glare ?? 0.35}
+                                                    min={0}
+                                                    max={1}
+                                                    step={0.02}
+                                                    decimals={2}
+                                                    onChange={(glare) =>
+                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
+                                                            (l.kind === 'image' || l.kind === 'video') && l.device
+                                                                ? { ...l, device: { ...l.device, glare } }
                                                                 : l
                                                         )
                                                     }
@@ -1015,7 +756,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     decimals={2}
                                                     onChange={(screenGlow) =>
                                                         updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'image' && l.device
+                                                            (l.kind === 'image' || l.kind === 'video') && l.device
                                                                 ? { ...l, device: { ...l.device, screenGlow } }
                                                                 : l
                                                         )
@@ -1033,7 +774,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     unit="°"
                                                     onChange={(lidAngle) =>
                                                         updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'image' && l.device
+                                                            (l.kind === 'image' || l.kind === 'video') && l.device
                                                                 ? { ...l, device: { ...l.device, lidAngle } }
                                                                 : l
                                                         )
@@ -1612,8 +1353,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 <div className="space-y-2 pt-2 border-t border-white/[0.06]">
                                     <div className="flex items-center justify-between">
                                         <div className="flex flex-col">
-                                            <span className="text-[10px] font-medium text-white">Receives 3D Light</span>
-                                            <span className="text-[9px] text-[#a1a1aa]">
+                                            <span className="text-[11px] font-medium text-white">Receives 3D Light</span>
+                                            <span className="text-[10px] text-[#a1a1aa] tracking-tight">
                                                 {selectedLayer.kind === 'text' ? 'Unlit preserves flat, crisp typography' : 'Shades surface with scene lighting'}
                                             </span>
                                         </div>
@@ -1637,7 +1378,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
                                     {(selectedLayer.receivesLight ?? (selectedLayer.kind !== 'text')) && (
                                         <div className="space-y-1.5 pt-1">
-                                            <div className="flex items-center justify-between gap-1 text-[9px] text-[#a1a1aa]">
+                                            <div className="flex items-center justify-between gap-1 text-[10px] text-[#a1a1aa] tracking-tight">
                                                 <span>Material Presets:</span>
                                                 <div className="flex gap-1">
                                                     <button
@@ -2832,7 +2573,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                         <div className="text-[11px] font-medium text-white">
                                                             {cb.label || `Camera Move #${idx + 1}`}
                                                         </div>
-                                                        <div className="text-[9px] text-[#a1a1aa]">
+                                                        <div className="text-[10px] text-[#a1a1aa] font-mono tabular-nums tracking-tight">
                                                             {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
                                                         </div>
                                                     </div>

@@ -24,6 +24,7 @@ const SHORTCUTS: ShortcutItem[] = [
 
   // Playback & Animation
   { keys: ['Space'], description: 'Play / Pause timeline playback', category: 'Playback & Animation' },
+  { keys: ['S'], description: 'Split clip or shot at playhead', category: 'Playback & Animation' },
   { keys: ['Shift', 'A'], description: 'Toggle Live Motion Recording (Animate Mode)', category: 'Playback & Animation' },
   { keys: ['Arrow Keys'], description: 'Nudge selected layer position (0.005 units)', category: 'Playback & Animation' },
   { keys: ['Shift', 'Arrow Keys'], description: 'Fast nudge selected layer (0.025 units)', category: 'Playback & Animation' },
@@ -185,7 +186,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                     {sc.keys.map((k, kidx) => (
                       <kbd
                         key={kidx}
-                        className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-gray-200 font-mono text-[10px] font-semibold shadow-xs"
+                        className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[10px] font-semibold tracking-tight shadow-xs select-none"
                       >
                         {k}
                       </kbd>

@@ -12,6 +12,232 @@ interface LightingSectionProps {
   activeShot: Shot;
 }
 
+const LIGHTING_PRESETS = [
+  {
+    id: 'studio',
+    label: 'Studio',
+    desc: 'Balanced neutral 3-point daylight',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 1.3,
+      intensity: 1.0,
+      temperature: 5600,
+      ambientColor: '#f1f5f9',
+      ambience: 0.35,
+      castShadow: true,
+      sources: [
+        {
+          id: 'rim-fill',
+          name: 'Rim Light',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#ffffff',
+          intensity: 1.4,
+          position: { x: 0.8, y: 0.6, z: -1.2 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.55,
+          penumbra: 0.4,
+          castShadow: false,
+        },
+      ],
+    },
+  },
+  {
+    id: 'product',
+    label: 'Product',
+    desc: 'High contrast key with crisp specular edge',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 1.6,
+      intensity: 1.2,
+      temperature: 6500,
+      ambientColor: '#0f172a',
+      ambience: 0.15,
+      castShadow: true,
+      sources: [
+        {
+          id: 'accent-spec',
+          name: 'Specular Rim',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#ffffff',
+          intensity: 2.0,
+          position: { x: 1.2, y: -0.3, z: 0.8 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.4,
+          penumbra: 0.2,
+          castShadow: false,
+        },
+      ],
+    },
+  },
+  {
+    id: 'rim',
+    label: 'Rim',
+    desc: 'Dramatic edge silhouette backlighting',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 0.4,
+      intensity: 1.0,
+      temperature: 6000,
+      ambientColor: '#090d16',
+      ambience: 0.1,
+      castShadow: false,
+      sources: [
+        {
+          id: 'rim-back-l',
+          name: 'Left Rim',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#ffffff',
+          intensity: 2.2,
+          position: { x: -1.5, y: 0.6, z: -1.4 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.45,
+          penumbra: 0.3,
+          castShadow: true,
+        },
+        {
+          id: 'rim-back-r',
+          name: 'Right Rim',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#e2e8f0',
+          intensity: 2.2,
+          position: { x: 1.5, y: 0.6, z: -1.4 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.45,
+          penumbra: 0.3,
+          castShadow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'top-down',
+    label: 'Top Down',
+    desc: 'Overhead downlight with clean drop shadows',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 1.8,
+      intensity: 1.0,
+      temperature: 5000,
+      ambientColor: '#18181b',
+      ambience: 0.2,
+      castShadow: true,
+      sources: [
+        {
+          id: 'area-top',
+          name: 'Overhead Softbox',
+          type: 'area' as const,
+          enabled: true,
+          color: '#f8fafc',
+          intensity: 1.5,
+          position: { x: 0, y: 2.5, z: 0.5 },
+          width: 4,
+          height: 4,
+        },
+      ],
+    },
+  },
+  {
+    id: 'neon',
+    label: 'Neon',
+    desc: 'Cyberpunk dual-tone cyan & magenta glow',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 1.4,
+      intensity: 1.4,
+      temperature: 6500,
+      ambientColor: '#0a0518',
+      ambience: 0.12,
+      castShadow: true,
+      sources: [
+        {
+          id: 'neon-cyan',
+          name: 'Cyan Key',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#06b6d4',
+          intensity: 2.2,
+          position: { x: -1.4, y: 0.4, z: 1.2 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.6,
+          penumbra: 0.5,
+          castShadow: true,
+        },
+        {
+          id: 'neon-magenta',
+          name: 'Magenta Rim',
+          type: 'spot' as const,
+          enabled: true,
+          color: '#ec4899',
+          intensity: 2.4,
+          position: { x: 1.4, y: 0.2, z: -1.0 },
+          target: { x: 0, y: 0, z: 0 },
+          angle: 0.6,
+          penumbra: 0.5,
+          castShadow: true,
+        },
+      ],
+    },
+  },
+  {
+    id: 'window',
+    label: 'Window',
+    desc: 'Golden hour sunlight with cool ambient sky',
+    config: {
+      keyLightEnabled: true,
+      keyIntensity: 1.7,
+      intensity: 1.2,
+      temperature: 3400,
+      ambientColor: '#e0f2fe',
+      ambience: 0.28,
+      castShadow: true,
+      sources: [
+        {
+          id: 'sun-beam',
+          name: 'Sunbeam Area',
+          type: 'area' as const,
+          enabled: true,
+          color: '#fbbf24',
+          intensity: 1.8,
+          position: { x: 2.0, y: 1.5, z: 1.0 },
+          width: 3.5,
+          height: 3.5,
+        },
+      ],
+    },
+  },
+  {
+    id: 'backlight',
+    label: 'Backlight',
+    desc: 'Deep cinematic mood with prominent back emitter',
+    config: {
+      keyLightEnabled: false,
+      keyIntensity: 0.2,
+      intensity: 1.1,
+      temperature: 5500,
+      ambientColor: '#090d16',
+      ambience: 0.18,
+      castShadow: false,
+      sources: [
+        {
+          id: 'back-emitter',
+          name: 'Back Wall Glow',
+          type: 'area' as const,
+          enabled: true,
+          color: '#38bdf8',
+          intensity: 2.5,
+          position: { x: 0, y: 0, z: -1.6 },
+          width: 5,
+          height: 3.5,
+        },
+      ],
+    },
+  },
+];
+
 export const LightingSection: React.FC<LightingSectionProps> = ({
   activeShot,
 }) => {
@@ -98,11 +324,37 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
         </div>
       </div>
 
+      {/* 7 Studio Lighting Presets */}
+      <div className="space-y-1.5">
+        <span className="text-[10px] text-[#a1a1aa] block font-medium">Lighting Rig Presets</span>
+        <div className="grid grid-cols-4 gap-1">
+          {LIGHTING_PRESETS.map((pst) => (
+            <button
+              key={pst.id}
+              type="button"
+              onClick={() =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  light: {
+                    ...s.light,
+                    ...pst.config,
+                  },
+                }))
+              }
+              title={pst.desc}
+              className="px-1.5 py-1 rounded-lg bg-[#18181b] hover:bg-[#27272a] hover:text-white border border-white/[0.06] text-[10px] font-medium text-[#d4d4d8] text-center truncate transition cursor-pointer"
+            >
+              {pst.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
       {/* Master Gain (scales additional sources, 0 to 2, step 0.01) */}
       <div className="rounded-lg border border-white/[0.06] bg-[#18181b]/70 p-2.5 space-y-1.5">
         <div className="flex items-center justify-between">
           <span className="text-[11px] font-medium text-[#e4e4e7]">Master Gain</span>
-          <span className="text-[9px] text-[#a1a1aa]">Scales all extra light sources</span>
+          <span className="text-[10px] text-[#a1a1aa] tracking-tight">Scales all extra light sources</span>
         </div>
         <ScrubInput
           label="Master Gain"
@@ -131,7 +383,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
             <span className="text-[11px] font-medium text-[#e4e4e7]">
               Ambient (Shadow Floor)
             </span>
-            <span className="text-[9px] text-[#a1a1aa]">
+            <span className="text-[10px] text-[#a1a1aa] tracking-tight">
               Global baseline fill; prevents unlit areas from going pure black
             </span>
           </div>
@@ -395,7 +647,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 <span className="text-[11px] font-medium text-white truncate">
                   {source.name}
                 </span>
-                <span className="text-[9px] px-1 py-0.2 rounded bg-white/10 text-amber-300 font-mono capitalize">
+                <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/10 text-amber-300 font-mono capitalize tracking-tight">
                   {source.type}
                 </span>
               </label>
@@ -447,7 +699,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                     setTimelineView('scene');
                   }}
                   title="Animate this light on Timeline"
-                  className="px-1.5 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[9px] cursor-pointer"
+                  className="px-2 py-0.5 rounded bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 text-[10px] font-medium tracking-tight cursor-pointer"
                 >
                   Animate
                 </button>

@@ -95,6 +95,7 @@ export default function App() {
     recordAnimatedBlockAtPlayhead,
     createGroupFromLayers,
     ungroupInShot,
+    splitAtPlayhead,
     undo,
     redo,
   } = useProjectStore();
@@ -586,6 +587,11 @@ export default function App() {
         if (key === 'l') { setActiveTool('line'); return; }
         if (key === 'a') { setActiveTool('arrow'); return; }
         if (key === 'p') { setActiveTool('pen'); return; }
+        if (key === 's') {
+          e.preventDefault();
+          splitAtPlayhead(currentTimeMs);
+          return;
+        }
       }
 
       // ': Toggle Safe Zones & Rule of Thirds Grid (or Cmd/Ctrl + ')
@@ -771,6 +777,7 @@ export default function App() {
     setIsCropping,
     undo,
     redo,
+    splitAtPlayhead,
     togglePlay,
     leftPanelOpen,
     rightSidebarOpen,
@@ -1278,13 +1285,14 @@ export default function App() {
                   onChange={(e) =>
                     setExportSettings((s) => ({
                       ...s,
-                      fps: Number(e.target.value) as 30 | 60,
+                      fps: Number(e.target.value) as 24 | 30 | 60,
                     }))
                   }
                   className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
                 >
                   <option value={60}>60 FPS (Smooth)</option>
                   <option value={30}>30 FPS (Standard)</option>
+                  <option value={24}>24 FPS (Cinematic)</option>
                 </select>
               </div>
             </div>
@@ -1331,22 +1339,22 @@ export default function App() {
               </div>
             </div>
 
-            <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono text-[11px] space-y-1 text-[#d4d4d8]">
-              <div className="flex justify-between">
-                <span className="text-[#a1a1aa]">Dimensions:</span>
-                <span>
+            <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono tabular-nums text-[11px] space-y-1.5 text-[#f4f4f5] tracking-tight">
+              <div className="flex justify-between items-center">
+                <span className="text-[#a1a1aa] font-sans">Dimensions:</span>
+                <span className="font-semibold text-white">
                   {exportMetrics.width}&times;{exportMetrics.height}px
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#a1a1aa]">Estimated Size:</span>
-                <span className="text-emerald-400">
+              <div className="flex justify-between items-center">
+                <span className="text-[#a1a1aa] font-sans">Estimated Size:</span>
+                <span className="text-emerald-400 font-semibold">
                   ~{exportMetrics.estimatedSizeMb} MB
                 </span>
               </div>
-              <div className="flex justify-between">
-                <span className="text-[#a1a1aa]">Estimated Time:</span>
-                <span className="text-[#38bdf8]">
+              <div className="flex justify-between items-center">
+                <span className="text-[#a1a1aa] font-sans">Estimated Time:</span>
+                <span className="text-[#38bdf8] font-semibold">
                   ~{exportMetrics.estimatedTimeSec}s
                 </span>
               </div>
@@ -1354,9 +1362,9 @@ export default function App() {
 
             {exporting && (
               <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-mono text-[#38bdf8]">
+                <div className="flex justify-between text-[11px] font-mono tabular-nums text-[#38bdf8] tracking-tight">
                   <span>{exportProgressText}</span>
-                  <span>{exportPercent}%</span>
+                  <span className="font-semibold">{exportPercent}%</span>
                 </div>
                 <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
                   <div

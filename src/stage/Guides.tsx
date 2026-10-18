@@ -53,19 +53,19 @@ export const Guides: React.FC<GuidesProps> = ({
                         <div className="absolute inset-0 pointer-events-none">
                             {/* Top header margin */}
                             <div className="absolute top-0 inset-x-0 h-[12%] bg-black/20 border-b border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[9px] font-mono text-[#38bdf8]/70 uppercase tracking-wider">
+                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 uppercase tracking-wider">
                                     Header Safe Zone
                                 </span>
                             </div>
                             {/* Bottom caption margin */}
                             <div className="absolute bottom-0 inset-x-0 h-[22%] bg-black/20 border-t border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[9px] font-mono text-[#38bdf8]/70 uppercase tracking-wider">
+                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 uppercase tracking-wider">
                                     Caption &amp; Sound Zone
                                 </span>
                             </div>
                             {/* Right action icons margin */}
                             <div className="absolute top-[12%] bottom-[22%] right-0 w-[18%] bg-black/20 border-l border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[9px] font-mono text-[#38bdf8]/70 rotate-90 uppercase tracking-wider">
+                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 rotate-90 uppercase tracking-wider">
                                     UI Buttons
                                 </span>
                             </div>
@@ -85,7 +85,7 @@ export const Guides: React.FC<GuidesProps> = ({
                             className="absolute top-0 bottom-0 w-px bg-fuchsia-500 shadow-[0_0_8px_#d946ef]"
                             style={{ left: `${screenX}px` }}
                         >
-                            <span className="absolute top-2 left-1.5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[9px] font-mono whitespace-nowrap shadow">
+                            <span className="absolute top-2 left-1.5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
                                 {g.label}
                             </span>
                         </div>
@@ -100,7 +100,7 @@ export const Guides: React.FC<GuidesProps> = ({
                         className="absolute left-0 right-0 h-px bg-fuchsia-500 shadow-[0_0_8px_#d946ef]"
                         style={{ top: `${screenY}px` }}
                     >
-                        <span className="absolute left-2 -top-5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[9px] font-mono whitespace-nowrap shadow">
+                        <span className="absolute left-2 -top-5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
                             {g.label}
                         </span>
                     </div>

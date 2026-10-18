@@ -3,6 +3,7 @@ import type {
     Easing,
     PresetEasingName,
     SpringEasingName,
+    SpringConfig,
 } from '../model/types';
 
 function clamp(val: number, min: number, max: number): number {
@@ -61,13 +62,17 @@ export function solveCubicBezier(
     return Number(sampleCurveY(clamp(u, 0, 1)).toFixed(6));
 }
 
-// 2. The 4 Physics Springs (gentle, quick, bouncy, slow)
+// 2. The Physics Springs (gentle, quick, bouncy, slow, snappy, stiff)
 // Damped harmonic oscillator normalized so t=0 -> 0 and t=1 -> 1
-export function evaluateSpring(name: SpringEasingName, t: number): number {
+export function evaluateSpring(
+    name: SpringEasingName,
+    t: number,
+    config?: SpringConfig
+): number {
     if (t <= 0) return 0;
     if (t >= 1) return 1;
 
-    const config: Record<
+    const presets: Record<
         SpringEasingName,
         { damping: number; frequency: number }
     > = {
@@ -75,14 +80,30 @@ export function evaluateSpring(name: SpringEasingName, t: number): number {
         quick: { damping: 10.5, frequency: 8.5 },
         bouncy: { damping: 4.8, frequency: 11.5 },
         slow: { damping: 5.5, frequency: 3.8 },
+        snappy: { damping: 12.0, frequency: 10.0 },
+        stiff: { damping: 14.0, frequency: 12.0 },
     };
 
-    const { damping, frequency } = config[name];
+    let damping = presets[name]?.damping ?? 8;
+    let frequency = presets[name]?.frequency ?? 7;
+
+    if (config && (config.stiffness !== undefined || config.damping !== undefined || config.mass !== undefined)) {
+        const mass = Math.max(0.1, config.mass ?? 1);
+        const stiffness = Math.max(10, config.stiffness ?? 180);
+        const cDamping = Math.max(1, config.damping ?? 18);
+
+        const w0 = Math.sqrt(stiffness / mass);
+        const zeta = cDamping / (2 * Math.sqrt(stiffness * mass));
+
+        damping = zeta * w0 * 0.7;
+        frequency = (w0 * Math.sqrt(Math.max(0.01, 1 - zeta * zeta))) / (2 * Math.PI) * 4;
+    }
 
     const rawAt = (time: number) =>
         1 - Math.exp(-damping * time) * Math.cos(frequency * time * Math.PI);
 
     const endValue = rawAt(1);
+    if (Math.abs(endValue) < 1e-6) return 1;
     return Number((rawAt(t) / endValue).toFixed(6));
 }
 
@@ -186,7 +207,7 @@ export function evaluateEasing(progress: number, easing: Easing): number {
         case 'preset':
             return evaluatePreset(easing.name, clamped);
         case 'spring':
-            return evaluateSpring(easing.name, clamped);
+            return evaluateSpring(easing.name, clamped, easing.config);
         case 'bezier':
             return solveCubicBezier(
                 easing.x1,
@@ -200,7 +221,7 @@ export function evaluateEasing(progress: number, easing: Easing): number {
     }
 }
 
-// Complete catalog of all 18 Easing Feels for UI Pickers & Testing
+// Complete catalog of all 20 Easing Feels for UI Pickers & Testing
 export interface EasingCatalogItem {
     id: string;
     label: string;
@@ -222,11 +243,13 @@ export const ALL_18_EASINGS: EasingCatalogItem[] = [
     { id: 'preset:hold', label: 'Hold (Step)', category: 'Preset', easing: { kind: 'preset', name: 'hold' } },
     { id: 'preset:bounce', label: 'Bounce', category: 'Preset', easing: { kind: 'preset', name: 'bounce' } },
 
-    // 4 Physics Springs
+    // 6 Physics Springs
     { id: 'spring:gentle', label: 'Spring: Gentle', category: 'Spring', easing: { kind: 'spring', name: 'gentle' } },
     { id: 'spring:quick', label: 'Spring: Quick', category: 'Spring', easing: { kind: 'spring', name: 'quick' } },
     { id: 'spring:bouncy', label: 'Spring: Bouncy', category: 'Spring', easing: { kind: 'spring', name: 'bouncy' } },
     { id: 'spring:slow', label: 'Spring: Slow', category: 'Spring', easing: { kind: 'spring', name: 'slow' } },
+    { id: 'spring:snappy', label: 'Spring: Snappy', category: 'Spring', easing: { kind: 'spring', name: 'snappy' } },
+    { id: 'spring:stiff', label: 'Spring: Stiff', category: 'Spring', easing: { kind: 'spring', name: 'stiff' } },
 
     // 3 Custom Bezier Curves (totaling 18 options)
     {

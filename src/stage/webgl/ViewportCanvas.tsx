@@ -13,6 +13,7 @@ import { SceneLighting } from './SceneLighting';
 import { ViewportCamera } from './ViewportCamera';
 import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
+import { usePlayheadStore } from '../../store/usePlayheadStore';
 
 interface ViewportCanvasProps {
     project: Project;
@@ -93,13 +94,15 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const activeShot = frame.activeShot;
     const layers: EvaluatedLayerWithEffects[] = frame.layers;
     const activeBackground = resolveShotBackground(project, activeShot);
+    const { isPlaying } = usePlayheadStore();
+    const isAnimatedBg = activeBackground.kind === 'shader';
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
             <Canvas
                 shadows
                 flat
-                frameloop="demand"
+                frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                 dpr={[1, 2]}
                 gl={{
                     antialias: true,
@@ -139,8 +142,8 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 {/* 2. Physical Scene Lighting with shadows and Kelvin temperature */}
                 <SceneLighting light={activeShot?.light} />
 
-                {/* 3. Shot-Aware Background Plane */}
-                <SceneBackground background={activeBackground} />
+                {/* 3. Screen-Space Shot-Aware Background with Transition Support */}
+                <SceneBackground project={project} frame={frame} background={activeBackground} />
 
                 {/* 4. 3D Scene Objects / Layers with Depth Awareness */}
                 <group name="raylight_layers_root">
