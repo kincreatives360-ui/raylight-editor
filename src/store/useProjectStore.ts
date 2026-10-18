@@ -709,8 +709,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     loadProjectJson: (rawJson) => {
         let result = validateProject(rawJson);
-        // Defensive repair fallback: if validation fails on partial project data
-        if (!result.success && rawJson && typeof rawJson === 'object') {
+        // Defensive repair fallback: if validation fails on partial project data (excluding arrays)
+        if (!result.success && rawJson && typeof rawJson === 'object' && !Array.isArray(rawJson)) {
             try {
                 const partial = rawJson as Partial<Project>;
                 const repaired = {

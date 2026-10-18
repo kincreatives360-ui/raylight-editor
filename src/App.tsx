@@ -469,12 +469,39 @@ export default function App() {
   // Global Studio Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
       const targetTag = document.activeElement?.tagName;
       if (
         targetTag === 'INPUT' ||
         targetTag === 'TEXTAREA' ||
         targetTag === 'SELECT'
       ) {
+        return;
+      }
+
+      // Escape: Close shortcuts modal or reset tools/selection
+      if (e.key === 'Escape') {
+        if (shortcutsModalOpen) {
+          setShortcutsModalOpen(false);
+          return;
+        }
+        setIsCropping(false);
+        setActiveTool('select');
+        clearLayerSelection();
+        setInspectorTab('shot');
+        setExportModalOpen(false);
+        return;
+      }
+
+      // ?: Open Keyboard Shortcuts Cheat Sheet (or Cmd/Ctrl + /)
+      if (e.key === '?' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
+        e.preventDefault();
+        setShortcutsModalOpen((prev) => !prev);
+        return;
+      }
+
+      // Suppress all other shortcuts while shortcuts modal is open
+      if (shortcutsModalOpen) {
         return;
       }
 
@@ -559,22 +586,6 @@ export default function App() {
         if (key === 'l') { setActiveTool('line'); return; }
         if (key === 'a') { setActiveTool('arrow'); return; }
         if (key === 'p') { setActiveTool('pen'); return; }
-        if (e.key === 'Escape') {
-          setIsCropping(false);
-          setActiveTool('select');
-          clearLayerSelection();
-          setInspectorTab('shot');
-          setExportModalOpen(false);
-          setShortcutsModalOpen(false);
-          return;
-        }
-      }
-
-      // ?: Open Keyboard Shortcuts Cheat Sheet (or Cmd/Ctrl + /)
-      if (e.key === '?' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
-        e.preventDefault();
-        setShortcutsModalOpen((prev) => !prev);
-        return;
       }
 
       // ': Toggle Safe Zones & Rule of Thirds Grid (or Cmd/Ctrl + ')
@@ -585,9 +596,13 @@ export default function App() {
       }
 
       // Cmd/Ctrl + [ and Cmd/Ctrl + ]: Restack Layer Forward / Backward
-      if ((e.metaKey || e.ctrlKey) && (e.key === ']' || e.key === '[') && selectedLayer) {
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
+        selectedLayer
+      ) {
         e.preventDefault();
-        const isForward = e.key === ']';
+        const isForward = e.code === 'BracketRight';
         const isExtreme = e.shiftKey;
         restackLayerInShot(
           activeShot.id,
@@ -605,12 +620,12 @@ export default function App() {
 
       // [ and ]: Toggle Left Panel / Right Sidebar (Adaptive Viewport)
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
-        if (e.key === '[') {
+        if (e.code === 'BracketLeft') {
           e.preventDefault();
           toggleLeftPanel();
           return;
         }
-        if (e.key === ']') {
+        if (e.code === 'BracketRight') {
           e.preventDefault();
           toggleRightSidebar();
           return;
@@ -682,6 +697,8 @@ export default function App() {
         togglePlay();
         return;
       }
+
+      if (e.defaultPrevented) return;
 
       // Arrow Keys: Nudge Layer (or Record Block if Shift+A Animate Mode is ON)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
@@ -763,6 +780,7 @@ export default function App() {
     setRightSidebarOpen,
     setShowSafeArea,
     setShortcutsModalOpen,
+    shortcutsModalOpen,
   ]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {

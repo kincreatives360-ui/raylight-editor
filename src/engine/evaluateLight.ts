@@ -67,21 +67,30 @@ function getPropertyEndpoints(
         return { from: b.fromColor, to: b.toColor };
       }
       return null;
-    case 'temperature':
-      if (b.fromTemperature !== undefined && b.toTemperature !== undefined) {
-        return { from: b.fromTemperature, to: b.toTemperature };
+    case 'temperature': {
+      if (b.fromTemperature !== undefined || b.toTemperature !== undefined) {
+        const from = b.fromTemperature ?? (typeof baseVal === 'number' ? baseVal : 6100);
+        const to = b.toTemperature ?? from;
+        return { from, to };
       }
       return null;
-    case 'angle':
-      if (b.fromAngle !== undefined && b.toAngle !== undefined) {
-        return { from: b.fromAngle, to: b.toAngle };
+    }
+    case 'angle': {
+      if (b.fromAngle !== undefined || b.toAngle !== undefined) {
+        const from = b.fromAngle ?? (typeof baseVal === 'number' ? baseVal : 0);
+        const to = b.toAngle ?? from;
+        return { from, to };
       }
       return null;
-    case 'penumbra':
-      if (b.fromPenumbra !== undefined && b.toPenumbra !== undefined) {
-        return { from: b.fromPenumbra, to: b.toPenumbra };
+    }
+    case 'penumbra': {
+      if (b.fromPenumbra !== undefined || b.toPenumbra !== undefined) {
+        const from = b.fromPenumbra ?? (typeof baseVal === 'number' ? baseVal : 0);
+        const to = b.toPenumbra ?? from;
+        return { from, to };
       }
       return null;
+    }
     default:
       return null;
   }

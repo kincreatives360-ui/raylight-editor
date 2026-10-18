@@ -127,7 +127,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
                 }}
                 className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer shrink-0"
                 title="Delete Move"
-                aria-label={`Delete ${cb.label || `Move #${idx + 1}`}`}
+                aria-label={`Delete ${cb.label || 'Camera Move'} #${idx + 1} (${(cb.startMs / 1000).toFixed(1)}s - {((cb.startMs + cb.durationMs) / 1000).toFixed(1)}s)`}
               >
                 <X className="w-3 h-3" />
               </button>

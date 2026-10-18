@@ -114,7 +114,11 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
           onChange={(pct) =>
             updateShot(activeShot.id, (s) => ({
               ...s,
-              light: { ...s.light, intensity: Number((pct / 100).toFixed(2)) },
+              light: {
+                ...s.light,
+                keyIntensity: s.light.keyIntensity ?? s.light.intensity,
+                intensity: Number((pct / 100).toFixed(2)),
+              },
             }))
           }
         />
@@ -972,44 +976,52 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
           </div>
 
           {/* Temperature */}
-          <div className="grid grid-cols-2 gap-1.5">
-            <ScrubInput
-              label="From Temp"
-              value={selectedLightBlock.fromTemperature ?? 6100}
-              min={2500}
-              max={9500}
-              step={100}
-              unit="K"
-              onChange={(fromTemperature) =>
-                updateShot(activeShot.id, (s) => ({
-                  ...s,
-                  lightBlocks: (s.lightBlocks || []).map((b) =>
-                    b.id === selectedLightBlock.id
-                      ? { ...b, fromTemperature }
-                      : b
-                  ),
-                }))
-              }
-            />
-            <ScrubInput
-              label="To Temp"
-              value={selectedLightBlock.toTemperature ?? selectedLightBlock.fromTemperature ?? 6100}
-              min={2500}
-              max={9500}
-              step={100}
-              unit="K"
-              onChange={(toTemperature) =>
-                updateShot(activeShot.id, (s) => ({
-                  ...s,
-                  lightBlocks: (s.lightBlocks || []).map((b) =>
-                    b.id === selectedLightBlock.id
-                      ? { ...b, toTemperature }
-                      : b
-                  ),
-                }))
-              }
-            />
-          </div>
+          {(() => {
+            const targetSource = selectedLightBlock.targetLightId && selectedLightBlock.targetLightId !== 'key'
+              ? activeShot.light.sources?.find((s) => s.id === selectedLightBlock.targetLightId)
+              : undefined;
+            const fallbackTemp = targetSource?.temperature ?? activeShot.light.temperature ?? 6100;
+            return (
+              <div className="grid grid-cols-2 gap-1.5">
+                <ScrubInput
+                  label="From Temp"
+                  value={selectedLightBlock.fromTemperature ?? fallbackTemp}
+                  min={2500}
+                  max={9500}
+                  step={100}
+                  unit="K"
+                  onChange={(fromTemperature) =>
+                    updateShot(activeShot.id, (s) => ({
+                      ...s,
+                      lightBlocks: (s.lightBlocks || []).map((b) =>
+                        b.id === selectedLightBlock.id
+                          ? { ...b, fromTemperature }
+                          : b
+                      ),
+                    }))
+                  }
+                />
+                <ScrubInput
+                  label="To Temp"
+                  value={selectedLightBlock.toTemperature ?? selectedLightBlock.fromTemperature ?? fallbackTemp}
+                  min={2500}
+                  max={9500}
+                  step={100}
+                  unit="K"
+                  onChange={(toTemperature) =>
+                    updateShot(activeShot.id, (s) => ({
+                      ...s,
+                      lightBlocks: (s.lightBlocks || []).map((b) =>
+                        b.id === selectedLightBlock.id
+                          ? { ...b, toTemperature }
+                          : b
+                      ),
+                    }))
+                  }
+                />
+              </div>
+            );
+          })()}
 
           {/* Color for additional light sources */}
           {selectedLightBlock.targetLightId && selectedLightBlock.targetLightId !== 'key' && (

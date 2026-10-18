@@ -1033,7 +1033,7 @@ export const Stage: React.FC<StageProps> = ({
                                     <span>Bring to Front</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
-                                    ⌘]
+                                    ⌘⇧]
                                 </span>
                             </button>
                             <button
@@ -1052,7 +1052,7 @@ export const Stage: React.FC<StageProps> = ({
                                     <span>Bring Forward</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
-                                    ]
+                                    ⌘]
                                 </span>
                             </button>
                             <button
@@ -1071,7 +1071,7 @@ export const Stage: React.FC<StageProps> = ({
                                     <span>Send Backward</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
-                                    [
+                                    ⌘[
                                 </span>
                             </button>
                             <button
@@ -1090,7 +1090,7 @@ export const Stage: React.FC<StageProps> = ({
                                     <span>Send to Back</span>
                                 </div>
                                 <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
-                                    ⌘[
+                                    ⌘⇧[
                                 </span>
                             </button>
                             <div className="my-1 border-t border-white/10" />
