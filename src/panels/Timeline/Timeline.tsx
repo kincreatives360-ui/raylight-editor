@@ -1,7 +1,7 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX } from 'lucide-react';
-import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock } from '../../model/types';
+import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -14,7 +14,7 @@ interface TimelineProps {
     onHoverTimeChange?: (timeMs: number | null) => void;
 }
 
-export const Timeline: React.FC<TimelineProps> = ({
+export const Timeline: React.FC<TimelineProps> = React.memo(({
     totalDurationMs,
     hoverTimeMs: propHoverTimeMs,
     onHoverTimeChange: propOnHoverTimeChange,
@@ -31,9 +31,9 @@ export const Timeline: React.FC<TimelineProps> = ({
     } = useProjectStore();
 
     const {
-        currentTimeMs,
         hoverTimeMs: storeHoverTimeMs,
         setHoverTimeMs,
+        currentTimeMs,
         isPlaying,
         setIsPlaying,
         setCurrentTimeMs,
@@ -152,21 +152,29 @@ export const Timeline: React.FC<TimelineProps> = ({
     }, [visibleDurationMs, totalDurationMs, rulerStepMs]);
 
     // Top Splitter Drag: Expand Timeline Up or Contract Down
-    const handleStartResizeTimelineHeight = (e: React.MouseEvent) => {
+    const handleStartResizeTimelineHeight = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         const startY = e.clientY;
         const startHeight = timelineHeightPx;
+        const pointerId = e.pointerId;
 
-        const onMove = (ev: MouseEvent) => {
-            const deltaY = startY - ev.clientY;
-            setTimelineHeightPx(startHeight + deltaY);
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId === pointerId) {
+                const deltaY = startY - ev.clientY;
+                setTimelineHeightPx(startHeight + deltaY);
+            }
         };
-        const onUp = () => {
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId === pointerId) {
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onEnd);
+                window.removeEventListener('pointercancel', onEnd);
+            }
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
     const clientXToLocalMs = (clientX: number): number => {
@@ -239,7 +247,8 @@ export const Timeline: React.FC<TimelineProps> = ({
         setCurrentTimeMs(targetTime);
     };
 
-    const handleRulerMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleRulerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         isDraggingPlayheadRef.current = true;
@@ -247,26 +256,40 @@ export const Timeline: React.FC<TimelineProps> = ({
         onHoverTimeChange(null);
         scrubFromClientX(e.clientX);
 
-        const onMove = (ev: MouseEvent) => {
-            scrubFromClientX(ev.clientX);
+        const pointerId = e.pointerId;
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture failure
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId === pointerId) {
+                scrubFromClientX(ev.clientX);
+            }
         };
-        const onUp = () => {
-            isDraggingPlayheadRef.current = false;
-            setIsDraggingPlayhead(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId === pointerId) {
+                isDraggingPlayheadRef.current = false;
+                setIsDraggingPlayhead(false);
+                window.removeEventListener('pointermove', onMove);
+                window.removeEventListener('pointerup', onEnd);
+                window.removeEventListener('pointercancel', onEnd);
+            }
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    // 1. Drag / Trim Main Layer Bar
+    // 1. Drag / Trim Main Layer Bar (Hardened with Pointer Events & >3px deadzone)
     const startLayerBarDrag = (
-        e: React.MouseEvent,
+        e: React.PointerEvent,
         shot: Shot,
         layer: Layer,
         mode: 'move' | 'in' | 'out'
     ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         setInspectorTab('layer');
@@ -274,10 +297,24 @@ export const Timeline: React.FC<TimelineProps> = ({
         const startX = e.clientX;
         const origIn = layer.inMs;
         const origOut = layer.outMs;
-        beginDragTransaction();
-        setDragging(true);
+        const pointerId = e.pointerId;
+        let hasMoved = false;
 
-        const onMove = (ev: MouseEvent) => {
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture failure
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
             const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
             let nextIn = origIn;
             let nextOut = origOut;
@@ -303,24 +340,31 @@ export const Timeline: React.FC<TimelineProps> = ({
             );
         };
 
-        const onUp = () => {
-            commitDragTransaction();
-            setDragging(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills!
+    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills! (Hardened)
     const startPresetDrag = (
-        e: React.MouseEvent,
+        e: React.PointerEvent,
         shot: Shot,
         layer: Layer,
         which: 'entrance' | 'exit',
         mode: 'move' | 'left' | 'right'
     ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         selectPreset(which, layer.id);
@@ -330,11 +374,24 @@ export const Timeline: React.FC<TimelineProps> = ({
         const origDelay = preset.delayMs || 0;
         const origDur = Math.max(100, preset.durationMs || 500);
         const layerSpan = Math.max(200, layer.outMs - layer.inMs);
+        const pointerId = e.pointerId;
+        let hasMoved = false;
 
-        beginDragTransaction();
-        setDragging(true);
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
 
-        const onMove = (ev: MouseEvent) => {
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
             const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
 
             if (which === 'entrance') {
@@ -371,7 +428,6 @@ export const Timeline: React.FC<TimelineProps> = ({
                     { skipHistory: true }
                 );
             } else {
-                // For exit: delayMs is distance from layer.outMs backward
                 let nextDelay = origDelay;
                 let nextDur = origDur;
                 if (mode === 'move') {
@@ -407,34 +463,55 @@ export const Timeline: React.FC<TimelineProps> = ({
             }
         };
 
-        const onUp = () => {
-            commitDragTransaction();
-            setDragging(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    // 3. Drag / Trim Animation Block
+    // 3. Drag / Trim Animation Block (Hardened)
     const startBlockDrag = (
-        e: React.MouseEvent,
+        e: React.PointerEvent,
         shot: Shot,
         layer: Layer,
         block: AnimationBlock,
         mode: 'move' | 'left' | 'right'
     ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         selectBlock(block.id, layer.id);
         const startX = e.clientX;
         const origStart = block.startMs;
         const origDur = block.durationMs;
-        beginDragTransaction();
-        setDragging(true);
+        const pointerId = e.pointerId;
+        let hasMoved = false;
 
-        const onMove = (ev: MouseEvent) => {
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
             const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
             let nextStart = origStart;
             let nextDur = origDur;
@@ -472,33 +549,54 @@ export const Timeline: React.FC<TimelineProps> = ({
             );
         };
 
-        const onUp = () => {
-            commitDragTransaction();
-            setDragging(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    // 4. Drag / Trim Camera Block
+    // 4. Drag / Trim Camera Block (Hardened)
     const startCameraBlockDrag = (
-        e: React.MouseEvent,
+        e: React.PointerEvent,
         shot: Shot,
         camBlock: CameraBlock,
         mode: 'move' | 'left' | 'right'
     ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         selectCameraBlock(camBlock.id);
         const startX = e.clientX;
         const origStart = camBlock.startMs;
         const origDur = camBlock.durationMs;
-        beginDragTransaction();
-        setDragging(true);
+        const pointerId = e.pointerId;
+        let hasMoved = false;
 
-        const onMove = (ev: MouseEvent) => {
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
             const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
             let nextStart = origStart;
             let nextDur = origDur;
@@ -535,33 +633,54 @@ export const Timeline: React.FC<TimelineProps> = ({
             );
         };
 
-        const onUp = () => {
-            commitDragTransaction();
-            setDragging(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    // 5. Drag / Trim Light Block
+    // 5. Drag / Trim Light Block (Hardened)
     const startLightBlockDrag = (
-        e: React.MouseEvent,
+        e: React.PointerEvent,
         shot: Shot,
         lightBlock: LightAnimationBlock,
         mode: 'move' | 'left' | 'right'
     ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
         e.preventDefault();
         e.stopPropagation();
         selectLightBlock(lightBlock.id);
         const startX = e.clientX;
         const origStart = lightBlock.startMs;
         const origDur = lightBlock.durationMs;
-        beginDragTransaction();
-        setDragging(true);
+        const pointerId = e.pointerId;
+        let hasMoved = false;
 
-        const onMove = (ev: MouseEvent) => {
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
             const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
             let nextStart = origStart;
             let nextDur = origDur;
@@ -598,17 +717,25 @@ export const Timeline: React.FC<TimelineProps> = ({
             );
         };
 
-        const onUp = () => {
-            commitDragTransaction();
-            setDragging(false);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    const startShotTrim = (event: React.MouseEvent, shot: Shot) => {
+    // 6. Shot Edge Trim (Hardened)
+    const startShotTrim = (event: React.PointerEvent, shot: Shot) => {
+        if (event.button !== 0 && event.pointerType === 'mouse') return;
         event.preventDefault();
         event.stopPropagation();
         selectShot(shot.id);
@@ -616,10 +743,23 @@ export const Timeline: React.FC<TimelineProps> = ({
         const startX = event.clientX;
         const startDuration = shot.durationMs;
         const pixelsPerMsAtStart = pxPerMs;
-        beginDragTransaction();
-        setDragging(true);
+        const pointerId = event.pointerId;
+        let hasMoved = false;
 
-        const onMove = (moveEvent: MouseEvent) => {
+        try {
+            event.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(moveEvent.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
             const deltaMs = Math.round((moveEvent.clientX - startX) / Math.max(pixelsPerMsAtStart, 0.0001) / 10) * 10;
             const durationMs = Math.max(300, startDuration + deltaMs);
             updateProject((current) => ({
@@ -629,26 +769,42 @@ export const Timeline: React.FC<TimelineProps> = ({
                 )),
             }), { skipHistory: true });
         };
-        const onUp = () => {
-            suppressShotClickRef.current = shot.id;
-            commitDragTransaction();
-            setDragging(false);
-            window.setTimeout(() => {
-                if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
-            }, 0);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+
+        const onEnd = (endEvent: PointerEvent) => {
+            if (endEvent.pointerId !== pointerId) return;
+            if (hasMoved) {
+                suppressShotClickRef.current = shot.id;
+                commitDragTransaction();
+                setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
+                }, 0);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    const startShotReorder = (event: React.MouseEvent, shot: Shot, shotIndex: number) => {
+    // 7. Shot Reorder (Hardened)
+    const startShotReorder = (event: React.PointerEvent, shot: Shot, shotIndex: number) => {
         if (event.button !== 0 || (event.target as HTMLElement).closest('[data-shot-trim]')) return;
         const drag = { shotId: shot.id, index: shotIndex, startX: event.clientX, dragging: false };
         shotDragRef.current = drag;
+        const pointerId = event.pointerId;
 
-        const onMove = (moveEvent: MouseEvent) => {
+        try {
+            event.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (moveEvent: PointerEvent) => {
+            if (moveEvent.pointerId !== pointerId) return;
             const currentDrag = shotDragRef.current;
             if (!currentDrag) return;
             if (!currentDrag.dragging && Math.abs(moveEvent.clientX - currentDrag.startX) >= 6) {
@@ -684,7 +840,9 @@ export const Timeline: React.FC<TimelineProps> = ({
                 delta += 60;
             }
         };
-        const onUp = () => {
+
+        const onEnd = (endEvent: PointerEvent) => {
+            if (endEvent.pointerId !== pointerId) return;
             const currentDrag = shotDragRef.current;
             if (currentDrag?.dragging) {
                 suppressShotClickRef.current = shot.id;
@@ -695,17 +853,133 @@ export const Timeline: React.FC<TimelineProps> = ({
                 }, 0);
             }
             shotDragRef.current = null;
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', onUp);
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
         };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
     };
 
-    const playheadDisplayTimeMs =
-        timelineView === 'scene' && activeShot
-            ? Math.max(0, currentTimeMs - activeShot.startMs)
-            : currentTimeMs;
+    // 8. Audio / Media Clip Drag & Trim (Hardened)
+    const startAudioClipDrag = (
+        e: React.PointerEvent,
+        clip: AudioClip,
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const origStart = clip.startMs;
+        const origDur = clip.durationMs;
+        const origOffset = clip.offsetMs || 0;
+        const pointerId = e.pointerId;
+        let hasMoved = false;
+
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture failure
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+            let nextStart = origStart;
+            let nextDur = origDur;
+            let nextOffset = origOffset;
+
+            if (mode === 'move') {
+                nextStart = Math.max(0, origStart + deltaMs);
+            } else if (mode === 'left') {
+                nextStart = Math.max(0, Math.min(origStart + origDur - 100, origStart + deltaMs));
+                const diff = nextStart - origStart;
+                nextDur = Math.max(100, origDur - diff);
+                nextOffset = Math.max(0, origOffset + diff);
+            } else if (mode === 'right') {
+                nextDur = Math.max(100, origDur + deltaMs);
+            }
+
+            updateProject(
+                (p) => ({
+                    ...p,
+                    audio: {
+                        clips: (p.audio?.clips || []).map((c) =>
+                            c.id === clip.id
+                                ? { ...c, startMs: nextStart, durationMs: nextDur, offsetMs: nextOffset }
+                                : c
+                        ),
+                        muted: p.audio?.muted || false,
+                        masterVolume: p.audio?.masterVolume ?? 1,
+                    },
+                }),
+                { skipHistory: true }
+            );
+        };
+
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+    };
+
+    // 9. Delete Audio Clip helper
+    const deleteAudioClip = (clipId: string) => {
+        updateProject((p) => ({
+            ...p,
+            audio: {
+                clips: (p.audio?.clips || []).filter((c) => c.id !== clipId),
+                muted: p.audio?.muted || false,
+                masterVolume: p.audio?.masterVolume ?? 1,
+            },
+        }));
+    };
+
+    // 10. Cursor-Anchored Horizontal Zoom (Ctrl/Cmd + Wheel)
+    const handleTimelineWheel = (event: React.WheelEvent<HTMLDivElement>) => {
+        if (event.ctrlKey || event.metaKey) {
+            event.preventDefault();
+            const container = trackRef.current;
+            if (!container) return;
+            const rect = container.getBoundingClientRect();
+            const mouseX = event.clientX - rect.left;
+            const timelineX = mouseX + container.scrollLeft;
+
+            const zoomDelta = event.deltaY < 0 ? 0.12 : -0.12;
+            const nextZoom = Math.max(0.5, Math.min(3.0, Number((timelineZoom + zoomDelta).toFixed(2))));
+            if (nextZoom === timelineZoom) return;
+
+            const scaleRatio = nextZoom / timelineZoom;
+            setTimelineZoom(nextZoom);
+
+            requestAnimationFrame(() => {
+                if (trackRef.current) {
+                    trackRef.current.scrollLeft = Math.max(0, timelineX * scaleRatio - mouseX);
+                }
+            });
+        }
+    };
+
     const hoverDisplayTimeMs = hoverTimeMs === null
         ? null
         : timelineView === 'scene' && activeShot
@@ -768,8 +1042,9 @@ export const Timeline: React.FC<TimelineProps> = ({
         >
             {/* TOP VERTICAL RESIZE SPLITTER HANDLE (Drag up for more layer room, down to compact) */}
             <div
-                onMouseDown={handleStartResizeTimelineHeight}
+                onPointerDown={handleStartResizeTimelineHeight}
                 title="Drag up or down to resize timeline height"
+                style={{ touchAction: 'none' }}
                 className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-40 group flex items-center justify-center"
             >
                 <div className="w-12 h-0.5 rounded-full bg-white/15 group-hover:bg-[#0088ff] transition" />
@@ -777,17 +1052,26 @@ export const Timeline: React.FC<TimelineProps> = ({
 
             {/* 1. TOP CONTROL ROW (h-8 = 32px) */}
             <div className="h-8 px-4 flex items-center justify-between shrink-0">
-                <button
-                    onClick={togglePlay}
-                    title="Play / Pause (Space)"
-                    className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition"
-                >
-                    {isPlaying ? (
-                        <Pause className="w-2.5 h-2.5" />
-                    ) : (
-                        <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
-                    )}
-                </button>
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={togglePlay}
+                        aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
+                        title="Play / Pause (Space)"
+                        className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
+                    >
+                        {isPlaying ? (
+                            <Pause className="w-2.5 h-2.5" />
+                        ) : (
+                            <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
+                        )}
+                    </button>
+                    <div className="flex items-center gap-1 font-mono text-[10px] text-[#a1a1aa] tracking-tight tabular-nums select-none">
+                        <span className="text-white font-medium">{(currentTimeMs / 1000).toFixed(2)}s</span>
+                        <span className="text-white/30">/</span>
+                        <span>{(totalDurationMs / 1000).toFixed(2)}s</span>
+                    </div>
+                </div>
 
                 <div className="flex items-center gap-2">
                     <div className="relative w-24 h-1.5 rounded-full bg-[#27272a] flex items-center">
@@ -823,6 +1107,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                 onScroll={(e) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
                 }}
+                onWheel={handleTimelineWheel}
                 onPointerMove={handleTimelinePointerMove}
                 onPointerLeave={handleTimelinePointerLeave}
                 onClick={handleTimelineClick}
@@ -833,7 +1118,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                 {isBlankState && timelineView === 'video' && (
                     <button
                         type="button"
-                        onMouseDown={(event) => event.stopPropagation()}
+                        onPointerDown={(event) => event.stopPropagation()}
                         onClick={(event) => {
                             event.stopPropagation();
                             const created = addShot();
@@ -851,7 +1136,8 @@ export const Timeline: React.FC<TimelineProps> = ({
                 >
                     {/* TIME RULER (h-6 = 24px) */}
                     <div
-                        onMouseDown={handleRulerMouseDown}
+                        onPointerDown={handleRulerPointerDown}
+                        style={{ touchAction: 'none' }}
                         className="sticky top-0 z-10 h-6 border-b border-white/[0.08] bg-[#0b0b0d] relative cursor-ew-resize select-none shrink-0"
                     >
                         {rulerMarks.map((m) => (
@@ -863,7 +1149,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                 {m.isHalf ? (
                                     <span className="text-[#52525b] text-base leading-none">&middot;</span>
                                 ) : (
-                                    <span className="text-[10px] font-mono text-[#71717a] font-medium">
+                                    <span className="text-[10px] font-mono text-[#a1a1aa] font-medium">
                                         {Math.round(m.timeMs / 1000)}s
                                     </span>
                                 )}
@@ -878,7 +1164,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                             <span className="absolute left-2 top-1 text-[9px] uppercase tracking-wide text-slate-500 z-10">Media</span>
                             <button
                                 type="button"
-                                onMouseDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     updateProject((p) => ({
@@ -911,47 +1197,87 @@ export const Timeline: React.FC<TimelineProps> = ({
                                     const left = (visibleStart - shotStart) * pxPerMs;
                                     const width = Math.max(18, (visibleEnd - visibleStart) * pxPerMs);
                                     return (
-                                        <button
+                                        <div
                                             key={clip.id}
-                                            type="button"
-                                            title={`${clip.name} · click to seek`}
-                                            onMouseDown={(e) => e.stopPropagation()}
+                                            title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
+                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'move')}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 setCurrentTimeMs(visibleStart);
                                             }}
                                             style={{ left: `${left}px`, width: `${width}px` }}
-                                            className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate cursor-pointer ${
+                                            className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[9px] truncate cursor-grab active:cursor-grabbing transition select-none ${
                                                 clip.muted || project.audio?.muted
                                                     ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
                                                     : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
                                             }`}
                                         >
-                                            {clip.name}
-                                        </button>
+                                            <span
+                                                onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
+                                                title="Trim audio start"
+                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-l"
+                                            />
+                                            <span className="truncate pointer-events-none pl-1">{clip.name}</span>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    deleteAudioClip(clip.id);
+                                                }}
+                                                title="Delete audio clip"
+                                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-10 shrink-0"
+                                            >
+                                                &times;
+                                            </button>
+                                            <span
+                                                onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
+                                                title="Trim audio end"
+                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-r"
+                                            />
+                                        </div>
                                     );
                                 }
                                 const left = Math.max(0, clipStart) * pxPerMs;
                                 const width = Math.max(18, clip.durationMs * pxPerMs);
                                 return (
-                                    <button
+                                    <div
                                         key={clip.id}
-                                        type="button"
-                                        title={`${clip.name} · click to seek`}
-                                        onMouseDown={(e) => e.stopPropagation()}
+                                        title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
+                                        onPointerDown={(e) => startAudioClipDrag(e, clip, 'move')}
                                         onClick={(e) => {
                                             e.stopPropagation();
                                             setCurrentTimeMs(Math.max(0, clipStart));
                                         }}
                                         style={{ left: `${left}px`, width: `${width}px` }}
-                                        className={`absolute top-1 bottom-1 rounded border px-2 text-left text-[9px] truncate cursor-pointer ${
+                                        className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[9px] truncate cursor-grab active:cursor-grabbing transition select-none ${
                                             clip.muted || project.audio?.muted
                                                 ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
                                                 : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
                                         }`}
                                     >
-                                        {clip.name}
-                                    </button>
+                                        <span
+                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
+                                            title="Trim audio start"
+                                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-l"
+                                        />
+                                        <span className="truncate pointer-events-none pl-1">{clip.name}</span>
+                                        <button
+                                            type="button"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                deleteAudioClip(clip.id);
+                                            }}
+                                            title="Delete audio clip"
+                                            className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-10 shrink-0"
+                                        >
+                                            &times;
+                                        </button>
+                                        <span
+                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
+                                            title="Trim audio end"
+                                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-r"
+                                        />
+                                    </div>
                                 );
                             })}
                         </div>
@@ -968,7 +1294,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                     return (
                                         <div
                                             key={shot.id}
-                                            onMouseDown={(e) => startShotReorder(e, shot, shotIndex)}
+                                            onPointerDown={(e) => startShotReorder(e, shot, shotIndex)}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 if (suppressShotClickRef.current === shot.id) {
@@ -998,7 +1324,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                             <span className="truncate">{shot.name}</span>
                                             <span
                                                 data-shot-trim="right"
-                                                onMouseDown={(e) => startShotTrim(e, shot)}
+                                                onPointerDown={(e) => startShotTrim(e, shot)}
                                                 title="Drag to trim shot duration"
                                                 className="absolute right-0 top-0 bottom-0 w-2.5 flex items-center justify-center rounded-r-xl opacity-0 group-hover:opacity-100 hover:bg-white/15 cursor-ew-resize transition"
                                             >
@@ -1018,7 +1344,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                         <div className="relative flex flex-col gap-0.5">
                             {/* Raylight exposes the add-layer lane before the layer rows. */}
                             <div
-                                onMouseDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     const created = addLayerToShot(activeShot.id, 'shape', {
@@ -1036,7 +1362,7 @@ export const Timeline: React.FC<TimelineProps> = ({
 
                             {/* Camera track: always present, with a hover preview in empty space. */}
                             <div
-                                onMouseDown={(e) => e.stopPropagation()}
+                                onPointerDown={(e) => e.stopPropagation()}
                                 onMouseMove={(e) => {
                                     e.stopPropagation();
                                     setHoverCameraTimeMs(clientXToLocalMs(e.clientX));
@@ -1076,7 +1402,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                             <div
                                                 key={cb.id}
                                                 data-cam-pill="true"
-                                                onMouseDown={(e) =>
+                                                onPointerDown={(e) =>
                                                     startCameraBlockDrag(e, activeShot, cb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
@@ -1090,13 +1416,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                     {cb.to?.zoom ?? 1.1}x
                                                 </span>
                                                 <span
-                                                    onMouseDown={(e) =>
+                                                    onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'left')
                                                     }
                                                     className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-l-full"
                                                 />
                                                 <span
-                                                    onMouseDown={(e) =>
+                                                    onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'right')
                                                     }
                                                     className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-r-full"
@@ -1122,7 +1448,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                     selectLightBlock(lb.id);
                                                     setInspectorTab('shot');
                                                 }}
-                                                onMouseDown={(e) =>
+                                                onPointerDown={(e) =>
                                                     startLightBlockDrag(e, activeShot, lb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
@@ -1153,13 +1479,13 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                     &times;
                                                 </button>
                                                 <span
-                                                    onMouseDown={(e) =>
+                                                    onPointerDown={(e) =>
                                                         startLightBlockDrag(e, activeShot, lb, 'left')
                                                     }
                                                     className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-l-full"
                                                 />
                                                 <span
-                                                    onMouseDown={(e) =>
+                                                    onPointerDown={(e) =>
                                                         startLightBlockDrag(e, activeShot, lb, 'right')
                                                     }
                                                     className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-r-full"
@@ -1207,7 +1533,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                             {/* Main Layer Bar Row (h-7 = 28px — NO duplicate text header above it!) */}
                                             <div className="h-7 relative flex items-center">
                                                 <div
-                                                    onMouseDown={(e) =>
+                                                    onPointerDown={(e) =>
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
                                                     style={{ left: `${left}px`, width: `${width}px` }}
@@ -1217,14 +1543,14 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                         {layer.name}
                                                     </span>
                                                     <span
-                                                        onMouseDown={(e) =>
+                                                        onPointerDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'in')
                                                         }
                                                         title="Drag left edge to trim layer In point"
                                                         className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-l-lg"
                                                     />
                                                     <span
-                                                        onMouseDown={(e) =>
+                                                        onPointerDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'out')
                                                         }
                                                         title="Drag right edge to trim layer Out point"
@@ -1238,7 +1564,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                 <div className="space-y-0.5">
                                                     {/* ♦ Presets Row: Movable & Resizable In / Out Pills! */}
                                                     <div
-                                                        onMouseDown={(e) => e.stopPropagation()}
+                                                        onPointerDown={(e) => e.stopPropagation()}
                                                         onClick={(e) => {
                                                             if (
                                                                 (e.target as HTMLElement).closest(
@@ -1285,7 +1611,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                         {layer.entrance.type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="in"
-                                                                onMouseDown={(e) =>
+                                                                onPointerDown={(e) =>
                                                                     startPresetDrag(
                                                                         e,
                                                                         activeShot,
@@ -1308,7 +1634,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     In: {layer.entrance.type}
                                                                 </span>
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startPresetDrag(
                                                                             e,
                                                                             activeShot,
@@ -1321,7 +1647,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
                                                                 />
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startPresetDrag(
                                                                             e,
                                                                             activeShot,
@@ -1340,7 +1666,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                         {layer.exit.type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="out"
-                                                                onMouseDown={(e) =>
+                                                                onPointerDown={(e) =>
                                                                     startPresetDrag(
                                                                         e,
                                                                         activeShot,
@@ -1362,7 +1688,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     Out: {layer.exit.type}
                                                                 </span>
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startPresetDrag(
                                                                             e,
                                                                             activeShot,
@@ -1375,7 +1701,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
                                                                 />
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startPresetDrag(
                                                                             e,
                                                                             activeShot,
@@ -1398,7 +1724,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                             className="h-6 relative flex items-center"
                                                         >
                                                             <div
-                                                                onMouseDown={(e) =>
+                                                                onPointerDown={(e) =>
                                                                     startBlockDrag(
                                                                         e,
                                                                         activeShot,
@@ -1442,7 +1768,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     {blk.label}
                                                                 </span>
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startBlockDrag(
                                                                             e,
                                                                             activeShot,
@@ -1454,7 +1780,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                                     className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
                                                                 />
                                                                 <span
-                                                                    onMouseDown={(e) =>
+                                                                    onPointerDown={(e) =>
                                                                         startBlockDrag(
                                                                             e,
                                                                             activeShot,
@@ -1518,29 +1844,74 @@ export const Timeline: React.FC<TimelineProps> = ({
                     {/* ======================================================= */}
                     {/* MAIN PLAYHEAD (BLUE)                                    */}
                     {/* ======================================================= */}
-                    <div
-                        aria-hidden="true"
-                        className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
-                        style={{
-                            left: `${playheadDisplayTimeMs * pxPerMs}px`,
-                            transform: 'translateX(-50%)',
-                        }}
-                    >
-                        {/* 1px vertical line in bright blue (~#0A84FF) spanning through full track area with bottom fade */}
-                        <div
-                            className="absolute inset-y-0 w-px"
-                            style={{
-                                background: 'linear-gradient(to bottom, #0A84FF 0%, #0A84FF 82%, rgba(10, 132, 255, 0) 100%)',
-                            }}
-                        />
-
-                        {/* Rounded pill label sitting on the ruler at the top */}
-                        <div className="relative px-1.5 py-0.5 rounded-full bg-[#0A84FF] text-white text-[9.5px] font-mono font-bold shadow-md whitespace-nowrap leading-none select-none mt-1 z-10">
-                            {(playheadDisplayTimeMs / 1000).toFixed(2)}
-                        </div>
-                    </div>
+                    <PlayheadOverlay
+                        pxPerMs={pxPerMs}
+                        timelineView={timelineView}
+                        activeShotStartMs={activeShot?.startMs ?? 0}
+                        scrollContainerRef={trackRef}
+                    />
                 </div>
             </div>
         </section>
     );
-};
+});
+
+interface PlayheadOverlayProps {
+    pxPerMs: number;
+    timelineView: 'video' | 'scene';
+    activeShotStartMs: number;
+    scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
+}
+
+const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
+    pxPerMs,
+    timelineView,
+    activeShotStartMs,
+    scrollContainerRef,
+}) => {
+    const currentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
+    const isPlaying = usePlayheadStore((s) => s.isPlaying);
+    const playheadDisplayTimeMs =
+        timelineView === 'scene'
+            ? Math.max(0, currentTimeMs - activeShotStartMs)
+            : currentTimeMs;
+
+    // Auto-scroll timeline container with playhead during playback
+    useEffect(() => {
+        if (!isPlaying || !scrollContainerRef?.current) return;
+        const container = scrollContainerRef.current;
+        const playheadPx = playheadDisplayTimeMs * pxPerMs;
+        const visibleLeft = container.scrollLeft;
+        const visibleRight = container.scrollLeft + container.clientWidth;
+
+        if (playheadPx > visibleRight - 40) {
+            container.scrollLeft = playheadPx - 80;
+        } else if (playheadPx < visibleLeft) {
+            container.scrollLeft = Math.max(0, playheadPx - 40);
+        }
+    }, [isPlaying, playheadDisplayTimeMs, pxPerMs, scrollContainerRef]);
+
+    return (
+        <div
+            aria-hidden="true"
+            className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
+            style={{
+                left: `${playheadDisplayTimeMs * pxPerMs}px`,
+                transform: 'translateX(-50%)',
+            }}
+        >
+            {/* 1px vertical line in bright blue (~#0A84FF) spanning through full track area with bottom fade */}
+            <div
+                className="absolute inset-y-0 w-px"
+                style={{
+                    background: 'linear-gradient(to bottom, #0A84FF 0%, #0A84FF 82%, rgba(10, 132, 255, 0) 100%)',
+                }}
+            />
+
+            {/* Rounded pill label sitting on the ruler at the top */}
+            <div className="relative px-1.5 py-0.5 rounded-full bg-[#0A84FF] text-white text-[9.5px] font-mono font-bold shadow-md whitespace-nowrap leading-none select-none mt-1 z-10">
+                {(playheadDisplayTimeMs / 1000).toFixed(2)}
+            </div>
+        </div>
+    );
+});

@@ -1,11 +1,19 @@
 // src/App.tsx
-import React, { lazy, Suspense, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles } from 'lucide-react';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Download, X, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
-import { useSelectionStore } from './store/useSelectionStore';
+import {
+  useSelectionStore,
+  MIN_LEFT_PANEL_WIDTH,
+  MAX_LEFT_PANEL_WIDTH,
+  DEFAULT_LEFT_PANEL_WIDTH,
+  MIN_RIGHT_SIDEBAR_WIDTH,
+  MAX_RIGHT_SIDEBAR_WIDTH,
+  DEFAULT_RIGHT_SIDEBAR_WIDTH,
+} from './store/useSelectionStore';
 import { evaluateProjectAtTime } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
@@ -26,6 +34,7 @@ import type {
 } from './engine/exporter';
 import { estimateExportMetrics } from './engine/exportMetrics';
 import { preloadProjectFonts } from './engine/fontLoader';
+import { KeyboardShortcutsModal } from './ui/KeyboardShortcutsModal';
 
 interface StageErrorBoundaryProps {
   children: React.ReactNode;
@@ -112,9 +121,21 @@ export default function App() {
     setActiveTool,
     toggleAnimateMode,
     setIsCropping,
+    leftPanelOpen,
+    rightSidebarOpen,
+    toggleLeftPanel,
+    toggleRightSidebar,
+    setLeftPanelOpen,
+    setRightSidebarOpen,
+    leftPanelWidth,
+    rightSidebarWidth,
+    setLeftPanelWidth,
+    setRightSidebarWidth,
   } = useSelectionStore();
 
   const [audioLabel, setAudioLabel] = useState<string>('');
+  const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
+  const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>({
     format: 'mp4',
@@ -174,6 +195,98 @@ export default function App() {
         selectedShotId: activeShot.id,
       }),
     [project, exportSettings, activeShot.id]
+  );
+
+  const handleUploadClick = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const handleSelectAudioClick = useCallback(() => {
+    audioInputRef.current?.click();
+  }, []);
+
+  const handleOpenExportModal = useCallback(() => {
+    setExportModalOpen(true);
+  }, []);
+
+  const handleSelectLayer = useCallback(
+    (id: string, multi?: boolean) => {
+      setInspectorTab('layer');
+      selectLayer(id, multi);
+    },
+    [setInspectorTab, selectLayer]
+  );
+
+  const handleStartResizeLeftPanel = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pointerId = e.pointerId;
+      const startX = e.clientX;
+      const startW = leftPanelWidth;
+      const currentTarget = e.currentTarget;
+      currentTarget.setPointerCapture(pointerId);
+
+      const handlePointerMove = (ev: PointerEvent) => {
+        const deltaX = ev.clientX - startX;
+        const maxAllowed = Math.min(
+          MAX_LEFT_PANEL_WIDTH,
+          window.innerWidth - (rightSidebarOpen ? rightSidebarWidth : 0) - 340
+        );
+        const newWidth = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(maxAllowed, startW + deltaX));
+        setLeftPanelWidth(newWidth);
+      };
+
+      const handlePointerUp = () => {
+        if (currentTarget.hasPointerCapture(pointerId)) {
+          currentTarget.releasePointerCapture(pointerId);
+        }
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+    },
+    [leftPanelWidth, rightSidebarOpen, rightSidebarWidth, setLeftPanelWidth]
+  );
+
+  const handleStartResizeRightSidebar = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const pointerId = e.pointerId;
+      const startX = e.clientX;
+      const startW = rightSidebarWidth;
+      const currentTarget = e.currentTarget;
+      currentTarget.setPointerCapture(pointerId);
+
+      const handlePointerMove = (ev: PointerEvent) => {
+        const deltaX = startX - ev.clientX; // Dragging left increases right sidebar width
+        const maxAllowed = Math.min(
+          MAX_RIGHT_SIDEBAR_WIDTH,
+          window.innerWidth - (leftPanelOpen ? leftPanelWidth : 0) - 340
+        );
+        const newWidth = Math.max(MIN_RIGHT_SIDEBAR_WIDTH, Math.min(maxAllowed, startW + deltaX));
+        setRightSidebarWidth(newWidth);
+      };
+
+      const handlePointerUp = () => {
+        if (currentTarget.hasPointerCapture(pointerId)) {
+          currentTarget.releasePointerCapture(pointerId);
+        }
+        window.removeEventListener('pointermove', handlePointerMove);
+        window.removeEventListener('pointerup', handlePointerUp);
+        window.removeEventListener('pointercancel', handlePointerUp);
+      };
+
+      window.addEventListener('pointermove', handlePointerMove);
+      window.addEventListener('pointerup', handlePointerUp);
+      window.addEventListener('pointercancel', handlePointerUp);
+    },
+    [rightSidebarWidth, leftPanelOpen, leftPanelWidth, setRightSidebarWidth]
   );
 
   useEffect(() => {
@@ -337,6 +450,22 @@ export default function App() {
     setInspectorTab,
   ]);
 
+  // Responsive auto-collapse sidebars on smaller screens / split view
+  useEffect(() => {
+    const handleResize = () => {
+      const width = window.innerWidth;
+      if (width < 1024) {
+        setLeftPanelOpen(false);
+      }
+      if (width < 768) {
+        setRightSidebarOpen(false);
+      }
+    };
+    handleResize();
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [setLeftPanelOpen, setRightSidebarOpen]);
+
   // Global Studio Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -436,15 +565,30 @@ export default function App() {
           clearLayerSelection();
           setInspectorTab('shot');
           setExportModalOpen(false);
+          setShortcutsModalOpen(false);
           return;
         }
       }
 
-      // [ and ] (plus Cmd+[ and Cmd+]): Restack Layer Forward / Backward
-      if ((e.key === ']' || e.key === '[') && selectedLayer) {
+      // ?: Open Keyboard Shortcuts Cheat Sheet (or Cmd/Ctrl + /)
+      if (e.key === '?' || ((e.metaKey || e.ctrlKey) && e.key === '/')) {
+        e.preventDefault();
+        setShortcutsModalOpen((prev) => !prev);
+        return;
+      }
+
+      // ': Toggle Safe Zones & Rule of Thirds Grid (or Cmd/Ctrl + ')
+      if (e.key === "'" && !e.altKey) {
+        e.preventDefault();
+        setShowSafeArea((prev) => !prev);
+        return;
+      }
+
+      // Cmd/Ctrl + [ and Cmd/Ctrl + ]: Restack Layer Forward / Backward
+      if ((e.metaKey || e.ctrlKey) && (e.key === ']' || e.key === '[') && selectedLayer) {
         e.preventDefault();
         const isForward = e.key === ']';
-        const isExtreme = e.metaKey || e.ctrlKey;
+        const isExtreme = e.shiftKey;
         restackLayerInShot(
           activeShot.id,
           selectedLayer.id,
@@ -456,6 +600,33 @@ export default function App() {
               ? 'back'
               : 'backward'
         );
+        return;
+      }
+
+      // [ and ]: Toggle Left Panel / Right Sidebar (Adaptive Viewport)
+      if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (e.key === '[') {
+          e.preventDefault();
+          toggleLeftPanel();
+          return;
+        }
+        if (e.key === ']') {
+          e.preventDefault();
+          toggleRightSidebar();
+          return;
+        }
+      }
+
+      // \: Zen Mode (Distraction-free 3D & Timeline stage)
+      if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === '\\') {
+        e.preventDefault();
+        if (leftPanelOpen || rightSidebarOpen) {
+          setLeftPanelOpen(false);
+          setRightSidebarOpen(false);
+        } else {
+          setLeftPanelOpen(true);
+          setRightSidebarOpen(true);
+        }
         return;
       }
 
@@ -584,6 +755,14 @@ export default function App() {
     undo,
     redo,
     togglePlay,
+    leftPanelOpen,
+    rightSidebarOpen,
+    toggleLeftPanel,
+    toggleRightSidebar,
+    setLeftPanelOpen,
+    setRightSidebarOpen,
+    setShowSafeArea,
+    setShortcutsModalOpen,
   ]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -868,14 +1047,60 @@ export default function App() {
         className="hidden"
       />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR */}
-        <LeftPanel
-          activeShot={projectActiveShot}
-          onUploadClick={() => fileInputRef.current?.click()}
-          audioLabel={audioLabel}
-          onSelectAudioClick={() => audioInputRef.current?.click()}
-        />
+      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR OR FLOATING RESTORE TAB */}
+        {leftPanelOpen ? (
+          <>
+            <LeftPanel
+              activeShot={projectActiveShot}
+              onUploadClick={handleUploadClick}
+              audioLabel={audioLabel}
+              onSelectAudioClick={handleSelectAudioClick}
+            />
+            {/* Draggable vertical splitter for Left Panel */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize left panel"
+              aria-valuenow={leftPanelWidth}
+              aria-valuemin={MIN_LEFT_PANEL_WIDTH}
+              aria-valuemax={MAX_LEFT_PANEL_WIDTH}
+              tabIndex={0}
+              onPointerDown={handleStartResizeLeftPanel}
+              onDoubleClick={() => setLeftPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  setLeftPanelWidth(leftPanelWidth - 10);
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  setLeftPanelWidth(leftPanelWidth + 10);
+                } else if (e.key === 'Home') {
+                  e.preventDefault();
+                  setLeftPanelWidth(MIN_LEFT_PANEL_WIDTH);
+                } else if (e.key === 'End') {
+                  e.preventDefault();
+                  setLeftPanelWidth(MAX_LEFT_PANEL_WIDTH);
+                }
+              }}
+              className="w-1.5 -mx-[3px] relative flex items-center justify-center cursor-col-resize group select-none shrink-0 z-20 hover:bg-[#0088ff]/40 active:bg-[#0088ff] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+              title="Drag to resize left panel (double-click to reset)"
+            >
+              <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-[#0088ff] transition-colors" />
+            </div>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleLeftPanel}
+            title="Expand Left Panel ( [ )"
+            aria-label="Expand Left Panel"
+            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+          >
+            <PanelLeftOpen className="w-3.5 h-3.5 text-[#0088ff]" />
+            <span className="hidden sm:inline">Panels</span>
+          </button>
+        )}
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
@@ -885,12 +1110,11 @@ export default function App() {
                 project={project}
                 frame={frame}
                 selectedLayerIds={selectedLayerIds}
-                onSelectLayer={(id, multi) => {
-                  setInspectorTab('layer');
-                  selectLayer(id, multi);
-                }}
-                showSafeArea={false}
+                onSelectLayer={handleSelectLayer}
+                showSafeArea={showSafeArea}
                 snapEnabled={true}
+                onToggleSafeArea={() => setShowSafeArea((prev) => !prev)}
+                onOpenShortcuts={() => setShortcutsModalOpen(true)}
               />
             </Suspense>
           </StageErrorBoundary>
@@ -898,14 +1122,60 @@ export default function App() {
           <Timeline totalDurationMs={totalDurationMs} />
         </main>
 
-        {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) */}
-        <RightSidebar
-          activeShot={projectActiveShot}
-          selectedLayer={selectedLayer}
-          selectedLayerIds={selectedLayerIds}
-          onSwapImageClick={() => fileInputRef.current?.click()}
-          onOpenExportModal={() => setExportModalOpen(true)}
-        />
+        {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) OR FLOATING RESTORE TAB */}
+        {rightSidebarOpen ? (
+          <>
+            {/* Draggable vertical splitter for Right Sidebar */}
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-label="Resize right inspector"
+              aria-valuenow={rightSidebarWidth}
+              aria-valuemin={MIN_RIGHT_SIDEBAR_WIDTH}
+              aria-valuemax={MAX_RIGHT_SIDEBAR_WIDTH}
+              tabIndex={0}
+              onPointerDown={handleStartResizeRightSidebar}
+              onDoubleClick={() => setRightSidebarWidth(DEFAULT_RIGHT_SIDEBAR_WIDTH)}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowLeft') {
+                  e.preventDefault();
+                  setRightSidebarWidth(rightSidebarWidth + 10);
+                } else if (e.key === 'ArrowRight') {
+                  e.preventDefault();
+                  setRightSidebarWidth(rightSidebarWidth - 10);
+                } else if (e.key === 'Home') {
+                  e.preventDefault();
+                  setRightSidebarWidth(MIN_RIGHT_SIDEBAR_WIDTH);
+                } else if (e.key === 'End') {
+                  e.preventDefault();
+                  setRightSidebarWidth(MAX_RIGHT_SIDEBAR_WIDTH);
+                }
+              }}
+              className="w-1.5 -mx-[3px] relative flex items-center justify-center cursor-col-resize group select-none shrink-0 z-20 hover:bg-[#0088ff]/40 active:bg-[#0088ff] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+              title="Drag to resize inspector (double-click to reset)"
+            >
+              <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-[#0088ff] transition-colors" />
+            </div>
+            <RightSidebar
+              activeShot={projectActiveShot}
+              selectedLayer={selectedLayer}
+              selectedLayerIds={selectedLayerIds}
+              onSwapImageClick={handleUploadClick}
+              onOpenExportModal={handleOpenExportModal}
+            />
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={toggleRightSidebar}
+            title="Expand Inspector ( ] )"
+            aria-label="Expand Inspector"
+            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+          >
+            <PanelRightOpen className="w-3.5 h-3.5 text-[#0088ff]" />
+            <span className="hidden sm:inline">Inspector</span>
+          </button>
+        )}
 
       </div>
 
@@ -1045,19 +1315,19 @@ export default function App() {
 
             <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono text-[11px] space-y-1 text-[#d4d4d8]">
               <div className="flex justify-between">
-                <span className="text-[#71717a]">Dimensions:</span>
+                <span className="text-[#a1a1aa]">Dimensions:</span>
                 <span>
                   {exportMetrics.width}&times;{exportMetrics.height}px
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#71717a]">Estimated Size:</span>
+                <span className="text-[#a1a1aa]">Estimated Size:</span>
                 <span className="text-emerald-400">
                   ~{exportMetrics.estimatedSizeMb} MB
                 </span>
               </div>
               <div className="flex justify-between">
-                <span className="text-[#71717a]">Estimated Time:</span>
+                <span className="text-[#a1a1aa]">Estimated Time:</span>
                 <span className="text-[#38bdf8]">
                   ~{exportMetrics.estimatedTimeSec}s
                 </span>
@@ -1110,6 +1380,12 @@ export default function App() {
           </div>
         </div>
       )}
+
+      {/* KEYBOARD SHORTCUTS MODAL */}
+      <KeyboardShortcutsModal
+        isOpen={shortcutsModalOpen}
+        onClose={() => setShortcutsModalOpen(false)}
+      />
     </div>
   );
 }

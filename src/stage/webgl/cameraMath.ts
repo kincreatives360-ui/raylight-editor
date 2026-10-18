@@ -111,13 +111,19 @@ export function getLayer3DWorldTransform(
 } {
     const { planeW, planeH } = getReferencePlaneDimensions(aspect, cameraZ, focalLength);
 
-    const meshW = Math.max(0.02, evalLayer.size.width * planeW);
-    const meshH = Math.max(0.02, evalLayer.size.height * planeH);
+    const rawW = Number.isFinite(evalLayer.size?.width) ? evalLayer.size.width : 0.4;
+    const rawH = Number.isFinite(evalLayer.size?.height) ? evalLayer.size.height : 0.3;
+    const meshW = Math.max(0.02, rawW * planeW);
+    const meshH = Math.max(0.02, rawH * planeH);
 
-    const worldX = evalLayer.position.x * planeW;
+    const posX = Number.isFinite(evalLayer.position?.x) ? evalLayer.position.x : 0;
+    const posY = Number.isFinite(evalLayer.position?.y) ? evalLayer.position.y : 0;
+    const posZ = Number.isFinite(evalLayer.position?.z) ? evalLayer.position.z : 0;
+
+    const worldX = posX * planeW;
     // Invert Y so moving a layer down (+Y in model) moves it down (-Y in Three.js)
-    const worldY = -evalLayer.position.y * planeH;
-    const worldZ = evalLayer.position.z * 0.85;
+    const worldY = -posY * planeH;
+    const worldZ = posZ * 0.85;
 
     return { worldX, worldY, worldZ, meshW, meshH };
 }

@@ -80,8 +80,8 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                     fromY: 0.35,
                     toX: 0.35,
                     toY: 0.25,
-                    fromIntensity: s.light.intensity,
-                    toIntensity: s.light.intensity,
+                    fromIntensity: s.light.keyIntensity ?? s.light.intensity,
+                    toIntensity: s.light.keyIntensity ?? s.light.intensity,
                     easing: { kind: 'preset', name: 'ease-in-out' },
                   },
                 ],
@@ -98,6 +98,28 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
         </div>
       </div>
 
+      {/* Master Gain (scales additional sources, 0 to 2, step 0.01) */}
+      <div className="rounded-lg border border-white/[0.06] bg-[#18181b]/70 p-2.5 space-y-1.5">
+        <div className="flex items-center justify-between">
+          <span className="text-[11px] font-medium text-[#e4e4e7]">Master Gain</span>
+          <span className="text-[9px] text-[#a1a1aa]">Scales all extra light sources</span>
+        </div>
+        <ScrubInput
+          label="Master Gain"
+          value={Math.round((light.intensity ?? 1.2) * 100)}
+          min={0}
+          max={200}
+          step={1}
+          unit="%"
+          onChange={(pct) =>
+            updateShot(activeShot.id, (s) => ({
+              ...s,
+              light: { ...s.light, intensity: Number((pct / 100).toFixed(2)) },
+            }))
+          }
+        />
+      </div>
+
       {/* 2. Scene-Level Ambient (Shadow Floor): sets baseline shadow brightness without direction/falloff */}
       <div className="rounded-lg border border-white/[0.06] bg-[#18181b]/70 p-2.5 space-y-2">
         <div className="flex items-center justify-between">
@@ -105,7 +127,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
             <span className="text-[11px] font-medium text-[#e4e4e7]">
               Ambient (Shadow Floor)
             </span>
-            <span className="text-[9px] text-[#71717a]">
+            <span className="text-[9px] text-[#a1a1aa]">
               Global baseline fill; prevents unlit areas from going pure black
             </span>
           </div>
@@ -248,7 +270,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
             <div className="grid grid-cols-2 gap-1.5">
               <ScrubInput
                 label="Intensity"
-                value={Math.round((light.intensity ?? 1.2) * 100)}
+                value={Math.round((light.keyIntensity ?? light.intensity ?? 1.2) * 100)}
                 min={0}
                 max={300}
                 step={5}
@@ -256,7 +278,7 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                 onChange={(pct) =>
                   updateShot(activeShot.id, (s) => ({
                     ...s,
-                    light: { ...s.light, intensity: Number((pct / 100).toFixed(2)) },
+                    light: { ...s.light, keyIntensity: Number((pct / 100).toFixed(2)) },
                   }))
                 }
               />
@@ -906,6 +928,236 @@ export const LightingSection: React.FC<LightingSectionProps> = ({
                   ),
                 }))
               }
+            />
+          </div>
+
+          {/* From / To Z Position */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <ScrubInput
+              label="From Z"
+              value={Math.round((selectedLightBlock.fromZ ?? 0.9) * 100)}
+              min={10}
+              max={250}
+              step={5}
+              unit="%"
+              onChange={(val) =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  lightBlocks: (s.lightBlocks || []).map((b) =>
+                    b.id === selectedLightBlock.id
+                      ? { ...b, fromZ: Number((val / 100).toFixed(2)) }
+                      : b
+                  ),
+                }))
+              }
+            />
+            <ScrubInput
+              label="To Z"
+              value={Math.round((selectedLightBlock.toZ ?? selectedLightBlock.fromZ ?? 0.9) * 100)}
+              min={10}
+              max={250}
+              step={5}
+              unit="%"
+              onChange={(val) =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  lightBlocks: (s.lightBlocks || []).map((b) =>
+                    b.id === selectedLightBlock.id
+                      ? { ...b, toZ: Number((val / 100).toFixed(2)) }
+                      : b
+                  ),
+                }))
+              }
+            />
+          </div>
+
+          {/* Temperature */}
+          <div className="grid grid-cols-2 gap-1.5">
+            <ScrubInput
+              label="From Temp"
+              value={selectedLightBlock.fromTemperature ?? 6100}
+              min={2500}
+              max={9500}
+              step={100}
+              unit="K"
+              onChange={(fromTemperature) =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  lightBlocks: (s.lightBlocks || []).map((b) =>
+                    b.id === selectedLightBlock.id
+                      ? { ...b, fromTemperature }
+                      : b
+                  ),
+                }))
+              }
+            />
+            <ScrubInput
+              label="To Temp"
+              value={selectedLightBlock.toTemperature ?? selectedLightBlock.fromTemperature ?? 6100}
+              min={2500}
+              max={9500}
+              step={100}
+              unit="K"
+              onChange={(toTemperature) =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  lightBlocks: (s.lightBlocks || []).map((b) =>
+                    b.id === selectedLightBlock.id
+                      ? { ...b, toTemperature }
+                      : b
+                  ),
+                }))
+              }
+            />
+          </div>
+
+          {/* Color for additional light sources */}
+          {selectedLightBlock.targetLightId && selectedLightBlock.targetLightId !== 'key' && (
+            <div className="grid grid-cols-2 gap-2 pt-1">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-[#a1a1aa]">From Color</span>
+                <ColorField
+                  value={selectedLightBlock.fromColor ?? '#ffffff'}
+                  onChange={(e) => {
+                    const fromColor = e.target.value;
+                    updateShot(activeShot.id, (s) => ({
+                      ...s,
+                      lightBlocks: (s.lightBlocks || []).map((b) =>
+                        b.id === selectedLightBlock.id
+                          ? { ...b, fromColor, toColor: b.toColor ?? fromColor }
+                          : b
+                      ),
+                    }));
+                  }}
+                />
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] text-[#a1a1aa]">To Color</span>
+                <ColorField
+                  value={selectedLightBlock.toColor ?? selectedLightBlock.fromColor ?? '#ffffff'}
+                  onChange={(e) => {
+                    const toColor = e.target.value;
+                    updateShot(activeShot.id, (s) => ({
+                      ...s,
+                      lightBlocks: (s.lightBlocks || []).map((b) =>
+                        b.id === selectedLightBlock.id
+                          ? { ...b, toColor }
+                          : b
+                      ),
+                    }));
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Spot Angle and Softness */}
+          {(() => {
+            const tgtSrc = (light.sources || []).find((s) => s.id === selectedLightBlock.targetLightId);
+            if (tgtSrc?.type !== 'spot') return null;
+            return (
+              <>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <ScrubInput
+                    label="From Angle"
+                    value={Math.round((((selectedLightBlock.fromAngle ?? tgtSrc.angle ?? Math.PI / 5) * 180) / Math.PI))}
+                    min={10}
+                    max={90}
+                    step={1}
+                    unit="°"
+                    onChange={(deg) => {
+                      const fromAngle = Number(((deg * Math.PI) / 180).toFixed(3));
+                      updateShot(activeShot.id, (s) => ({
+                        ...s,
+                        lightBlocks: (s.lightBlocks || []).map((b) =>
+                          b.id === selectedLightBlock.id
+                            ? { ...b, fromAngle }
+                            : b
+                        ),
+                      }));
+                    }}
+                  />
+                  <ScrubInput
+                    label="To Angle"
+                    value={Math.round((((selectedLightBlock.toAngle ?? selectedLightBlock.fromAngle ?? tgtSrc.angle ?? Math.PI / 5) * 180) / Math.PI))}
+                    min={10}
+                    max={90}
+                    step={1}
+                    unit="°"
+                    onChange={(deg) => {
+                      const toAngle = Number(((deg * Math.PI) / 180).toFixed(3));
+                      updateShot(activeShot.id, (s) => ({
+                        ...s,
+                        lightBlocks: (s.lightBlocks || []).map((b) =>
+                          b.id === selectedLightBlock.id
+                            ? { ...b, toAngle }
+                            : b
+                        ),
+                      }));
+                    }}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <ScrubInput
+                    label="From Soft"
+                    value={Math.round((selectedLightBlock.fromPenumbra ?? tgtSrc.penumbra ?? 0.4) * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    unit="%"
+                    onChange={(pct) => {
+                      const fromPenumbra = Number((pct / 100).toFixed(2));
+                      updateShot(activeShot.id, (s) => ({
+                        ...s,
+                        lightBlocks: (s.lightBlocks || []).map((b) =>
+                          b.id === selectedLightBlock.id
+                            ? { ...b, fromPenumbra }
+                            : b
+                        ),
+                      }));
+                    }}
+                  />
+                  <ScrubInput
+                    label="To Soft"
+                    value={Math.round((selectedLightBlock.toPenumbra ?? selectedLightBlock.fromPenumbra ?? tgtSrc.penumbra ?? 0.4) * 100)}
+                    min={0}
+                    max={100}
+                    step={5}
+                    unit="%"
+                    onChange={(pct) => {
+                      const toPenumbra = Number((pct / 100).toFixed(2));
+                      updateShot(activeShot.id, (s) => ({
+                        ...s,
+                        lightBlocks: (s.lightBlocks || []).map((b) =>
+                          b.id === selectedLightBlock.id
+                            ? { ...b, toPenumbra }
+                            : b
+                        ),
+                      }));
+                    }}
+                  />
+                </div>
+              </>
+            );
+          })()}
+
+          {/* Hold before start toggle */}
+          <div className="flex items-center justify-between pt-1">
+            <span className="text-[10px] text-[#a1a1aa]">Hold before start</span>
+            <input
+              type="checkbox"
+              checked={selectedLightBlock.holdBefore !== false}
+              onChange={(e) =>
+                updateShot(activeShot.id, (s) => ({
+                  ...s,
+                  lightBlocks: (s.lightBlocks || []).map((b) =>
+                    b.id === selectedLightBlock.id
+                      ? { ...b, holdBefore: e.target.checked }
+                      : b
+                  ),
+                }))
+              }
+              className="accent-amber-500 rounded cursor-pointer"
             />
           </div>
         </div>

@@ -46,6 +46,8 @@ interface StageProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     showSafeArea?: boolean;
     snapEnabled?: boolean;
+    onToggleSafeArea?: () => void;
+    onOpenShortcuts?: () => void;
 }
 
 export const Stage: React.FC<StageProps> = ({
@@ -55,6 +57,8 @@ export const Stage: React.FC<StageProps> = ({
     onSelectLayer,
     showSafeArea = true,
     snapEnabled = true,
+    onToggleSafeArea,
+    onOpenShortcuts,
 }) => {
     const {
         addLayerToShot,
@@ -924,9 +928,9 @@ export const Stage: React.FC<StageProps> = ({
                 </div>
             </div>
 
-            {/* Top-Left Active Animate Recording Pill (Raylight-style) */}
+            {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (
-                <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse pointer-events-none z-30">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse pointer-events-none z-30">
                     <span className="w-2 h-2 rounded-full bg-white" />
                     <span>REC (⇧A)</span>
                 </div>
@@ -1254,7 +1258,12 @@ export const Stage: React.FC<StageProps> = ({
             )}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
-            <CanvasToolbar selectedLayer={selectedLayer} />
+            <CanvasToolbar
+                selectedLayer={selectedLayer}
+                showSafeArea={showSafeArea}
+                onToggleSafeArea={onToggleSafeArea}
+                onOpenShortcuts={onOpenShortcuts}
+            />
         </div>
     );
 };

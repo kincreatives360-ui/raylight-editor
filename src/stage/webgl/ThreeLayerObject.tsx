@@ -169,7 +169,17 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
 
-    const { currentTimeMs } = usePlayheadStore();
+    const isVideoAsset = useMemo(() => {
+        if (layer.kind === 'video') return true;
+        if (layer.kind === 'image') {
+            const asset = project.assets[(layer as ImageLayer).assetId];
+            return asset?.mimeType?.startsWith('video/') ?? false;
+        }
+        return false;
+    }, [layer, project.assets]);
+
+    // Selective playhead subscription: Only video layers re-render on RAF ticks; static layers stay idle
+    const currentTimeMs = usePlayheadStore((s) => (isVideoAsset ? s.currentTimeMs : 0));
 
     const device =
         (layer.kind === 'image' || layer.kind === 'video')
@@ -184,15 +194,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         url: string;
         image: HTMLImageElement;
     } | null>(null);
-
-    const isVideoAsset = useMemo(() => {
-        if (layer.kind === 'video') return true;
-        if (layer.kind === 'image') {
-            const asset = project.assets[(layer as ImageLayer).assetId];
-            return asset?.mimeType?.startsWith('video/') ?? false;
-        }
-        return false;
-    }, [layer, project.assets]);
 
     const assetUrl = useMemo(() => {
         if (layer.kind !== 'image' && layer.kind !== 'video') return null;

@@ -1,20 +1,102 @@
 @import "tailwindcss";
 
+:root {
+  /* Surface Tokens */
+  --bg-canvas: #07080d;
+  --bg-app: #0b0b0d;
+  --bg-panel: #111114;
+  --bg-surface: #161619;
+  --bg-subtle: #1c1c1f;
+  --bg-muted: #242428;
+  --bg-hover: rgba(255, 255, 255, 0.05);
+  --bg-active: rgba(255, 255, 255, 0.08);
+
+  /* Border Tokens */
+  --border-subtle: rgba(255, 255, 255, 0.07);
+  --border-medium: rgba(255, 255, 255, 0.12);
+  --border-focus: #0088ff;
+
+  /* Text & Contrast Tokens (WCAG AA compliant) */
+  --text-primary: #f4f4f5;
+  --text-secondary: #d4d4d8;
+  --text-muted: #a1a1aa;
+  --text-subtle: #8a8a93;
+  --text-disabled: #71717a;
+
+  /* Accent Tokens */
+  --accent-primary: #0088ff;
+  --accent-hover: #0077e6;
+  --accent-glow: rgba(0, 136, 255, 0.25);
+  --accent-selection: #09355c;
+  --accent-danger: #f43f5e;
+  --accent-success: #10b981;
+  --accent-warning: #f59e0b;
+}
+
 * {
   box-sizing: border-box;
+}
+
+/* Scoped non-selection for canvas and drag handles, preserving readability */
+.select-none,
+button,
+[role="button"],
+[role="treeitem"],
+[role="tab"] {
   user-select: none;
 }
 
-input, textarea, [contenteditable="true"] {
+input, textarea, [contenteditable="true"], .select-text {
   user-select: text;
 }
 
 body {
   margin: 0;
-  background-color: #07080d;
-  color: #f3f4f6;
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
   overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Accessible focus rings */
+:focus-visible {
+  outline: 2px solid var(--border-focus);
+  outline-offset: 1px;
+}
+
+input:focus-visible,
+textarea:focus-visible,
+select:focus-visible {
+  outline: 1px solid var(--border-focus);
+}
+
+/* Touch-friendly scrolling on mobile / tablets */
+.overflow-y-auto,
+.overflow-x-auto,
+.overflow-auto {
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Comfortable hit target sizing for touch screens */
+@media (pointer: coarse) {
+  button, [role="button"] {
+    min-width: 32px;
+    min-height: 32px;
+  }
+}
+
+/* Reduced motion sensitivity support */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }
 
 ::-webkit-scrollbar {
@@ -28,3 +110,6 @@ body {
   background: #262936;
   border-radius: 3px;
 }
+::-webkit-scrollbar-thumb:hover {
+  background: #363a4d;
+}

@@ -307,11 +307,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                     <input aria-label={`Stop ${index + 1} hex`} value={stop.color.replace(/^#/, '').toUpperCase()} onChange={(event) => { const value = normalizeHex(event.target.value); if (value) updateStop(index, { color: value }); }} className="min-w-0 w-full bg-transparent font-mono text-[10px] text-white outline-none" />
                                 </label>
                                 <label className="flex items-center text-[10px] text-[#c4c4cc]"><input aria-label={`Stop ${index + 1} opacity`} type="number" min="0" max="100" value={Math.round((stop.opacity ?? 1) * 100)} onChange={(event) => updateStop(index, { opacity: Math.max(0, Math.min(100, Number(event.target.value))) / 100 })} className="w-7 bg-transparent text-right outline-none" /><span>%</span></label>
-                                <button type="button" aria-label={`Remove stop ${index + 1}`} disabled={gradient.stops.length <= 2} onClick={() => updateGradient({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })} className="grid h-6 w-6 place-items-center rounded text-[#777] hover:text-red-300 disabled:opacity-30"><Trash2 className="h-3.5 w-3.5" /></button>
+                                <button type="button" aria-label={`Remove stop ${index + 1}`} disabled={gradient.stops.length <= 2} onClick={() => updateGradient({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })} className="grid h-6 w-6 place-items-center rounded text-[#a1a1aa] hover:text-red-300 disabled:opacity-40"><Trash2 className="h-3.5 w-3.5" /></button>
                             </div>
                         ))}
                     </div>
-                    <div className="text-right text-[10px] text-[#73737c]">Angle {gradient.angle}°</div>
+                    <div className="text-right text-[10px] text-[#a1a1aa]">Angle {gradient.angle}°</div>
                 </div>
             )}
         </div>,

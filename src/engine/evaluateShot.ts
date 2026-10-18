@@ -1,6 +1,7 @@
 // src/engine/evaluateShot.ts
 import type { Project, Shot, LightRig, SceneEffects } from '../model/types';
 import { evaluateEasing } from './easing';
+import { evaluateLightBlocks } from './evaluateLight';
 import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
 import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
@@ -70,98 +71,82 @@ export function evaluateProjectAtTime(
         baseShot.durationMs > 0 ? shotLocalTimeMs / baseShot.durationMs : 0;
 
     // 1. Evaluate Animated Light Blocks on the Timeline (if any)
-    const evaluatedLight: LightRig = {
-        ...baseShot.light,
-        position: { ...baseShot.light.position },
-        sources: baseShot.light.sources
-            ? baseShot.light.sources.map((s) => ({
-                ...s,
-                position: { ...s.position },
-                target: s.target ? { ...s.target } : undefined,
-                rotation: s.rotation ? { ...s.rotation } : undefined,
-            }))
-            : [],
-    };
-    for (const lb of baseShot.lightBlocks || []) {
-        if (shotLocalTimeMs < lb.startMs) continue;
-        const rawP =
-            lb.durationMs > 0
-                ? Math.max(0, Math.min(1, (shotLocalTimeMs - lb.startMs) / lb.durationMs))
-                : 1;
-        const eased = evaluateEasing(rawP, lb.easing);
-
-        if (lb.targetLightId && lb.targetLightId !== 'key') {
-            const targetSrc = evaluatedLight.sources?.find((s) => s.id === lb.targetLightId);
-            if (targetSrc) {
-                targetSrc.position.x = Number(lerp(lb.fromX, lb.toX, eased).toFixed(3));
-                targetSrc.position.y = Number(lerp(lb.fromY, lb.toY, eased).toFixed(3));
-                if (lb.fromZ !== undefined && lb.toZ !== undefined) {
-                    targetSrc.position.z = Number(lerp(lb.fromZ, lb.toZ, eased).toFixed(3));
-                }
-                targetSrc.intensity = Number(lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2));
-            }
-        } else {
-            evaluatedLight.position.x = Number(
-                lerp(lb.fromX, lb.toX, eased).toFixed(3)
-            );
-            evaluatedLight.position.y = Number(
-                lerp(lb.fromY, lb.toY, eased).toFixed(3)
-            );
-            if (lb.fromZ !== undefined && lb.toZ !== undefined) {
-                evaluatedLight.position.z = Number(
-                    lerp(lb.fromZ, lb.toZ, eased).toFixed(3)
-                );
-            }
-            evaluatedLight.intensity = Number(
-                lerp(lb.fromIntensity, lb.toIntensity, eased).toFixed(2)
-            );
-        }
-    }
-
-    // 2. Evaluate Animated Scene Effect Blocks on the Timeline (if any)
-    const evaluatedEffectsConfig: SceneEffects = JSON.parse(
-        JSON.stringify(baseShot.effects)
+    const evaluatedLight = evaluateLightBlocks(
+        baseShot.light,
+        baseShot.lightBlocks,
+        shotLocalTimeMs
     );
-    for (const eb of baseShot.effectBlocks || []) {
-        if (shotLocalTimeMs < eb.startMs) continue;
-        const rawP =
-            eb.durationMs > 0
-                ? Math.max(0, Math.min(1, (shotLocalTimeMs - eb.startMs) / eb.durationMs))
-                : 1;
-        const eased = evaluateEasing(rawP, eb.easing);
-        const val = lerp(eb.fromValue, eb.toValue, eased);
 
-        if (eb.effectKey === 'depthOfField') {
-            evaluatedEffectsConfig.depthOfField.enabled = true;
-            evaluatedEffectsConfig.depthOfField.target.z = val;
-        } else if (eb.effectKey === 'bloom') {
-            evaluatedEffectsConfig.bloom.enabled = true;
-            evaluatedEffectsConfig.bloom.intensity = Math.max(0, val);
-        } else if (eb.effectKey === 'vignette') {
-            evaluatedEffectsConfig.vignette.enabled = true;
-            evaluatedEffectsConfig.vignette.intensity = Math.max(0, Math.min(1, val));
-        } else if (eb.effectKey === 'filmGrain') {
-            evaluatedEffectsConfig.filmGrain.enabled = true;
-            evaluatedEffectsConfig.filmGrain.intensity = Math.max(0, val);
-        } else if (eb.effectKey === 'chromaticAberration') {
-            evaluatedEffectsConfig.chromaticAberration.enabled = true;
-            evaluatedEffectsConfig.chromaticAberration.offset = Math.max(0, val);
-        } else if (eb.effectKey === 'glitch') {
-            evaluatedEffectsConfig.glitch.enabled = true;
-            evaluatedEffectsConfig.glitch.intensity = Math.max(0, val);
-        } else if (eb.effectKey === 'colorGrade') {
-            evaluatedEffectsConfig.colorGrade.enabled = true;
-            evaluatedEffectsConfig.colorGrade.exposure = Math.max(0.2, val);
-        } else if (eb.effectKey === 'motionBlur') {
-            evaluatedEffectsConfig.motionBlur.enabled = true;
-            evaluatedEffectsConfig.motionBlur.shutterAngle = Math.max(0, val);
-        } else if (eb.effectKey === 'ghost') {
-            evaluatedEffectsConfig.ghost.enabled = true;
-            evaluatedEffectsConfig.ghost.opacity = Math.max(0, Math.min(1, val));
-        } else if (eb.effectKey === 'edgeFade') {
-            evaluatedEffectsConfig.edgeFade.enabled = true;
-            evaluatedEffectsConfig.edgeFade.top = Math.max(0, Math.min(1, val));
-            evaluatedEffectsConfig.edgeFade.bottom = Math.max(0, Math.min(1, val));
+    // 2. Evaluate Animated Scene Effect Blocks on the Timeline (Zero-allocation when idle)
+    let evaluatedEffectsConfig: SceneEffects = baseShot.effects;
+    const effectBlocks = baseShot.effectBlocks;
+    if (effectBlocks && effectBlocks.length > 0) {
+        let hasActiveBlock = false;
+        for (const eb of effectBlocks) {
+            if (shotLocalTimeMs >= eb.startMs) {
+                hasActiveBlock = true;
+                break;
+            }
+        }
+        if (hasActiveBlock) {
+            evaluatedEffectsConfig = {
+                ...baseShot.effects,
+                depthOfField: {
+                    ...baseShot.effects.depthOfField,
+                    target: { ...baseShot.effects.depthOfField.target },
+                },
+                bloom: { ...baseShot.effects.bloom },
+                vignette: { ...baseShot.effects.vignette },
+                filmGrain: { ...baseShot.effects.filmGrain },
+                chromaticAberration: { ...baseShot.effects.chromaticAberration },
+                glitch: { ...baseShot.effects.glitch },
+                colorGrade: { ...baseShot.effects.colorGrade },
+                motionBlur: { ...baseShot.effects.motionBlur },
+                ghost: { ...baseShot.effects.ghost },
+                edgeFade: { ...baseShot.effects.edgeFade },
+            };
+            for (const eb of effectBlocks) {
+                if (shotLocalTimeMs < eb.startMs) continue;
+                const rawP =
+                    eb.durationMs > 0
+                        ? Math.max(0, Math.min(1, (shotLocalTimeMs - eb.startMs) / eb.durationMs))
+                        : 1;
+                const eased = evaluateEasing(rawP, eb.easing);
+                const val = lerp(eb.fromValue, eb.toValue, eased);
+
+                if (eb.effectKey === 'depthOfField') {
+                    evaluatedEffectsConfig.depthOfField.enabled = true;
+                    evaluatedEffectsConfig.depthOfField.target.z = val;
+                } else if (eb.effectKey === 'bloom') {
+                    evaluatedEffectsConfig.bloom.enabled = true;
+                    evaluatedEffectsConfig.bloom.intensity = Math.max(0, val);
+                } else if (eb.effectKey === 'vignette') {
+                    evaluatedEffectsConfig.vignette.enabled = true;
+                    evaluatedEffectsConfig.vignette.intensity = Math.max(0, Math.min(1, val));
+                } else if (eb.effectKey === 'filmGrain') {
+                    evaluatedEffectsConfig.filmGrain.enabled = true;
+                    evaluatedEffectsConfig.filmGrain.intensity = Math.max(0, val);
+                } else if (eb.effectKey === 'chromaticAberration') {
+                    evaluatedEffectsConfig.chromaticAberration.enabled = true;
+                    evaluatedEffectsConfig.chromaticAberration.offset = Math.max(0, val);
+                } else if (eb.effectKey === 'glitch') {
+                    evaluatedEffectsConfig.glitch.enabled = true;
+                    evaluatedEffectsConfig.glitch.intensity = Math.max(0, val);
+                } else if (eb.effectKey === 'colorGrade') {
+                    evaluatedEffectsConfig.colorGrade.enabled = true;
+                    evaluatedEffectsConfig.colorGrade.exposure = Math.max(0.2, val);
+                } else if (eb.effectKey === 'motionBlur') {
+                    evaluatedEffectsConfig.motionBlur.enabled = true;
+                    evaluatedEffectsConfig.motionBlur.shutterAngle = Math.max(0, val);
+                } else if (eb.effectKey === 'ghost') {
+                    evaluatedEffectsConfig.ghost.enabled = true;
+                    evaluatedEffectsConfig.ghost.opacity = Math.max(0, Math.min(1, val));
+                } else if (eb.effectKey === 'edgeFade') {
+                    evaluatedEffectsConfig.edgeFade.enabled = true;
+                    evaluatedEffectsConfig.edgeFade.top = Math.max(0, Math.min(1, val));
+                    evaluatedEffectsConfig.edgeFade.bottom = Math.max(0, Math.min(1, val));
+                }
+            }
         }
     }
 

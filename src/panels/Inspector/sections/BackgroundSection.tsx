@@ -128,11 +128,12 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                     </span>
                 </div>
                 <label className="flex items-center gap-2 cursor-pointer select-none">
-                    <span className="text-[10px] text-[#71717a]">Use project</span>
+                    <span className="text-[10px] text-[#a1a1aa]">Use project</span>
                     <button
                         type="button"
                         role="switch"
                         aria-checked={useProject}
+                        aria-label="Use project background"
                         onClick={() => handleToggleUseProject(!useProject)}
                         className={`relative w-8 h-4.5 rounded-full transition-colors cursor-pointer ${useProject ? 'bg-[#0088ff]' : 'bg-[#3f3f46]'
                             }`}
@@ -149,7 +150,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
 
             {/* Type: Color | Image | Shader */}
             <div className="space-y-1.5">
-                <span className="text-[10px] text-[#71717a]">Type</span>
+                <span className="text-[10px] text-[#a1a1aa]">Type</span>
                 <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
                     {(['color', 'image', 'shader'] as BgUiKind[]).map((k) => (
                         <button
@@ -158,7 +159,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             onClick={() => handleSetKind(k)}
                             className={`flex-1 px-2 py-1 rounded-md text-[10px] font-medium capitalize transition cursor-pointer ${uiKind === k
                                 ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                : 'text-[#71717a] hover:text-white'
+                                : 'text-[#a1a1aa] hover:text-white'
                                 }`}
                         >
                             {k === 'color' ? 'Color' : k === 'image' ? 'Image' : 'Shader'}
@@ -177,7 +178,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                         showGradientMode={false}
                     />
                     <div className="flex items-center h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] gap-1.5">
-                        <span className="text-[10px] text-[#71717a] font-medium">HEX</span>
+                        <span className="text-[10px] text-[#a1a1aa] font-medium">HEX</span>
                         <input
                             type="text"
                             aria-label="Background color HEX"
@@ -239,8 +240,8 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                             onClick={() => fileInputRef.current?.click()}
                             className="w-full h-20 rounded-lg border border-dashed border-white/15 bg-[#1c1c1f] hover:border-[#0088ff]/50 hover:bg-[#1c1c1f]/80 flex flex-col items-center justify-center gap-1.5 cursor-pointer transition"
                         >
-                            <ImageIcon className="w-5 h-5 text-[#71717a]" />
-                            <span className="text-[10px] text-[#71717a]">Upload background image</span>
+                            <ImageIcon className="w-5 h-5 text-[#a1a1aa]" />
+                            <span className="text-[10px] text-[#a1a1aa]">Upload background image</span>
                         </button>
                     )}
                 </div>
@@ -252,7 +253,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                     <div className="grid grid-cols-2 gap-2">
                         <div className="flex items-center gap-1.5">
                             <ColorField
-
+                                aria-label="Gradient start color"
                                 value={effectiveBg.stops[0]?.color || '#0a0a0c'}
                                 onChange={(e) => {
                                     const col = e.target.value;
@@ -262,11 +263,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 }}
                                 className="w-6 h-6 rounded border border-white/10 bg-transparent cursor-pointer"
                             />
-                            <span className="text-[10px] text-[#71717a]">Start</span>
+                            <span className="text-[10px] text-[#a1a1aa]">Start</span>
                         </div>
                         <div className="flex items-center gap-1.5">
                             <ColorField
-
+                                aria-label="Gradient end color"
                                 value={effectiveBg.stops[1]?.color || '#000000'}
                                 onChange={(e) => {
                                     const col = e.target.value;
@@ -276,11 +277,11 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                                 }}
                                 className="w-6 h-6 rounded border border-white/10 bg-transparent cursor-pointer"
                             />
-                            <span className="text-[10px] text-[#71717a]">End</span>
+                            <span className="text-[10px] text-[#a1a1aa]">End</span>
                         </div>
                     </div>
                     <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[10px] text-[#71717a]">
+                        <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
                             <span>Angle</span>
                             <span className="font-mono text-white/80">{effectiveBg.angle}°</span>
                         </div>

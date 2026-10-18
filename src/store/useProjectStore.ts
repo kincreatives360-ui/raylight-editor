@@ -679,7 +679,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             return {
                 project: previous,
                 past: state.past.slice(0, -1),
-                future: [state.project, ...state.future],
+                future: [state.project, ...state.future].slice(0, MAX_HISTORY_STEPS),
                 dragSnapshot: null,
                 validation: validateProject(previous),
             };
@@ -691,7 +691,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             const next = state.future[0];
             return {
                 project: next,
-                past: [...state.past, state.project],
+                past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
                 future: state.future.slice(1),
                 dragSnapshot: null,
                 validation: validateProject(next),
@@ -708,11 +708,33 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         }),
 
     loadProjectJson: (rawJson) => {
-        const result = validateProject(rawJson);
+        let result = validateProject(rawJson);
+        // Defensive repair fallback: if validation fails on partial project data
+        if (!result.success && rawJson && typeof rawJson === 'object') {
+            try {
+                const partial = rawJson as Partial<Project>;
+                const repaired = {
+                    ...DEFAULT_PROJECT,
+                    ...partial,
+                    shots: Array.isArray(partial.shots) && partial.shots.length > 0
+                        ? partial.shots
+                        : DEFAULT_PROJECT.shots,
+                    assets: { ...DEFAULT_PROJECT.assets, ...(partial.assets || {}) },
+                    audio: partial.audio || DEFAULT_PROJECT.audio,
+                };
+                const repairResult = validateProject(repaired);
+                if (repairResult.success) {
+                    result = repairResult;
+                }
+            } catch {
+                // Keep original validation error
+            }
+        }
+
         if (result.success) {
             set((state) => ({
                 project: result.data,
-                past: [...state.past, state.project],
+                past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
                 future: [],
                 validation: result,
             }));

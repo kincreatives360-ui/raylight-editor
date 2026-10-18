@@ -165,28 +165,34 @@ export function syncAudioPlayback(
       const clipOffsetSec = (clip.offsetMs + (currentTimeMs - clipStart)) / 1000;
       const remainingDurationSec = (clipEnd - currentTimeMs) / 1000;
 
-      if (clip.dataUrl && audioBufferCache.has(clip.dataUrl)) {
-        // Play decoded user audio
-        const buffer = audioBufferCache.get(clip.dataUrl)!;
-        if (clipOffsetSec < buffer.duration) {
-          const source = ctx.createBufferSource();
-          source.buffer = buffer;
-          const gain = ctx.createGain();
-          gain.gain.value = clip.volume;
-          source.connect(gain);
-          gain.connect(masterGainNode);
+      if (clip.dataUrl) {
+        if (!audioBufferCache.has(clip.dataUrl)) {
+          // Preload into cache so it will be ready to play on upcoming playback ticks
+          void decodeAudioFromDataUrl(clip.dataUrl);
+        } else {
+          // Play decoded user audio
+          const buffer = audioBufferCache.get(clip.dataUrl)!;
+          if (clipOffsetSec < buffer.duration) {
+            const source = ctx.createBufferSource();
+            source.buffer = buffer;
+            const gain = ctx.createGain();
+            gain.gain.value = clip.volume;
+            source.connect(gain);
+            gain.connect(masterGainNode);
 
-          source.start(ctx.currentTime, clipOffsetSec, remainingDurationSec);
-          activeSources.push({
-            stop: () => {
-              try {
-                source.stop();
-                source.disconnect();
-              } catch {
-                // Source might already be stopped or disconnected
-              }
-            },
-          });
+            source.start(ctx.currentTime, clipOffsetSec, remainingDurationSec);
+            activeSources.push({
+              stop: () => {
+                try {
+                  source.stop();
+                  source.disconnect();
+                  gain.disconnect();
+                } catch {
+                  // Source might already be stopped or disconnected
+                }
+              },
+            });
+          }
         }
       }
     }

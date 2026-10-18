@@ -348,6 +348,15 @@ export const LightAnimationBlockSchema = z.object({
   toZ: z.number().optional(),
   fromIntensity: z.number(),
   toIntensity: z.number(),
+  fromColor: z.string().optional(),
+  toColor: z.string().optional(),
+  fromTemperature: z.number().min(1000).max(15000).optional(),
+  toTemperature: z.number().min(1000).max(15000).optional(),
+  fromAngle: z.number().optional(),
+  toAngle: z.number().optional(),
+  fromPenumbra: z.number().min(0).max(1).optional(),
+  toPenumbra: z.number().min(0).max(1).optional(),
+  holdBefore: z.boolean().optional(),
   easing: EasingSchema,
 });
 
@@ -408,6 +417,10 @@ export const ShotSchema = z.object({
     ambience: z.number().min(0).max(1),
     ambientColor: z.string().optional(),
     keyLightEnabled: z.boolean().optional(),
+    keyIntensity: z.number().min(0).optional(),
+    fillEnabled: z.boolean().optional(),
+    fillIntensity: z.number().min(0).max(1).optional(),
+    toneMapping: z.enum(['none', 'neutral']).optional(),
     castShadow: z.boolean().optional(),
     showGizmos: z.boolean().optional(),
     sources: z.array(z.object({

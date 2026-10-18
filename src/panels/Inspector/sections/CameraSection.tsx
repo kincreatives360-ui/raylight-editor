@@ -87,7 +87,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
       {/* List Existing Camera Moves */}
       {activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0 ? (
         <div className="space-y-1.5 pt-1">
-          <span className="text-[10px] text-[#71717a] block">
+          <span className="text-[10px] text-[#a1a1aa] block">
             Camera Motion Blocks
           </span>
           {activeShot.cameraBlocks.map((cb, idx) => (
@@ -106,7 +106,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
                   <div className="text-[11px] font-medium text-white truncate">
                     {cb.label || `Move #${idx + 1}`}
                   </div>
-                  <div className="text-[9px] text-[#71717a]">
+                  <div className="text-[9px] text-[#a1a1aa]">
                     {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
                   </div>
                 </div>
@@ -125,8 +125,9 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
                     selectCameraBlock(null);
                   }
                 }}
-                className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer shrink-0"
+                className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer shrink-0"
                 title="Delete Move"
+                aria-label={`Delete ${cb.label || `Move #${idx + 1}`}`}
               >
                 <X className="w-3 h-3" />
               </button>
@@ -134,7 +135,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
           ))}
         </div>
       ) : (
-        <p className="text-[10px] text-[#71717a] leading-relaxed">
+        <p className="text-[10px] text-[#a1a1aa] leading-relaxed">
           Add a Camera Move to enable 3D Dolly, Zoom, Pan, Orbit, and Handheld moves on this shot.
         </p>
       )}
@@ -146,7 +147,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
             <span className="text-[10px] font-semibold text-[#0088ff]">
               Active Move Settings
             </span>
-            <span className="text-[9px] text-[#71717a] capitalize">
+            <span className="text-[9px] text-[#a1a1aa] capitalize">
               {selectedBlock.mode}
             </span>
           </div>

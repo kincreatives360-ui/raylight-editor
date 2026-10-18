@@ -21,12 +21,16 @@ import {
     Sun,
     Volume2,
     VolumeX,
+    PanelLeftClose,
+    Play,
+    Upload,
 } from 'lucide-react';
-import type { Shot, Layer, Group } from '../../model/types';
+import type { Shot, Layer, Group, AudioClip } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
+import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 
 interface LeftPanelProps {
     activeShot: Shot;
@@ -35,7 +39,7 @@ interface LeftPanelProps {
     onSelectAudioClick: () => void;
 }
 
-export const LeftPanel: React.FC<LeftPanelProps> = ({
+export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     activeShot,
     onUploadClick,
     audioLabel,
@@ -75,11 +79,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
         setTimelineView,
         setTimelineScrollTop,
         toggleTimelineLayerExpanded,
+        toggleLeftPanel,
+        leftPanelWidth,
     } = useSelectionStore();
 
-    const { setCurrentTimeMs } = usePlayheadStore();
+    const { currentTimeMs, setCurrentTimeMs } = usePlayheadStore();
 
-    const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
+    const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio'>('file');
+    const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
+    const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedShots, setCollapsedShots] = useState<Record<string, boolean>>(
@@ -302,8 +310,28 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     e.stopPropagation();
                     startRename(layer.id, layer.name);
                 }}
+                role="treeitem"
+                tabIndex={isSelected ? 0 : -1}
+                aria-selected={isSelected}
+                aria-label={`${layer.name}, ${layer.kind} layer`}
+                onKeyDown={(e) => {
+                    if (isEditing) return;
+                    if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        setInspectorTab('layer');
+                        if (shot.id !== activeShot.id) {
+                            selectShot(shot.id, layer.id);
+                            setCurrentTimeMs(shot.startMs + 100);
+                        } else {
+                            selectLayer(layer.id, false);
+                        }
+                    } else if (e.key === 'F2') {
+                        e.preventDefault();
+                        startRename(layer.id, layer.name);
+                    }
+                }}
                 style={{ paddingLeft: `${12 + indentLevel * 14}px` }}
-                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isDragTarget ? 'border-t border-[#0088ff]' : ''
+                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isDragTarget ? 'border-t border-[#0088ff]' : ''
                     } ${isSelected || isInsideSelectedContainer
                         ? 'bg-[#09355c] text-white font-medium'
                         : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
@@ -338,6 +366,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 hidden: !l.hidden,
                             }));
                         }}
+                        aria-label={layer.hidden ? `Show ${layer.name}` : `Hide ${layer.name}`}
+                        title={layer.hidden ? "Show layer" : "Hide layer"}
                         className="p-1 rounded hover:bg-white/10 text-gray-300 cursor-pointer"
                     >
                         {layer.hidden ? (
@@ -351,6 +381,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             e.stopPropagation();
                             deleteLayerFromShot(shot.id, layer.id);
                         }}
+                        aria-label={`Delete ${layer.name}`}
+                        title="Delete layer"
                         className="p-1 rounded hover:bg-rose-500/20 text-gray-300 hover:text-rose-400 cursor-pointer"
                     >
                         <Trash2 className="w-3 h-3" />
@@ -382,6 +414,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                 }
             >
                 <div
+                    role="treeitem"
+                    tabIndex={isGroupSelected ? 0 : -1}
+                    aria-selected={isGroupSelected}
+                    aria-expanded={!group.collapsed}
+                    aria-label={`${group.name} group`}
                     style={{ paddingLeft: `${8 + indentLevel * 12}px` }}
                     onClick={(e) => {
                         e.stopPropagation();
@@ -393,13 +430,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                         e.stopPropagation();
                         startRename(group.id, group.name);
                     }}
-                    className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isGroupSelected
+                    className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isGroupSelected
                         ? 'bg-[#0088ff] text-white font-semibold'
                         : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                         }`}
                 >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
                         <button
+                            type="button"
+                            aria-label={group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 updateGroupInShot(shot.id, group.id, (g) => ({
@@ -461,7 +500,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
     const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
 
     return (
-        <aside className="w-56 border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full">
+        <aside
+            style={{ width: `${leftPanelWidth}px` }}
+            className="border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
+        >
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
                 <button
@@ -474,16 +516,32 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                         R
                     </span>
                     <span>Canvas</span>
-                    <ChevronDown className="w-3 h-3 text-[#71717a]" />
+                    <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
                 </button>
 
-                <button
-                    onClick={() => setAddMenuOpen((v) => !v)}
-                    className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#242429] border border-white/[0.07] flex items-center justify-center text-[#d4d4d8] hover:text-white cursor-pointer transition"
-                    title="Add Blank Shot, Layer, or Camera"
-                >
-                    <Plus className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => setAddMenuOpen((v) => !v)}
+                        aria-label="Add blank shot, layer, or camera"
+                        aria-expanded={addMenuOpen}
+                        aria-haspopup="menu"
+                        className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#242429] border border-white/[0.07] flex items-center justify-center text-[#d4d4d8] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        title="Add Blank Shot, Layer, or Camera"
+                    >
+                        <Plus className="w-3.5 h-3.5" />
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={toggleLeftPanel}
+                        aria-label="Collapse Left Panel ( [ )"
+                        className="w-7 h-7 rounded-full hover:bg-[#18181b] border border-transparent hover:border-white/[0.07] flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        title="Collapse Left Panel ( [ )"
+                    >
+                        <PanelLeftClose className="w-3.5 h-3.5" />
+                    </button>
+                </div>
 
                 {addMenuOpen && (
                     <div className="absolute top-11 right-3 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
@@ -580,34 +638,52 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             </div>
 
             {/* 2. SUB-HEADER: [File] | Assets + Search Icon */}
-            <div className="h-9 border-y border-white/[0.07] px-3 flex items-center justify-between shrink-0">
+            <div className="h-9 border-y border-white/[0.07] px-3 flex items-center justify-between shrink-0" role="tablist" aria-label="Left panel views">
                 <div className="flex items-center gap-1">
                     <button
+                        role="tab"
+                        aria-selected={activeTab === 'file'}
                         onClick={() => setActiveTab('file')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'file'
                             ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
                         File
                     </button>
                     <button
+                        role="tab"
+                        aria-selected={activeTab === 'assets'}
                         onClick={() => setActiveTab('assets')}
                         className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'assets'
                             ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#71717a] hover:text-[#d4d4d8]'
+                            : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
                         Assets
                     </button>
+                    <button
+                        role="tab"
+                        aria-selected={activeTab === 'audio'}
+                        onClick={() => setActiveTab('audio')}
+                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'audio'
+                            ? 'bg-[#1f1f23] text-white'
+                            : 'text-[#a1a1aa] hover:text-white'
+                            }`}
+                    >
+                        <Music className="w-3 h-3 text-[#38bdf8]" />
+                        <span>SFX</span>
+                    </button>
                 </div>
 
                 <button
+                    type="button"
+                    aria-label="Search layers"
                     onClick={() => {
                         setSearchOpen((v) => !v);
                         if (searchOpen) setSearchQuery('');
                     }}
-                    className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-[#0088ff]' : 'text-[#71717a] hover:text-white'
+                    className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-[#0088ff]' : 'text-[#a1a1aa] hover:text-white'
                         }`}
                 >
                     <Search className="w-3.5 h-3.5" />
@@ -616,19 +692,22 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
             {searchOpen && (
                 <div className="px-3 py-1.5 border-b border-white/[0.07] bg-[#111114] flex items-center gap-1.5">
-                    <Search className="w-3 h-3 text-[#71717a]" />
+                    <Search className="w-3 h-3 text-[#a1a1aa]" />
                     <input
                         autoFocus
                         type="text"
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         placeholder="Find layer..."
-                        className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-[#52525b]"
+                        aria-label="Filter layers by name"
+                        className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-[#a1a1aa]"
                     />
                     {searchQuery && (
                         <button
+                            type="button"
+                            aria-label="Clear search"
                             onClick={() => setSearchQuery('')}
-                            className="text-[#71717a] hover:text-white cursor-pointer"
+                            className="text-[#a1a1aa] hover:text-white cursor-pointer"
                         >
                             <X className="w-3 h-3" />
                         </button>
@@ -641,7 +720,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
             {/* =================================================================== */}
             {activeTab === 'file' && (
                 <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                    <div className="flex-1 overflow-y-auto p-2 space-y-1" role="tree" aria-label="Project layer hierarchy">
                         {isBlankState && <div className="px-4 pt-11 text-[11px] text-[#a1a1aa]">No layers.</div>}
                         {project.shots.filter(() => !isBlankState).map((shot) => {
                             const isShotActive = shot.id === activeShot.id;
@@ -727,6 +806,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
 
                                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
                                             <button
+                                                type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     const copy = duplicateShot(shot.id);
@@ -736,6 +816,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                                         setCurrentTimeMs(copy.startMs + 100);
                                                     }
                                                 }}
+                                                aria-label={`Duplicate shot ${shot.name}`}
                                                 title="Duplicate Shot"
                                                 className="p-1 rounded hover:bg-black/20 cursor-pointer"
                                             >
@@ -743,10 +824,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                             </button>
                                             {project.shots.length > 1 && (
                                                 <button
+                                                    type="button"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         deleteShot(shot.id);
                                                     }}
+                                                    aria-label={`Delete shot ${shot.name}`}
                                                     title="Delete Shot"
                                                     className="p-1 rounded hover:bg-rose-500/40 cursor-pointer"
                                                 >
@@ -800,7 +883,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                             className="border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0"
                         >
                             {/* Header Spacer matching Timeline Transport (h-8) + Ruler (h-6) = 56px (h-14) */}
-                            <div className="h-14 border-b border-white/[0.06] px-3 flex items-center text-[10px] font-mono text-[#71717a] shrink-0">
+                            <div className="h-14 border-b border-white/[0.06] px-3 flex items-center text-[10px] font-mono text-[#a1a1aa] shrink-0">
                                 <span className="truncate">{activeShot.name} TRACKS</span>
                             </div>
 
@@ -810,7 +893,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                 onScroll={(e) =>
                                     setTimelineScrollTop(e.currentTarget.scrollTop)
                                 }
-                                className="flex-1 overflow-y-auto px-1.5 py-1 flex flex-col gap-0.5"
+                                className="flex-1 overflow-y-auto px-1.5 py-2 flex flex-col gap-0.5"
                             >
                                 {/* 0. Media Track Row (Matching Timeline Media row when audio/video clips exist!) */}
                                 {(project.audio?.clips?.length || 0) > 0 && (
@@ -869,7 +952,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                         ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
                                         : hasCameraBlocks
                                             ? 'text-emerald-400 hover:bg-white/[0.04]'
-                                            : 'text-[#71717a] hover:text-emerald-300 hover:bg-white/[0.04]'
+                                            : 'text-[#a1a1aa] hover:text-emerald-300 hover:bg-white/[0.04]'
                                         }`}
                                 >
                                     <Video className="w-3.5 h-3.5 shrink-0" />
@@ -1047,7 +1130,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                                     <div className="text-[11px] font-medium text-white truncate">
                                         {asset.name}
                                     </div>
-                                    <div className="text-[10px] font-mono text-[#71717a]">
+                                    <div className="text-[10px] font-mono text-[#a1a1aa]">
                                         {asset.width}&times;{asset.height}
                                     </div>
                                 </div>
@@ -1056,6 +1139,128 @@ export const LeftPanel: React.FC<LeftPanelProps> = ({
                     </div>
                 </div>
             )}
+
+            {/* AUDIO & SFX TAB */}
+            {activeTab === 'audio' && (
+                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
+                    <button
+                        type="button"
+                        onClick={onSelectAudioClick}
+                        className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-lg shadow-[#0088ff]/20"
+                    >
+                        <Upload className="w-3.5 h-3.5" />
+                        <span>Upload Audio Track</span>
+                    </button>
+
+                    {audioLabel && (
+                        <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 min-w-0">
+                                <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
+                            </div>
+                            <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
+                        </div>
+                    )}
+
+                    {/* Category Filter Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar">
+                        {['All', 'Transition', 'UI & Tactile', 'Impact & FX', 'Notification'].map((cat) => (
+                            <button
+                                key={cat}
+                                type="button"
+                                onClick={() => setSelectedSfxCategory(cat)}
+                                className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedSfxCategory === cat
+                                    ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
+                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                    }`}
+                            >
+                                {cat}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* SFX List */}
+                    <div className="flex-1 overflow-y-auto space-y-2">
+                        {BUILTIN_SOUND_PACKS.filter(
+                            (s) => selectedSfxCategory === 'All' || s.category === selectedSfxCategory
+                        ).map((sound) => {
+                            const isPlaying = playingSfxId === sound.id;
+                            return (
+                                <div
+                                    key={sound.id}
+                                    className="p-2.5 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                >
+                                    <div className="min-w-0 flex-1">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="text-xs font-semibold text-white truncate">
+                                                {sound.name}
+                                            </span>
+                                            <span className="text-[9px] px-1.5 py-0.2 rounded bg-white/10 text-[#a1a1aa] font-mono">
+                                                {sound.durationMs}ms
+                                            </span>
+                                        </div>
+                                        <p className="text-[10px] text-[#a1a1aa] line-clamp-1 mt-0.5">
+                                            {sound.description}
+                                        </p>
+                                    </div>
+
+                                    <div className="flex items-center gap-1 shrink-0">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const url = sound.generateWavDataUrl();
+                                                const audio = new Audio(url);
+                                                setPlayingSfxId(sound.id);
+                                                audio.onended = () => setPlayingSfxId(null);
+                                                audio.onerror = () => setPlayingSfxId(null);
+                                                audio.play().catch(() => setPlayingSfxId(null));
+                                            }}
+                                            title="Preview Sound"
+                                            aria-label={`Preview ${sound.name}`}
+                                            className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
+                                                ? 'bg-[#0088ff] text-white border-[#38bdf8]'
+                                                : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
+                                                }`}
+                                        >
+                                            <Play className={`w-3.5 h-3.5 ${isPlaying ? 'fill-current' : ''}`} />
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const dataUrl = sound.generateWavDataUrl();
+                                                const clip: AudioClip = {
+                                                    id: `sfx-${sound.id}-${Date.now()}`,
+                                                    name: sound.name,
+                                                    dataUrl,
+                                                    startMs: currentTimeMs,
+                                                    durationMs: sound.durationMs,
+                                                    offsetMs: 0,
+                                                    volume: 1,
+                                                    muted: false,
+                                                };
+                                                updateProject((p) => ({
+                                                    ...p,
+                                                    audio: {
+                                                        clips: [...(p.audio?.clips || []), clip],
+                                                        muted: p.audio?.muted || false,
+                                                        masterVolume: p.audio?.masterVolume ?? 1,
+                                                    },
+                                                }));
+                                            }}
+                                            title="Add to Timeline at Playhead"
+                                            aria-label={`Add ${sound.name} to Timeline at playhead`}
+                                            className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                        </button>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
         </aside>
     );
-};
+});

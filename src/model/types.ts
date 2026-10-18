@@ -300,6 +300,15 @@ export interface LightAnimationBlock {
   toZ?: number;
   fromIntensity: number;
   toIntensity: number;
+  fromColor?: string;
+  toColor?: string;
+  fromTemperature?: number;
+  toTemperature?: number;
+  fromAngle?: number;
+  toAngle?: number;
+  fromPenumbra?: number;
+  toPenumbra?: number;
+  holdBefore?: boolean;
   easing: Easing;
 }
 
@@ -355,6 +364,14 @@ export interface LightRig {
   ambientColor?: string;
   /** Toggle key light on/off */
   keyLightEnabled?: boolean;
+  /** Key light only; intensity remains a master gain for additional sources. */
+  keyIntensity?: number;
+  /** Toggle fill light on/off */
+  fillEnabled?: boolean;
+  /** Fill light intensity level (0 - 1) */
+  fillIntensity?: number;
+  /** Tone mapping rolloff mode */
+  toneMapping?: 'none' | 'neutral';
   /** Whether the directional key light casts shadows */
   castShadow?: boolean;
   /** Show 3D light helper gizmos on stage */

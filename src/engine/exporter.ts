@@ -7,6 +7,7 @@ import {
     syncAndSeekAllProjectVideos,
 } from './canvasRenderer';
 import { getExportDimensions } from './exportMetrics';
+import { decodeAudioFromDataUrl } from './audioEngine';
 
 export type ExportFormat = 'mp4' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
@@ -386,6 +387,30 @@ export async function runVideoExportPipeline(
     }
 
     const stream = canvas.captureStream(fps);
+
+    // CRITICAL FIX: Mix down project audio tracks and attach to the recording stream
+    let audioContext: AudioContext | null = null;
+    let audioDest: MediaStreamAudioDestinationNode | null = null;
+    const activeAudioClips = (project.audio?.clips || []).filter(
+        (clip) => !clip.muted && (clip.volume ?? 1) > 0 && clip.dataUrl
+    );
+
+    if (activeAudioClips.length > 0 && typeof AudioContext !== 'undefined') {
+        try {
+            const AudioContextClass =
+                window.AudioContext ||
+                (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+            audioContext = new AudioContextClass();
+            audioDest = audioContext.createMediaStreamDestination();
+            const audioTrack = audioDest.stream.getAudioTracks()[0];
+            if (audioTrack) {
+                stream.addTrack(audioTrack);
+            }
+        } catch (e) {
+            console.warn('[Exporter] Audio track integration skipped:', e);
+        }
+    }
+
     let recorder: MediaRecorder | null = null;
     try {
         recorder = new MediaRecorder(stream, {
@@ -451,6 +476,34 @@ export async function runVideoExportPipeline(
 
         recorder.start();
 
+        // Schedule all synchronized audio voices into the audio destination
+        if (audioContext && audioDest) {
+            if (audioContext.state === 'suspended') {
+                await audioContext.resume();
+            }
+            for (const clip of activeAudioClips) {
+                if (!clip.dataUrl) continue;
+                const buffer = await decodeAudioFromDataUrl(clip.dataUrl);
+                if (!buffer || !audioContext || !audioDest) continue;
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                const gain = audioContext.createGain();
+                const clipVol = (clip.volume ?? 1) * (project.audio?.masterVolume ?? 1);
+                gain.gain.setValueAtTime(clipVol, audioContext.currentTime);
+                source.connect(gain);
+                gain.connect(audioDest);
+
+                const clipRelStart = clip.startMs - startMs;
+                const scheduledStart = audioContext.currentTime + Math.max(0, clipRelStart / 1000);
+                const bufferOffset = Math.max(0, (clip.offsetMs || 0) + Math.max(0, -clipRelStart)) / 1000;
+                const playDuration = Math.max(0.05, clip.durationMs - Math.max(0, -clipRelStart)) / 1000;
+
+                if (playDuration > 0 && bufferOffset < buffer.duration) {
+                    source.start(scheduledStart, bufferOffset, playDuration);
+                }
+            }
+        }
+
         const frameDelayMs = Math.max(8, Math.round(1000 / fps));
 
         for (let f = 0; f <= totalFrames; f++) {
@@ -468,11 +521,18 @@ export async function runVideoExportPipeline(
             await syncAndSeekAllProjectVideos(project, t);
             await new Promise((r) => requestAnimationFrame(r));
 
+            const evaluated = evaluateProjectAtTime(project, t);
             const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
-            if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+            const isNativeResolution =
+                webglCanvas &&
+                webglCanvas.width >= width * 0.75 &&
+                webglCanvas.height >= height * 0.75;
+
+            if (isNativeResolution) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(webglCanvas, 0, 0, width, height);
             } else {
-                const evaluated = evaluateProjectAtTime(project, t);
                 renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
             }
 
@@ -512,6 +572,9 @@ export async function runVideoExportPipeline(
             statusText: 'Video Export Complete!',
         });
     } finally {
+        if (audioContext) {
+            audioContext.close().catch(() => {});
+        }
         if (recorder && recorder.state !== 'inactive') {
             try {
                 recorder.stop();

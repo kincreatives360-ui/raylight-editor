@@ -3,7 +3,14 @@ import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import { kelvinToRgb } from '../stageUtils';
-import type { Shot, SceneLight } from '../../model/types';
+import type { Shot, SceneLight, LightRig } from '../../model/types';
+import {
+    KEY_LIGHT_MIN_Z,
+    resolveKeyIntensity,
+    resolveSourceIntensity,
+    resolveFill,
+    planShadowCasters,
+} from '../../engine/lightMath';
 
 interface SceneLightingProps {
     light?: Shot['light'];
@@ -176,19 +183,31 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
         return new THREE.Color(r / 255, g / 255, b / 255);
     }, [temp]);
 
+    const rig: LightRig = useMemo(() => {
+        return light ?? {
+            position: { x: posX, y: posY, z: posZ },
+            intensity: 1.2,
+            temperature: temp ?? 6100,
+            ambience: 0.45,
+        };
+    }, [light, posX, posY, posZ, temp]);
+
     const lightPos: [number, number, number] = useMemo(() => {
-        return [posX * 6, posY * 6, Math.max(2.5, posZ * 5)];
+        return [posX * 6, posY * 6, Math.max(KEY_LIGHT_MIN_Z, posZ * 5)];
     }, [posX, posY, posZ]);
 
-    const intensity = light?.intensity ?? 1.2;
-    const ambience = light?.ambience ?? 0.45;
-    const ambientColor = light?.ambientColor || '#f8fafc';
-    const keyEnabled = light?.keyLightEnabled !== false;
-    const keyShadow = light?.castShadow !== false;
-    const showGizmos = light?.showGizmos ?? false;
+    const keyIntensity = resolveKeyIntensity(rig);
+    const fillState = resolveFill(rig);
+    const shadowPlan = planShadowCasters(rig);
+
+    const ambience = rig.ambience ?? 0.45;
+    const ambientColor = rig.ambientColor || '#f8fafc';
+    const keyEnabled = rig.keyLightEnabled !== false;
+    const keyShadow = rig.castShadow !== false && shadowPlan.key;
+    const showGizmos = rig.showGizmos ?? false;
 
     // Cap at maximum 8 active lights for peak real-time shader performance
-    const sources = (light?.sources?.filter((source) => source.enabled) || []).slice(0, 8);
+    const sources = (rig.sources?.filter((source) => source.enabled) || []).slice(0, 8);
 
     return (
         <group name="raylight_scene_lighting">
@@ -197,29 +216,30 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
 
             {/* 2. DIRECTIONAL KEY LIGHT (Sun): produces main shading gradient, specular streak, cast shadows */}
             {keyEnabled && (
-                <>
-                    <directionalLight
-                        position={lightPos}
-                        intensity={intensity * 2.2}
-                        color={lightColor}
-                        castShadow={keyShadow}
-                        shadow-mapSize-width={2048}
-                        shadow-mapSize-height={2048}
-                        shadow-camera-near={0.1}
-                        shadow-camera-far={40}
-                        shadow-camera-left={-4}
-                        shadow-camera-right={4}
-                        shadow-camera-top={4}
-                        shadow-camera-bottom={-4}
-                        shadow-bias={-0.0002}
-                    />
-                    {/* Secondary soft bounce fill opposite key light */}
-                    <directionalLight
-                        position={[-lightPos[0] * 0.7, -lightPos[1] * 0.5, lightPos[2] * 0.5]}
-                        intensity={intensity * 0.38}
-                        color="#e0e7ff"
-                    />
-                </>
+                <directionalLight
+                    position={lightPos}
+                    intensity={keyIntensity * 2.2}
+                    color={lightColor}
+                    castShadow={keyShadow}
+                    shadow-mapSize-width={2048}
+                    shadow-mapSize-height={2048}
+                    shadow-camera-near={0.1}
+                    shadow-camera-far={40}
+                    shadow-camera-left={-4}
+                    shadow-camera-right={4}
+                    shadow-camera-top={4}
+                    shadow-camera-bottom={-4}
+                    shadow-bias={-0.0002}
+                />
+            )}
+
+            {/* 2b. Secondary soft bounce fill opposite key light (independent fill control) */}
+            {fillState.enabled && (
+                <directionalLight
+                    position={[-lightPos[0] * 0.7, -lightPos[1] * 0.5, lightPos[2] * 0.5]}
+                    intensity={keyIntensity * fillState.intensity}
+                    color="#e0e7ff"
+                />
             )}
 
             {/* Gizmo for Key Light if gizmos enabled */}
@@ -248,8 +268,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                     })()
                     : lightColor;
                 const color = baseColor.clone().multiply(srcTempColor);
-                const sourceIntensity = source.intensity * intensity * 2.0;
-                const castShadow = source.castShadow !== false;
+                const sourceIntensity = resolveSourceIntensity(rig, source);
+                const castShadow = shadowPlan.sourceIds.has(source.id);
 
                 if (source.type === 'ambient') {
                     return <ambientLight key={source.id} intensity={sourceIntensity * 0.5} color={color} />;

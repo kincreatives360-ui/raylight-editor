@@ -56,6 +56,32 @@ const ViewportRenderBridge: React.FC<{
     return null;
 };
 
+const WebGLContextGuard: React.FC = () => {
+    const { gl, invalidate } = useThree();
+
+    useEffect(() => {
+        const canvas = gl.domElement;
+        const handleContextLost = (e: Event) => {
+            e.preventDefault();
+            console.warn('[Raylight Stage] WebGL context lost. Retaining scene state...');
+        };
+        const handleContextRestored = () => {
+            console.info('[Raylight Stage] WebGL context restored. Re-rendering stage...');
+            invalidate();
+        };
+
+        canvas.addEventListener('webglcontextlost', handleContextLost, false);
+        canvas.addEventListener('webglcontextrestored', handleContextRestored, false);
+
+        return () => {
+            canvas.removeEventListener('webglcontextlost', handleContextLost);
+            canvas.removeEventListener('webglcontextrestored', handleContextRestored);
+        };
+    }, [gl, invalidate]);
+
+    return null;
+};
+
 export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     project,
     frame,
@@ -90,6 +116,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
                 />
+                <WebGLContextGuard />
 
                 {/* Studio PBR Reflection Environment Map */}
                 <StudioEnvironment />

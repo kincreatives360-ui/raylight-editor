@@ -20,6 +20,7 @@ import type {
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
 import { kelvinToRgb } from '../stage/stageUtils';
+import { resolveKeyIntensity } from './lightMath';
 
 const imageElementCache = new Map<string, HTMLImageElement>();
 const videoElementCache = new Map<string, HTMLVideoElement>();
@@ -661,7 +662,7 @@ function drawLayerOnCanvas(
         glossGrad.addColorStop(Math.max(0, mid - 0.2), 'rgba(255,255,255,0)');
         glossGrad.addColorStop(
           mid,
-          kelvinToRgb(light.temperature, 0.22 * glossAmount * light.intensity).css
+          kelvinToRgb(light.temperature, 0.22 * glossAmount * resolveKeyIntensity(light)).css
         );
         glossGrad.addColorStop(Math.min(1, mid + 0.2), 'rgba(255,255,255,0)');
         ctx.fillStyle = glossGrad;
@@ -829,7 +830,7 @@ function renderSceneLightSources(
 
   // 2. Key Directional Light Wash (if enabled)
   if (light.keyLightEnabled !== false) {
-    const keyInt = (light.intensity ?? 1.2) * 0.14;
+    const keyInt = resolveKeyIntensity(light) * 0.14;
     const dirX = light.position?.x ?? -0.28;
     const dirY = light.position?.y ?? 0.36;
     const grad = ctx.createLinearGradient(

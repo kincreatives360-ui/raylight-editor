@@ -15,7 +15,6 @@ import {
     Unlock,
     Crosshair,
     ChevronDown,
-    ChevronUp,
     Plus,
     X,
     Eye,
@@ -29,10 +28,9 @@ import {
     Image as ImageIcon,
     Square,
     Film,
-    Type,
-    Shapes,
     Trash2,
     Laptop,
+    PanelRightClose,
 } from 'lucide-react';
 import type {
     Shot,
@@ -44,9 +42,7 @@ import type {
     Easing,
     AspectRatio,
     CameraBlock,
-    CameraKeyframeEndpoint,
     BlendMode,
-    ShapeLayer,
     Vec3,
     PresetEasingName,
     SpringEasingName,
@@ -63,43 +59,10 @@ import { BackgroundSection } from './sections/BackgroundSection';
 import { SceneTransitionSection } from './sections/SceneTransitionSection';
 import { CameraSection } from './sections/CameraSection';
 import { LightingSection } from './sections/LightingSection';
+import { TypographySection } from './sections/TypographySection';
+import { ShapeSection } from './sections/ShapeSection';
+import { CameraBlockSection } from './sections/CameraBlockSection';
 import { readImageFileWithThumbnail } from '../../engine/figmaSvgImporter';
-import { POPULAR_FONT_NAMES as POPULAR_FONTS, loadGoogleFont } from '../../engine/fontLoader';
-
-const SHAPE_GRADIENT_PRESETS = [
-    {
-        name: 'Violet Glow',
-        angle: 135,
-        stops: [
-            { at: 0, color: '#818cf8' },
-            { at: 1, color: '#4f46e5' },
-        ],
-    },
-    {
-        name: 'Neon Mint',
-        angle: 135,
-        stops: [
-            { at: 0, color: '#34d399' },
-            { at: 1, color: '#059669' },
-        ],
-    },
-    {
-        name: 'Sunset Flare',
-        angle: 90,
-        stops: [
-            { at: 0, color: '#f43f5e' },
-            { at: 1, color: '#fb923c' },
-        ],
-    },
-    {
-        name: 'Cyan Frost',
-        angle: 135,
-        stops: [
-            { at: 0, color: '#38bdf8' },
-            { at: 1, color: '#1d4ed8' },
-        ],
-    },
-];
 
 const ALL_BLEND_MODES: BlendMode[] = [
     'normal',
@@ -119,7 +82,7 @@ interface RightSidebarProps {
     onOpenExportModal: () => void;
 }
 
-export const RightSidebar: React.FC<RightSidebarProps> = ({
+export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     activeShot,
     selectedLayer,
     selectedLayerIds,
@@ -141,6 +104,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         selectBlock,
         selectCameraBlock,
         clearLayerSelection,
+        toggleRightSidebar,
+        rightSidebarWidth,
     } = useSelectionStore();
     const { currentTimeMs } = usePlayheadStore();
 
@@ -150,8 +115,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
     const [swapMenuOpen, setSwapMenuOpen] = useState(false);
     const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
     const [shareToast, setShareToast] = useState(false);
-    const [fromCollapsed, setFromCollapsed] = useState(false);
-    const [toCollapsed, setToCollapsed] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
 
     const fontInputRef = useRef<HTMLInputElement>(null);
@@ -324,208 +287,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
         clearLayerSelection();
     };
 
-    const updateCameraBlock = (
-        camBlockId: string,
-        updater: (cb: CameraBlock) => CameraBlock
-    ) => {
-        updateShot(activeShot.id, (s) => ({
-            ...s,
-            cameraBlocks: s.cameraBlocks.map((cb) =>
-                cb.id === camBlockId ? updater(cb) : cb
-            ),
-        }));
-    };
 
-    const renderCameraEndpointSection = (
-        cb: CameraBlock,
-        which: 'from' | 'to',
-        collapsed: boolean,
-        onToggleCollapse: () => void
-    ) => {
-        const fallback: CameraKeyframeEndpoint =
-            which === 'from'
-                ? { anchorX: -0.84, anchorY: 0.55, zoom: 1, roll: 0, orbit: 0, tilt: 0 }
-                : {
-                    anchorX: -0.795,
-                    anchorY: 0.595,
-                    zoom: 1.1,
-                    roll: 0,
-                    orbit: 0,
-                    tilt: 0,
-                };
-
-        const ep: CameraKeyframeEndpoint = cb[which] || fallback;
-
-        const patchEndpoint = (patch: Partial<CameraKeyframeEndpoint>) => {
-            updateCameraBlock(cb.id, (curr) => ({
-                ...curr,
-                [which]: { ...(curr[which] || fallback), ...patch },
-            }));
-        };
-
-        return (
-            <div className="p-3.5 space-y-3">
-                <div
-                    onClick={onToggleCollapse}
-                    className="flex items-center justify-between cursor-pointer"
-                >
-                    <span className="text-[11px] font-medium text-[#e4e4e7] capitalize">
-                        {which}
-                    </span>
-                    {collapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#71717a]" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#71717a]" />
-                    )}
-                </div>
-
-                {!collapsed && (
-                    <div className="space-y-3">
-                        {/* Alignment 6-Icon Bar */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">
-                                Alignment
-                            </span>
-                            <div className="grid grid-cols-6 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
-                                <button
-                                    onClick={() => patchEndpoint({ anchorX: -0.35 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Left"
-                                >
-                                    <AlignLeft className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => patchEndpoint({ anchorX: 0 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Center X"
-                                >
-                                    <AlignCenterHorizontal className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => patchEndpoint({ anchorX: 0.35 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Right"
-                                >
-                                    <AlignRight className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => patchEndpoint({ anchorY: -0.35 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Top"
-                                >
-                                    <AlignStartVertical className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => patchEndpoint({ anchorY: 0 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Center Y"
-                                >
-                                    <AlignCenterVertical className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    onClick={() => patchEndpoint({ anchorY: 0.35 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Bottom"
-                                >
-                                    <AlignEndVertical className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        </div>
-
-                        {/* Anchor X & Y */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">Anchor</span>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="X"
-                                    value={Math.round(ep.anchorX * refStageW)}
-                                    min={-3000}
-                                    max={3000}
-                                    step={10}
-                                    onChange={(pxX) =>
-                                        patchEndpoint({
-                                            anchorX: Number((pxX / refStageW).toFixed(4)),
-                                        })
-                                    }
-                                />
-                                <ScrubInput
-                                    label="Y"
-                                    value={Math.round(ep.anchorY * refStageH)}
-                                    min={-3000}
-                                    max={3000}
-                                    step={10}
-                                    onChange={(pxY) =>
-                                        patchEndpoint({
-                                            anchorY: Number((pxY / refStageH).toFixed(4)),
-                                        })
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        {/* Zoom */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">Zoom</span>
-                            <ScrubInput
-                                label="⊕"
-                                value={ep.zoom}
-                                min={0.25}
-                                max={4}
-                                step={0.05}
-                                decimals={2}
-                                unit="x"
-                                onChange={(zoom) => patchEndpoint({ zoom })}
-                            />
-                        </div>
-
-                        {/* Roll */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">Roll</span>
-                            <ScrubInput
-                                label="∟"
-                                value={ep.roll}
-                                min={-180}
-                                max={180}
-                                step={1}
-                                unit="°"
-                                onChange={(roll) => patchEndpoint({ roll })}
-                            />
-                        </div>
-
-                        {/* Orbit & tilt */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">
-                                Orbit &amp; tilt
-                            </span>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="◎"
-                                    value={ep.orbit}
-                                    min={-85}
-                                    max={85}
-                                    step={1}
-                                    unit="°"
-                                    onChange={(orbit) => patchEndpoint({ orbit })}
-                                />
-                                <ScrubInput
-                                    label="∠"
-                                    value={ep.tilt}
-                                    min={-85}
-                                    max={85}
-                                    step={1}
-                                    unit="°"
-                                    onChange={(tilt) => patchEndpoint({ tilt })}
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
-            </div>
-        );
-    };
 
     return (
-        <aside className="w-64 border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative">
+        <aside
+            style={{ width: `${rightSidebarWidth}px` }}
+            className="border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
+        >
             <input
                 ref={fontInputRef}
                 type="file"
@@ -543,8 +311,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
             {/* 1. TOP HEADER BAR */}
             <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
-                <div className="w-6 h-6 rounded-full bg-[#18181b] border border-white/10 flex items-center justify-center font-bold text-xs text-white">
-                    R
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={toggleRightSidebar}
+                        aria-label="Collapse Inspector sidebar ( ] )"
+                        title="Collapse Inspector sidebar ( ] )"
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                    >
+                        <PanelRightClose className="w-3.5 h-3.5" />
+                    </button>
+                    <span className="text-[11px] font-semibold text-white">Inspector</span>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -587,7 +364,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                         <span>Project</span>
                         <button
                             onClick={() => setProjectPopoverOpen(false)}
-                            className="text-[#71717a] hover:text-white cursor-pointer"
+                            className="text-[#a1a1aa] hover:text-white cursor-pointer"
                         >
                             <X className="w-3.5 h-3.5" />
                         </button>
@@ -595,7 +372,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                     {/* Name */}
                     <div className="space-y-1">
-                        <span className="text-[10px] text-[#71717a]">Name</span>
+                        <span className="text-[10px] text-[#a1a1aa]">Name</span>
                         <input
                             type="text"
                             value={project.name}
@@ -608,7 +385,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                     {/* Aspect Ratio */}
                     <div className="space-y-1">
-                        <span className="text-[10px] text-[#71717a]">Aspect Ratio</span>
+                        <span className="text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
                         <select
                             value={project.aspectRatio}
                             onChange={(e) =>
@@ -633,7 +410,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                     {/* Lens (focal length) */}
                     <div className="space-y-1">
-                        <span className="text-[10px] text-[#71717a]">Lens</span>
+                        <span className="text-[10px] text-[#a1a1aa]">Lens</span>
                         <ScrubInput
                             label="F"
                             value={project.defaultCamera?.focalLength ?? 50}
@@ -664,7 +441,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                     {/* Background type + color */}
                     <div className="space-y-1.5">
-                        <span className="text-[10px] text-[#71717a]">Background</span>
+                        <span className="text-[10px] text-[#a1a1aa]">Background</span>
                         <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
                             {(
                                 [
@@ -723,7 +500,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             project.background.kind === 'gradient') ||
                                         (key === 'image' && project.background.kind === 'image')
                                         ? 'bg-[#2a2a2e] text-white shadow-sm'
-                                        : 'text-[#71717a] hover:text-white'
+                                        : 'text-[#a1a1aa] hover:text-white'
                                         }`}
                                 >
                                     {label}
@@ -906,7 +683,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     <button
                                         type="button"
                                         onClick={() => projectBgFileRef.current?.click()}
-                                        className="w-full h-12 rounded-lg border border-dashed border-white/20 hover:border-[#0088ff] text-[#71717a] hover:text-white flex items-center justify-center gap-1.5 transition text-[11px]"
+                                        className="w-full h-12 rounded-lg border border-dashed border-white/20 hover:border-[#0088ff] text-[#a1a1aa] hover:text-white flex items-center justify-center gap-1.5 transition text-[11px]"
                                     >
                                         <Upload className="w-3.5 h-3.5" />
                                         <span>Upload Background Image</span>
@@ -918,7 +695,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                     {/* FPS */}
                     <div className="space-y-1">
-                        <span className="text-[10px] text-[#71717a]">Frame Rate</span>
+                        <span className="text-[10px] text-[#a1a1aa]">Frame Rate</span>
                         <select
                             value={project.fps}
                             onChange={(e) =>
@@ -940,211 +717,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             {/* CAMERA BLOCK INSPECTOR (When Camera Move is Selected)               */}
             {/* =================================================================== */}
             {activeCameraBlock ? (
-                <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                    <div className="px-3.5 py-2.5 flex items-center justify-between bg-emerald-950/20">
-                        <span className="text-[11px] font-semibold text-emerald-300">
-                            Camera Move
-                        </span>
-                        <button
-                            onClick={() => selectCameraBlock(null)}
-                            className="text-[10px] text-[#a1a1aa] hover:text-white cursor-pointer"
-                        >
-                            Done
-                        </button>
-                    </div>
-
-                    {/* 1. FROM SECTION */}
-                    {renderCameraEndpointSection(
-                        activeCameraBlock,
-                        'from',
-                        fromCollapsed,
-                        () => setFromCollapsed((v) => !v)
-                    )}
-
-                    {/* 2. TO SECTION */}
-                    {renderCameraEndpointSection(
-                        activeCameraBlock,
-                        'to',
-                        toCollapsed,
-                        () => setToCollapsed((v) => !v)
-                    )}
-
-                    {/* 3. MOVE SECTION: [ Dolly | Zoom | Warp ] */}
-                    <div className="p-3.5 space-y-2.5">
-                        <span className="text-[11px] font-medium text-[#e4e4e7] block">
-                            Move
-                        </span>
-                        <div className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]">
-                            {(
-                                [
-                                    { id: 'dolly', label: 'Dolly' },
-                                    { id: 'zoom', label: 'Zoom' },
-                                    { id: 'dollyzoom', label: 'Warp' },
-                                ] as const
-                            ).map((m) => (
-                                <button
-                                    key={m.id}
-                                    onClick={() =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            mode: m.id,
-                                        }))
-                                    }
-                                    className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${activeCameraBlock.mode === m.id
-                                        ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
-                                        : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                >
-                                    {m.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* 4. SHAKE SECTION: Amount [From 0%] [To 0%] */}
-                    <div className="p-3.5 space-y-2.5">
-                        <span className="text-[11px] font-medium text-[#e4e4e7] block">
-                            Shake
-                        </span>
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">Amount</span>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="From"
-                                    value={activeCameraBlock.shake?.from ?? 0}
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    unit="%"
-                                    onChange={(from) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            shake: { from, to: cb.shake?.to ?? 0 },
-                                        }))
-                                    }
-                                />
-                                <ScrubInput
-                                    label="To"
-                                    value={activeCameraBlock.shake?.to ?? 0}
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    unit="%"
-                                    onChange={(to) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            shake: { from: cb.shake?.from ?? 0, to },
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* 5. TIMING SECTION: Start & length + Easing */}
-                    <div className="p-3.5 space-y-3">
-                        <span className="text-[11px] font-medium text-[#e4e4e7] block">
-                            Timing
-                        </span>
-
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">
-                                Start &amp; length
-                            </span>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="🕒"
-                                    value={activeCameraBlock.startMs}
-                                    min={0}
-                                    max={Math.max(0, activeShot.durationMs - 100)}
-                                    step={20}
-                                    unit=" ms"
-                                    onChange={(startMs) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            startMs,
-                                        }))
-                                    }
-                                />
-                                <ScrubInput
-                                    label="⏱"
-                                    value={activeCameraBlock.durationMs}
-                                    min={100}
-                                    max={activeShot.durationMs}
-                                    step={20}
-                                    unit=" ms"
-                                    onChange={(durationMs) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            durationMs,
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#71717a] block">Easing</span>
-                            <div className="flex items-center gap-1.5">
-                                <select
-                                    value={
-                                        activeCameraBlock.easing.kind === 'bezier'
-                                            ? 'bezier'
-                                            : `${activeCameraBlock.easing.kind}:${activeCameraBlock.easing.name}`
-                                    }
-                                    onChange={(e) => {
-                                        const val = e.target.value;
-                                        const easing: Easing =
-                                            val === 'bezier'
-                                                ? {
-                                                    kind: 'bezier',
-                                                    x1: 0.16,
-                                                    y1: 1,
-                                                    x2: 0.3,
-                                                    y2: 1,
-                                                }
-                                                : val.startsWith('spring:')
-                                                    ? {
-                                                        kind: 'spring',
-                                                        name: val.split(':')[1] as SpringEasingName,
-                                                    }
-                                                    : {
-                                                        kind: 'preset',
-                                                        name: val.split(':')[1] as PresetEasingName,
-                                                    };
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing,
-                                        }));
-                                    }}
-                                    className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
-                                >
-                                    <option value="preset:linear">Linear</option>
-                                    <option value="preset:ease-in-out">Ease in and out</option>
-                                    <option value="preset:ease-out">Ease out</option>
-                                    <option value="preset:ease-out-expo">Ease out expo</option>
-                                    <option value="spring:gentle">Spring: Gentle</option>
-                                    <option value="bezier">Custom Cubic-Bezier</option>
-                                </select>
-                                <button
-                                    onClick={() => {
-                                        updateShot(activeShot.id, (s) => ({
-                                            ...s,
-                                            cameraBlocks: s.cameraBlocks.filter(
-                                                (b) => b.id !== activeCameraBlock.id
-                                            ),
-                                        }));
-                                        selectCameraBlock(null);
-                                    }}
-                                    title="Delete Camera Move"
-                                    className="p-1.5 text-[#71717a] hover:text-rose-400 cursor-pointer"
-                                >
-                                    <X className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <CameraBlockSection
+                    activeShotId={activeShot.id}
+                    activeCameraBlock={activeCameraBlock}
+                    onDone={() => selectCameraBlock(null)}
+                />
             ) : (
                 <>
                     {/* 2. SUB-HEADER: Context navigation */}
@@ -1155,7 +732,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     onClick={() => setMainTab('design')}
                                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
                                         ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
                                         }`}
                                 >
                                     Design
@@ -1164,7 +741,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     onClick={() => setMainTab('animate')}
                                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
                                         ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#71717a] hover:text-[#d4d4d8]'
+                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
                                         }`}
                                 >
                                     Animate
@@ -1189,7 +766,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 <Film className="w-3.5 h-3.5 text-[#0088ff]" />
                                 <span className="truncate">{activeShot.name || 'Shot Settings'}</span>
                             </span>
-                            <span className="text-[10px] text-[#71717a] font-mono">
+                            <span className="text-[10px] text-[#a1a1aa] font-mono">
                                 {(activeShot.durationMs / 1000).toFixed(2)}s
                             </span>
                         </div>
@@ -1207,7 +784,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[9px] font-semibold uppercase tracking-wider text-[#0088ff]">
                                             {selectedLayer.kind}
                                         </span>
-                                        <span className="text-[10px] text-[#71717a]">
+                                        <span className="text-[10px] text-[#a1a1aa]">
                                             #{selectedLayer.order}
                                         </span>
                                     </div>
@@ -1221,7 +798,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                 }))
                                             }
                                             title={selectedLayer.hidden ? 'Show Layer' : 'Hide Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white"
+                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
                                         >
                                             {selectedLayer.hidden ? (
                                                 <EyeOff className="w-3.5 h-3.5 text-amber-400" />
@@ -1238,7 +815,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                 }))
                                             }
                                             title={selectedLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white"
+                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
                                         >
                                             {selectedLayer.locked ? (
                                                 <Lock className="w-3.5 h-3.5 text-amber-400" />
@@ -1250,7 +827,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                             type="button"
                                             onClick={handleDeleteSelectedLayer}
                                             title="Delete Layer"
-                                            className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-rose-400"
+                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400"
                                         >
                                             <Trash2 className="w-3.5 h-3.5" />
                                         </button>
@@ -1274,489 +851,20 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                             {/* TEXT LAYER: Typography Controls */}
                             {selectedLayer.kind === 'text' && (
-                                <div className="p-3.5 space-y-3">
-                                    <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
-                                        <span className="flex items-center gap-1.5">
-                                            <Type className="w-3.5 h-3.5 text-amber-400" />
-                                            Typography
-                                        </span>
-                                        <button
-                                            type="button"
-                                            onClick={() => fontInputRef.current?.click()}
-                                            title="Upload Custom Font (.ttf, .otf, .woff2)"
-                                            className="text-[10px] text-[#0088ff] hover:underline flex items-center gap-1"
-                                        >
-                                            <Upload className="w-3 h-3" />
-                                            <span>Upload font</span>
-                                        </button>
-                                    </div>
-
-                                    {/* Content textarea */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a]">Text Content</span>
-                                        <textarea
-                                            rows={2}
-                                            value={selectedLayer.content}
-                                            onChange={(e) =>
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                    l.kind === 'text' ? { ...l, content: e.target.value } : l
-                                                )
-                                            }
-                                            className="w-full p-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-amber-400 resize-none font-sans"
-                                        />
-                                    </div>
-
-                                    {/* Font Family */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a]">Font Family</span>
-                                        <select
-                                            value={selectedLayer.font.family}
-                                            onChange={(e) => {
-                                                const nextFont = e.target.value;
-                                                loadGoogleFont(nextFont);
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                    l.kind === 'text'
-                                                        ? { ...l, font: { ...l.font, family: nextFont } }
-                                                        : l
-                                                );
-                                            }}
-                                            className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer"
-                                        >
-                                            {[...POPULAR_FONTS, ...customFonts].map((f) => (
-                                                <option key={f} value={f}>
-                                                    {f}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Color & Size */}
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-[#71717a]">Color</span>
-                                            <div className="flex items-center gap-1.5 h-7 px-1.5 rounded-lg bg-[#1c1c1f] border border-white/10">
-                                                <ColorField
-
-                                                    value={selectedLayer.font.color}
-                                                    onChange={(e) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'text'
-                                                                ? { ...l, font: { ...l.font, color: e.target.value } }
-                                                                : l
-                                                        )
-                                                    }
-                                                    className="w-5 h-5 rounded cursor-pointer bg-transparent border-0"
-                                                />
-                                                <input
-                                                    type="text"
-                                                    value={selectedLayer.font.color}
-                                                    onChange={(e) => {
-                                                        let val = e.target.value.trim();
-                                                        if (!val.startsWith('#')) val = `#${val}`;
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'text'
-                                                                ? { ...l, font: { ...l.font, color: val } }
-                                                                : l
-                                                        );
-                                                    }}
-                                                    className="w-full bg-transparent text-[10px] font-mono text-white outline-none"
-                                                />
-                                            </div>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-[#71717a]">Size</span>
-                                            <ScrubInput
-                                                label="A"
-                                                value={Math.round(selectedLayer.font.size * refStageH)}
-                                                min={8}
-                                                max={300}
-                                                step={1}
-                                                unit="px"
-                                                onChange={(sizePx) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                        l.kind === 'text'
-                                                            ? { ...l, font: { ...l.font, size: sizePx / refStageH } }
-                                                            : l
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Weight & Letter Spacing */}
-                                    <div className="grid grid-cols-2 gap-1.5">
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-[#71717a]">Weight</span>
-                                            <select
-                                                value={selectedLayer.font.weight}
-                                                onChange={(e) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                        l.kind === 'text'
-                                                            ? {
-                                                                ...l,
-                                                                font: {
-                                                                    ...l.font,
-                                                                    weight: Number(e.target.value),
-                                                                },
-                                                            }
-                                                            : l
-                                                    )
-                                                }
-                                                className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer"
-                                            >
-                                                <option value={300}>300 Light</option>
-                                                <option value={400}>400 Regular</option>
-                                                <option value={500}>500 Medium</option>
-                                                <option value={600}>600 SemiBold</option>
-                                                <option value={700}>700 Bold</option>
-                                                <option value={800}>800 ExtraBold</option>
-                                                <option value={900}>900 Black</option>
-                                            </select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <span className="text-[10px] text-[#71717a]">Spacing</span>
-                                            <ScrubInput
-                                                label="↔"
-                                                value={selectedLayer.font.letterSpacing}
-                                                min={-5}
-                                                max={30}
-                                                step={0.5}
-                                                decimals={1}
-                                                onChange={(letterSpacing) =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                        l.kind === 'text'
-                                                            ? { ...l, font: { ...l.font, letterSpacing } }
-                                                            : l
-                                                    )
-                                                }
-                                            />
-                                        </div>
-                                    </div>
-
-                                    {/* Text Alignment */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a]">Align</span>
-                                        <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
-                                            {(['left', 'center', 'right'] as const).map((al) => (
-                                                <button
-                                                    key={al}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'text'
-                                                                ? { ...l, font: { ...l.font, align: al } }
-                                                                : l
-                                                        )
-                                                    }
-                                                    className={`h-6 rounded text-[10px] capitalize flex items-center justify-center transition cursor-pointer ${selectedLayer.font.align === al
-                                                        ? 'bg-[#2a2a30] text-white font-medium'
-                                                        : 'text-[#71717a] hover:text-white'
-                                                        }`}
-                                                >
-                                                    {al}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                </div>
+                                <TypographySection
+                                    activeShotId={activeShot.id}
+                                    layer={selectedLayer}
+                                    customFonts={customFonts}
+                                    onUploadFontClick={() => fontInputRef.current?.click()}
+                                />
                             )}
 
                             {/* SHAPE LAYER: Geometry, Fill & Stroke */}
                             {selectedLayer.kind === 'shape' && (
-                                <div className="p-3.5 space-y-3">
-                                    <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center gap-1.5">
-                                        <Shapes className="w-3.5 h-3.5 text-purple-400" />
-                                        Shape &amp; Fill
-                                    </div>
-
-                                    {/* Geometry */}
-                                    <div className="grid grid-cols-5 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
-                                        {(
-                                            ['rectangle', 'ellipse', 'line', 'arrow', 'polygon'] as Array<
-                                                ShapeLayer['shape']
-                                            >
-                                        ).map((shp) => (
-                                            <button
-                                                key={shp}
-                                                type="button"
-                                                onClick={() =>
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                        l.kind === 'shape' ? { ...l, shape: shp } : l
-                                                    )
-                                                }
-                                                className={`h-6 rounded text-[10px] capitalize flex items-center justify-center transition cursor-pointer ${selectedLayer.shape === shp
-                                                    ? 'bg-[#2a2a30] text-white font-medium'
-                                                    : 'text-[#71717a] hover:text-white'
-                                                    }`}
-                                            >
-                                                {shp === 'rectangle' ? 'Rect' : shp === 'ellipse' ? 'Circle' : shp}
-                                            </button>
-                                        ))}
-                                    </div>
-
-                                    {/* Fill Mode */}
-                                    <div className="space-y-1.5">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] text-[#71717a]">Fill</span>
-                                            <div className="flex bg-[#1c1c1f] p-0.5 rounded border border-white/[0.06]">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (selectedLayer.fill.kind === 'solid') return;
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'shape'
-                                                                ? {
-                                                                    ...l,
-                                                                    fill: {
-                                                                        kind: 'solid',
-                                                                        color:
-                                                                            l.fill.kind === 'gradient' &&
-                                                                                l.fill.stops[0]?.color
-                                                                                ? l.fill.stops[0].color
-                                                                                : '#818cf8',
-                                                                        opacity: 1,
-                                                                    },
-                                                                }
-                                                                : l
-                                                        );
-                                                    }}
-                                                    className={`px-2 py-0.5 rounded text-[10px] cursor-pointer ${selectedLayer.fill.kind === 'solid'
-                                                        ? 'bg-[#2a2a30] text-white font-medium'
-                                                        : 'text-[#71717a] hover:text-white'
-                                                        }`}
-                                                >
-                                                    Solid
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        if (selectedLayer.fill.kind === 'gradient') return;
-                                                        const initialColor = selectedLayer.fill.color || '#818cf8';
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'shape'
-                                                                ? {
-                                                                    ...l,
-                                                                    fill: {
-                                                                        kind: 'gradient',
-                                                                        angle: 135,
-                                                                        stops: [
-                                                                            { at: 0, color: initialColor },
-                                                                            { at: 1, color: '#4f46e5' },
-                                                                        ],
-                                                                    },
-                                                                }
-                                                                : l
-                                                        );
-                                                    }}
-                                                    className={`px-2 py-0.5 rounded text-[10px] cursor-pointer ${selectedLayer.fill.kind === 'gradient'
-                                                        ? 'bg-[#2a2a30] text-white font-medium'
-                                                        : 'text-[#71717a] hover:text-white'
-                                                        }`}
-                                                >
-                                                    Shader
-                                                </button>
-                                            </div>
-                                        </div>
-
-                                        {selectedLayer.fill.kind === 'solid' ? (
-                                            <div className="flex items-center gap-2 pt-0.5">
-                                                <div className="relative shrink-0">
-                                                    <ColorField
-
-                                                        value={selectedLayer.fill.color}
-                                                        onChange={(e) => {
-                                                            const color = e.target.value;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                                l.kind === 'shape' && l.fill.kind === 'solid'
-                                                                    ? { ...l, fill: { ...l.fill, color } }
-                                                                    : l
-                                                            );
-                                                        }}
-                                                        className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
-                                                    />
-                                                    <div
-                                                        className="w-7 h-7 rounded-lg border border-white/10"
-                                                        style={{ backgroundColor: selectedLayer.fill.color }}
-                                                    />
-                                                </div>
-                                                <input
-                                                    type="text"
-                                                    value={selectedLayer.fill.color}
-                                                    onChange={(e) => {
-                                                        let color = e.target.value.trim();
-                                                        if (!color.startsWith('#')) color = `#${color}`;
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            l.kind === 'shape' && l.fill.kind === 'solid'
-                                                                ? { ...l, fill: { ...l.fill, color } }
-                                                                : l
-                                                        );
-                                                    }}
-                                                    className="flex-1 h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] font-mono text-white outline-none"
-                                                />
-                                            </div>
-                                        ) : (
-                                            <div className="space-y-2 pt-1">
-                                                <div className="flex items-center gap-2">
-                                                    <ColorField
-
-                                                        value={selectedLayer.fill.stops[0]?.color ?? '#818cf8'}
-                                                        onChange={(e) => {
-                                                            const color = e.target.value;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                if (l.kind !== 'shape' || l.fill.kind !== 'gradient') return l;
-                                                                const stops = [...l.fill.stops];
-                                                                stops[0] = { ...stops[0], at: 0, color };
-                                                                return { ...l, fill: { ...l.fill, stops } };
-                                                            });
-                                                        }}
-                                                        className="w-6 h-6 rounded border border-white/10 cursor-pointer"
-                                                        title="Color 1"
-                                                    />
-                                                    <ColorField
-
-                                                        value={selectedLayer.fill.stops[1]?.color ?? '#4f46e5'}
-                                                        onChange={(e) => {
-                                                            const color = e.target.value;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                if (l.kind !== 'shape' || l.fill.kind !== 'gradient') return l;
-                                                                const stops = [...l.fill.stops];
-                                                                if (!stops[1]) stops[1] = { at: 1, color };
-                                                                stops[1] = { ...stops[1], at: 1, color };
-                                                                return { ...l, fill: { ...l.fill, stops } };
-                                                            });
-                                                        }}
-                                                        className="w-6 h-6 rounded border border-white/10 cursor-pointer"
-                                                        title="Color 2"
-                                                    />
-                                                    <div className="flex-1">
-                                                        <ScrubInput
-                                                            label="∠"
-                                                            value={selectedLayer.fill.angle}
-                                                            min={0}
-                                                            max={360}
-                                                            step={5}
-                                                            unit="°"
-                                                            onChange={(angle) =>
-                                                                updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                                    l.kind === 'shape' && l.fill.kind === 'gradient'
-                                                                        ? { ...l, fill: { ...l.fill, angle } }
-                                                                        : l
-                                                                )
-                                                            }
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                {/* Gradient Presets */}
-                                                <div className="grid grid-cols-2 gap-1 pt-1">
-                                                    {SHAPE_GRADIENT_PRESETS.map((preset) => (
-                                                        <button
-                                                            key={preset.name}
-                                                            type="button"
-                                                            onClick={() =>
-                                                                updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                                    l.kind === 'shape'
-                                                                        ? {
-                                                                            ...l,
-                                                                            fill: {
-                                                                                kind: 'gradient',
-                                                                                angle: preset.angle,
-                                                                                stops: preset.stops.map((s) => ({ ...s })),
-                                                                            },
-                                                                        }
-                                                                        : l
-                                                                )
-                                                            }
-                                                            className="flex items-center gap-1.5 p-1 rounded bg-[#1c1c1f] hover:bg-white/10 text-left cursor-pointer border border-white/[0.06]"
-                                                        >
-                                                            <div
-                                                                className="w-3.5 h-3.5 rounded shrink-0"
-                                                                style={{
-                                                                    background: `linear-gradient(${preset.angle}deg, ${preset.stops[0].color}, ${preset.stops[1].color})`,
-                                                                }}
-                                                            />
-                                                            <span className="truncate text-[9px] text-[#a1a1aa]">
-                                                                {preset.name}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    {/* Stroke / Border */}
-                                    <div className="space-y-2 pt-1 border-t border-white/[0.06]">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] text-[#71717a]">Border &amp; Stroke</span>
-                                            <input
-                                                type="checkbox"
-                                                checked={Boolean(selectedLayer.stroke)}
-                                                onChange={(e) => {
-                                                    const enabled = e.target.checked;
-                                                    updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                        l.kind === 'shape'
-                                                            ? {
-                                                                ...l,
-                                                                stroke: enabled
-                                                                    ? {
-                                                                        color: l.stroke?.color || '#a855f7',
-                                                                        width: l.stroke?.width ?? 0.003,
-                                                                        opacity: l.stroke?.opacity ?? 1,
-                                                                    }
-                                                                    : undefined,
-                                                            }
-                                                            : l
-                                                    );
-                                                }}
-                                                className="w-3.5 h-3.5 rounded accent-[#0088ff] cursor-pointer"
-                                            />
-                                        </div>
-
-                                        {selectedLayer.stroke && (
-                                            <div className="space-y-1.5">
-                                                <div className="flex items-center gap-2">
-                                                    <ColorField
-
-                                                        value={selectedLayer.stroke.color}
-                                                        onChange={(e) => {
-                                                            const color = e.target.value;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                                l.kind === 'shape' && l.stroke
-                                                                    ? { ...l, stroke: { ...l.stroke, color } }
-                                                                    : l
-                                                            );
-                                                        }}
-                                                        className="w-6 h-6 rounded border border-white/10 cursor-pointer"
-                                                    />
-                                                    <div className="flex-1">
-                                                        <ScrubInput
-                                                            label="W"
-                                                            value={Math.round(selectedLayer.stroke.width * 1000)}
-                                                            min={1}
-                                                            max={30}
-                                                            step={1}
-                                                            unit="px"
-                                                            onChange={(w) =>
-                                                                updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                                    l.kind === 'shape' && l.stroke
-                                                                        ? {
-                                                                            ...l,
-                                                                            stroke: {
-                                                                                ...l.stroke,
-                                                                                width: Number((w / 1000).toFixed(4)),
-                                                                            },
-                                                                        }
-                                                                        : l
-                                                                )
-                                                            }
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
+                                <ShapeSection
+                                    activeShotId={activeShot.id}
+                                    layer={selectedLayer}
+                                />
                             )}
 
                             {/* IMAGE / VIDEO LAYER: Source, Device Frame & Crop */}
@@ -1807,7 +915,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                     ? `${selectedLayer.device.type} Frame`
                                                     : 'Bare Screenshot'}
                                             </div>
-                                            <div className="text-[10px] text-[#71717a]">
+                                            <div className="text-[10px] text-[#a1a1aa]">
                                                 {project.assets[selectedLayer.assetId]?.name ||
                                                     'Active asset'}
                                             </div>
@@ -1848,7 +956,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     {/* 3D Device Frame Settings */}
                                     {selectedLayer.device && (
                                         <div className="p-2.5 rounded-xl bg-[#161619] border border-white/[0.06] space-y-2 pt-2">
-                                            <div className="flex items-center justify-between text-[10px] text-[#71717a]">
+                                            <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
                                                 <span className="flex items-center gap-1 text-[#e4e4e7]">
                                                     <Laptop className="w-3 h-3 text-[#0088ff]" />
                                                     Frame Details
@@ -1873,7 +981,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             }
                                                             className={`px-1.5 py-0.5 rounded text-[9px] capitalize cursor-pointer ${selectedLayer.device?.color === clr
                                                                 ? 'bg-[#2a2a30] text-white font-medium'
-                                                                : 'text-[#71717a] hover:text-white'
+                                                                : 'text-[#a1a1aa] hover:text-white'
                                                                 }`}
                                                         >
                                                             {clr}
@@ -1938,7 +1046,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     {/* Image Border & Stroke */}
                                     <div className="space-y-1.5 pt-1">
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[10px] text-[#71717a]">Border &amp; Stroke</span>
+                                            <span className="text-[10px] text-[#a1a1aa]">Border &amp; Stroke</span>
                                             <input
                                                 type="checkbox"
                                                 checked={Boolean(selectedLayer.stroke)}
@@ -2014,7 +1122,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">
+                                    <span className="text-[10px] text-[#a1a1aa] block">
                                         Alignment
                                     </span>
                                     <div className="grid grid-cols-6 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
@@ -2064,7 +1172,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">
+                                    <span className="text-[10px] text-[#a1a1aa] block">
                                         Coordinates
                                     </span>
                                     <div className="flex items-center gap-1.5">
@@ -2110,7 +1218,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                 }))
                                             }
                                             title="Center Position (0, 0)"
-                                            className="p-1.5 text-[#71717a] hover:text-white cursor-pointer"
+                                            className="p-1.5 text-[#a1a1aa] hover:text-white cursor-pointer"
                                         >
                                             <Crosshair className="w-3.5 h-3.5" />
                                         </button>
@@ -2118,7 +1226,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">
+                                    <span className="text-[10px] text-[#a1a1aa] block">
                                         Depth &amp; Roll
                                     </span>
                                     <div className="grid grid-cols-2 gap-1.5 pr-6">
@@ -2156,7 +1264,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">
+                                    <span className="text-[10px] text-[#a1a1aa] block">
                                         Transform
                                     </span>
                                     <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
@@ -2292,7 +1400,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">Size</span>
+                                    <span className="text-[10px] text-[#a1a1aa] block">Size</span>
                                     {selectedLayer.kind !== 'text' ? (
                                         <div className="flex items-center gap-1.5">
                                             <div className="grid grid-cols-2 gap-1.5 flex-1">
@@ -2357,7 +1465,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                 onClick={() => setAspectLocked((v) => !v)}
                                                 className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition ${aspectLocked
                                                     ? 'bg-[#1c1c1f] text-white border border-white/10'
-                                                    : 'text-[#71717a] hover:text-white'
+                                                    : 'text-[#a1a1aa] hover:text-white'
                                                     }`}
                                                 title={aspectLocked ? 'Aspect Ratio Locked' : 'Aspect Ratio Unlocked'}
                                             >
@@ -2392,7 +1500,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                                 {/* Scale X / Y % */}
                                 <div className="space-y-1.5">
-                                    <span className="text-[10px] text-[#71717a] block">
+                                    <span className="text-[10px] text-[#a1a1aa] block">
                                         Scale
                                     </span>
                                     <div className="grid grid-cols-2 gap-1.5 pr-6">
@@ -2481,7 +1589,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                                 {/* Blend Mode */}
                                 <div className="space-y-1">
-                                    <span className="text-[10px] text-[#71717a]">Blend Mode</span>
+                                    <span className="text-[10px] text-[#a1a1aa]">Blend Mode</span>
                                     <select
                                         value={selectedLayer.blendMode}
                                         onChange={(e) =>
@@ -2505,7 +1613,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     <div className="flex items-center justify-between">
                                         <div className="flex flex-col">
                                             <span className="text-[10px] font-medium text-white">Receives 3D Light</span>
-                                            <span className="text-[9px] text-[#71717a]">
+                                            <span className="text-[9px] text-[#a1a1aa]">
                                                 {selectedLayer.kind === 'text' ? 'Unlit preserves flat, crisp typography' : 'Shades surface with scene lighting'}
                                             </span>
                                         </div>
@@ -2529,7 +1637,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                                     {(selectedLayer.receivesLight ?? (selectedLayer.kind !== 'text')) && (
                                         <div className="space-y-1.5 pt-1">
-                                            <div className="flex items-center justify-between gap-1 text-[9px] text-[#71717a]">
+                                            <div className="flex items-center justify-between gap-1 text-[9px] text-[#a1a1aa]">
                                                 <span>Material Presets:</span>
                                                 <div className="flex gap-1">
                                                     <button
@@ -2613,7 +1721,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 {/* Drop Shadow */}
                                 <div className="space-y-2 pt-1 border-t border-white/[0.06]">
                                     <div className="flex items-center justify-between">
-                                        <span className="text-[10px] text-[#71717a]">Drop Shadow</span>
+                                        <span className="text-[10px] text-[#a1a1aa]">Drop Shadow</span>
                                         <input
                                             type="checkbox"
                                             checked={Boolean(selectedLayer.effects?.dropShadow?.enabled)}
@@ -2749,7 +1857,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
 
                                 {/* Layer Masking */}
                                 <div className="space-y-1 pt-1 border-t border-white/[0.06]">
-                                    <span className="text-[10px] text-[#71717a]">Alpha Mask</span>
+                                    <span className="text-[10px] text-[#a1a1aa]">Alpha Mask</span>
                                     <select
                                         value={selectedLayer.maskLayerId || ''}
                                         onChange={(e) =>
@@ -2780,7 +1888,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                             {isBottomLayerSelected && (
                                 <div className="divide-y divide-white/[0.06] bg-black/20">
                                     <div className="p-3 bg-white/[0.02]">
-                                        <span className="text-[10px] font-medium text-[#71717a] uppercase tracking-wider block">
+                                        <span className="text-[10px] font-medium text-[#a1a1aa] uppercase tracking-wider block">
                                             Stage Background &amp; Effects
                                         </span>
                                     </div>
@@ -2803,14 +1911,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         <Film className="w-3.5 h-3.5 text-[#0088ff]" />
                                         Shot &amp; Project Settings
                                     </span>
-                                    <span className="text-[10px] text-[#71717a] font-mono">
+                                    <span className="text-[10px] text-[#a1a1aa] font-mono">
                                         {(activeShot.durationMs / 1000).toFixed(2)}s
                                     </span>
                                 </div>
 
                                 <div className="grid grid-cols-2 gap-2">
                                     <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#71717a]">Project Name</span>
+                                        <span className="block text-[10px] text-[#a1a1aa]">Project Name</span>
                                         <input
                                             type="text"
                                             value={project.name}
@@ -2819,7 +1927,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         />
                                     </label>
                                     <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#71717a]">Aspect Ratio</span>
+                                        <span className="block text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
                                         <select
                                             value={project.aspectRatio}
                                             onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
@@ -2839,7 +1947,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </div>
 
                                 <label className="block space-y-1">
-                                    <span className="block text-[10px] text-[#71717a]">Shot Name</span>
+                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Name</span>
                                     <input
                                         type="text"
                                         value={activeShot.name}
@@ -2851,7 +1959,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                 </label>
 
                                 <div className="space-y-1">
-                                    <span className="block text-[10px] text-[#71717a]">Shot Duration</span>
+                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Duration</span>
                                     <ScrubInput
                                         label="Duration"
                                         value={activeShot.durationMs}
@@ -2951,7 +2059,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     >
                                         <div className="flex items-center justify-between">
                                             <span className="text-[11px] font-medium text-[#e4e4e7] capitalize flex items-center gap-1.5">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${isSelectedBlock ? 'bg-[#0088ff]' : 'bg-[#71717a]'}`} />
+                                                <span className={`w-1.5 h-1.5 rounded-full ${isSelectedBlock ? 'bg-[#0088ff]' : 'bg-[#a1a1aa]'}`} />
                                                 {blk.label || `${blk.property} animation`}
                                             </span>
                                             <button
@@ -2959,7 +2067,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                     e.stopPropagation();
                                                     handleDeleteBlock(blk.id);
                                                 }}
-                                                className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
                                                 title="Delete Animation Block"
                                             >
                                                 <X className="w-3.5 h-3.5" />
@@ -2967,7 +2075,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#71717a] block capitalize">
+                                            <span className="text-[10px] text-[#a1a1aa] block capitalize">
                                                 Delta Amount
                                             </span>
                                             {isVec ? (
@@ -3059,7 +2167,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         {/* DIRECTION BUTTONS (ONLY FOR POSITION) */}
                                         {isVec && blk.property === 'position' && (
                                             <div className="space-y-1.5">
-                                                <span className="text-[10px] text-[#71717a] block">
+                                                <span className="text-[10px] text-[#a1a1aa] block">
                                                     Direction
                                                 </span>
                                                 <div className="grid grid-cols-2 gap-1 bg-[#161619] p-0.5 rounded-lg border border-white/[0.05]">
@@ -3075,7 +2183,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }}
                                                         className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x <= 0
                                                             ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#71717a] hover:text-white'
+                                                            : 'text-[#a1a1aa] hover:text-white'
                                                             }`}
                                                         title="Left Direction"
                                                     >
@@ -3093,7 +2201,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }}
                                                         className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x > 0
                                                             ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#71717a] hover:text-white'
+                                                            : 'text-[#a1a1aa] hover:text-white'
                                                             }`}
                                                         title="Right Direction"
                                                     >
@@ -3130,7 +2238,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                         </div>
 
                                         <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#71717a] block">
+                                            <span className="text-[10px] text-[#a1a1aa] block">
                                                 Easing
                                             </span>
                                             <select
@@ -3273,7 +2381,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             })
                                                         }
                                                         title="Remove this entrance"
-                                                        className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                        className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
                                                     >
                                                         <Minus className="w-3.5 h-3.5" />
                                                     </button>
@@ -3358,7 +2466,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }))
                                                     }
                                                     title={selectedLayer.entrance.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
                                                 >
                                                     {selectedLayer.entrance.durationMs === 0 ? (
                                                         <EyeOff className="w-3.5 h-3.5 text-amber-400" />
@@ -3375,7 +2483,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }))
                                                     }
                                                     title="Remove Entrance"
-                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
                                                 >
                                                     <Minus className="w-3.5 h-3.5" />
                                                 </button>
@@ -3506,7 +2614,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             })
                                                         }
                                                         title="Remove this exit"
-                                                        className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                        className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
                                                     >
                                                         <Minus className="w-3.5 h-3.5" />
                                                     </button>
@@ -3592,7 +2700,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }))
                                                     }
                                                     title={selectedLayer.exit.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
                                                 >
                                                     {selectedLayer.exit.durationMs === 0 ? (
                                                         <EyeOff className="w-3.5 h-3.5 text-amber-400" />
@@ -3609,7 +2717,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         }))
                                                     }
                                                     title="Remove Exit"
-                                                    className="p-1 text-[#71717a] hover:text-white cursor-pointer"
+                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
                                                 >
                                                     <Minus className="w-3.5 h-3.5" />
                                                 </button>
@@ -3724,7 +2832,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                         <div className="text-[11px] font-medium text-white">
                                                             {cb.label || `Camera Move #${idx + 1}`}
                                                         </div>
-                                                        <div className="text-[9px] text-[#71717a]">
+                                                        <div className="text-[9px] text-[#a1a1aa]">
                                                             {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
                                                         </div>
                                                     </div>
@@ -3740,7 +2848,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                                             selectCameraBlock(null);
                                                         }
                                                     }}
-                                                    className="p-1 text-[#71717a] hover:text-rose-400 cursor-pointer"
+                                                    className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
                                                     title="Delete Move"
                                                 >
                                                     <X className="w-3 h-3" />
@@ -3750,7 +2858,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
                                     </div>
                                 )}
 
-                                <p className="text-[10px] text-[#71717a] leading-relaxed">
+                                <p className="text-[10px] text-[#a1a1aa] leading-relaxed">
                                     Add a Camera Move to unlock From / To keyframes, Zoom, Orbit,
                                     Dolly/Warp modes, and Handheld Shake.
                                 </p>
@@ -3763,4 +2871,4 @@ export const RightSidebar: React.FC<RightSidebarProps> = ({
             )}
         </aside>
     );
-};
+});

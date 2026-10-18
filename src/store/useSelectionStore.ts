@@ -49,6 +49,18 @@ interface SelectionStore {
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
 
+    leftPanelOpen: boolean;
+    rightSidebarOpen: boolean;
+    leftPanelWidth: number;
+    rightSidebarWidth: number;
+    toggleLeftPanel: () => void;
+    toggleRightSidebar: () => void;
+    setLeftPanelOpen: (open: boolean) => void;
+    setRightSidebarOpen: (open: boolean) => void;
+    setLeftPanelWidth: (width: number) => void;
+    setRightSidebarWidth: (width: number) => void;
+    resetPanelWidths: () => void;
+
     selectProject: () => void;
     selectShot: (shotId: string, defaultLayerId?: string) => void;
     selectLayer: (layerId: string, toggleMulti?: boolean) => void;
@@ -84,6 +96,31 @@ interface SelectionStore {
     setGradientEditorAngle: (angle: number) => void;
 }
 
+export const DEFAULT_LEFT_PANEL_WIDTH = 260;
+export const MIN_LEFT_PANEL_WIDTH = 200;
+export const MAX_LEFT_PANEL_WIDTH = 460;
+
+export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 300;
+export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
+export const MAX_RIGHT_SIDEBAR_WIDTH = 500;
+
+function getSavedPanelWidth(key: string, defaultVal: number, minVal: number, maxVal: number): number {
+    try {
+        if (typeof window !== 'undefined' && window.localStorage) {
+            const saved = window.localStorage.getItem(key);
+            if (saved) {
+                const num = Number(saved);
+                if (Number.isFinite(num)) {
+                    return Math.max(minVal, Math.min(maxVal, num));
+                }
+            }
+        }
+    } catch {
+        // Ignore localStorage restrictions
+    }
+    return defaultVal;
+}
+
 export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedShotId: 'shot-1',
     selectedLayerIds: [],
@@ -107,6 +144,11 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     canvasPan: { x: 0, y: 0 },
     gradientEditorActive: false,
     gradientEditorAngle: 0,
+
+    leftPanelOpen: true,
+    rightSidebarOpen: true,
+    leftPanelWidth: getSavedPanelWidth('raylight_left_panel_width', DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH),
+    rightSidebarWidth: getSavedPanelWidth('raylight_right_sidebar_width', DEFAULT_RIGHT_SIDEBAR_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH),
 
     selectProject: () =>
         set({
@@ -312,4 +354,48 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         })),
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
+
+    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
+    toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
+    setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
+    setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
+
+    setLeftPanelWidth: (width) => {
+        const clamped = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(MAX_LEFT_PANEL_WIDTH, Math.round(width)));
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('raylight_left_panel_width', String(clamped));
+            }
+        } catch {
+            // Ignore localStorage restrictions
+        }
+        set({ leftPanelWidth: clamped });
+    },
+
+    setRightSidebarWidth: (width) => {
+        const clamped = Math.max(MIN_RIGHT_SIDEBAR_WIDTH, Math.min(MAX_RIGHT_SIDEBAR_WIDTH, Math.round(width)));
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.setItem('raylight_right_sidebar_width', String(clamped));
+            }
+        } catch {
+            // Ignore localStorage restrictions
+        }
+        set({ rightSidebarWidth: clamped });
+    },
+
+    resetPanelWidths: () => {
+        try {
+            if (typeof window !== 'undefined' && window.localStorage) {
+                window.localStorage.removeItem('raylight_left_panel_width');
+                window.localStorage.removeItem('raylight_right_sidebar_width');
+            }
+        } catch {
+            // Ignore localStorage restrictions
+        }
+        set({
+            leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
+            rightSidebarWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH,
+        });
+    },
 }));
