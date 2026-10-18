@@ -45,7 +45,7 @@ function downloadBlob(blob: Blob, filename: string): void {
 // ============================================================================
 // SELF-CONTAINED BINARY GIF89a LZW ENCODER (For Looping Animated GIF Exports)
 // ============================================================================
-function encodeLzwClearCodeStream(indices: Uint8Array): number[] {
+function encodeLzwClearCodeStream(indices: Uint8Array): Uint8Array {
     // Uses 8-bit color indices with periodic Clear Codes (256) every 120 pixels
     // so 9-bit LZW codes never overflow the dictionary—100% GIF89a compliant & fast!
     const CLEAR_CODE = 256;
@@ -79,13 +79,21 @@ function encodeLzwClearCodeStream(indices: Uint8Array): number[] {
     }
 
     // Packetize into 255-byte GIF sub-blocks
-    const output: number[] = [8]; // LZW Minimum Code Size = 8
+    const numBlocks = Math.ceil(subBlockBytes.length / 255);
+    const totalLen = 1 + subBlockBytes.length + numBlocks + 1;
+    const output = new Uint8Array(totalLen);
+    let ptr = 0;
+    output[ptr++] = 8; // LZW Minimum Code Size = 8
+
     for (let offset = 0; offset < subBlockBytes.length; offset += 255) {
-        const chunk = subBlockBytes.slice(offset, offset + 255);
-        output.push(chunk.length, ...chunk);
+        const chunkSize = Math.min(255, subBlockBytes.length - offset);
+        output[ptr++] = chunkSize;
+        for (let j = 0; j < chunkSize; j++) {
+            output[ptr++] = subBlockBytes[offset + j];
+        }
     }
-    output.push(0); // Block Terminator
-    return output;
+    output[ptr++] = 0; // Block Terminator
+    return output.slice(0, ptr);
 }
 
 function buildAnimatedGifBlob(
@@ -94,63 +102,73 @@ function buildAnimatedGifBlob(
     height: number,
     delayCentiseconds: number
 ): Blob {
-    const bytes: number[] = [];
-    const writeByte = (b: number) => bytes.push(b & 0xff);
-    const writeShort = (s: number) => {
-        bytes.push(s & 0xff, (s >> 8) & 0xff);
-    };
+    const chunks: any[] = [];
+
+    // Header buffer (Header, LSD, GCT, Netscape extension)
+    const header = new Uint8Array(800);
+    let hPtr = 0;
     const writeAscii = (str: string) => {
-        for (let i = 0; i < str.length; i++) bytes.push(str.charCodeAt(i));
+        for (let i = 0; i < str.length; i++) header[hPtr++] = str.charCodeAt(i);
+    };
+    const writeShort = (s: number) => {
+        header[hPtr++] = s & 0xff;
+        header[hPtr++] = (s >> 8) & 0xff;
     };
 
-    // 1. GIF89a Header & Logical Screen Descriptor
     writeAscii('GIF89a');
     writeShort(width);
     writeShort(height);
-    writeByte(0xf7); // Global Color Table Flag (1) + 8-bit color (256 entries)
-    writeByte(0);
-    writeByte(0);
+    header[hPtr++] = 0xf7;
+    header[hPtr++] = 0;
+    header[hPtr++] = 0;
 
-    // 2. Global 256-Color RGB332 Palette (3 bits R, 3 bits G, 2 bits B)
+    // 2. Global 256-Color RGB332 Palette
     for (let i = 0; i < 256; i++) {
-        const r = ((i >> 5) & 0x07) * 36;
-        const g = ((i >> 2) & 0x07) * 36;
-        const b = (i & 0x03) * 85;
-        writeByte(r);
-        writeByte(g);
-        writeByte(b);
+        header[hPtr++] = ((i >> 5) & 0x07) * 36;
+        header[hPtr++] = ((i >> 2) & 0x07) * 36;
+        header[hPtr++] = (i & 0x03) * 85;
     }
 
     // 3. Netscape 2.0 Infinite Loop Application Extension
-    writeByte(0x21);
-    writeByte(0xff);
-    writeByte(11);
+    header[hPtr++] = 0x21;
+    header[hPtr++] = 0xff;
+    header[hPtr++] = 11;
     writeAscii('NETSCAPE2.0');
-    writeByte(3);
-    writeByte(1);
-    writeShort(0); // Loop forever
-    writeByte(0);
+    header[hPtr++] = 3;
+    header[hPtr++] = 1;
+    writeShort(0);
+    header[hPtr++] = 0;
+
+    chunks.push(header.slice(0, hPtr));
 
     // 4. Encode Each Frame
     for (const frame of framesData) {
-        // Graphic Control Extension (Frame Delay)
-        writeByte(0x21);
-        writeByte(0xf9);
-        writeByte(4);
-        writeByte(0x00);
-        writeShort(delayCentiseconds);
-        writeByte(0);
-        writeByte(0);
+        const frameHeader = new Uint8Array(18);
+        let fPtr = 0;
+        // Graphic Control Extension
+        frameHeader[fPtr++] = 0x21;
+        frameHeader[fPtr++] = 0xf9;
+        frameHeader[fPtr++] = 4;
+        frameHeader[fPtr++] = 0x00;
+        frameHeader[fPtr++] = delayCentiseconds & 0xff;
+        frameHeader[fPtr++] = (delayCentiseconds >> 8) & 0xff;
+        frameHeader[fPtr++] = 0;
+        frameHeader[fPtr++] = 0;
 
         // Image Descriptor
-        writeByte(0x2c);
-        writeShort(0);
-        writeShort(0);
-        writeShort(width);
-        writeShort(height);
-        writeByte(0x00);
+        frameHeader[fPtr++] = 0x2c;
+        frameHeader[fPtr++] = 0;
+        frameHeader[fPtr++] = 0;
+        frameHeader[fPtr++] = 0;
+        frameHeader[fPtr++] = 0;
+        frameHeader[fPtr++] = width & 0xff;
+        frameHeader[fPtr++] = (width >> 8) & 0xff;
+        frameHeader[fPtr++] = height & 0xff;
+        frameHeader[fPtr++] = (height >> 8) & 0xff;
+        frameHeader[fPtr++] = 0x00;
 
-        // Map RGBA pixels to RGB332 palette indices
+        chunks.push(frameHeader);
+
         const rgba = frame.data;
         const pixelCount = width * height;
         const indexed = new Uint8Array(pixelCount);
@@ -162,14 +180,12 @@ function buildAnimatedGifBlob(
         }
 
         const compressed = encodeLzwClearCodeStream(indexed);
-        for (let k = 0; k < compressed.length; k++) {
-            bytes.push(compressed[k]);
-        }
+        chunks.push(compressed);
     }
 
     // 5. GIF Trailer
-    writeByte(0x3b);
-    return new Blob([new Uint8Array(bytes)], { type: 'image/gif' });
+    chunks.push(new Uint8Array([0x3b]));
+    return new Blob(chunks, { type: 'image/gif' });
 }
 
 // ============================================================================
@@ -297,7 +313,9 @@ export async function runVideoExportPipeline(
             }
             await syncAndSeekAllProjectVideos(project, t);
             await new Promise((r) => requestAnimationFrame(r));
-            const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+            const webglCanvas =
+                (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
+                (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
             if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
                 ctx.drawImage(webglCanvas, 0, 0, gifW, gifH);
             } else {
@@ -511,7 +529,9 @@ export async function runVideoExportPipeline(
             await new Promise((r) => requestAnimationFrame(r));
 
             const evaluated = evaluateProjectAtTime(project, t);
-            const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+            const webglCanvas =
+                (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
+                (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
             const isNativeResolution =
                 webglCanvas &&
                 webglCanvas.width >= width * 0.75 &&

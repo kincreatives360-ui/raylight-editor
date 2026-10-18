@@ -195,14 +195,18 @@ export const Stage: React.FC<StageProps> = ({
                 const selectedCamBlock = currentShot.cameraBlocks?.find(
                     (b) => b.id === selectedCameraBlockId
                 );
-                const baseZoom =
-                    selectedCamBlock?.to?.zoom ??
-                    currentShot.framings?.[0]?.zoom ??
-                    frame.camera.zoom;
+                let baseZoom = currentShot.framings?.[0]?.zoom ?? frame.camera.zoom;
+                if (selectedCamBlock) {
+                    const midMs = selectedCamBlock.startMs + selectedCamBlock.durationMs / 2;
+                    const which: 'from' | 'to' = frame.shotLocalTimeMs < midMs ? 'from' : 'to';
+                    baseZoom = selectedCamBlock[which]?.zoom ?? baseZoom;
+                }
                 const nextZoom = Number(
                     Math.max(0.2, Math.min(5.0, baseZoom * zoomFactor)).toFixed(3)
                 );
+                beginDragTransaction();
                 updateActiveShotCamera({ zoom: nextZoom });
+                commitDragTransaction();
                 return;
             }
 
@@ -220,7 +224,17 @@ export const Stage: React.FC<StageProps> = ({
 
         el.addEventListener('wheel', handleWheel, { passive: false });
         return () => el.removeEventListener('wheel', handleWheel);
-    }, [setCanvasZoom, setCanvasPan, activeTool, frame.activeShot, selectedCameraBlockId, frame.camera.zoom]);
+    }, [
+        setCanvasZoom,
+        setCanvasPan,
+        activeTool,
+        frame.activeShot,
+        selectedCameraBlockId,
+        frame.camera.zoom,
+        frame.shotLocalTimeMs,
+        beginDragTransaction,
+        commitDragTransaction,
+    ]);
 
     const ratioSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
     const targetAspect = ratioSpec.widthRatio / ratioSpec.heightRatio;
@@ -244,9 +258,11 @@ export const Stage: React.FC<StageProps> = ({
         && effectiveBackground.kind === 'gradient'
         && effectiveBackground.gradientType !== 'radial';
 
-    const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGSVGElement>) => {
+    const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation();
-        const rect = event.currentTarget.getBoundingClientRect();
+        const svgEl = event.currentTarget.ownerSVGElement;
+        if (!svgEl) return;
+        const rect = svgEl.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
         const x = ((event.clientX - rect.left) / rect.width) * frameWidth - frameWidth / 2;
         const y = ((event.clientY - rect.top) / rect.height) * frameHeight - frameHeight / 2;
@@ -283,25 +299,25 @@ export const Stage: React.FC<StageProps> = ({
         }
     };
 
-    const handleGradientAnglePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
+    const handleGradientAnglePointerDown = (event: React.PointerEvent<SVGGElement>) => {
         event.preventDefault();
         beginDragTransaction();
         updateGradientAngleFromPointer(event);
         event.currentTarget.setPointerCapture(event.pointerId);
     };
 
-    const handleGradientAnglePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
+    const handleGradientAnglePointerMove = (event: React.PointerEvent<SVGGElement>) => {
         if (event.buttons === 1) updateGradientAngleFromPointer(event);
     };
 
-    const handleGradientAnglePointerUp = (event: React.PointerEvent<SVGSVGElement>) => {
+    const handleGradientAnglePointerUp = (event: React.PointerEvent<SVGGElement>) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
         }
         commitDragTransaction();
     };
 
-    const handleGradientAnglePointerCancel = (event: React.PointerEvent<SVGSVGElement>) => {
+    const handleGradientAnglePointerCancel = (event: React.PointerEvent<SVGGElement>) => {
         if (event.currentTarget.hasPointerCapture(event.pointerId)) {
             event.currentTarget.releasePointerCapture(event.pointerId);
         }
@@ -471,7 +487,7 @@ export const Stage: React.FC<StageProps> = ({
                 if (isOrbitAction) {
                     const deltaOrbit = deltaX * 0.4;
                     const deltaTilt = -deltaY * 0.4;
-                    const nextOrbit = Math.round((startOrbit + deltaOrbit + 360) % 360);
+                    const nextOrbit = Math.round(startOrbit + deltaOrbit);
                     const nextTilt = Math.max(
                         -85,
                         Math.min(85, Math.round(startTilt + deltaTilt))
@@ -1203,6 +1219,9 @@ export const Stage: React.FC<StageProps> = ({
             <OrientationGizmo
                 cameraRotation={frame.camera.rotation}
                 onSetOrientation={handleSetOrientation}
+                onDragStart={beginDragTransaction}
+                onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
+                onDragEnd={commitDragTransaction}
                 onResetCamera={handleResetCamera}
                 currentZoom={frame.camera.zoom}
             />

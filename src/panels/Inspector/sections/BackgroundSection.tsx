@@ -145,17 +145,6 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
                 }),
                 options
             );
-            // Keep activeShot in sync if it has a direct background object
-            if (activeShot?.background) {
-                updateShot(
-                    activeShot.id,
-                    (shot) => ({
-                        ...shot,
-                        background: bg,
-                    }),
-                    options
-                );
-            }
         }
     };
 
@@ -185,6 +174,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     };
 
     const handleStopPointerUp = (e: React.PointerEvent<HTMLButtonElement>) => {
+        if (draggingStopIdx === null) return;
         setDraggingStopIdx(null);
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {

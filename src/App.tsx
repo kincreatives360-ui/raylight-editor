@@ -305,13 +305,21 @@ export default function App() {
     void loadProjectFromIndexedDB().then((idbProject) => {
       if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
         updateProject(
-          (curr) => ({
-            ...curr,
-            assets: {
-              ...idbProject.assets,
-              ...curr.assets,
-            },
-          }),
+          (curr) => {
+            const restoredAssets = { ...curr.assets };
+            let hasNewData = false;
+            for (const [id, asset] of Object.entries(idbProject.assets)) {
+              if (restoredAssets[id] && asset.dataUrl && !restoredAssets[id].dataUrl) {
+                restoredAssets[id] = { ...restoredAssets[id], ...asset };
+                hasNewData = true;
+              }
+            }
+            if (!hasNewData) return curr;
+            return {
+              ...curr,
+              assets: restoredAssets,
+            };
+          },
           { skipHistory: true }
         );
       }
@@ -325,9 +333,21 @@ export default function App() {
     }
   }, [project.audio?.clips]);
 
+  const projectFontKey = useMemo(() => {
+    const families = new Set<string>();
+    for (const shot of project.shots || []) {
+      for (const layer of shot.layers || []) {
+        if (layer.kind === 'text' && layer.font?.family) {
+          families.add(layer.font.family);
+        }
+      }
+    }
+    return Array.from(families).sort().join('|');
+  }, [project.shots]);
+
   useEffect(() => {
     void preloadProjectFonts(project);
-  }, [project]);
+  }, [projectFontKey, project]);
 
   useEffect(() => {
     syncAudioPlayback(project.audio, isPlaying && hoverTimeMs === null, currentTimeMs);

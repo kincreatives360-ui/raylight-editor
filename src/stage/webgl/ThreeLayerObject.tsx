@@ -742,7 +742,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             scale={[scale.x, scale.y, scale.z || 1]}
             onPointerDown={(e) => {
                 e.stopPropagation();
-                onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey);
             }}
             onClick={(e) => {
                 e.stopPropagation();

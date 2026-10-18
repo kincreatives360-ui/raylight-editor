@@ -72,9 +72,9 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     };
 
     const toEp = activeBlock.to || {
-        anchorX: -0.05,
-        anchorY: 0.02,
-        zoom: 1.15,
+        anchorX: 0,
+        anchorY: 0,
+        zoom: 1,
         roll: 0,
         orbit: 0,
         tilt: 0,
@@ -166,9 +166,11 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 (shotData) => {
                     const blocks = (shotData.cameraBlocks || []).map((b) => {
                         if (b.id !== selectedCameraBlockId) return b;
+                        const baseEp = s.which === 'from' ? fromEp : toEp;
                         return {
                             ...b,
                             [s.which]: {
+                                ...baseEp,
                                 ...b[s.which],
                                 anchorX: nextAnchorX,
                                 anchorY: nextAnchorY,
@@ -202,9 +204,11 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 (shotData) => {
                     const blocks = (shotData.cameraBlocks || []).map((b) => {
                         if (b.id !== selectedCameraBlockId) return b;
+                        const baseEp = s.which === 'from' ? fromEp : toEp;
                         return {
                             ...b,
                             [s.which]: {
+                                ...baseEp,
                                 ...b[s.which],
                                 zoom: nextZoom,
                             },

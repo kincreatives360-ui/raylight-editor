@@ -7,6 +7,9 @@ import { radToDeg } from '../model/defaults';
 interface OrientationGizmoProps {
     cameraRotation: { x: number; y: number; z: number };
     onSetOrientation: (orbitDeg: number, tiltDeg: number, rollDeg?: number) => void;
+    onDragStart?: () => void;
+    onDragOrientation?: (orbitDeg: number, tiltDeg: number, rollDeg?: number) => void;
+    onDragEnd?: () => void;
     onResetCamera: () => void;
     currentZoom?: number;
 }
@@ -14,6 +17,9 @@ interface OrientationGizmoProps {
 export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
     cameraRotation,
     onSetOrientation,
+    onDragStart,
+    onDragOrientation,
+    onDragEnd,
     onResetCamera,
     currentZoom = 1,
 }) => {
@@ -44,6 +50,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             startPitch: radToDeg(cameraRotation.x),
             hasMoved: false,
         };
+        onDragStart?.();
     };
 
     const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -60,7 +67,11 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         const deltaTilt = -dy * 0.75;
         const nextOrbit = Math.round((dragStartRef.current.startYaw + deltaOrbit + 3600) % 360);
         const nextTilt = Math.max(-85, Math.min(85, Math.round(dragStartRef.current.startPitch + deltaTilt)));
-        onSetOrientation(nextOrbit, nextTilt);
+        if (onDragOrientation) {
+            onDragOrientation(nextOrbit, nextTilt);
+        } else {
+            onSetOrientation(nextOrbit, nextTilt);
+        }
     };
 
     const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -74,6 +85,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             // ignore
         }
         dragStartRef.current = null;
+        onDragEnd?.();
     };
 
     // Compute projected 2D coordinates for the unit axes (X, Y, Z)

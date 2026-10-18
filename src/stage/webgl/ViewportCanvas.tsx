@@ -101,6 +101,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
             <Canvas
+                id="raylight-stage-webgl-canvas"
                 shadows
                 flat
                 frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}

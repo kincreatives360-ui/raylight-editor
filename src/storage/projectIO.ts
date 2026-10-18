@@ -55,13 +55,24 @@ export async function saveProjectToIndexedDB(project: Project): Promise<boolean>
 
             // Separate large assets to prevent massive single-record serialization
             const lightweightAssets: Record<string, AssetRecord> = {};
+            const currentAssetIds = new Set(Object.keys(project.assets || {}));
+
+            // Prune assets from assetStore that are no longer part of this project
+            const getAllKeysReq = assetStore.getAllKeys();
+            getAllKeysReq.onsuccess = () => {
+                const keys = (getAllKeysReq.result as string[]) || [];
+                for (const key of keys) {
+                    if (!currentAssetIds.has(key)) {
+                        assetStore.delete(key);
+                    }
+                }
+            };
+
             for (const [id, asset] of Object.entries(project.assets || {})) {
                 if (asset) {
                     assetStore.put(asset);
-                    lightweightAssets[id] = {
-                        ...asset,
-                        // Retain lightweight metadata; assetStore holds the full payload
-                    };
+                    const { dataUrl: _drop, ...meta } = asset;
+                    lightweightAssets[id] = meta as AssetRecord;
                 }
             }
 
@@ -110,17 +121,21 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                 }
 
                 const baseProject = result.project as Project;
-                // Fetch all assets from asset store to reconstitute full dataUrls
-                const allAssetsReq = assetStore.getAll();
-                allAssetsReq.onsuccess = () => {
-                    const assetsArray = (allAssetsReq.result as AssetRecord[]) || [];
-                    const assetMap: Record<string, AssetRecord> = {};
-                    for (const a of assetsArray) {
-                        if (a && a.id) {
-                            assetMap[a.id] = a;
-                        }
-                    }
+                const neededIds = Object.keys(baseProject.assets || {});
+                if (neededIds.length === 0) {
+                    const validated = validateProject(baseProject);
+                    resolve(validated.success ? validated.data : null);
+                    return;
+                }
 
+                // Fetch only the assets that belong to this project
+                const assetMap: Record<string, AssetRecord> = {};
+                let pending = neededIds.length;
+                let settled = false;
+
+                const finish = () => {
+                    if (settled) return;
+                    settled = true;
                     const validated = validateProject({
                         ...baseProject,
                         assets: {
@@ -128,17 +143,23 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                             ...assetMap,
                         },
                     });
-
-                    if (validated.success) {
-                        resolve(validated.data);
-                    } else {
-                        resolve(null);
-                    }
-                };
-                allAssetsReq.onerror = () => {
-                    const validated = validateProject(baseProject);
                     resolve(validated.success ? validated.data : null);
                 };
+
+                for (const id of neededIds) {
+                    const req = assetStore.get(id);
+                    req.onsuccess = () => {
+                        if (req.result) {
+                            assetMap[id] = req.result as AssetRecord;
+                        }
+                        pending--;
+                        if (pending === 0) finish();
+                    };
+                    req.onerror = () => {
+                        pending--;
+                        if (pending === 0) finish();
+                    };
+                }
             };
             getReq.onerror = () => resolve(null);
         } catch (err) {

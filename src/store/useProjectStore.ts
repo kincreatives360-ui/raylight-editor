@@ -40,6 +40,37 @@ export function recalculateShotStartTimes(shots: Shot[]): Shot[] {
     });
 }
 
+function trimBlocksForFirstHalf<T extends { startMs: number; durationMs: number }>(
+    blocks: T[] | undefined,
+    splitMs: number
+): T[] {
+    if (!blocks) return [];
+    return blocks
+        .filter((b) => b.startMs < splitMs)
+        .map((b) => ({
+            ...b,
+            durationMs: Math.min(b.durationMs, splitMs - b.startMs),
+        }));
+}
+
+function shiftBlocksForSecondHalf<T extends { startMs: number; durationMs: number }>(
+    blocks: T[] | undefined,
+    splitMs: number
+): T[] {
+    if (!blocks) return [];
+    return blocks
+        .filter((b) => b.startMs + b.durationMs > splitMs)
+        .map((b) => {
+            const newStart = Math.max(0, b.startMs - splitMs);
+            const remaining = b.startMs + b.durationMs - splitMs;
+            return {
+                ...b,
+                startMs: newStart,
+                durationMs: Math.min(b.durationMs, remaining),
+            };
+        });
+}
+
 export type RestackMode = 'forward' | 'backward' | 'front' | 'back';
 
 interface ProjectStore {
@@ -267,7 +298,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             layers: shot.layers
                 .filter((l) => l.id !== layerId)
                 .sort((a, b) => a.order - b.order)
-                .map((l, idx) => ({ ...l, order: idx })),
+                .map((l, idx) => ({
+                    ...l,
+                    order: idx,
+                    maskLayerId: l.maskLayerId === layerId ? undefined : l.maskLayerId,
+                })),
+            groups: (shot.groups || []).filter((g) =>
+                shot.layers.some((l) => l.groupId === g.id && l.id !== layerId)
+            ),
         }));
     },
 
@@ -279,7 +317,14 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             layers: shot.layers
                 .filter((l) => !idSet.has(l.id))
                 .sort((a, b) => a.order - b.order)
-                .map((l, idx) => ({ ...l, order: idx })),
+                .map((l, idx) => ({
+                    ...l,
+                    order: idx,
+                    maskLayerId: l.maskLayerId && idSet.has(l.maskLayerId) ? undefined : l.maskLayerId,
+                })),
+            groups: (shot.groups || []).filter((g) =>
+                shot.layers.some((l) => l.groupId === g.id && !idSet.has(l.id))
+            ),
         }));
     },
 
@@ -632,7 +677,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             id: `layer-${l.kind}-${Date.now()}-${idx}`,
             inMs: Math.max(0, l.inMs - firstDuration),
             outMs: Math.max(100, Math.min(secondDuration, l.outMs - firstDuration)),
+            blocks: shiftBlocksForSecondHalf(l.blocks, firstDuration),
         }));
+        secondShot.cameraBlocks = shiftBlocksForSecondHalf(target.cameraBlocks, firstDuration);
+        secondShot.lightBlocks = shiftBlocksForSecondHalf(target.lightBlocks, firstDuration);
+        secondShot.effectBlocks = shiftBlocksForSecondHalf(target.effectBlocks, firstDuration);
 
         get().updateProject((proj) => {
             const idx = proj.shots.findIndex((s) => s.id === shotId);
@@ -642,7 +691,11 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 layers: target.layers.map((l) => ({
                     ...l,
                     outMs: Math.min(firstDuration, l.outMs),
+                    blocks: trimBlocksForFirstHalf(l.blocks, firstDuration),
                 })),
+                cameraBlocks: trimBlocksForFirstHalf(target.cameraBlocks, firstDuration),
+                lightBlocks: trimBlocksForFirstHalf(target.lightBlocks, firstDuration),
+                effectBlocks: trimBlocksForFirstHalf(target.effectBlocks, firstDuration),
             };
             const nextShots = [...proj.shots];
             nextShots.splice(idx, 1, updatedFirst, secondShot);
