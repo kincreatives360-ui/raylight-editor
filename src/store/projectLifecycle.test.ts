@@ -73,6 +73,7 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     expect(shotsAfter[1].id).toBe(newShot.id);
     expect(shotsAfter[0].startMs).toBe(0);
     expect(shotsAfter[1].startMs).toBe(3000);
+    expect(newShot.startMs).toBe(3000);
   });
 
   it('3. splitShotAtPlayhead recalculates startMs for newly created and all subsequent shots', () => {

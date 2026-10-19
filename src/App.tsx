@@ -315,10 +315,27 @@ export default function App() {
       if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
         updateProject(
           (curr) => {
+            if (idbProject.id !== curr.id) return curr;
+
             const restoredAssets = { ...curr.assets };
             let hasNewData = false;
             for (const [id, asset] of Object.entries(idbProject.assets)) {
               if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
+                if (!restoredAssets[id]) {
+                  const isReferenced =
+                    (curr.background?.kind === 'image' && curr.background.assetId === id) ||
+                    curr.shots.some(
+                      (s) =>
+                        (s.background?.kind === 'image' && s.background.assetId === id) ||
+                        s.layers.some(
+                          (l) => 'assetId' in l && (l as { assetId?: string }).assetId === id
+                        )
+                    ) ||
+                    (curr.audio?.clips?.some((c) => c.assetId === id) ?? false);
+
+                  if (!isReferenced) continue;
+                }
+
                 restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
                 hasNewData = true;
               }

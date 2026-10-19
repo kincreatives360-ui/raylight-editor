@@ -5,6 +5,8 @@ import {
   loadProjectFromBrowser,
   importProjectFromFile,
   exportProjectToFile,
+  saveProjectToIndexedDB,
+  loadProjectFromIndexedDB,
 } from './projectIO';
 import { DEFAULT_PROJECT, createDefaultShot } from '../model/defaults';
 import type { Project } from '../model/types';
@@ -261,6 +263,110 @@ describe('Project IO Storage & File Operations', () => {
     expect(loaded).not.toBeNull();
     expect(loaded?.name).toBe('Legacy Project Missing dataUrl');
     expect(loaded?.assets['legacy-asset'].dataUrl).toBe('');
+  });
+
+  it('10. saveProjectToIndexedDB deletes from assetStore when dataUrl is empty, preventing restoration of stale data', async () => {
+    const projectStoreMap: Record<string, unknown> = {};
+    const assetStoreMap: Record<string, unknown> = {
+      'asset-stale': {
+        id: 'asset-stale',
+        name: 'stale.png',
+        mimeType: 'image/png',
+        dataUrl: 'data:image/png;base64,staleData',
+      },
+    };
+
+    const mockProjectStore = {
+      put: vi.fn((rec: { id: string; project: unknown }) => {
+        projectStoreMap[rec.id] = rec;
+      }),
+      get: vi.fn((id: string) => ({
+        result: projectStoreMap[id],
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    const mockAssetStore = {
+      put: vi.fn((asset: { id: string }) => {
+        assetStoreMap[asset.id] = asset;
+      }),
+      delete: vi.fn((id: string) => {
+        delete assetStoreMap[id];
+      }),
+      getAllKeys: vi.fn(() => ({
+        result: Object.keys(assetStoreMap),
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+      get: vi.fn((id: string) => ({
+        result: assetStoreMap[id],
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    const mockTx = {
+      objectStore: vi.fn((name: string) =>
+        name === 'raylight_projects' ? mockProjectStore : mockAssetStore
+      ),
+      set oncomplete(cb: () => void) {
+        cb();
+      },
+      onerror: null,
+    };
+
+    const mockDb = {
+      transaction: vi.fn(() => mockTx),
+      objectStoreNames: {
+        contains: () => true,
+      },
+    };
+
+    const mockIdb = {
+      open: vi.fn(() => ({
+        result: mockDb,
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: mockLocalStorage,
+      indexedDB: mockIdb,
+    };
+
+    // Save project with asset whose dataUrl is empty
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-1',
+      assets: {
+        'asset-stale': {
+          id: 'asset-stale',
+          name: 'stale.png',
+          mimeType: 'image/png',
+          dataUrl: '',
+          width: 100,
+          height: 100,
+        },
+      },
+    };
+
+    const saved = await saveProjectToIndexedDB(project);
+    expect(saved).toBe(true);
+    // Verify assetStore.delete was called for the empty dataUrl asset
+    expect(mockAssetStore.delete).toHaveBeenCalledWith('asset-stale');
+    expect(assetStoreMap['asset-stale']).toBeUndefined();
+
+    // Verify loading from IndexedDB returns asset with empty dataUrl, without stale data
+    const loaded = await loadProjectFromIndexedDB();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.assets['asset-stale']).toBeDefined();
+    expect(loaded?.assets['asset-stale'].dataUrl).toBe('');
   });
 });
 

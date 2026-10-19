@@ -72,6 +72,8 @@ export async function saveProjectToIndexedDB(project: Project): Promise<boolean>
                 if (asset) {
                     if (asset.dataUrl) {
                         assetStore.put(asset);
+                    } else {
+                        assetStore.delete(id);
                     }
                     const { dataUrl: _drop, ...meta } = asset;
                     lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;

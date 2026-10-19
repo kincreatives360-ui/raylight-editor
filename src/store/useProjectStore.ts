@@ -599,12 +599,17 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             cameraBlocks: [],
         });
 
-        get().updateProject((proj) => ({
-            ...proj,
-            shots: recalculateShotStartTimes([...proj.shots, newShot]),
-        }));
+        let addedShot = newShot;
+        get().updateProject((proj) => {
+            const nextShots = recalculateShotStartTimes([...proj.shots, newShot]);
+            addedShot = nextShots.find((s) => s.id === newShot.id) || nextShots[nextShots.length - 1];
+            return {
+                ...proj,
+                shots: nextShots,
+            };
+        });
 
-        return newShot;
+        return addedShot;
     },
 
     duplicateShot: (shotId) => {
