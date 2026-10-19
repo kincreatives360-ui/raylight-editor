@@ -1,7 +1,7 @@
 # Raylight Editor — Stage Overlays & Custom Controls UI/Motion Audit
 
 **Target Surfaces:** Stage Overlays & Precision Custom Controls  
-**Governing Documents:** [`DESIGN.md`](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/DESIGN.md), [`PRODUCT.md`](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/PRODUCT.md), [`src/index.css`](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/index.css)  
+**Governing Documents:** [`DESIGN.md`](../DESIGN.md), [`PRODUCT.md`](../PRODUCT.md), [`src/index.css`](../src/index.css)  
 **Guidelines & Methodologies:** `/improve-ui` • `/improve-animations` (Emil Kowalski Animation Philosophy) • `/component-canvas`  
 **Primary Files Audited:**
 1. `src/stage/Stage.tsx`

@@ -1,6 +1,39 @@
 // src/stage/stageUtils.ts
-import type { AspectRatio } from '../model/types';
+import type { AspectRatio, CameraKeyframeEndpoint } from '../model/types';
 import type { EvaluatedLayerWithEffects } from '../engine/evaluateShot';
+
+export interface FramingBox {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    cx: number;
+    cy: number;
+}
+
+export function computeFramingBox(
+    ep: CameraKeyframeEndpoint | { anchorX?: number; anchorY?: number; zoom: number },
+    frameWidth: number,
+    frameHeight: number,
+    artboardWidth: number = 1920,
+    artboardHeight: number = 1080
+): FramingBox {
+    const safeZoom = Math.max(0.15, ep.zoom);
+    const width = frameWidth / safeZoom;
+    const height = frameHeight / safeZoom;
+    const scaleX = frameWidth / artboardWidth;
+    const scaleY = frameHeight / artboardHeight;
+    const cx = frameWidth / 2 + (ep.anchorX ?? 0) * scaleX;
+    const cy = frameHeight / 2 - (ep.anchorY ?? 0) * scaleY; // world Y is up, DOM Y is down
+    return {
+        left: cx - width / 2,
+        top: cy - height / 2,
+        width,
+        height,
+        cx,
+        cy,
+    };
+}
 
 export const ASPECT_RATIO_CONFIG: Record<
     AspectRatio,

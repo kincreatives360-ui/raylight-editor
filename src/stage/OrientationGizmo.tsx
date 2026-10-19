@@ -74,9 +74,14 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         }
     };
 
-    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+    const endDrag = () => {
         if (!dragStartRef.current) return;
         setIsDragging(false);
+        dragStartRef.current = null;
+        onDragEnd?.();
+    };
+
+    const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                 e.currentTarget.releasePointerCapture(e.pointerId);
@@ -84,15 +89,11 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         } catch {
             // ignore
         }
-        dragStartRef.current = null;
-        onDragEnd?.();
+        endDrag();
     };
 
     const handleLostPointerCapture = (_e: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragStartRef.current) return;
-        setIsDragging(false);
-        dragStartRef.current = null;
-        onDragEnd?.();
+        endDrag();
     };
 
     // Compute projected 2D coordinates for the unit axes (X, Y, Z)

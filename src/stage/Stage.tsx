@@ -162,6 +162,7 @@ const StageComponent: React.FC<StageProps> = ({
     // Track Spacebar hold for temporary Hand panning and C/V/H/Y tool shortcuts
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
+            if (e.defaultPrevented) return;
             const el = document.activeElement as HTMLElement | null;
             if (!el) return;
             const tag = el.tagName;

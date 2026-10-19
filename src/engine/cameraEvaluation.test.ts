@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
 import { evaluateShotCameraAtTime } from './evaluateCamera';
 import { evaluateCameraPose, getReferencePlaneDimensions } from '../stage/webgl/cameraMath';
-import { computeFramingBox } from '../stage/CameraFramingOverlay';
+import { computeFramingBox } from '../stage/stageUtils';
 import { validateProject } from '../model/schema';
 import { DEFAULT_PROJECT } from '../model/defaults';
 import type { Shot, CameraBlock } from '../model/types';

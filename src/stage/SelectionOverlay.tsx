@@ -606,14 +606,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         ];
 
     const borderColor = isLocked
-        ? '#f59e0b'
+        ? 'var(--accent-warning, #f59e0b)'
         : isCropping
-            ? '#fbbf24'
+            ? 'var(--accent-warning, #f59e0b)'
             : isAnimateMode
-                ? '#f43f5e'
-                : activeTool === 'tilt'
-                    ? '#a855f7'
-                    : '#0088ff';
+                ? 'var(--accent-danger, #f43f5e)'
+                : 'var(--accent-primary, #0088ff)';
 
     return (
         <div
@@ -636,8 +634,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         <g key={sec.id}>
                             <polygon
                                 points={pts}
-                                fill="rgba(0, 136, 255, 0.04)"
-                                stroke="#0088ff"
+                                fill="var(--accent-primary, #0088ff)"
+                                fillOpacity="0.04"
+                                stroke="var(--accent-primary, #0088ff)"
                                 strokeWidth="1.5"
                                 strokeDasharray="5 3"
                                 className="cursor-move pointer-events-auto"
@@ -667,7 +666,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
                         <polygon
                             points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
-                            fill="rgba(0, 136, 255, 0.02)"
+                            fill="var(--accent-primary, #0088ff)"
+                            fillOpacity="0.02"
                             stroke={borderColor}
                             strokeWidth="1.75"
                             strokeDasharray={isLocked || isCropping ? '6 4' : 'none'}

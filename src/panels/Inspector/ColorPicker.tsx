@@ -229,6 +229,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     event.stopPropagation();
                     setOpen(false);
                     onExitGradient?.();
+                    anchorRef.current?.focus();
                 }
             }}
             className="fixed z-[10000] w-[312px] rounded-2xl border border-[var(--border-medium,rgba(255,255,255,0.12))] bg-[var(--bg-muted,#242428)] p-2.5 shadow-[0_18px_60px_rgba(0,0,0,.7)]"
@@ -287,6 +288,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                     event.preventDefault();
                                     setOpen(false);
                                     onExitGradient?.();
+                                    anchorRef.current?.focus();
                                     return;
                                 }
                                 if (event.key === 'Enter') {
@@ -375,7 +377,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 const bounds = event.currentTarget.getBoundingClientRect();
                                 const at = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
                                 const nearest = gradient.stops.reduce((best, stop, index) => Math.abs(stop.at - at) < Math.abs(gradient.stops[best].at - at) ? index : best, 0);
-                                (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
+                                try {
+                                    (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
+                                } catch {
+                                    // ignore
+                                }
                                 (event.currentTarget as SVGSVGElement).dataset.dragStop = String(nearest);
                             }}
                             onPointerMove={(event) => {
@@ -445,6 +451,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                                 e.preventDefault();
                                                 setOpen(false);
                                                 onExitGradient?.();
+                                                anchorRef.current?.focus();
                                             }
                                         }}
                                         className="min-w-0 w-full bg-transparent font-mono text-[10px] text-[var(--text-primary,#f4f4f5)] outline-none"
