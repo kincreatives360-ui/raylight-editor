@@ -5,6 +5,7 @@ import {
   getOpfsMediaDirectory,
   saveMediaToOPFS,
   loadMediaBlobFromOPFS,
+  loadMediaDataUrlFromOPFS,
   deleteMediaFromOPFS,
   pruneOPFSAssets,
 } from './opfsStorage';
@@ -18,6 +19,7 @@ describe('Origin Private File System (OPFS) Media Engine', () => {
       return Promise.resolve();
     }),
     close: vi.fn(async () => Promise.resolve()),
+    abort: vi.fn(async () => Promise.resolve()),
   };
 
   const mockFileHandle = (name: string) => ({
@@ -142,5 +144,21 @@ describe('Origin Private File System (OPFS) Media Engine', () => {
     expect(mockMediaDir.removeEntry).toHaveBeenCalledWith('stale-2');
     expect(mockMediaDir.removeEntry).toHaveBeenCalledWith('stale-3');
     expect(mockMediaDir.removeEntry).not.toHaveBeenCalledWith('active-1');
+  });
+
+  it('7. saveMediaToOPFS() aborts the writable stream if writing fails', async () => {
+    mockWritableStream.write.mockRejectedValueOnce(new Error('Disk full error'));
+
+    const success = await saveMediaToOPFS('failing-asset', 'binary-data');
+    expect(success).toBe(false);
+    expect(mockWritableStream.abort).toHaveBeenCalled();
+  });
+
+  it('8. loadMediaDataUrlFromOPFS() restores specified mimeType on recovered data URL', async () => {
+    storageFiles['video-restore-mime'] = new Uint8Array([1, 2, 3]);
+
+    const dataUrl = await loadMediaDataUrlFromOPFS('video-restore-mime', 'video/mp4');
+    expect(dataUrl).not.toBeNull();
+    expect(dataUrl).toContain('data:video/mp4;base64,');
   });
 });

@@ -49,70 +49,90 @@ function openIndexedDb(): Promise<IDBDatabase | null> {
 
 /**
  * Saves project to IndexedDB asynchronously with full asset blobs,
- * preventing localStorage quota exhaustion.
+ * serializing saves to prevent overlapping writes/pruning races.
  */
-export async function saveProjectToIndexedDB(project: Project): Promise<boolean> {
-    const db = await openIndexedDb();
-    if (!db) return false;
+let saveQueue: Promise<boolean> = Promise.resolve(true);
 
-    return new Promise((resolve) => {
-        try {
-            const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readwrite');
-            const projectStore = tx.objectStore(STORE_PROJECTS);
-            const assetStore = tx.objectStore(STORE_ASSETS);
+export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
+    const execute = async (): Promise<boolean> => {
+        const db = await openIndexedDb();
+        if (!db) return false;
 
-            // Separate large assets to prevent massive single-record serialization
-            const lightweightAssets: Record<string, AssetRecord> = {};
-            const currentAssetIds = new Set(Object.keys(project.assets || {}));
+        const lightweightAssets: Record<string, AssetRecord> = {};
+        const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
-            // Prune assets from assetStore that are no longer part of this project
-            const getAllKeysReq = assetStore.getAllKeys();
-            getAllKeysReq.onsuccess = () => {
-                const keys = (getAllKeysReq.result as string[]) || [];
-                for (const key of keys) {
-                    if (!currentAssetIds.has(key)) {
-                        assetStore.delete(key);
-                    }
+        // 1. Gather all OPFS write/delete operations for this save
+        const opfsOperations: Promise<unknown>[] = [];
+        for (const [id, asset] of Object.entries(project.assets || {})) {
+            if (asset) {
+                if (asset.dataUrl) {
+                    opfsOperations.push(saveMediaToOPFS(id, asset.dataUrl));
+                } else {
+                    opfsOperations.push(deleteMediaFromOPFS(id));
                 }
-            };
-
-            for (const [id, asset] of Object.entries(project.assets || {})) {
-                if (asset) {
-                    if (asset.dataUrl) {
-                        assetStore.put(asset);
-                        void saveMediaToOPFS(id, asset.dataUrl);
-                    } else {
-                        assetStore.delete(id);
-                        void deleteMediaFromOPFS(id);
-                    }
-                    const { dataUrl: _drop, ...meta } = asset;
-                    lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
-                }
+                const { dataUrl: _drop, ...meta } = asset;
+                lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
             }
-
-            void pruneOPFSAssets(currentAssetIds);
-
-            const record = {
-                id: 'current_project',
-                project: {
-                    ...project,
-                    assets: lightweightAssets,
-                    updatedAt: new Date().toISOString(),
-                },
-            };
-
-            projectStore.put(record);
-
-            tx.oncomplete = () => resolve(true);
-            tx.onerror = () => {
-                console.warn('[Raylight Storage] IndexedDB transaction failed');
-                resolve(false);
-            };
-        } catch (err) {
-            console.warn('[Raylight Storage] saveProjectToIndexedDB error:', err);
-            resolve(false);
         }
-    });
+
+        // 2. Await all OPFS writes for this save and only THEN prune unreferenced assets
+        await Promise.all(opfsOperations);
+        await pruneOPFSAssets(currentAssetIds);
+
+        // 3. Persist to IndexedDB
+        return new Promise((resolve) => {
+            try {
+                const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readwrite');
+                const projectStore = tx.objectStore(STORE_PROJECTS);
+                const assetStore = tx.objectStore(STORE_ASSETS);
+
+                // Prune assets from assetStore that are no longer part of this project
+                const getAllKeysReq = assetStore.getAllKeys();
+                getAllKeysReq.onsuccess = () => {
+                    const keys = (getAllKeysReq.result as string[]) || [];
+                    for (const key of keys) {
+                        if (!currentAssetIds.has(key)) {
+                            assetStore.delete(key);
+                        }
+                    }
+                };
+
+                for (const [id, asset] of Object.entries(project.assets || {})) {
+                    if (asset) {
+                        if (asset.dataUrl) {
+                            assetStore.put(asset);
+                        } else {
+                            assetStore.delete(id);
+                        }
+                    }
+                }
+
+                const record = {
+                    id: 'current_project',
+                    project: {
+                        ...project,
+                        assets: lightweightAssets,
+                        updatedAt: new Date().toISOString(),
+                    },
+                };
+
+                projectStore.put(record);
+
+                tx.oncomplete = () => resolve(true);
+                tx.onerror = () => {
+                    console.warn('[Raylight Storage] IndexedDB transaction failed');
+                    resolve(false);
+                };
+            } catch (err) {
+                console.warn('[Raylight Storage] executeSaveProject error:', err);
+                resolve(false);
+            }
+        });
+    };
+
+    const next = saveQueue.then(execute, execute);
+    saveQueue = next;
+    return next;
 }
 
 /**
@@ -168,7 +188,10 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                         if (req.result) {
                             assetMap[id] = req.result as AssetRecord;
                         } else {
-                            const diskDataUrl = await loadMediaDataUrlFromOPFS(id);
+                            const diskDataUrl = await loadMediaDataUrlFromOPFS(
+                                id,
+                                baseProject.assets[id]?.mimeType
+                            );
                             if (diskDataUrl) {
                                 assetMap[id] = {
                                     ...baseProject.assets[id],
@@ -180,7 +203,10 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                         if (pending === 0) finish();
                     };
                     req.onerror = async () => {
-                        const diskDataUrl = await loadMediaDataUrlFromOPFS(id);
+                        const diskDataUrl = await loadMediaDataUrlFromOPFS(
+                            id,
+                            baseProject.assets[id]?.mimeType
+                        );
                         if (diskDataUrl) {
                             assetMap[id] = {
                                 ...baseProject.assets[id],

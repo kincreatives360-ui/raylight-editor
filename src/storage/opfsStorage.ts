@@ -37,58 +37,93 @@ export async function saveMediaToOPFS(
   const dir = await getOpfsMediaDirectory();
   if (!dir) return false;
 
+  let writable: FileSystemWritableFileStream | null = null;
   try {
-    const fileHandle = await dir.getFileHandle(assetId, { create: true });
-    const writable = await fileHandle.createWritable();
-
-    if (typeof data === 'string') {
-      if (data.startsWith('data:')) {
-        const response = await fetch(data);
-        const blob = await response.blob();
-        await writable.write(blob);
-      } else {
-        await writable.write(data);
-      }
+    let payload: Blob | ArrayBuffer | string;
+    if (typeof data === 'string' && data.startsWith('data:')) {
+      const response = await fetch(data);
+      payload = await response.blob();
     } else {
-      await writable.write(data);
+      payload = data;
     }
 
+    const fileHandle = await dir.getFileHandle(assetId, { create: true });
+    writable = await fileHandle.createWritable();
+    await writable.write(payload);
     await writable.close();
+    writable = null;
     return true;
   } catch (err) {
+    if (writable) {
+      try {
+        await (writable as FileSystemWritableFileStream).abort();
+      } catch {
+        // ignore abort error
+      }
+    }
     console.warn(`[Raylight OPFS] Error streaming media asset ${assetId} to disk:`, err);
     return false;
   }
 }
 
 /**
- * Loads a media asset file from OPFS as a Blob.
+ * Loads a media asset file from OPFS as a Blob, restoring the saved mimeType if specified.
  */
-export async function loadMediaBlobFromOPFS(assetId: string): Promise<Blob | null> {
+export async function loadMediaBlobFromOPFS(
+  assetId: string,
+  mimeType?: string
+): Promise<Blob | null> {
   const dir = await getOpfsMediaDirectory();
   if (!dir) return null;
 
   try {
     const fileHandle = await dir.getFileHandle(assetId);
-    return await fileHandle.getFile();
+    const file = await fileHandle.getFile();
+    if (mimeType && file.type !== mimeType) {
+      return file.slice(0, file.size, mimeType);
+    }
+    return file;
   } catch {
     return null;
   }
 }
 
 /**
- * Loads a media asset file from OPFS converted to a dataUrl string for immediate playback.
+ * Loads a media asset file from OPFS converted to a dataUrl string for immediate playback,
+ * restoring the saved AssetRecord.mimeType before encoding as a data URL.
  */
-export async function loadMediaDataUrlFromOPFS(assetId: string): Promise<string | null> {
-  const blob = await loadMediaBlobFromOPFS(assetId);
+export async function loadMediaDataUrlFromOPFS(
+  assetId: string,
+  mimeType?: string
+): Promise<string | null> {
+  const blob = await loadMediaBlobFromOPFS(assetId, mimeType);
   if (!blob) return null;
 
-  return new Promise((resolve) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result || ''));
-    reader.onerror = () => resolve(null);
-    reader.readAsDataURL(blob);
-  });
+  try {
+    const effectiveMime = mimeType || blob.type || 'application/octet-stream';
+    if (typeof FileReader !== 'undefined') {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result || ''));
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(blob);
+      });
+    }
+
+    const buffer = await blob.arrayBuffer();
+    const bytes = new Uint8Array(buffer);
+    let binary = '';
+    for (let i = 0; i < bytes.byteLength; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    const base64 = typeof btoa === 'function'
+      ? btoa(binary)
+      : (globalThis as unknown as { Buffer?: { from: (b: Uint8Array) => { toString: (e: string) => string } } })
+          .Buffer?.from(bytes).toString('base64') || '';
+    return `data:${effectiveMime};base64,${base64}`;
+  } catch {
+    return null;
+  }
 }
 
 /**
