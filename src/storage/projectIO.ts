@@ -2,6 +2,14 @@
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { DEFAULT_PROJECT } from '../model/defaults';
+import {
+    saveMediaToOPFS,
+    loadMediaBlobFromOPFS,
+    loadMediaDataUrlFromOPFS,
+    deleteMediaFromOPFS,
+    pruneOPFSAssets,
+    isOpfsSupported,
+} from './opfsStorage';
 
 const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
 const LEGACY_DEFAULT_CANVAS_BACKGROUND = '#111114';
@@ -72,13 +80,17 @@ export async function saveProjectToIndexedDB(project: Project): Promise<boolean>
                 if (asset) {
                     if (asset.dataUrl) {
                         assetStore.put(asset);
+                        void saveMediaToOPFS(id, asset.dataUrl);
                     } else {
                         assetStore.delete(id);
+                        void deleteMediaFromOPFS(id);
                     }
                     const { dataUrl: _drop, ...meta } = asset;
                     lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
                 }
             }
+
+            void pruneOPFSAssets(currentAssetIds);
 
             const record = {
                 id: 'current_project',
@@ -104,7 +116,7 @@ export async function saveProjectToIndexedDB(project: Project): Promise<boolean>
 }
 
 /**
- * Loads project and reconstitutes assets from IndexedDB
+ * Loads project and reconstitutes assets from IndexedDB (with OPFS fallback)
  */
 export async function loadProjectFromIndexedDB(): Promise<Project | null> {
     const db = await openIndexedDb();
@@ -152,14 +164,29 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
 
                 for (const id of neededIds) {
                     const req = assetStore.get(id);
-                    req.onsuccess = () => {
+                    req.onsuccess = async () => {
                         if (req.result) {
                             assetMap[id] = req.result as AssetRecord;
+                        } else {
+                            const diskDataUrl = await loadMediaDataUrlFromOPFS(id);
+                            if (diskDataUrl) {
+                                assetMap[id] = {
+                                    ...baseProject.assets[id],
+                                    dataUrl: diskDataUrl,
+                                };
+                            }
                         }
                         pending--;
                         if (pending === 0) finish();
                     };
-                    req.onerror = () => {
+                    req.onerror = async () => {
+                        const diskDataUrl = await loadMediaDataUrlFromOPFS(id);
+                        if (diskDataUrl) {
+                            assetMap[id] = {
+                                ...baseProject.assets[id],
+                                dataUrl: diskDataUrl,
+                            };
+                        }
                         pending--;
                         if (pending === 0) finish();
                     };
@@ -291,3 +318,12 @@ export async function importProjectFromFile(
         };
     }
 }
+
+export {
+    isOpfsSupported,
+    saveMediaToOPFS,
+    loadMediaBlobFromOPFS,
+    loadMediaDataUrlFromOPFS,
+    deleteMediaFromOPFS,
+    pruneOPFSAssets,
+};

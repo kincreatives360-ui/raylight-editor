@@ -59,16 +59,35 @@ const ViewportRenderBridge: React.FC<{
 };
 
 const WebGLContextGuard: React.FC = () => {
-    const { gl, invalidate } = useThree();
+    const { gl, invalidate, scene, size } = useThree();
 
     useEffect(() => {
         const canvas = gl.domElement;
         const handleContextLost = (e: Event) => {
             e.preventDefault();
-            console.warn('[Raylight Stage] WebGL context lost. Retaining scene state...');
+            console.warn('[Raylight Stage] WebGL context lost (e.g. OS sleep/tab backgrounding). Retaining scene state...');
         };
         const handleContextRestored = () => {
-            console.info('[Raylight Stage] WebGL context restored. Re-rendering stage...');
+            console.info('[Raylight Stage] WebGL context restored. Re-initializing render state...');
+            try {
+                if (typeof gl.resetState === 'function') {
+                    gl.resetState();
+                }
+                gl.setSize(size.width, size.height, false);
+                // Mark scene materials for program recompilation on the restored context
+                scene.traverse((obj) => {
+                    const mesh = obj as THREE.Mesh;
+                    if (mesh.material) {
+                        if (Array.isArray(mesh.material)) {
+                            mesh.material.forEach((m) => (m.needsUpdate = true));
+                        } else {
+                            mesh.material.needsUpdate = true;
+                        }
+                    }
+                });
+            } catch (err) {
+                console.warn('[Raylight Stage] Error resetting WebGL state on restore:', err);
+            }
             invalidate();
         };
 
@@ -79,7 +98,7 @@ const WebGLContextGuard: React.FC = () => {
             canvas.removeEventListener('webglcontextlost', handleContextLost);
             canvas.removeEventListener('webglcontextrestored', handleContextRestored);
         };
-    }, [gl, invalidate]);
+    }, [gl, invalidate, scene, size]);
 
     return null;
 };
