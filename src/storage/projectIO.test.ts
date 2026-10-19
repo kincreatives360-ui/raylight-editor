@@ -204,4 +204,63 @@ describe('Project IO Storage & File Operations', () => {
       (globalThis as unknown as { URL: unknown }).URL = originalURL;
     }
   });
+
+  it('8. saveProjectToBrowser falls back to lightweight assets when QuotaExceededError occurs, and loads cleanly', () => {
+    let callCount = 0;
+    mockLocalStorage.setItem.mockImplementation((key: string, val: string) => {
+      callCount++;
+      if (callCount === 1) {
+        throw new Error('QuotaExceededError');
+      }
+      storageMap[key] = val;
+    });
+
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      name: 'Heavy Asset Project',
+      assets: {
+        'asset-1': {
+          id: 'asset-1',
+          name: 'large_texture.png',
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,large...',
+          width: 100,
+          height: 100,
+        },
+      },
+    };
+
+    saveProjectToBrowser(project);
+    expect(callCount).toBe(2);
+    expect(storageMap[AUTO_SAVE_KEY]).toBeDefined();
+
+    const loaded = loadProjectFromBrowser();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.name).toBe('Heavy Asset Project');
+    expect(loaded?.assets['asset-1']).toBeDefined();
+    expect(loaded?.assets['asset-1'].dataUrl).toBe('');
+  });
+
+  it('9. loadProjectFromBrowser successfully migrates legacy projects where asset records omit dataUrl', () => {
+    const legacyProject = {
+      ...DEFAULT_PROJECT,
+      name: 'Legacy Project Missing dataUrl',
+      assets: {
+        'legacy-asset': {
+          id: 'legacy-asset',
+          name: 'old_asset.png',
+          mimeType: 'image/png',
+          width: 50,
+          height: 50,
+        },
+      },
+    };
+
+    storageMap[AUTO_SAVE_KEY] = JSON.stringify(legacyProject);
+    const loaded = loadProjectFromBrowser();
+    expect(loaded).not.toBeNull();
+    expect(loaded?.name).toBe('Legacy Project Missing dataUrl');
+    expect(loaded?.assets['legacy-asset'].dataUrl).toBe('');
+  });
 });
+

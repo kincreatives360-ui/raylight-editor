@@ -405,32 +405,37 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
   };
 }
 
-export const DEFAULT_PROJECT: Project = {
-  id: `project-${Date.now()}`,
-  name: 'Untitled project',
-  version: CURRENT_SCHEMA_VERSION,
-  schemaVersion: CURRENT_SCHEMA_VERSION,
-  updatedAt: new Date().toISOString(),
-  createdAt: new Date().toISOString(),
-  aspectRatio: '16:9',
-  fps: 60,
-  background: {
-    kind: 'gradient',
-    angle: 135,
-    stops: [
-      { at: 0, color: '#0c0e17' },
-      { at: 1, color: '#161928' },
+export function createDefaultProject(overrides: Partial<Project> = {}): Project {
+  return {
+    id: `project-${Date.now()}`,
+    name: 'Untitled project',
+    version: CURRENT_SCHEMA_VERSION,
+    schemaVersion: CURRENT_SCHEMA_VERSION,
+    updatedAt: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    aspectRatio: '16:9',
+    fps: 60,
+    background: {
+      kind: 'gradient',
+      angle: 135,
+      stops: [
+        { at: 0, color: '#0c0e17' },
+        { at: 1, color: '#161928' },
+      ],
+    },
+    assets: {},
+    audio: createDefaultAudio(),
+    shots: [
+      createDefaultShot({
+        id: 'shot-1',
+        name: 'Shot 1',
+        startMs: 0,
+        durationMs: 4000,
+        lane: 0,
+      }),
     ],
-  },
-  assets: {},
-  audio: createDefaultAudio(),
-  shots: [
-    createDefaultShot({
-      id: 'shot-1',
-      name: 'Shot 1',
-      startMs: 0,
-      durationMs: 4000,
-      lane: 0,
-    }),
-  ],
-};
+    ...overrides,
+  };
+}
+
+export const DEFAULT_PROJECT: Project = createDefaultProject();

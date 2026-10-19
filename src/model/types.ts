@@ -596,7 +596,6 @@ export function isBlankProjectState(project: Project): boolean {
   const [shot] = project.shots;
   return Boolean(
     shot &&
-    shot.id === 'shot-1' &&
     shot.layers.length === 0 &&
     shot.groups.length === 0 &&
     (shot.cameraBlocks?.length ?? 0) === 0 &&

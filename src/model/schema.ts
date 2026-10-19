@@ -622,7 +622,7 @@ export const ProjectSchema = z.object({
       id: z.string(),
       name: z.string(),
       mimeType: z.string(),
-      dataUrl: z.string(),
+      dataUrl: z.string().default(''),
       thumbUrl: z.string().optional(),
       width: z.number(),
       height: z.number(),
@@ -639,6 +639,14 @@ export type ValidationResult =
 function migrateLegacyProject(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
   const project = JSON.parse(JSON.stringify(raw));
+
+  if (project.assets && typeof project.assets === 'object') {
+    for (const asset of Object.values(project.assets)) {
+      if (asset && typeof asset === 'object' && !('dataUrl' in asset)) {
+        (asset as { dataUrl?: string }).dataUrl = '';
+      }
+    }
+  }
 
   if (project.version == null && project.schemaVersion != null) {
     project.version = project.schemaVersion;

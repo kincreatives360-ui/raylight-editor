@@ -1,7 +1,8 @@
 import React, { useRef, useState } from 'react';
-import type { Shot } from '../model/types';
+import type { Shot, CameraKeyframeEndpoint, CameraBlock } from '../model/types';
 import { Film } from 'lucide-react';
 import { getArtboardDimensions, computeFramingBox } from './stageUtils';
+import { useProjectStore } from '../store/useProjectStore';
 
 interface CameraFramingOverlayProps {
     shot: Shot;
@@ -160,8 +161,8 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         const updateSelectedEndpoint = (patch: Record<string, number>) => {
             updateShot(
                 shot.id,
-                (shotData) => {
-                    const blocks = (shotData.cameraBlocks || []).map((b) => {
+                (shotData: Shot) => {
+                    const blocks = (shotData.cameraBlocks || []).map((b: CameraBlock) => {
                         if (b.id !== selectedCameraBlockId) return b;
                         const baseEp = s.which === 'from' ? fromEp : toEp;
                         return {

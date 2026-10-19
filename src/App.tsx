@@ -318,8 +318,8 @@ export default function App() {
             const restoredAssets = { ...curr.assets };
             let hasNewData = false;
             for (const [id, asset] of Object.entries(idbProject.assets)) {
-              if (restoredAssets[id] && asset.dataUrl && !restoredAssets[id].dataUrl) {
-                restoredAssets[id] = { ...restoredAssets[id], ...asset };
+              if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
+                restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
                 hasNewData = true;
               }
             }
@@ -1192,7 +1192,7 @@ export default function App() {
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
           <StageErrorBoundary>
-            <Suspense fallback={<div className="flex-1 bg-[#242424]" />}>
+            <Suspense fallback={<div className="flex-1 bg-[var(--bg-canvas,#07080d)]" />}>
               <Stage
                 project={project}
                 frame={frame}

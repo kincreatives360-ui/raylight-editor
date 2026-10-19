@@ -13,9 +13,9 @@ import type {
     AssetRecord,
     AudioClip,
 } from '../model/types';
-import { isBlankProjectState } from '../model/types';
 import {
     DEFAULT_PROJECT,
+    createDefaultProject,
     createDefaultImageLayer,
     createDefaultVideoLayer,
     createDefaultShapeLayer,
@@ -590,28 +590,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     addShot: () => {
         const state = get();
         const count = state.project.shots.length;
-        const isPromotingStarterShot = isBlankProjectState(state.project);
-        const newShot = isPromotingStarterShot
-            ? {
-                ...state.project.shots[0],
-                id: `shot-${Date.now()}`,
-                name: `Shot ${count}`,
-                startMs: 0,
-            }
-            : createDefaultShot({
-                id: `shot-${Date.now()}`,
-                name: `Shot ${count + 1}`,
-                durationMs: 3500,
-                lane: count % 8,
-                layers: [],
-                cameraBlocks: [],
-            });
+        const newShot = createDefaultShot({
+            id: `shot-${Date.now()}`,
+            name: `Shot ${count + 1}`,
+            durationMs: 3500,
+            lane: count % 8,
+            layers: [],
+            cameraBlocks: [],
+        });
 
         get().updateProject((proj) => ({
             ...proj,
-            shots: isPromotingStarterShot
-                ? [newShot]
-                : recalculateShotStartTimes([...proj.shots, newShot]),
+            shots: recalculateShotStartTimes([...proj.shots, newShot]),
         }));
 
         return newShot;
@@ -699,7 +689,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             };
             const nextShots = [...proj.shots];
             nextShots.splice(idx, 1, updatedFirst, secondShot);
-            return { ...proj, shots: nextShots };
+            return { ...proj, shots: recalculateShotStartTimes(nextShots) };
         });
 
         return secondShot;
@@ -824,14 +814,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             };
         }),
 
-    resetProject: () =>
+    resetProject: () => {
+        const fresh = createDefaultProject();
         set({
-            project: DEFAULT_PROJECT,
+            project: fresh,
             past: [],
             future: [],
             dragSnapshot: null,
-            validation: validateProject(DEFAULT_PROJECT),
-        }),
+            validation: validateProject(fresh),
+        });
+    },
 
     loadProjectJson: (rawJson) => {
         let result = validateProject(rawJson);

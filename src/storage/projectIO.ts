@@ -70,9 +70,11 @@ export async function saveProjectToIndexedDB(project: Project): Promise<boolean>
 
             for (const [id, asset] of Object.entries(project.assets || {})) {
                 if (asset) {
-                    assetStore.put(asset);
+                    if (asset.dataUrl) {
+                        assetStore.put(asset);
+                    }
                     const { dataUrl: _drop, ...meta } = asset;
-                    lightweightAssets[id] = meta as AssetRecord;
+                    lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
                 }
             }
 
@@ -185,13 +187,15 @@ export function saveProjectToBrowser(project: Project): void {
     } catch {
         // If localStorage throws QuotaExceededError, try saving without heavy asset base64s
         try {
-            const lightweightAssets: Record<string, Partial<AssetRecord>> = {};
+            const lightweightAssets: Record<string, AssetRecord> = {};
             for (const [id, a] of Object.entries(project.assets || {})) {
                 if (a) {
                     lightweightAssets[id] = {
                         id: a.id,
                         name: a.name,
                         mimeType: a.mimeType,
+                        dataUrl: '',
+                        thumbUrl: a.thumbUrl,
                         width: a.width,
                         height: a.height,
                     };
