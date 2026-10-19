@@ -27,7 +27,7 @@ import { createCanvasFillStyle } from '../../engine/canvasRenderer';
 import {
   DEFAULT_CAMERA_Z,
   DEFAULT_FOCAL_LENGTH,
-  getReferencePlaneDimensions,
+  focalLengthToFov,
 } from './cameraMath';
 
 export interface SceneBackgroundProps {
@@ -118,9 +118,9 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   const { currentTimeMs } = usePlayheadStore();
 
   // Preload texture for image background
-  const [loadedTexture, setLoadedTexture] = useState<THREE.Texture | null>(null);
+  const [loadedTextureInfo, setLoadedTextureInfo] = useState<{ url: string; texture: THREE.Texture } | null>(null);
   const dataUrl = bg.kind === 'image' ? (bg.src || (bg.assetId ? assets[bg.assetId]?.dataUrl : undefined)) : undefined;
-  const imageTexture = bg.kind === 'image' && dataUrl ? loadedTexture : null;
+  const imageTexture = bg.kind === 'image' && dataUrl && loadedTextureInfo?.url === dataUrl ? loadedTextureInfo.texture : null;
 
   useEffect(() => {
     if (!dataUrl) return;
@@ -137,11 +137,11 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.generateMipmaps = true;
-        setLoadedTexture(tex);
+        setLoadedTextureInfo({ url: dataUrl, texture: tex });
       },
       undefined,
       () => {
-        if (active) setLoadedTexture(null);
+        if (active) setLoadedTextureInfo(null);
       }
     );
 
@@ -262,12 +262,16 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
 
     const pCam = camera as THREE.PerspectiveCamera;
     const aspect = pCam.aspect || (16 / 9);
-    const { planeW, planeH } = getReferencePlaneDimensions(aspect, DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH);
-    const scaleFactor = (DEFAULT_CAMERA_Z + 0.05) / DEFAULT_CAMERA_Z;
+    const distance = DEFAULT_CAMERA_Z + 0.05;
+    const fovRad = ((pCam.fov ?? focalLengthToFov(DEFAULT_FOCAL_LENGTH)) * Math.PI) / 180;
+    const planeH = 2 * distance * Math.tan(fovRad / 2);
+    const planeW = planeH * aspect;
 
-    mesh.position.set(slideX * planeW, 0, -0.05);
-    mesh.quaternion.set(0, 0, 0, 1);
-    mesh.scale.set(planeW * scaleFactor, planeH * scaleFactor, 1);
+    const offset = new THREE.Vector3(slideX * planeW, 0, -distance);
+    offset.applyQuaternion(pCam.quaternion);
+    mesh.position.copy(pCam.position).add(offset);
+    mesh.quaternion.copy(pCam.quaternion);
+    mesh.scale.set(planeW, planeH, 1);
 
     if (bg.kind === 'shader') {
       if (uniforms.uTime) {

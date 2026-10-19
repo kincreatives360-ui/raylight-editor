@@ -20,6 +20,7 @@ import type {
 } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
+import { getArtboardDimensions } from '../../../stage/stageUtils';
 
 interface CameraBlockSectionProps {
     activeShotId: string;
@@ -32,7 +33,10 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     activeCameraBlock,
     onDone,
 }) => {
-    const { updateShot } = useProjectStore();
+    const { project, updateShot } = useProjectStore();
+    const { width: artboardWidth, height: artboardHeight } = getArtboardDimensions(project.aspectRatio);
+    const halfW = artboardWidth / 2;
+    const halfH = artboardHeight / 2;
     const [fromCollapsed, setFromCollapsed] = useState(false);
     const [toCollapsed, setToCollapsed] = useState(false);
 
@@ -103,7 +107,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <div className="grid grid-cols-6 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg" role="toolbar" aria-label={`${which} endpoint alignment`}>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorX: Math.round(-960 + 960 / Math.max(0.1, ep.zoom)) })}
+                                    onClick={() => patchEndpoint({ anchorX: Math.round(-halfW + halfW / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Left"
                                     aria-label="Align Left"
@@ -121,7 +125,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorX: Math.round(960 - 960 / Math.max(0.1, ep.zoom)) })}
+                                    onClick={() => patchEndpoint({ anchorX: Math.round(halfW - halfW / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Right"
                                     aria-label="Align Right"
@@ -130,7 +134,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorY: Math.round(540 - 540 / Math.max(0.1, ep.zoom)) })}
+                                    onClick={() => patchEndpoint({ anchorY: Math.round(halfH - halfH / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Top"
                                     aria-label="Align Top"
@@ -148,7 +152,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => patchEndpoint({ anchorY: Math.round(-540 + 540 / Math.max(0.1, ep.zoom)) })}
+                                    onClick={() => patchEndpoint({ anchorY: Math.round(-halfH + halfH / Math.max(0.1, ep.zoom)) })}
                                     className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                     title="Align Bottom"
                                     aria-label="Align Bottom"

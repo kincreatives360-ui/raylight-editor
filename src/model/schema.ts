@@ -647,6 +647,48 @@ function migrateLegacyProject(raw: unknown): unknown {
     project.schemaVersion = project.version;
   }
 
+  const schemaVer = project.schemaVersion ?? project.version ?? 1;
+  if (schemaVer < 2) {
+    if (Array.isArray(project.shots)) {
+      for (const shot of project.shots) {
+        if (Array.isArray(shot.framings)) {
+          for (const f of shot.framings) {
+            if (f && f.target) {
+              if (typeof f.target.x === 'number') {
+                f.target.x = Math.round(f.target.x * 1920);
+              }
+              if (typeof f.target.y === 'number') {
+                f.target.y = Math.round(-f.target.y * 1080);
+              }
+            }
+          }
+        }
+        if (Array.isArray(shot.cameraBlocks)) {
+          for (const cb of shot.cameraBlocks) {
+            if (cb.from) {
+              if (typeof cb.from.anchorX === 'number') {
+                cb.from.anchorX = Math.round(cb.from.anchorX * 1920);
+              }
+              if (typeof cb.from.anchorY === 'number') {
+                cb.from.anchorY = Math.round(-cb.from.anchorY * 1080);
+              }
+            }
+            if (cb.to) {
+              if (typeof cb.to.anchorX === 'number') {
+                cb.to.anchorX = Math.round(cb.to.anchorX * 1920);
+              }
+              if (typeof cb.to.anchorY === 'number') {
+                cb.to.anchorY = Math.round(-cb.to.anchorY * 1080);
+              }
+            }
+          }
+        }
+      }
+    }
+    project.schemaVersion = 2;
+    project.version = 2;
+  }
+
   if (Array.isArray(project.shots)) {
     for (const shot of project.shots) {
       if (typeof shot.durationMs === 'number') {

@@ -370,7 +370,7 @@ export const Stage: React.FC<StageProps> = ({
         const silhouettes: { id: string; points: string }[] = [];
 
         for (const evalLayer of frame.layers) {
-            if ((evalLayer.opacity ?? 1) <= 0) continue;
+            if (evalLayer.visible === false || (evalLayer.opacity ?? 1) <= 0) continue;
             const proj = getLayerProjectedCorners(
                 evalLayer,
                 null,

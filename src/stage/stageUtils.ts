@@ -17,6 +17,23 @@ export const ASPECT_RATIO_CONFIG: Record<
     '4:5': { widthRatio: 4, heightRatio: 5, label: '4:5 Feed' },
 };
 
+export function getArtboardDimensions(
+    aspectRatio: AspectRatio = '16:9'
+): { width: number; height: number } {
+    const spec = ASPECT_RATIO_CONFIG[aspectRatio] ?? ASPECT_RATIO_CONFIG['16:9'];
+    const aspect = spec.widthRatio / spec.heightRatio;
+
+    if (aspect >= 1) {
+        const width = 1920;
+        const height = Math.round(width / aspect / 2) * 2;
+        return { width, height };
+    }
+    const height = 1920;
+    const width = Math.round((height * aspect) / 2) * 2;
+    return { width, height };
+}
+
+
 export function kelvinToRgb(
     kelvin: number,
     alpha = 1

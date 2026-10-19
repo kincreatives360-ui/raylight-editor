@@ -84,7 +84,7 @@ export function evaluateCameraPose(
     const dist = baseZ / zoom;
     const offset = new THREE.Vector3(0, 0, dist);
     if (rotX !== 0 || rotY !== 0 || rotZ !== 0) {
-        offset.applyEuler(new THREE.Euler(rotX, rotY, rotZ, 'YXZ'));
+        offset.applyEuler(new THREE.Euler(rotX, rotY, rotZ, 'XYZ'));
     }
 
     return {

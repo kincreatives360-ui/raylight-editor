@@ -1,8 +1,41 @@
-// src/stage/CameraFramingOverlay.tsx
 import React, { useRef, useState } from 'react';
 import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { Film } from 'lucide-react';
 import { useProjectStore } from '../store/useProjectStore';
+import { getArtboardDimensions } from './stageUtils';
+
+export interface FramingBox {
+    left: number;
+    top: number;
+    width: number;
+    height: number;
+    cx: number;
+    cy: number;
+}
+
+export function computeFramingBox(
+    ep: CameraKeyframeEndpoint | { anchorX?: number; anchorY?: number; zoom: number },
+    frameWidth: number,
+    frameHeight: number,
+    artboardWidth: number = 1920,
+    artboardHeight: number = 1080
+): FramingBox {
+    const safeZoom = Math.max(0.15, ep.zoom);
+    const width = frameWidth / safeZoom;
+    const height = frameHeight / safeZoom;
+    const scaleX = frameWidth / artboardWidth;
+    const scaleY = frameHeight / artboardHeight;
+    const cx = frameWidth / 2 + (ep.anchorX ?? 0) * scaleX;
+    const cy = frameHeight / 2 - (ep.anchorY ?? 0) * scaleY; // world Y is up, DOM Y is down
+    return {
+        left: cx - width / 2,
+        top: cy - height / 2,
+        width,
+        height,
+        cx,
+        cy,
+    };
+}
 
 interface CameraFramingOverlayProps {
     shot: Shot;
@@ -30,7 +63,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     cameraZoom,
     canvasZoom = 1,
 }) => {
-    const { updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const { width: artboardWidth, height: artboardHeight } = getArtboardDimensions(project?.aspectRatio);
+    const scaleX = frameWidth / artboardWidth;
+    const scaleY = frameHeight / artboardHeight;
     const [activeDrag, setActiveDrag] = useState<{
         which: 'from' | 'to';
         type: 'resize' | 'pan';
@@ -86,22 +122,8 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     // Calculate on-canvas rectangle derived strictly from the numbers:
     // width = artboardW / zoom, height = artboardH / zoom, centred on the anchor.
     // 1 world unit = 1 artboard pixel (1920x1080), Y points up.
-    const computeBox = (ep: CameraKeyframeEndpoint) => {
-        const safeZoom = Math.max(0.15, ep.zoom);
-        const w = frameWidth / safeZoom;
-        const h = frameHeight / safeZoom;
-        const scale = frameWidth / 1920;
-        const cx = frameWidth / 2 + ep.anchorX * scale;
-        const cy = frameHeight / 2 - ep.anchorY * scale; // world Y is up, DOM Y is down
-        return {
-            left: cx - w / 2,
-            top: cy - h / 2,
-            width: w,
-            height: h,
-            cx,
-            cy,
-        };
-    };
+    const computeBox = (ep: CameraKeyframeEndpoint) =>
+        computeFramingBox(ep, frameWidth, frameHeight, artboardWidth, artboardHeight);
 
     const fromBox = computeBox(fromEp);
     const toBox = computeBox(toEp);
@@ -192,26 +214,29 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         };
 
         if (s.type === 'pan') {
-            const scale = frameWidth / 1920;
-            const rawAnchorX = s.startAnchorX + dx / scale;
-            const rawAnchorY = s.startAnchorY - dy / scale; // world Y is up, DOM dy > 0 is down
+            const rawAnchorX = s.startAnchorX + dx / scaleX;
+            const rawAnchorY = s.startAnchorY - dy / scaleY; // world Y is up, DOM dy > 0 is down
 
             const ep = s.which === 'from' ? fromEp : toEp;
-            const rectW = 1920 / Math.max(0.15, ep.zoom);
-            const rectH = 1080 / Math.max(0.15, ep.zoom);
+            const rectW = artboardWidth / Math.max(0.15, ep.zoom);
+            const rectH = artboardHeight / Math.max(0.15, ep.zoom);
             const hw = rectW / 2;
             const hh = rectH / 2;
 
+            const halfW = artboardWidth / 2;
+            const halfH = artboardHeight / 2;
+
             // Artboard targets in world coordinates:
-            // X: Left edge (-960), Center (0), Right edge (+960)
-            const artboardXTargets = [-960, 0, 960];
-            // Y: Top edge (+540), Center (0), Bottom edge (-540)
-            const artboardYTargets = [540, 0, -540];
-            const snapThreshWorld = 8 / scale;
+            // X: Left edge (-halfW), Center (0), Right edge (+halfW)
+            const artboardXTargets = [-halfW, 0, halfW];
+            // Y: Top edge (+halfH), Center (0), Bottom edge (-halfH)
+            const artboardYTargets = [halfH, 0, -halfH];
+            const snapThreshWorldX = 8 / scaleX;
+            const snapThreshWorldY = 8 / scaleY;
 
             let snappedAnchorX = rawAnchorX;
             let activeSnapX: number | null = null;
-            let minDiffX = snapThreshWorld;
+            let minDiffX = snapThreshWorldX;
 
             const rectXLines = [rawAnchorX - hw, rawAnchorX, rawAnchorX + hw];
             for (const rX of rectXLines) {
@@ -220,14 +245,14 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     if (diff < minDiffX) {
                         minDiffX = diff;
                         snappedAnchorX = rawAnchorX + (aX - rX);
-                        activeSnapX = frameWidth / 2 + aX * scale;
+                        activeSnapX = frameWidth / 2 + aX * scaleX;
                     }
                 }
             }
 
             let snappedAnchorY = rawAnchorY;
             let activeSnapY: number | null = null;
-            let minDiffY = snapThreshWorld;
+            let minDiffY = snapThreshWorldY;
 
             const rectYLines = [rawAnchorY + hh, rawAnchorY, rawAnchorY - hh];
             for (const rY of rectYLines) {
@@ -236,7 +261,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     if (diff < minDiffY) {
                         minDiffY = diff;
                         snappedAnchorY = rawAnchorY + (aY - rY);
-                        activeSnapY = frameHeight / 2 - aY * scale;
+                        activeSnapY = frameHeight / 2 - aY * scaleY;
                     }
                 }
             }

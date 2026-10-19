@@ -74,7 +74,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f1Id,
               name: 'Wide Establishing',
-              target: { x: 0, y: 0.05, z: 0 },
+              target: { x: 0, y: -54, z: 0 },
               zoom: 0.95,
               roll: 0,
               orbit: 0,
@@ -82,7 +82,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f2Id,
               name: 'Macro Push-In',
-              target: { x: 0, y: -0.04, z: 0 },
+              target: { x: 0, y: 43, z: 0 },
               zoom: 1.25,
               roll: -1.5,
               orbit: 2,
@@ -135,7 +135,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       return {
         id: `project-iphone-${now}`,
         name: 'iPhone 15 Pro Showcase',
-        version: 1,
+        version: CURRENT_SCHEMA_VERSION,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -232,7 +232,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f2Id,
               name: 'Front Center',
-              target: { x: 0, y: -0.05, z: 0 },
+              target: { x: 0, y: 54, z: 0 },
               zoom: 1.15,
               roll: 0,
               orbit: 3,
@@ -266,7 +266,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       return {
         id: `project-macbook-${now}`,
         name: 'MacBook Pro Walkthrough',
-        version: 1,
+        version: CURRENT_SCHEMA_VERSION,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -359,7 +359,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f1Id,
               name: 'Far Left Angle',
-              target: { x: -0.1, y: 0, z: 0 },
+              target: { x: -192, y: 0, z: 0 },
               zoom: 0.9,
               roll: 2.5,
               orbit: -5,
@@ -367,7 +367,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f2Id,
               name: 'Snap Center',
-              target: { x: 0, y: -0.02, z: 0 },
+              target: { x: 0, y: 22, z: 0 },
               zoom: 1.2,
               roll: 0,
               orbit: 0,
@@ -426,7 +426,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       return {
         id: `project-neon-${now}`,
         name: 'Cyberpunk Neon Teaser',
-        version: 1,
+        version: CURRENT_SCHEMA_VERSION,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),
@@ -519,7 +519,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
             {
               id: f2Id,
               name: 'Card Focus',
-              target: { x: 0, y: -0.05, z: 0 },
+              target: { x: 0, y: 54, z: 0 },
               zoom: 1.15,
             },
           ],
@@ -551,7 +551,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
       return {
         id: `project-vertical-${now}`,
         name: 'TikTok & Reels 9:16 Story',
-        version: 1,
+        version: CURRENT_SCHEMA_VERSION,
         schemaVersion: CURRENT_SCHEMA_VERSION,
         updatedAt: new Date().toISOString(),
         createdAt: new Date().toISOString(),

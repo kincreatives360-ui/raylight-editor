@@ -14,7 +14,7 @@ import type {
   CameraBlock,
 } from './types';
 
-export const CURRENT_SCHEMA_VERSION = 1;
+export const CURRENT_SCHEMA_VERSION = 2;
 
 export function createDefaultCameraBlock(
   id: string,
@@ -386,7 +386,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
       {
         id: f2Id,
         name: 'Feature Push-In',
-        target: { x: -0.05, y: -0.02, z: 0 },
+        target: { x: -96, y: 22, z: 0 },
         zoom: 1.15,
       },
     ],
@@ -408,7 +408,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
 export const DEFAULT_PROJECT: Project = {
   id: `project-${Date.now()}`,
   name: 'Untitled project',
-  version: 1,
+  version: CURRENT_SCHEMA_VERSION,
   schemaVersion: CURRENT_SCHEMA_VERSION,
   updatedAt: new Date().toISOString(),
   createdAt: new Date().toISOString(),

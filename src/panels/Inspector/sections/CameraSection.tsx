@@ -5,6 +5,7 @@ import type { Shot, CameraKeyframeEndpoint } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
+import { createDefaultCameraBlock } from '../../../model/defaults';
 
 interface CameraSectionProps {
   activeShot: Shot;
@@ -34,33 +35,13 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
       ...s,
       cameraBlocks: [
         ...(s.cameraBlocks || []),
-        {
-          id: camId,
-          label: 'Camera Move',
-          startMs: 0,
-          durationMs: s.durationMs,
-          fromFramingId: s.framings[0]?.id || 'f1',
-          toFramingId: s.framings[1]?.id || 'f2',
-          mode: 'dolly',
-          easing: { kind: 'preset', name: 'ease-in-out' },
-          from: {
-            anchorX: 0,
-            anchorY: 0,
-            zoom: 1,
-            roll: 0,
-            orbit: 0,
-            tilt: 0,
-          },
-          to: {
-            anchorX: 0,
-            anchorY: 0,
-            zoom: 1.2,
-            roll: 0,
-            orbit: 0,
-            tilt: 0,
-          },
-          shake: { from: 0, to: 0 },
-        },
+        createDefaultCameraBlock(
+          camId,
+          0,
+          s.durationMs,
+          s.framings[0]?.id || 'f1',
+          s.framings[1]?.id || 'f2'
+        ),
       ],
     }));
     selectCameraBlock(camId);
@@ -214,7 +195,7 @@ export const CameraSection: React.FC<CameraSectionProps> = ({ activeShot }) => {
             />
             <ScrubInput
               label="To Zoom"
-              value={Math.round(((selectedBlock.to?.zoom) ?? 1.15) * 100)}
+              value={Math.round(((selectedBlock.to?.zoom) ?? 1.2) * 100)}
               min={25}
               max={300}
               step={5}

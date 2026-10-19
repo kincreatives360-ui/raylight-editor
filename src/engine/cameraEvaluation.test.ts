@@ -1,7 +1,11 @@
 // src/engine/cameraEvaluation.test.ts
 import { describe, it, expect } from 'vitest';
+import * as THREE from 'three';
 import { evaluateShotCameraAtTime } from './evaluateCamera';
 import { evaluateCameraPose, getReferencePlaneDimensions } from '../stage/webgl/cameraMath';
+import { computeFramingBox } from '../stage/CameraFramingOverlay';
+import { validateProject } from '../model/schema';
+import { DEFAULT_PROJECT } from '../model/defaults';
 import type { Shot, CameraBlock } from '../model/types';
 
 describe('Raylight Camera Framing & Evaluation', () => {
@@ -31,19 +35,17 @@ describe('Raylight Camera Framing & Evaluation', () => {
         const artboardH = 1080;
 
         // At zoom 1x, rectangle matches artboard exactly
-        const zoom1 = 1.0;
-        expect(artboardW / zoom1).toBe(1920);
-        expect(artboardH / zoom1).toBe(1080);
+        const box1 = computeFramingBox({ zoom: 1.0 }, artboardW, artboardH, artboardW, artboardH);
+        expect(box1.width).toBe(1920);
+        expect(box1.height).toBe(1080);
 
         // At zoom 1.46x
-        const zoom146 = 1.46;
-        const w146 = artboardW / zoom146;
-        const h146 = artboardH / zoom146;
-        expect(Math.round(w146)).toBe(1315);
-        expect(Math.round(h146)).toBe(740);
+        const box146 = computeFramingBox({ zoom: 1.46 }, artboardW, artboardH, artboardW, artboardH);
+        expect(Math.round(box146.width)).toBe(1315);
+        expect(Math.round(box146.height)).toBe(740);
 
         // Aspect ratio is locked to artboard's (16:9)
-        expect(Number((w146 / h146).toFixed(4))).toBe(Number((1920 / 1080).toFixed(4)));
+        expect(Number((box146.width / box146.height).toFixed(4))).toBe(Number((1920 / 1080).toFixed(4)));
     });
 
     it('2. Evaluates clip start holding From view and clip end holding To view', () => {
@@ -149,5 +151,65 @@ describe('Raylight Camera Framing & Evaluation', () => {
         expect(toPose.position.x).toBeCloseTo(expectedToThreeX, 4);
         expect(toPose.position.y).toBeCloseTo(expectedToThreeY, 4);
         expect(toPose.position.z).toBeCloseTo(2.65 / 1.4, 4);
+
+        // Multiple rotation axes test Euler order matching Three.js default 'XYZ'
+        const rotCam = {
+            target: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0.1, y: 0.2, z: 0.3 },
+            zoom: 1,
+            fovDegrees: 27.0006,
+            focalLength: 50,
+            activeMode: 'dolly' as const,
+        };
+        const rotPose = evaluateCameraPose(rotCam, defaultCam, aspect);
+        const expectedOffset = new THREE.Vector3(0, 0, 2.65).applyEuler(new THREE.Euler(0.1, 0.2, 0.3, 'XYZ'));
+        expect(rotPose.position.x).toBeCloseTo(expectedOffset.x, 4);
+        expect(rotPose.position.y).toBeCloseTo(expectedOffset.y, 4);
+        expect(rotPose.position.z).toBeCloseTo(expectedOffset.z, 4);
+    });
+
+    it('4. Migrates legacy project with fractional framing targets and anchors to artboard pixels and inverted Y', () => {
+        const testShot: Shot = {
+            ...DEFAULT_PROJECT.shots[0],
+            id: 'shot-1',
+            framings: [
+                { id: 'f1', name: 'F1', target: { x: 0.1, y: -0.05, z: 0 }, zoom: 1 },
+            ],
+            cameraBlocks: [
+                {
+                    id: 'cam-1',
+                    startMs: 0,
+                    durationMs: 4000,
+                    fromFramingId: 'f1',
+                    toFramingId: 'f1',
+                    mode: 'dolly',
+                    easing: { kind: 'preset', name: 'linear' },
+                    from: { anchorX: -0.2, anchorY: 0.1, zoom: 1, roll: 0, orbit: 0, tilt: 0 },
+                    to: { anchorX: 0.3, anchorY: -0.4, zoom: 1.2, roll: 0, orbit: 0, tilt: 0 },
+                },
+            ],
+        };
+
+        const legacyProject = {
+            ...DEFAULT_PROJECT,
+            id: 'proj-legacy',
+            version: 1,
+            schemaVersion: 1,
+            shots: [testShot],
+        };
+
+        const result = validateProject(legacyProject);
+        expect(result.success).toBe(true);
+        if (result.success) {
+            const shot = result.data.shots[0];
+            expect(shot.framings[0].target.x).toBe(Math.round(0.1 * 1920)); // 192
+            expect(shot.framings[0].target.y).toBe(Math.round(-(-0.05) * 1080)); // 54
+            expect(shot.cameraBlocks[0].from?.anchorX).toBe(Math.round(-0.2 * 1920)); // -384
+            expect(shot.cameraBlocks[0].from?.anchorY).toBe(Math.round(-0.1 * 1080)); // -108
+            expect(shot.cameraBlocks[0].to?.anchorX).toBe(Math.round(0.3 * 1920)); // 576
+            expect(shot.cameraBlocks[0].to?.anchorY).toBe(Math.round(-(-0.4) * 1080)); // 432
+            expect(result.data.schemaVersion).toBe(2);
+        }
     });
 });
+

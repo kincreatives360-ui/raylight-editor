@@ -1080,33 +1080,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 ...s,
                                                 cameraBlocks: [
                                                     ...(s.cameraBlocks || []),
-                                                    {
-                                                        id: camId,
-                                                        label: 'Camera Move',
-                                                        startMs: 0,
-                                                        durationMs: s.durationMs,
-                                                        fromFramingId: s.framings[0]?.id || 'f1',
-                                                        toFramingId: s.framings[1]?.id || 'f2',
-                                                        mode: 'dolly',
-                                                        easing: { kind: 'preset', name: 'ease-in-out' },
-                                                        from: {
-                                                            anchorX: 0,
-                                                            anchorY: 0,
-                                                            zoom: 1,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        to: {
-                                                            anchorX: 0,
-                                                            anchorY: 0,
-                                                            zoom: 1.2,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        shake: { from: 0, to: 0 },
-                                                    },
+                                                    createDefaultCameraBlock(
+                                                        camId,
+                                                        0,
+                                                        s.durationMs,
+                                                        s.framings[0]?.id || 'f1',
+                                                        s.framings[1]?.id || 'f2'
+                                                    ),
                                                 ],
                                             }));
                                             selectCameraBlock(camId);
