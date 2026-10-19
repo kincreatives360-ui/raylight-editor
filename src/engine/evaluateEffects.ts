@@ -34,6 +34,7 @@ export function calculateLayerDofBlurPx(
     const rawBlur =
         outOfFocusDist * dof.aperture * dof.bokehScale * lensFactor * 1.6;
 
+    if (!Number.isFinite(rawBlur)) return 0;
     return Number(Math.min(40, Math.max(0, rawBlur)).toFixed(2));
 }
 
@@ -71,12 +72,13 @@ export function evaluateEffectsAtTime(
     }
 
     // Deterministic pseudo-random seed from frameNumber (never uses Math.random())
-    const deterministicSeed =
-        ((frameNumber * 1664525 + 1013904223) % 4294967296) / 4294967296;
+    const frame = Math.max(0, Math.floor(Number.isFinite(frameNumber) ? frameNumber : 0));
+    const seedRaw = ((frame * 1664525 + 1013904223) % 4294967296 + 4294967296) % 4294967296;
+    const deterministicSeed = seedRaw / 4294967296;
 
     const orderedEnabledPasses: ActiveEffectPass[] = [];
 
-    shot.effectsOrder.forEach((key, index) => {
+    (shot.effectsOrder || []).forEach((key, index) => {
         const item = effects[key];
         if (!item || !item.enabled) return;
 

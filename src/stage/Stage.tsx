@@ -25,6 +25,7 @@ import { resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { useProjectStore } from '../store/useProjectStore';
+import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
 import { SelectionOverlay } from './SelectionOverlay';
@@ -54,7 +55,7 @@ interface StageProps {
     onOpenShortcuts?: () => void;
 }
 
-export const Stage: React.FC<StageProps> = ({
+const StageComponent: React.FC<StageProps> = ({
     project,
     frame,
     selectedLayerIds,
@@ -357,6 +358,10 @@ export const Stage: React.FC<StageProps> = ({
     }, [frame, isCameraSelected]);
 
     const exteriorSilhouettes = useMemo(() => {
+        if (usePlayheadStore.getState().isPlaying) {
+            return [];
+        }
+
         const defaultCamera = project.defaultCamera || {
             position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
             rotation: { x: 0, y: 0, z: 0 },
@@ -373,7 +378,6 @@ export const Stage: React.FC<StageProps> = ({
             if (evalLayer.visible === false || (evalLayer.opacity ?? 1) <= 0) continue;
             const proj = getLayerProjectedCorners(
                 evalLayer,
-                null,
                 frameWidth,
                 frameHeight,
                 targetAspect,
@@ -849,7 +853,6 @@ export const Stage: React.FC<StageProps> = ({
                         if (!l.visible) continue;
                         const proj = getLayerProjectedCorners(
                             l,
-                            cameraRef.current,
                             frameWidth,
                             frameHeight,
                             aspect,
@@ -1679,3 +1682,5 @@ export const Stage: React.FC<StageProps> = ({
         </div>
     );
 };
+
+export const Stage = React.memo(StageComponent);

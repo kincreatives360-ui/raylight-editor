@@ -115,7 +115,6 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   const { camera, invalidate } = useThree();
   const meshRef = useRef<THREE.Mesh>(null);
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
-  const { currentTimeMs } = usePlayheadStore();
 
   // Preload texture for image background
   const [loadedTextureInfo, setLoadedTextureInfo] = useState<{ url: string; texture: THREE.Texture } | null>(null);
@@ -272,6 +271,8 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     mesh.position.copy(pCam.position).add(offset);
     mesh.quaternion.copy(pCam.quaternion);
     mesh.scale.set(planeW, planeH, 1);
+
+    const currentTimeMs = usePlayheadStore.getState().currentTimeMs;
 
     if (bg.kind === 'shader') {
       if (uniforms.uTime) {

@@ -2,13 +2,7 @@
 import * as THREE from 'three';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
 import type { EvaluatedCamera } from '../../engine/evaluateCamera';
-
-export interface CameraFraming {
-    id?: string;
-    name?: string;
-    target: { x: number; y: number; z: number };
-    zoom: number;
-}
+import type { Framing } from '../../model/types';
 
 export interface DefaultCameraConfig {
     position: { x: number; y: number; z: number };
@@ -44,13 +38,14 @@ export function getReferencePlaneDimensions(
 }
 
 export function evaluateCameraPose(
-    evaluatedCamera?: EvaluatedCamera | CameraFraming,
+    evaluatedCamera?: EvaluatedCamera | Framing,
     defaultCamera: DefaultCameraConfig = {
         position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
         rotation: { x: 0, y: 0, z: 0 },
         focalLength: DEFAULT_FOCAL_LENGTH,
     },
-    aspect: number = 16 / 9
+    aspect: number = 16 / 9,
+    artboardDimensions?: { width: number; height: number }
 ): EvaluatedCameraPose {
     const baseZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
     const focalLength =
@@ -65,10 +60,17 @@ export function evaluateCameraPose(
         DEFAULT_FOCAL_LENGTH
     );
 
+    const artboardW =
+        artboardDimensions?.width ??
+        (aspect >= 1 ? 1920 : Math.round((1920 * aspect) / 2) * 2);
+    const artboardH =
+        artboardDimensions?.height ??
+        (aspect >= 1 ? Math.round(1920 / aspect / 2) * 2 : 1920);
+
     const zoom = Math.max(0.15, evaluatedCamera?.zoom ?? 1);
-    const targetX = ((evaluatedCamera?.target?.x ?? 0) / 1920) * planeW;
+    const targetX = ((evaluatedCamera?.target?.x ?? 0) / artboardW) * planeW;
     // Y points UP in world coordinates (1 unit = 1 artboard pixel), and Three.js +Y is UP
-    const targetY = ((evaluatedCamera?.target?.y ?? 0) / 1080) * planeH;
+    const targetY = ((evaluatedCamera?.target?.y ?? 0) / artboardH) * planeH;
     const targetZ = evaluatedCamera?.target?.z ?? 0;
 
     const rotX =
@@ -136,7 +138,6 @@ export function getLayer3DWorldTransform(
 
 export function getLayerProjectedCorners(
     evalLayer: EvaluatedLayerWithEffects,
-    _camera: THREE.PerspectiveCamera | null | undefined,
     frameWidth: number,
     frameHeight: number,
     aspect: number,

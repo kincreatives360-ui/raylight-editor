@@ -8,6 +8,8 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { evaluateEasing } from '../../engine/easing';
 import { createDefaultCameraBlock } from '../../model/defaults';
+import { TimelineTimecode } from './TimelineTimecode';
+import { PlayheadOverlay } from './PlayheadOverlay';
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -38,7 +40,6 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     const {
         hoverTimeMs: storeHoverTimeMs,
         setHoverTimeMs,
-        currentTimeMs,
         isPlaying,
         setIsPlaying,
         setCurrentTimeMs,
@@ -1072,18 +1073,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     </button>
                     <button
                         type="button"
-                        onClick={() => splitAtPlayhead(currentTimeMs)}
+                        onClick={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
                         aria-label="Split clip at playhead"
                         title="Split Clip at Playhead (S)"
                         className="w-5 h-5 rounded-full border border-white/20 hover:border-white/60 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
                     >
                         <Scissors className="w-2.5 h-2.5" />
                     </button>
-                    <div className="flex items-center gap-1 font-mono text-[10px] text-[#a1a1aa] tracking-tight tabular-nums select-none">
-                        <span className="text-white font-medium">{(currentTimeMs / 1000).toFixed(2)}s</span>
-                        <span className="text-white/30">/</span>
-                        <span>{(totalDurationMs / 1000).toFixed(2)}s</span>
-                    </div>
+                    <TimelineTimecode totalDurationMs={totalDurationMs} />
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -1867,65 +1864,5 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 </div>
             </div>
         </section>
-    );
-});
-
-interface PlayheadOverlayProps {
-    pxPerMs: number;
-    timelineView: 'video' | 'scene';
-    activeShotStartMs: number;
-    scrollContainerRef?: React.RefObject<HTMLDivElement | null>;
-}
-
-const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
-    pxPerMs,
-    timelineView,
-    activeShotStartMs,
-    scrollContainerRef,
-}) => {
-    const currentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
-    const isPlaying = usePlayheadStore((s) => s.isPlaying);
-    const playheadDisplayTimeMs =
-        timelineView === 'scene'
-            ? Math.max(0, currentTimeMs - activeShotStartMs)
-            : currentTimeMs;
-
-    // Auto-scroll timeline container with playhead during playback
-    useEffect(() => {
-        if (!isPlaying || !scrollContainerRef?.current) return;
-        const container = scrollContainerRef.current;
-        const playheadPx = playheadDisplayTimeMs * pxPerMs;
-        const visibleLeft = container.scrollLeft;
-        const visibleRight = container.scrollLeft + container.clientWidth;
-
-        if (playheadPx > visibleRight - 40) {
-            container.scrollLeft = playheadPx - 80;
-        } else if (playheadPx < visibleLeft) {
-            container.scrollLeft = Math.max(0, playheadPx - 40);
-        }
-    }, [isPlaying, playheadDisplayTimeMs, pxPerMs, scrollContainerRef]);
-
-    return (
-        <div
-            aria-hidden="true"
-            className="absolute top-0 bottom-0 pointer-events-none z-30 flex flex-col items-center"
-            style={{
-                left: `${playheadDisplayTimeMs * pxPerMs}px`,
-                transform: 'translateX(-50%)',
-            }}
-        >
-            {/* 1px vertical line in bright blue (~#0A84FF) spanning through full track area with bottom fade */}
-            <div
-                className="absolute inset-y-0 w-px"
-                style={{
-                    background: 'linear-gradient(to bottom, #0A84FF 0%, #0A84FF 82%, rgba(10, 132, 255, 0) 100%)',
-                }}
-            />
-
-            {/* Rounded pill label sitting on the ruler at the top */}
-            <div className="relative px-1.5 py-0.5 rounded-full bg-[#0A84FF] text-white text-[9.5px] font-mono font-bold shadow-md whitespace-nowrap leading-none select-none mt-1 z-10">
-                {(playheadDisplayTimeMs / 1000).toFixed(2)}
-            </div>
-        </div>
     );
 });

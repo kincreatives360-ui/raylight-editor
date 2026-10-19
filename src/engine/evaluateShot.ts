@@ -1,5 +1,6 @@
 // src/engine/evaluateShot.ts
 import type { Project, Shot, LightRig, SceneEffects } from '../model/types';
+import { createDefaultShot } from '../model/defaults';
 import { evaluateEasing } from './easing';
 import { evaluateLightBlocks } from './evaluateLight';
 import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
@@ -44,7 +45,8 @@ export function evaluateProjectAtTime(
     const clampedGlobalMs = Math.max(0, globalTimeMs);
     const frameNumber = Math.floor((clampedGlobalMs / 1000) * project.fps);
 
-    let shotIndex = project.shots.findIndex(
+    const shots = project.shots || [];
+    let shotIndex = shots.findIndex(
         (s) =>
             clampedGlobalMs >= s.startMs &&
             clampedGlobalMs <= s.startMs + s.durationMs
@@ -52,9 +54,9 @@ export function evaluateProjectAtTime(
 
     if (shotIndex === -1) {
         let latestIdx = -1;
-        for (let i = 0; i < project.shots.length; i++) {
-            if (project.shots[i].startMs <= clampedGlobalMs) {
-                if (latestIdx === -1 || project.shots[i].startMs >= project.shots[latestIdx].startMs) {
+        for (let i = 0; i < shots.length; i++) {
+            if (shots[i].startMs <= clampedGlobalMs) {
+                if (latestIdx === -1 || shots[i].startMs >= shots[latestIdx].startMs) {
                     latestIdx = i;
                 }
             }
@@ -62,7 +64,7 @@ export function evaluateProjectAtTime(
         shotIndex = latestIdx !== -1 ? latestIdx : 0;
     }
 
-    const baseShot = project.shots[shotIndex] || project.shots[0];
+    const baseShot = shots[shotIndex] || shots[0] || createDefaultShot();
     const shotLocalTimeMs = Math.max(
         0,
         Math.min(baseShot.durationMs, clampedGlobalMs - baseShot.startMs)
@@ -163,7 +165,7 @@ export function evaluateProjectAtTime(
     const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
 
     // 5. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
-    const groupById = new Map(activeShot.groups.map((g) => [g.id, g]));
+    const groupById = new Map((activeShot.groups || []).map((g) => [g.id, g]));
 
     const isLayerGroupHidden = (groupId?: string): boolean => {
         if (!groupId) return false;
@@ -181,7 +183,7 @@ export function evaluateProjectAtTime(
         return false;
     };
 
-    const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
+    const sortedLayers = [...(activeShot.layers || [])].sort((a, b) => a.order - b.order);
 
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
         const isGroupHidden = isLayerGroupHidden(layer.groupId);
@@ -211,7 +213,7 @@ export function evaluateProjectAtTime(
     });
 
     // 6. Evaluate Shot-to-Shot Transition
-    const trans = activeShot.transition;
+    const trans = activeShot.transition || { type: 'cut' as const, durationMs: 0, easing: { kind: 'preset' as const, name: 'linear' as const } };
     const isIncomingTransition =
         trans.type !== 'cut' &&
         trans.durationMs > 0 &&

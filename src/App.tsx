@@ -32,6 +32,7 @@ import type {
   ExportQuality,
   ExportScope,
 } from './engine/exporter';
+import { isMediaRecorderMp4Supported } from './engine/exportCapabilities';
 import { estimateExportMetrics } from './engine/exportMetrics';
 import { preloadProjectFonts } from './engine/fontLoader';
 import { KeyboardShortcutsModal } from './ui/KeyboardShortcutsModal';
@@ -218,6 +219,14 @@ export default function App() {
     [setInspectorTab, selectLayer]
   );
 
+  const handleToggleSafeArea = useCallback(() => {
+    setShowSafeArea((prev) => !prev);
+  }, []);
+
+  const handleOpenShortcuts = useCallback(() => {
+    setShortcutsModalOpen(true);
+  }, []);
+
   const handleStartResizeLeftPanel = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -350,8 +359,21 @@ export default function App() {
   }, [projectFontKey, project]);
 
   useEffect(() => {
-    syncAudioPlayback(project.audio, isPlaying && hoverTimeMs === null, currentTimeMs);
-  }, [project.audio, isPlaying, hoverTimeMs, currentTimeMs]);
+    syncAudioPlayback(project.audio, isPlaying && hoverTimeMs === null, usePlayheadStore.getState().currentTimeMs);
+  }, [project.audio, isPlaying, hoverTimeMs]);
+
+  useEffect(() => {
+    let lastTime = usePlayheadStore.getState().currentTimeMs;
+    const unsub = usePlayheadStore.subscribe((state) => {
+      if (Math.abs(state.currentTimeMs - lastTime) > 200) {
+        lastTime = state.currentTimeMs;
+        syncAudioPlayback(project.audio, state.isPlaying && state.hoverTimeMs === null, state.currentTimeMs);
+      } else {
+        lastTime = state.currentTimeMs;
+      }
+    });
+    return unsub;
+  }, [project.audio]);
 
   useEffect(() => () => stopAudioPlayback(), []);
 
@@ -609,7 +631,7 @@ export default function App() {
         if (key === 'p') { setActiveTool('pen'); return; }
         if (key === 's') {
           e.preventDefault();
-          splitAtPlayhead(currentTimeMs);
+          splitAtPlayhead(usePlayheadStore.getState().currentTimeMs);
           return;
         }
       }
@@ -808,7 +830,6 @@ export default function App() {
     setShowSafeArea,
     setShortcutsModalOpen,
     shortcutsModalOpen,
-    currentTimeMs,
   ]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -837,8 +858,9 @@ export default function App() {
           width: vw,
           height: vh,
         };
+        const currentPlayheadMs = usePlayheadStore.getState().currentTimeMs;
         const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
-        const clipEnd = currentTimeMs + clipDuration;
+        const clipEnd = currentPlayheadMs + clipDuration;
 
         const videoLayer: VideoLayer = {
           id: `layer-video-${Date.now()}`,
@@ -893,7 +915,7 @@ export default function App() {
                   name: file.name,
                   assetId,
                   dataUrl,
-                  startMs: currentTimeMs,
+                  startMs: currentPlayheadMs,
                   durationMs: clipDuration,
                   offsetMs: 0,
                   volume: 1,
@@ -947,6 +969,7 @@ export default function App() {
       }));
       selectLayer(selectedLayer.id, false);
     } else {
+      const currentPlayheadMs = usePlayheadStore.getState().currentTimeMs;
       const newLayer = addLayerToShot(activeShot.id, 'image', {
         name: file.name,
         assetId: assetRecord.id,
@@ -957,7 +980,7 @@ export default function App() {
           0,
           Math.min(
             Math.max(0, activeShot.durationMs - 1),
-            currentTimeMs - activeShot.startMs
+            currentPlayheadMs - activeShot.startMs
           )
         ),
         outMs: activeShot.durationMs,
@@ -977,7 +1000,7 @@ export default function App() {
         await exportCurrentFrameAsPng(
           project,
           project.name,
-          currentTimeMs,
+          usePlayheadStore.getState().currentTimeMs,
           exportSettings.resolution
         );
         setExportModalOpen(false);
@@ -1046,14 +1069,15 @@ export default function App() {
             reader.onload = () => {
               const dataUrl = String(reader.result || '');
               const audio = new Audio(dataUrl);
+              const currentPlayheadMs = usePlayheadStore.getState().currentTimeMs;
               const addClip = (durationMs: number) => {
                 const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
-                const clipEnd = currentTimeMs + clipDuration;
+                const clipEnd = currentPlayheadMs + clipDuration;
                 const clip = {
                   id: `audio-${Date.now()}`,
                   name: f.name,
                   dataUrl,
-                  startMs: currentTimeMs,
+                  startMs: currentPlayheadMs,
                   durationMs: clipDuration,
                   offsetMs: 0,
                   volume: 1,
@@ -1159,8 +1183,8 @@ export default function App() {
                 onSelectLayer={handleSelectLayer}
                 showSafeArea={showSafeArea}
                 snapEnabled={true}
-                onToggleSafeArea={() => setShowSafeArea((prev) => !prev)}
-                onOpenShortcuts={() => setShortcutsModalOpen(true)}
+                onToggleSafeArea={handleToggleSafeArea}
+                onOpenShortcuts={handleOpenShortcuts}
               />
             </Suspense>
           </StageErrorBoundary>
@@ -1255,7 +1279,11 @@ export default function App() {
             <div className="grid grid-cols-3 gap-2">
               {(
                 [
-                  { id: 'mp4', label: 'MP4 Video', desc: 'With sound' },
+                  {
+                    id: 'mp4',
+                    label: isMediaRecorderMp4Supported() ? 'MP4 Video' : 'WebM Video',
+                    desc: isMediaRecorderMp4Supported() ? 'With sound' : 'VP9 with sound',
+                  },
                   { id: 'gif', label: 'Animated GIF', desc: 'Silent loop' },
                   { id: 'png', label: 'PNG Still', desc: 'Current frame' },
                 ] as { id: ExportFormat; label: string; desc: string }[]

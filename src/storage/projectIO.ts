@@ -251,6 +251,7 @@ export function loadProjectFromBrowser(): Project | null {
 
 // Trigger browser download of .raylight.json project recipe file
 export function exportProjectToFile(project: Project): void {
+    if (typeof document === 'undefined') return;
     const cleanName = project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const filename = `${cleanName || 'raylight-project'}.raylight.json`;
     const jsonString = JSON.stringify(project, null, 2);

@@ -106,7 +106,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         toggleRightSidebar,
         rightSidebarWidth,
     } = useSelectionStore();
-    const { currentTimeMs } = usePlayheadStore();
 
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
     const [aspectLocked, setAspectLocked] = useState(true);
@@ -194,6 +193,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const handleAddAnimationBlock = (property: AnimationBlockProperty) => {
         if (!selectedLayer) return;
+        const currentTimeMs = usePlayheadStore.getState().currentTimeMs;
         const shotLocalMs = Math.max(
             0,
             Math.min(activeShot.durationMs - 800, currentTimeMs - activeShot.startMs)

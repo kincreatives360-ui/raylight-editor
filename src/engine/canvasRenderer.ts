@@ -19,7 +19,8 @@ import type {
 } from './evaluateShot';
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
-import { kelvinToRgb } from '../stage/stageUtils';
+import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
+import { getShaderColors } from '../model/backgroundPresets';
 import { resolveKeyIntensity } from './lightMath';
 
 const imageElementCache = new Map<string, HTMLImageElement>();
@@ -410,8 +411,11 @@ function drawLayerOnCanvas(
   const cameraZoom = frame.camera.zoom;
   const totalScale = depthScale * cameraZoom;
 
-  const relX = (evalLayer.position.x - frame.camera.target.x) * canvasW;
-  const relY = (evalLayer.position.y - frame.camera.target.y) * canvasH;
+  const artboard = getArtboardDimensions(project.aspectRatio);
+  const normTargetX = (frame.camera.target?.x ?? 0) / artboard.width;
+  const normTargetY = (frame.camera.target?.y ?? 0) / artboard.height;
+  const relX = (evalLayer.position.x - normTargetX) * canvasW;
+  const relY = (evalLayer.position.y - normTargetY) * canvasH;
   const screenCenterX = canvasW / 2 + relX * totalScale;
   const screenCenterY = canvasH / 2 + relY * totalScale;
 
@@ -839,9 +843,14 @@ function renderSceneLightSources(
   light: LightRig | undefined,
   camera: EvaluatedCamera,
   canvasW: number,
-  canvasH: number
+  canvasH: number,
+  aspectRatio?: Project['aspectRatio']
 ): void {
   if (!light) return;
+
+  const artboard = getArtboardDimensions(aspectRatio);
+  const normTargetX = (camera.target?.x ?? 0) / artboard.width;
+  const normTargetY = (camera.target?.y ?? 0) / artboard.height;
 
   ctx.save();
 
@@ -908,8 +917,8 @@ function renderSceneLightSources(
     } else if (src.type === 'point') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const px = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
-      const py = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const px = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
+      const py = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
       const radius = Math.max(30, (src.distance ?? 8) * (canvasW * 0.07) * camera.zoom);
       const radGrad = ctx.createRadialGradient(px, py, 0, px, py, radius);
       radGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.45, intensity * 0.2)));
@@ -921,8 +930,8 @@ function renderSceneLightSources(
     } else if (src.type === 'spot') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const sx = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
-      const sy = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const sx = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
+      const sy = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
       const radius = Math.max(40, (src.distance ?? 8) * (canvasW * 0.09) * camera.zoom);
       const spotGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
       spotGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.5, intensity * 0.24)));
@@ -934,8 +943,8 @@ function renderSceneLightSources(
     } else if (src.type === 'area') {
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      const ax = canvasW / 2 + ((src.position?.x ?? 0) - camera.target.x) * canvasW * camera.zoom;
-      const ay = canvasH / 2 + ((src.position?.y ?? 0) - camera.target.y) * canvasH * camera.zoom;
+      const ax = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
+      const ay = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
       const areaW = Math.max(20, (src.width ?? 2) * (canvasW * 0.1) * camera.zoom);
       const areaH = Math.max(20, (src.height ?? 2) * (canvasH * 0.1) * camera.zoom);
       const areaGrad = ctx.createRadialGradient(ax, ay, 0, ax, ay, Math.max(areaW, areaH));
@@ -1009,7 +1018,13 @@ function renderSingleBackground(
     ctx.fillStyle = baseColor;
     ctx.fillRect(0, 0, canvasW, canvasH);
 
-    const colors = bg.colors && bg.colors.length > 0 ? bg.colors : [bg.color, bg.backgroundColor];
+    const palette = getShaderColors(
+      bg.preset,
+      bg.colors,
+      bg.color,
+      bg.backgroundColor
+    );
+    const colors = palette.length > 0 ? palette : [bg.color || '#38bdf8', bg.backgroundColor || '#0c0e17'];
     const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);
     colors.forEach((c, idx) => {
       grad.addColorStop(idx / Math.max(1, colors.length - 1), c);
@@ -1156,7 +1171,8 @@ export function renderProjectFrameToCanvas(
       outgoing.activeShot.light,
       outgoing.camera,
       canvasW,
-      canvasH
+      canvasH,
+      project.aspectRatio
     );
     ctx.restore();
   } else {
@@ -1200,7 +1216,8 @@ export function renderProjectFrameToCanvas(
     frame.activeShot.light,
     frame.camera,
     canvasW,
-    canvasH
+    canvasH,
+    project.aspectRatio
   );
   ctx.restore();
 

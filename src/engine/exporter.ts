@@ -24,6 +24,8 @@ export interface ExportSettings {
     onSeekFrame?: (timeMs: number) => Promise<void> | void;
 }
 
+export { isWebCodecsSupported, isMediaRecorderMp4Supported } from './exportCapabilities';
+
 export interface ExportProgress {
     frameIndex: number;
     totalFrames: number;
@@ -212,7 +214,9 @@ export async function exportCurrentFrameAsPng(
     await syncAndSeekAllProjectVideos(project, timeMs);
 
     // 1. Prefer capturing high-resolution frame directly from the active WebGL canvas
-    const webglCanvas = document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null;
+    const webglCanvas =
+        (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
+        (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
     if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
         ctx.drawImage(webglCanvas, 0, 0, width, height);
     } else {
@@ -375,12 +379,19 @@ export async function runVideoExportPipeline(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Prefer native H.264/MP4 when supported by browser, fallback to VP9 WebM
+    // Prefer native H.264/MP4 when supported by browser, with high/main profiles and VP9/VP8 WebM fallbacks
     const mp4MimeTypes = [
+        'video/mp4;codecs=avc1.4d002a,mp4a.40.2',
+        'video/mp4;codecs=avc1.640033,mp4a.40.2',
+        'video/mp4;codecs=avc1.4d002a',
+        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
         'video/mp4;codecs=avc1.42E01E',
         'video/mp4;codecs=h264',
         'video/mp4',
+        'video/webm;codecs=vp9,opus',
         'video/webm;codecs=vp9',
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp8',
         'video/webm',
     ];
     const selectedMime =
@@ -488,10 +499,11 @@ export async function runVideoExportPipeline(
                 return;
             }
             try {
-                const isMp4 = selectedMime.includes('mp4');
+                const actualMime = recorder?.mimeType || selectedMime;
+                const isMp4 = actualMime.includes('mp4');
                 const ext = isMp4 ? 'mp4' : 'webm';
                 const videoBlob = new Blob(chunks, {
-                    type: recorder?.mimeType || selectedMime || 'video/webm',
+                    type: actualMime || 'video/webm',
                 });
                 downloadBlob(
                     videoBlob,
@@ -543,6 +555,11 @@ export async function runVideoExportPipeline(
                 ctx.drawImage(webglCanvas, 0, 0, width, height);
             } else {
                 renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+            }
+
+            const captureTrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
+            if (typeof captureTrack?.requestFrame === 'function') {
+                captureTrack.requestFrame();
             }
 
             if (f === 0) {

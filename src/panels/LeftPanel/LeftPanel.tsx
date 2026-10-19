@@ -94,7 +94,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         leftPanelWidth,
     } = useSelectionStore();
 
-    const { currentTimeMs, setCurrentTimeMs } = usePlayheadStore();
+    const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
     const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio' | 'templates'>('file');
     const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>('All');
@@ -1404,7 +1404,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     id: `sfx-${sound.id}-${Date.now()}`,
                                                     name: sound.name,
                                                     dataUrl: sound.getUrl(),
-                                                    startMs: currentTimeMs,
+                                                    startMs: usePlayheadStore.getState().currentTimeMs,
                                                     durationMs: sound.durationMs,
                                                     offsetMs: 0,
                                                     volume: 1,

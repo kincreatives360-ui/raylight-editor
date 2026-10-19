@@ -85,6 +85,10 @@ export function parseFigmaSvgToLayers(
     shotDurationMs: number,
     startingOrder: number
 ): FigmaImportResult {
+    if (typeof DOMParser === 'undefined') {
+        return { layers: [], assets: {} };
+    }
+
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgText, 'image/svg+xml');
     const svgEl = doc.querySelector('svg');
@@ -107,6 +111,8 @@ export function parseFigmaSvgToLayers(
             boardH = parts[3];
         }
     }
+    boardW = Math.max(1, boardW || 1200);
+    boardH = Math.max(1, boardH || 800);
 
     const layers: Layer[] = [];
     const assets: Record<string, AssetRecord> = {};

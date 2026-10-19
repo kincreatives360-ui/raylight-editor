@@ -86,7 +86,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryProj = getLayerProjectedCorners(
         primaryEval,
-        null,
         frameWidth,
         frameHeight,
         aspect,
@@ -625,7 +624,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 {selectedEvalLayers.slice(1).map((sec) => {
                     const secProj = getLayerProjectedCorners(
                         sec,
-                        null,
                         frameWidth,
                         frameHeight,
                         aspect,

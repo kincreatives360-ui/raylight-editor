@@ -166,7 +166,7 @@ export function evaluateLayerAtTime(
     }
 
     // 3. Evaluate Relative Animation Blocks (During)
-    for (const blk of layer.blocks) {
+    for (const blk of layer.blocks || []) {
         if (shotLocalTimeMs < blk.startMs) continue;
         const rawP =
             blk.durationMs > 0
@@ -234,7 +234,7 @@ export function evaluateLayerAtTime(
                 const numStr = match[1].replace(/,/g, '');
                 const baseNum = parseFloat(numStr);
                 if (Number.isFinite(baseNum)) {
-                    const delta = typeof blk.amount === 'number' ? blk.amount : blk.amount.x;
+                    const delta = typeof blk.amount === 'number' ? blk.amount : (blk.amount && typeof blk.amount.x === 'number' ? blk.amount.x : 0);
                     const currentNum = baseNum + delta * eased;
                     const hasDecimals = numStr.includes('.');
                     const decimalPlaces = hasDecimals ? (numStr.split('.')[1] || '').length : 0;
@@ -258,7 +258,7 @@ export function evaluateLayerAtTime(
         rotation,
         scale,
         size,
-        opacity: Math.max(0, Math.min(1, opacity)),
+        opacity: Math.max(0, Math.min(1, Number.isFinite(opacity) ? opacity : 0)),
         cornerRadius,
         extraLayerBlur,
         maskSweepProgress,

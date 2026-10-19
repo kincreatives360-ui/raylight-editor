@@ -22,7 +22,8 @@ export function evaluateShotCameraAtTime(
     shot: Shot,
     shotLocalTimeMs: number
 ): EvaluatedCamera {
-    const defaultFraming = shot.framings[0] || {
+    const framings = shot.framings || [];
+    const defaultFraming = framings[0] || {
         id: 'default',
         name: 'Default',
         target: { x: 0, y: 0, z: 0 },
@@ -50,9 +51,9 @@ export function evaluateShotCameraAtTime(
     for (let i = 0; i < sortedBlocks.length; i++) {
         const block = sortedBlocks[i];
         const fromFraming =
-            shot.framings.find((f) => f.id === block.fromFramingId) || defaultFraming;
+            framings.find((f) => f.id === block.fromFramingId) || defaultFraming;
         const toFraming =
-            shot.framings.find((f) => f.id === block.toFramingId) || fromFraming;
+            framings.find((f) => f.id === block.toFramingId) || fromFraming;
 
         const fromEndpoint = block.from || {
             anchorX: fromFraming.target.x,
@@ -77,7 +78,8 @@ export function evaluateShotCameraAtTime(
                 targetX = fromEndpoint.anchorX;
                 targetY = fromEndpoint.anchorY;
                 targetZ = fromFraming.target.z;
-                zoom = Math.max(0.15, fromEndpoint.zoom);
+                const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
+                zoom = Math.max(0.15, safeFromZoom);
                 rotX = degToRad(fromEndpoint.tilt);
                 rotY = degToRad(fromEndpoint.orbit);
                 rotZ = degToRad(fromEndpoint.roll);
@@ -86,9 +88,10 @@ export function evaluateShotCameraAtTime(
                     fovDegrees = BASE_FOV_DEGREES / zoom;
                     focalLength = 50 * zoom;
                 } else if (block.mode === 'dollyzoom') {
+                    const fromBaseZoom = Math.max(0.2, safeFromZoom);
                     fovDegrees = Math.max(
                         10,
-                        Math.min(95, BASE_FOV_DEGREES * (zoom / Math.max(0.2, fromEndpoint.zoom)))
+                        Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
                     );
                     focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
                 } else {
@@ -112,7 +115,8 @@ export function evaluateShotCameraAtTime(
         targetX = lerp(fromEndpoint.anchorX, toEndpoint.anchorX, eased);
         targetY = lerp(fromEndpoint.anchorY, toEndpoint.anchorY, eased);
         targetZ = lerp(fromFraming.target.z, toFraming.target.z, eased);
-        zoom = Math.max(0.15, lerp(fromEndpoint.zoom, toEndpoint.zoom, eased));
+        const targetZoom = lerp(fromEndpoint.zoom ?? 1, toEndpoint.zoom ?? 1, eased);
+        zoom = Math.max(0.15, Number.isFinite(targetZoom) ? targetZoom : 1);
 
         rotX = degToRad(lerp(fromEndpoint.tilt, toEndpoint.tilt, eased));
         rotY = degToRad(lerp(fromEndpoint.orbit, toEndpoint.orbit, eased));
@@ -125,9 +129,10 @@ export function evaluateShotCameraAtTime(
             focalLength = 50 * zoom;
         } else if (block.mode === 'dollyzoom') {
             // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
+            const fromBaseZoom = Math.max(0.2, Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1);
             fovDegrees = Math.max(
                 10,
-                Math.min(95, BASE_FOV_DEGREES * (zoom / Math.max(0.2, fromEndpoint.zoom)))
+                Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
         } else {
