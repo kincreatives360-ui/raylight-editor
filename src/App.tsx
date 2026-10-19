@@ -526,11 +526,15 @@ export default function App() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      const targetTag = document.activeElement?.tagName;
+      const el = document.activeElement as HTMLElement | null;
       if (
-        targetTag === 'INPUT' ||
-        targetTag === 'TEXTAREA' ||
-        targetTag === 'SELECT'
+        el &&
+        (el.tagName === 'INPUT' ||
+          el.tagName === 'TEXTAREA' ||
+          el.tagName === 'SELECT' ||
+          el.isContentEditable ||
+          el.getAttribute('role') === 'spinbutton' ||
+          el.getAttribute('role') === 'textbox')
       ) {
         return;
       }

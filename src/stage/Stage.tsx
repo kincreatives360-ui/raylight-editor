@@ -162,8 +162,19 @@ const StageComponent: React.FC<StageProps> = ({
     // Track Spacebar hold for temporary Hand panning and C/V/H/Y tool shortcuts
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
-            const tag = document.activeElement?.tagName;
-            if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+            const el = document.activeElement as HTMLElement | null;
+            if (!el) return;
+            const tag = el.tagName;
+            if (
+                tag === 'INPUT' ||
+                tag === 'TEXTAREA' ||
+                tag === 'SELECT' ||
+                el.isContentEditable ||
+                el.getAttribute('role') === 'spinbutton' ||
+                el.getAttribute('role') === 'textbox'
+            ) {
+                return;
+            }
             if (e.code === 'Space') setIsSpaceHeld(true);
             if (!e.metaKey && !e.ctrlKey) {
                 if (e.key === 'c' || e.key === 'C') setActiveTool('camera');
@@ -1082,7 +1093,7 @@ const StageComponent: React.FC<StageProps> = ({
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
-            className={`flex-1 bg-[#242424] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
+            className={`flex-1 bg-[var(--bg-canvas,#07080d)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
                     : activeTool === 'camera'
                         ? 'cursor-move active:cursor-grabbing'
@@ -1102,9 +1113,9 @@ const StageComponent: React.FC<StageProps> = ({
                 {/* THE STAGE FRAME */}
                 <div
                     ref={stageFrameRef}
-                    className={`relative transition-[width,height] duration-150 overflow-visible ${isTransparentBg
+                    className={`relative overflow-visible ${isTransparentBg
                         ? 'bg-[repeating-conic-gradient(#1c1c21_0%_25%,#101014_0%_50%)] bg-[size:20px_20px]'
-                        : 'bg-[#070707]'
+                        : 'bg-[var(--bg-canvas,#07080d)]'
                         }`}
                     style={{
                         width: `${frameWidth}px`,
@@ -1174,8 +1185,8 @@ const StageComponent: React.FC<StageProps> = ({
                                     >
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" className="cursor-crosshair pointer-events-auto" />
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" className="pointer-events-none drop-shadow" />
-                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
-                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="#38bdf8" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
+                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
+                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
                                         <text x={frameWidth / 2 + 10} y={frameHeight / 2 - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
                                     </g>
                                 );
@@ -1185,8 +1196,8 @@ const StageComponent: React.FC<StageProps> = ({
 
                     {/* Drag & Drop Target Glow Overlay */}
                     {isDraggingOver && (
-                        <div className="absolute inset-0 z-50 bg-sky-500/15 border-2 border-dashed border-sky-400 rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse">
-                            <div className="w-12 h-12 rounded-full bg-sky-500/20 border border-sky-400/40 flex items-center justify-center text-sky-300">
+                        <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse">
+                            <div className="w-12 h-12 rounded-full bg-[var(--accent-primary,#0088ff)]/20 border border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center text-[var(--accent-primary,#0088ff)]">
                                 <UploadCloud className="w-6 h-6" />
                             </div>
                             <span className="text-sm font-semibold text-white drop-shadow">
@@ -1262,7 +1273,7 @@ const StageComponent: React.FC<StageProps> = ({
                     {/* Rubber-band Draw Box when dragging to create a new layer */}
                     {drawBox && (
                         <div
-                            className="absolute border-2 border-sky-400 bg-sky-500/15 rounded pointer-events-none z-40"
+                            className="absolute border-2 border-[var(--accent-primary,#0088ff)] bg-[var(--accent-primary,#0088ff)]/15 rounded pointer-events-none z-40"
                             style={{
                                 left: `${drawBox.x}px`,
                                 top: `${drawBox.y}px`,
@@ -1275,7 +1286,7 @@ const StageComponent: React.FC<StageProps> = ({
                     {/* On-Canvas Marquee Box Multi-Selection */}
                     {marqueeBox && (
                         <div
-                            className="absolute border-2 border-dashed border-sky-400 bg-sky-500/15 rounded pointer-events-none z-40"
+                            className="absolute border-2 border-dashed border-[var(--accent-primary,#0088ff)] bg-[var(--accent-primary,#0088ff)]/15 rounded pointer-events-none z-40"
                             style={{
                                 left: `${Math.min(marqueeBox.startX, marqueeBox.currentX)}px`,
                                 top: `${Math.min(marqueeBox.startY, marqueeBox.currentY)}px`,
@@ -1322,8 +1333,8 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* Top-Center Camera Tool Floating Pill (when camera tool is active) */}
             {activeTool === 'camera' && !isAnimateMode && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[#16161a]/95 backdrop-blur-xl border border-sky-400/40 text-[11px] font-medium text-white flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
-                    <div className="flex items-center gap-1.5 text-sky-400">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-medium text-[var(--text-primary,#f4f4f5)] flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
+                    <div className="flex items-center gap-1.5 text-[var(--accent-primary,#0088ff)]">
                         <Camera className="w-3.5 h-3.5" />
                         <span className="font-semibold">Camera Tool (C)</span>
                     </div>
@@ -1366,7 +1377,7 @@ const StageComponent: React.FC<StageProps> = ({
                             window.innerHeight - (contextMenuLayer ? 390 : 220)
                         )}px`,
                     }}
-                    className="fixed z-50 w-56 bg-[#0c0d14]/95 backdrop-blur-xl border border-white/12 shadow-2xl rounded-xl p-1 text-xs text-gray-200 flex flex-col gap-0.5 select-none"
+                    className="fixed z-50 w-56 bg-[var(--bg-muted,#242428)]/98 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] shadow-2xl rounded-xl p-1 text-xs text-[var(--text-secondary,#d4d4d8)] flex flex-col gap-0.5 select-none"
                 >
                     {contextMenuLayer ? (
                         <>

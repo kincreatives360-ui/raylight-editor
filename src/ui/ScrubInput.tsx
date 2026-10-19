@@ -76,6 +76,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     const finishPointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
         if (activePointerIdRef.current !== e.pointerId) return false;
         activePointerIdRef.current = null;
+        movedRef.current = false;
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                 e.currentTarget.releasePointerCapture(e.pointerId);
@@ -99,6 +100,10 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         finishPointerDrag(e);
     };
 
+    const handleLostPointerCapture = (e: React.PointerEvent<HTMLDivElement>) => {
+        finishPointerDrag(e);
+    };
+
     const commitTextInput = () => {
         setIsEditing(false);
         const parsed = parseFloat(inputText);
@@ -108,23 +113,40 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (isEditing) return;
+        if (isEditing) {
+            e.stopPropagation();
+            return;
+        }
+
+        // Prevent spinbutton focus from leaking hotkeys (Space, Backspace, Delete) to global stage
+        if (e.code === 'Space' || e.key === 'Backspace' || e.key === 'Delete') {
+            e.stopPropagation();
+            e.preventDefault();
+            if (e.code === 'Space') {
+                setInputText(value.toFixed(decimals));
+                setIsEditing(true);
+            }
+            return;
+        }
 
         const stepMultiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
         const effectiveStep = step * stepMultiplier;
 
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
             e.preventDefault();
+            e.stopPropagation();
             beginDragTransaction();
             onChange(clampAndRound(value + effectiveStep));
             commitDragTransaction();
         } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
             e.preventDefault();
+            e.stopPropagation();
             beginDragTransaction();
             onChange(clampAndRound(value - effectiveStep));
             commitDragTransaction();
         } else if (e.key === 'Enter') {
             e.preventDefault();
+            e.stopPropagation();
             setInputText(value.toFixed(decimals));
             setIsEditing(true);
         }
@@ -145,6 +167,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
             onPointerCancel={handlePointerCancel}
+            onLostPointerCapture={handleLostPointerCapture}
             onKeyDown={handleKeyDown}
             onDoubleClick={() => {
                 setInputText(value.toFixed(decimals));
@@ -152,9 +175,9 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             }}
             title="Drag left/right to scrub, use arrow keys, or click/press Enter to type exact value"
             style={{ touchAction: 'none' }}
-            className="h-7 px-2.5 rounded-lg bg-[#1c1c1f] hover:bg-[#242429] border border-transparent focus-visible:outline-none focus-visible:border-[#0088ff] focus-visible:ring-1 focus-visible:ring-[#0088ff] flex items-center gap-2 cursor-ew-resize select-none transition"
+            className="h-7 px-2.5 rounded-md bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100"
         >
-            <span className="text-[11px] text-[#a1a1aa] font-medium tracking-tight shrink-0 select-none">
+            <span className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
                 {label}
             </span>
 
@@ -166,13 +189,17 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     onChange={(e) => setInputText(e.target.value)}
                     onBlur={commitTextInput}
                     onKeyDown={(e) => {
+                        e.stopPropagation();
                         if (e.key === 'Enter') commitTextInput();
-                        if (e.key === 'Escape') setIsEditing(false);
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setIsEditing(false);
+                        }
                     }}
-                    className="w-full bg-transparent text-[11px] font-mono tabular-nums text-white outline-none tracking-tight"
+                    className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] outline-none tracking-tight caret-[var(--accent-primary,#0088ff)]"
                 />
             ) : (
-                <span className="text-[11px] font-mono tabular-nums text-[#f4f4f5] truncate tracking-tight">
+                <span className="text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] truncate tracking-tight">
                     {value.toFixed(decimals)}
                     {unit}
                 </span>

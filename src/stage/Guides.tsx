@@ -52,20 +52,20 @@ export const Guides: React.FC<GuidesProps> = ({
                     {frameWidth < frameHeight && (
                         <div className="absolute inset-0 pointer-events-none">
                             {/* Top header margin */}
-                            <div className="absolute top-0 inset-x-0 h-[12%] bg-black/20 border-b border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 uppercase tracking-wider">
+                            <div className="absolute top-0 inset-x-0 h-[12%] bg-black/20 border-b border-dashed border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center">
+                                <span className="text-[10px] font-mono tabular-nums text-[var(--accent-primary,#0088ff)] uppercase tracking-wider">
                                     Header Safe Zone
                                 </span>
                             </div>
                             {/* Bottom caption margin */}
-                            <div className="absolute bottom-0 inset-x-0 h-[22%] bg-black/20 border-t border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 uppercase tracking-wider">
+                            <div className="absolute bottom-0 inset-x-0 h-[22%] bg-black/20 border-t border-dashed border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center">
+                                <span className="text-[10px] font-mono tabular-nums text-[var(--accent-primary,#0088ff)] uppercase tracking-wider">
                                     Caption &amp; Sound Zone
                                 </span>
                             </div>
                             {/* Right action icons margin */}
-                            <div className="absolute top-[12%] bottom-[22%] right-0 w-[18%] bg-black/20 border-l border-dashed border-[#0088ff]/40 flex items-center justify-center">
-                                <span className="text-[10px] font-mono tabular-nums text-[#38bdf8]/80 rotate-90 uppercase tracking-wider">
+                            <div className="absolute top-[12%] bottom-[22%] right-0 w-[18%] bg-black/20 border-l border-dashed border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center">
+                                <span className="text-[10px] font-mono tabular-nums text-[var(--accent-primary,#0088ff)] rotate-90 uppercase tracking-wider">
                                     UI Buttons
                                 </span>
                             </div>
@@ -74,7 +74,7 @@ export const Guides: React.FC<GuidesProps> = ({
                 </>
             )}
 
-            {/* Active Magenta Smart-Snap Alignment Lines */}
+            {/* Active Emerald Smart-Snap Alignment Lines (DESIGN.md §4.4) */}
             {guides.map((g, idx) => {
                 if (g.axis === 'x') {
                     const screenX =
@@ -82,10 +82,10 @@ export const Guides: React.FC<GuidesProps> = ({
                     return (
                         <div
                             key={`x-${idx}`}
-                            className="absolute top-0 bottom-0 w-px bg-fuchsia-500 shadow-[0_0_8px_#d946ef]"
-                            style={{ left: `${screenX}px` }}
+                            className="absolute top-0 bottom-0 left-0 w-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)] will-change-transform"
+                            style={{ transform: `translate3d(${screenX}px, 0, 0)` }}
                         >
-                            <span className="absolute top-2 left-1.5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
+                            <span className="absolute top-2 left-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-success,#10b981)] text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
                                 {g.label}
                             </span>
                         </div>
@@ -97,10 +97,10 @@ export const Guides: React.FC<GuidesProps> = ({
                 return (
                     <div
                         key={`y-${idx}`}
-                        className="absolute left-0 right-0 h-px bg-fuchsia-500 shadow-[0_0_8px_#d946ef]"
-                        style={{ top: `${screenY}px` }}
+                        className="absolute top-0 left-0 right-0 h-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)] will-change-transform"
+                        style={{ transform: `translate3d(0, ${screenY}px, 0)` }}
                     >
-                        <span className="absolute left-2 -top-5 px-1.5 py-0.5 rounded bg-fuchsia-600 text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
+                        <span className="absolute left-2 -top-5 px-1.5 py-0.5 rounded bg-[var(--accent-success,#10b981)] text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
                             {g.label}
                         </span>
                     </div>

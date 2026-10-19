@@ -74,10 +74,10 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 setActiveTool(item.id);
                 onClose();
             }}
-            className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer ${
+            className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition-colors duration-100 ${
                 activeTool === item.id
-                    ? 'bg-[#0088ff] text-white'
-                    : 'text-[#d4d4d8] hover:bg-white/5'
+                    ? 'bg-[var(--accent-primary,#0088ff)] text-white'
+                    : 'text-[var(--text-secondary,#d4d4d8)] hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
             }`}
         >
             <span>{item.label}</span>
@@ -97,9 +97,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             {(selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
                 <button
                     onClick={() => setIsCropping(!isCropping)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition ${isCropping
-                            ? 'bg-[#0088ff] text-white border-[#38bdf8]'
-                            : 'bg-[#18181b]/95 hover:bg-[#222226] text-[#e4e4e7] border-white/10'
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition-colors duration-100 ${isCropping
+                            ? 'bg-[var(--accent-primary,#0088ff)] text-white border-[var(--accent-hover,#0077e6)]'
+                            : 'bg-[var(--bg-surface,#161619)]/95 hover:bg-[var(--bg-muted,#242428)] text-[var(--text-primary,#f4f4f5)] border-[var(--border-subtle,rgba(255,255,255,0.07))]'
                         }`}
                 >
                     {isCropping ? (
@@ -109,7 +109,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         </>
                     ) : (
                         <>
-                            <Crop className="w-3.5 h-3.5 text-[#a1a1aa]" />
+                            <Crop className="w-3.5 h-3.5 text-[var(--text-muted,#a1a1aa)]" />
                             <span>Crop</span>
                         </>
                     )}
@@ -117,7 +117,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* Main Floating Toolbar Pill */}
-            <div className="relative flex items-center gap-1 px-1.5 py-1 rounded-xl bg-[#161619]/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl">
+            <div className="relative flex items-center gap-1 px-1.5 py-1 rounded-xl bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] shadow-2xl">
                 {/* 1. Select / Move / Hand Tool + Chevron */}
                 <div className="relative flex items-center">
                     <button
@@ -125,9 +125,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         onClick={() => setActiveTool('select')}
                         aria-label="Select Tool (V) - Plane-aware move"
                         title="Select Tool (V) - Plane-aware move"
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isPointerActive
-                                ? 'bg-[#0088ff] text-white shadow-sm'
-                                : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${isPointerActive
+                                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm'
+                                : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                             }`}
                     >
                         {activeTool === 'move' ? (
@@ -147,13 +147,13 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             setPointerMenuOpen((v) => !v);
                             setShapeMenuOpen(false);
                         }}
-                        className="px-1.5 py-1 text-[#a1a1aa] hover:text-white cursor-pointer rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="px-1.5 py-1 text-[var(--text-muted,#a1a1aa)] hover:text-white cursor-pointer rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                     >
                         <ChevronDown className="w-3 h-3" />
                     </button>
 
                     {pointerMenuOpen && (
-                        <div className="absolute bottom-10 left-0 w-44 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
+                        <div className="absolute bottom-10 left-0 w-44 rounded-xl bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] shadow-2xl p-1 text-xs z-50">
                             {(
                                 [
                                     { id: 'select', label: 'Select (3D Plane)', key: 'V' },
@@ -172,9 +172,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setActiveTool('camera')}
                     aria-label="Camera Navigation Tool (C) - Left-drag: Orbit | Middle-drag: Pan | Right-drag: Dolly"
                     title="Camera Navigation Tool (C) - Left-drag: Orbit | Middle-drag: Pan | Right-drag: Dolly"
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'camera'
-                            ? 'bg-[#0088ff] text-white shadow-sm ring-1 ring-sky-300'
-                            : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${activeTool === 'camera'
+                            ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm ring-1 ring-[var(--accent-glow,rgba(0,136,255,0.25))]'
+                            : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                         }`}
                 >
                     <Camera className="w-3.5 h-3.5" />
@@ -186,9 +186,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setActiveTool('tilt')}
                     aria-label="3D Tilt Tool (Y) - Drag a layer to angle it in 3D"
                     title="3D Tilt Tool (Y) - Drag a layer to angle it in 3D"
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'tilt'
-                            ? 'bg-[#0088ff] text-white'
-                            : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${activeTool === 'tilt'
+                            ? 'bg-[var(--accent-primary,#0088ff)] text-white'
+                            : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                         }`}
                 >
                     <Rotate3d className="w-3.5 h-3.5" />
@@ -207,9 +207,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         }
                         aria-label="Shape Tool (O / R / L)"
                         title="Shape Tool (O / R / L)"
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isShapeActive
-                                ? 'bg-[#0088ff] text-white'
-                                : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${isShapeActive
+                                ? 'bg-[var(--accent-primary,#0088ff)] text-white'
+                                : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                             }`}
                     >
                         {activeTool === 'rectangle' ? <Square className="w-3.5 h-3.5" /> : activeTool === 'line' ? <Minus className="w-3.5 h-3.5" /> : activeTool === 'arrow' ? <ArrowRight className="w-3.5 h-3.5" /> : activeTool === 'polygon' ? <Pentagon className="w-3.5 h-3.5" /> : <Circle className="w-3.5 h-3.5" />}
@@ -223,13 +223,13 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             setShapeMenuOpen((v) => !v);
                             setPointerMenuOpen(false);
                         }}
-                        className="px-1.5 py-1 text-[#a1a1aa] hover:text-white cursor-pointer rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="px-1.5 py-1 text-[var(--text-muted,#a1a1aa)] hover:text-white cursor-pointer rounded focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                     >
                         <ChevronDown className="w-3 h-3" />
                     </button>
 
                     {shapeMenuOpen && (
-                        <div className="absolute bottom-10 left-0 w-40 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
+                        <div className="absolute bottom-10 left-0 w-40 rounded-xl bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] shadow-2xl p-1 text-xs z-50">
                             {(
                                 [
                                     { id: 'ellipse', label: 'Oval / Ellipse', key: 'O' },
@@ -249,7 +249,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setActiveTool('pen')}
                     aria-label="Pen Tool - create editable vector paths"
                     title="Pen Tool - create editable vector paths"
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'pen' ? 'bg-[#0088ff] text-white' : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'}`}
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${activeTool === 'pen' ? 'bg-[var(--accent-primary,#0088ff)] text-white' : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'}`}
                 >
                     <Pen className="w-3.5 h-3.5" />
                 </button>
@@ -260,9 +260,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setActiveTool('text')}
                     aria-label="Text Tool (T) - Click or drag on canvas"
                     title="Text Tool (T) - Click or drag on canvas"
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'text'
-                            ? 'bg-[#0088ff] text-white'
-                            : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${activeTool === 'text'
+                            ? 'bg-[var(--accent-primary,#0088ff)] text-white'
+                            : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                         }`}
                 >
                     <Type className="w-3.5 h-3.5" />
@@ -274,9 +274,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setActiveTool('image')}
                     aria-label="Place Image or Card Frame (I)"
                     title="Place Image / Card Frame (I)"
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTool === 'image'
-                            ? 'bg-[#0088ff] text-white'
-                            : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${activeTool === 'image'
+                            ? 'bg-[var(--accent-primary,#0088ff)] text-white'
+                            : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                         }`}
                 >
                     <Tag className="w-3.5 h-3.5" />
@@ -288,7 +288,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={onToggleLightRig}
                     aria-label="Scene Key Light and Reflections"
                     title="Scene Key Light & Reflections"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:text-white hover:bg-white/5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                 >
                     <Sun className="w-3.5 h-3.5" />
                 </button>
@@ -299,7 +299,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={onOpenSceneEffects}
                     aria-label="Scene Post-Processing Effects"
                     title="Scene Post-Processing Effects (Depth of Field, Bloom, Grain)"
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:text-white hover:bg-white/5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                 >
                     <Sparkles className="w-3.5 h-3.5" />
                 </button>
@@ -311,10 +311,10 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         onClick={onToggleSafeArea}
                         aria-label="Toggle Safe Zones & Rule of Thirds Grid ( ' )"
                         title="Toggle Safe Zones & Rule of Thirds Grid ( ' )"
-                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${
+                        className={`w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${
                             showSafeArea
-                                ? 'bg-[#0088ff] text-white shadow-sm'
-                                : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm'
+                                : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))]'
                         }`}
                     >
                         <Grid3X3 className="w-3.5 h-3.5" />
@@ -328,20 +328,20 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         onClick={onOpenShortcuts}
                         aria-label="Keyboard Shortcuts & Hotkeys Guide ( ? )"
                         title="Keyboard Shortcuts & Hotkeys Guide ( ? )"
-                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:text-white hover:bg-white/5 transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="w-7 h-7 rounded-lg flex items-center justify-center text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                     >
                         <HelpCircle className="w-3.5 h-3.5" />
                     </button>
                 )}
 
                 {/* 10. Right Sub-Pill: [Play | Waveform Animate Mode (Shift+A)] */}
-                <div className="ml-1 pl-1 bg-[#232329] rounded-lg p-0.5 flex items-center gap-0.5 border border-white/[0.06]">
+                <div className="ml-1 pl-1 bg-[var(--bg-subtle,#1c1c1f)] rounded-lg p-0.5 flex items-center gap-0.5 border border-[var(--border-subtle,rgba(255,255,255,0.07))]">
                     <button
                         type="button"
                         onClick={togglePlay}
                         aria-label={isPlaying ? "Pause playback (Space)" : "Play preview (Space)"}
                         title="Play / Pause Preview (Space)"
-                        className="w-7 h-6 rounded-md flex items-center justify-center text-[#d4d4d8] hover:text-white hover:bg-white/10 transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="w-7 h-6 rounded-md flex items-center justify-center text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)]"
                     >
                         {isPlaying ? (
                             <Pause className="w-3 h-3" />
@@ -355,9 +355,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         onClick={toggleAnimateMode}
                         aria-label="Animate Tool - Toggle motion recording mode (Shift + A)"
                         title="Animate Tool (Shift + A): Turn on to record canvas edits as motion blocks ending at the playhead"
-                        className={`w-7 h-6 rounded-md flex items-center justify-center transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isAnimateMode
-                                ? 'bg-[#0088ff] text-white shadow-sm'
-                                : 'text-[#a1a1aa] hover:text-white hover:bg-white/10'
+                        className={`w-7 h-6 rounded-md flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] ${isAnimateMode
+                                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm'
+                                : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-white/10'
                             }`}
                     >
                         <AudioWaveform className="w-3.5 h-3.5" />

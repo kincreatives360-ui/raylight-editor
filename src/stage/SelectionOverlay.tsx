@@ -699,7 +699,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     }}
                     onMouseDown={handleStartRotateZ}
                     title="Drag around object to Spin / Rotate (Roll Z)"
-                    className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[#0088ff] hover:bg-[#38bdf8] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition transform hover:scale-110"
+                    className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
                 >
                     <RotateCw className="w-2.5 h-2.5 text-white" />
                 </div>
@@ -719,11 +719,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                             cursor: h.cursor,
                         }}
                         className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
-                                ? 'bg-amber-400 border-black'
+                                ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
                                 : isAnimateMode
-                                    ? 'bg-rose-500 border-white'
-                                    : 'bg-white border-[#0088ff]'
-                            } hover:scale-125 transition`}
+                                    ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
+                                    : 'bg-white border-[var(--accent-primary,#0088ff)]'
+                            } hover:scale-125 transition-transform duration-100 ease-out`}
                     />
                 ))}
 
@@ -759,7 +759,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                 }
                             }}
                             onBlur={() => setIsEditingInlineText(false)}
-                            className="w-full bg-black/90 border-2 border-[#0088ff] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
+                            className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
                         />
                     </div>
                 ) : isLocked ? (
@@ -767,18 +767,18 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         <Lock className="w-3 h-3" /> Locked
                     </div>
                 ) : isCropping ? (
-                    <div className="px-2.5 py-1 rounded-full bg-amber-500 text-black text-[10px] font-semibold flex items-center gap-1 shadow-lg">
+                    <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[10px] font-semibold flex items-center gap-1 shadow-lg">
                         <Crop className="w-3 h-3" /> Drag Corners to Crop
                     </div>
                 ) : (
-                    <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition">
+                    <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity duration-100">
                         {layer.kind === 'text' && (
                             <button
                                 onMouseDown={(e) => {
                                     e.stopPropagation();
                                     setIsEditingInlineText(true);
                                 }}
-                                className="px-2 h-6 rounded-full bg-[#18181b]/90 hover:bg-[#0088ff] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[10px] font-medium text-white transition"
+                                className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--accent-primary,#0088ff)] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[10px] font-medium text-white transition-colors duration-100"
                             >
                                 <Type className="w-3 h-3" />
                                 <span>Edit</span>
@@ -788,7 +788,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         <div
                             onMouseDown={handleStartMove}
                             title="Drag to move in 3D space"
-                            className="w-6 h-6 rounded-full bg-[#0088ff]/90 hover:bg-[#38bdf8] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition"
+                            className="w-6 h-6 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition-colors duration-100"
                         >
                             <Move className="w-3 h-3 text-white" />
                         </div>
@@ -796,7 +796,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         <div
                             onMouseDown={handleStart3DTilt}
                             title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
-                            className="px-2 h-6 rounded-full bg-[#18181b]/90 hover:bg-purple-600 border border-white/30 shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-medium text-white transition"
+                            className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-medium,rgba(255,255,255,0.12))] shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-medium text-white transition-colors duration-100"
                         >
                             <Compass className="w-3 h-3" />
                             <span>Tilt</span>
@@ -813,10 +813,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         top: `${primaryProj.pS.y + 12}px`,
                         transform: 'translate(-50%, 0)',
                     }}
-                    className="absolute whitespace-nowrap px-2 py-0.5 rounded-full bg-[#121216]/90 border border-white/10 text-[10px] font-mono text-[#a1a1aa] shadow-xl pointer-events-none flex items-center gap-1.5"
+                    className="absolute whitespace-nowrap px-2 py-0.5 rounded-full bg-[var(--bg-surface,#161619)]/90 border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[10px] font-mono tabular-nums text-[var(--text-muted,#a1a1aa)] shadow-xl pointer-events-none flex items-center gap-1.5"
                 >
                     {isAnimateMode && (
-                        <span className="px-1.5 py-0.2 rounded bg-rose-600 text-white font-bold">
+                        <span className="px-1.5 py-0.2 rounded bg-[var(--accent-danger,#f43f5e)] text-white font-bold">
                             REC ⇧A
                         </span>
                     )}
@@ -825,8 +825,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         {Math.round(primaryEval.position.y * 1080)}, Z:{' '}
                         {Math.round(primaryEval.position.z * 500)}
                     </span>
-                    <span className="text-[#52525b]">|</span>
-                    <span className="text-[#38bdf8]">
+                    <span className="text-[var(--text-disabled,#71717a)]">|</span>
+                    <span className="text-[var(--accent-primary,#0088ff)]">
                         {rotXDeg}° / {rotYDeg}° / {rotZDeg}°
                     </span>
                 </div>

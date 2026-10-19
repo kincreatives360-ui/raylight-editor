@@ -365,6 +365,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onLostPointerCapture={handlePointerUp}
                 className={`absolute border-2 border-dashed border-emerald-400/80 bg-emerald-500/[0.03] rounded-lg pointer-events-auto cursor-move transition-shadow ${
                     activeDrag?.which === 'from' ? 'ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/10' : ''
                 }`}
@@ -390,6 +391,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
                         onPointerCancel={handlePointerUp}
+                        onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale From framing (${h.dir.toUpperCase()})`}
                         className="absolute w-3 h-3 rounded-xs bg-emerald-400 border-2 border-emerald-950 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none"
                     />
@@ -417,6 +419,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onLostPointerCapture={handlePointerUp}
                 className={`absolute border-2 border-dashed border-sky-400/90 bg-sky-500/[0.03] rounded-lg pointer-events-auto cursor-move transition-shadow ${
                     activeDrag?.which === 'to' ? 'ring-2 ring-sky-400/40 shadow-lg shadow-sky-500/10' : ''
                 }`}
@@ -442,6 +445,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerMove={handlePointerMove}
                         onPointerUp={handlePointerUp}
                         onPointerCancel={handlePointerUp}
+                        onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale To framing (${h.dir.toUpperCase()})`}
                         className="absolute w-3 h-3 rounded-xs bg-sky-400 border-2 border-sky-950 shadow-md hover:scale-130 active:scale-140 hover:bg-sky-300 pointer-events-auto transition-transform touch-none"
                     />

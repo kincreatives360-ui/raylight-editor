@@ -88,6 +88,13 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         onDragEnd?.();
     };
 
+    const handleLostPointerCapture = (_e: React.PointerEvent<HTMLDivElement>) => {
+        if (!dragStartRef.current) return;
+        setIsDragging(false);
+        dragStartRef.current = null;
+        onDragEnd?.();
+    };
+
     // Compute projected 2D coordinates for the unit axes (X, Y, Z)
     const axes = useMemo(() => {
         const euler = new THREE.Euler(
@@ -111,21 +118,21 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 py: -vX.y * radius,
                 depth: vX.z,
                 label: 'X',
-                color: '#ef4444',
+                color: 'var(--accent-danger, #f43f5e)',
             },
             y: {
                 px: vY.x * radius,
                 py: -vY.y * radius,
                 depth: vY.z,
                 label: 'Y',
-                color: '#10b981',
+                color: 'var(--accent-success, #10b981)',
             },
             z: {
                 px: vZ.x * radius,
                 py: -vZ.y * radius,
                 depth: vZ.z,
                 label: 'Z',
-                color: '#38bdf8',
+                color: 'var(--accent-primary, #0088ff)',
             },
         };
     }, [cameraRotation.x, cameraRotation.y, cameraRotation.z]);
@@ -148,11 +155,12 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
+                onLostPointerCapture={handleLostPointerCapture}
                 title="Drag to orbit 3D camera (Yaw & Pitch) • Click axis to snap"
-                className={`relative group flex items-center justify-center w-14 h-14 rounded-2xl bg-[#141417]/85 backdrop-blur-md border shadow-xl transition-all duration-150 touch-none ${
+                className={`relative group flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--bg-surface,#161619)]/90 backdrop-blur-md border shadow-xl touch-none ${
                     isDragging
-                        ? 'cursor-grabbing border-sky-400 ring-2 ring-sky-400/50 shadow-sky-500/25 scale-105'
-                        : 'cursor-grab border-white/10 hover:border-white/30 hover:scale-102'
+                        ? 'cursor-grabbing border-[var(--border-focus,#0088ff)] ring-2 ring-[var(--accent-glow,rgba(0,136,255,0.25))] shadow-lg scale-105 transition-none'
+                        : 'cursor-grab border-[var(--border-subtle,rgba(255,255,255,0.07))] hover:border-[var(--border-medium,rgba(255,255,255,0.12))] hover:scale-102 transition-[transform,border-color,box-shadow] duration-100 ease-out'
                 }`}
             >
                 <svg
@@ -167,7 +175,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                         cy="0"
                         r="20"
                         fill="rgba(255, 255, 255, 0.02)"
-                        stroke={isDragging ? 'rgba(56, 189, 248, 0.4)' : 'rgba(255, 255, 255, 0.08)'}
+                        stroke={isDragging ? 'var(--accent-primary, #0088ff)' : 'rgba(255, 255, 255, 0.08)'}
                         strokeWidth={isDragging ? 1.5 : 1}
                     />
 
@@ -197,7 +205,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                                         x={axis.px * 1.3}
                                         y={axis.py * 1.3 + 3}
                                         fill={axis.color}
-                                        fontSize="9"
+                                        fontSize="10.5"
                                         fontWeight="bold"
                                         textAnchor="middle"
                                         fontFamily="Inter, monospace"
@@ -211,13 +219,13 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
 
                 {/* Subtle Center Pivot Point */}
                 <div className={`absolute w-1.5 h-1.5 rounded-full pointer-events-none transition-colors ${
-                    isDragging ? 'bg-sky-400' : 'bg-white/70'
+                    isDragging ? 'bg-[var(--accent-primary,#0088ff)]' : 'bg-white/70'
                 }`} />
             </div>
 
             {/* Quick Snapping Perspective Presets (Shown on hover) */}
             <div
-                className={`flex items-center gap-1 bg-[#141417]/90 backdrop-blur-md border border-white/10 rounded-xl px-1.5 py-1 shadow-lg transition-all duration-150 ${
+                className={`flex items-center gap-1 bg-[var(--bg-muted,#242428)]/90 backdrop-blur-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] rounded-xl px-1.5 py-1 shadow-lg transition-[opacity,transform] duration-150 ease-out ${
                     isHovered
                         ? 'opacity-100 translate-y-0 pointer-events-auto'
                         : 'opacity-0 -translate-y-1 pointer-events-none'
@@ -227,7 +235,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(0, 0, 0)}
                     title="Front View (0°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[#d4d4d8] hover:text-white hover:bg-white/10 cursor-pointer transition"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Front
                 </button>
@@ -235,7 +243,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(0, -85, 0)}
                     title="Top View (0°, -85°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[#d4d4d8] hover:text-white hover:bg-white/10 cursor-pointer transition"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Top
                 </button>
@@ -243,7 +251,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(90, 0, 0)}
                     title="Right View (90°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[#d4d4d8] hover:text-white hover:bg-white/10 cursor-pointer transition"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Right
                 </button>
@@ -251,7 +259,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(38, 22, 0)}
                     title="Isometric 3D View (38°, 22°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[#38bdf8] hover:text-white hover:bg-white/10 cursor-pointer transition"
+                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--accent-primary,#0088ff)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Iso
                 </button>
@@ -260,14 +268,14 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={onResetCamera}
                     title="Reset Camera Pose to Default"
-                    className="p-1 rounded text-[#a1a1aa] hover:text-white hover:bg-white/10 cursor-pointer transition"
+                    className="p-1 rounded text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     <RotateCcw className="w-3 h-3" />
                 </button>
             </div>
 
             {/* Readout pill */}
-            <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/[0.06] text-[9px] font-mono text-[#a1a1aa] tracking-tight pointer-events-none">
+            <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[10px] font-mono tabular-nums text-[var(--text-muted,#a1a1aa)] tracking-tight pointer-events-none">
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x
             </div>
         </div>
