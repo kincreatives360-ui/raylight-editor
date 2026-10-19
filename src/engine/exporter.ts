@@ -9,7 +9,7 @@ import {
 import { getExportDimensions } from './exportMetrics';
 import { decodeAudioFromDataUrl } from './audioEngine';
 
-export type ExportFormat = 'mp4' | 'gif' | 'png';
+export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
 export type ExportQuality = 'studio' | 'social' | 'web';
 export type ExportScope = 'entire' | 'shot';
@@ -24,7 +24,8 @@ export interface ExportSettings {
     onSeekFrame?: (timeMs: number) => Promise<void> | void;
 }
 
-export { isWebCodecsSupported, isMediaRecorderMp4Supported } from './exportCapabilities';
+import { isWebCodecsSupported, isMediaRecorderMp4Supported } from './exportCapabilities';
+export { isWebCodecsSupported, isMediaRecorderMp4Supported };
 
 export interface ExportProgress {
     frameIndex: number;
@@ -213,16 +214,9 @@ export async function exportCurrentFrameAsPng(
 
     await syncAndSeekAllProjectVideos(project, timeMs);
 
-    // 1. Prefer capturing high-resolution frame directly from the active WebGL canvas
-    const webglCanvas =
-        (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
-        (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
-    if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
-        ctx.drawImage(webglCanvas, 0, 0, width, height);
-    } else {
-        const evaluated = evaluateProjectAtTime(project, timeMs);
-        renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
-    }
+    // Evaluate and render the exact requested timeMs frame to canvas
+    const evaluated = evaluateProjectAtTime(project, timeMs);
+    renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
 
     const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const filename = `${cleanName || 'raylight'}-${Math.round(timeMs)}ms.png`;
@@ -242,7 +236,7 @@ export async function runVideoExportPipeline(
     abortSignal?: AbortSignal
 ): Promise<void> {
     const settings: ExportSettings = {
-        format: 'mp4',
+        format: isMediaRecorderMp4Supported() ? 'mp4' : 'webm',
         resolution: '1080p',
         fps: project.fps,
         quality: 'social',
@@ -251,10 +245,19 @@ export async function runVideoExportPipeline(
     };
 
     if (settings.format === 'png') {
+        const targetShot =
+            project.shots.find((s) => s.id === settings.selectedShotId) ||
+            project.shots[0];
+        const targetTimeMs =
+            settings.scope === 'shot' && targetShot ? targetShot.startMs : 0;
+        if (settings.onSeekFrame) {
+            await settings.onSeekFrame(targetTimeMs);
+            await new Promise((r) => requestAnimationFrame(r));
+        }
         await exportCurrentFrameAsPng(
             project,
             project.name,
-            0,
+            targetTimeMs,
             settings.resolution
         );
         return;

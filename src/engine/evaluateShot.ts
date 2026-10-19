@@ -238,7 +238,7 @@ export function evaluateProjectAtTime(
                 frameNumber,
                 prevLocalTime
             );
-            const prevLayers: EvaluatedLayerWithEffects[] = prevShot.layers.map(
+            const prevLayers: EvaluatedLayerWithEffects[] = (prevShot.layers || []).map(
                 (layer) => {
                     const evalLayer = evaluateLayerAtTime(layer, prevLocalTime);
                     const dofBlurPx = calculateLayerDofBlurPx(

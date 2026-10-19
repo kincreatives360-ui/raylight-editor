@@ -169,7 +169,7 @@ describe('evaluateShotCameraAtTime', () => {
           durationMs: 0,
           easing: { kind: 'preset', name: 'linear' },
           from: { anchorX: 10, anchorY: 20, zoom: NaN, roll: 0, orbit: 0, tilt: 0 },
-          to: { anchorX: 30, anchorY: 40, zoom: 0, roll: 0, orbit: 0, tilt: 0 },
+          to: { anchorX: 30, anchorY: 40, zoom: 1.4, roll: 0, orbit: 0, tilt: 0 },
         },
       ],
     };
@@ -177,7 +177,7 @@ describe('evaluateShotCameraAtTime', () => {
     const result = evaluateShotCameraAtTime(bareShot, 100);
     expect(result.target.x).toBe(30);
     expect(result.target.y).toBe(40);
-    expect(result.zoom).toBeGreaterThanOrEqual(0.15);
+    expect(result.zoom).toBe(1.4);
     expect(Number.isFinite(result.fovDegrees)).toBe(true);
     expect(Number.isFinite(result.focalLength)).toBe(true);
   });

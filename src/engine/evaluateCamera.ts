@@ -114,9 +114,10 @@ export function evaluateShotCameraAtTime(
 
         targetX = lerp(fromEndpoint.anchorX, toEndpoint.anchorX, eased);
         targetY = lerp(fromEndpoint.anchorY, toEndpoint.anchorY, eased);
-        targetZ = lerp(fromFraming.target.z, toFraming.target.z, eased);
-        const targetZoom = lerp(fromEndpoint.zoom ?? 1, toEndpoint.zoom ?? 1, eased);
-        zoom = Math.max(0.15, Number.isFinite(targetZoom) ? targetZoom : 1);
+        const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
+        const safeToZoom = Number.isFinite(toEndpoint.zoom) && toEndpoint.zoom > 0 ? toEndpoint.zoom : safeFromZoom;
+        const targetZoom = lerp(safeFromZoom, safeToZoom, eased);
+        zoom = Math.max(0.15, targetZoom);
 
         rotX = degToRad(lerp(fromEndpoint.tilt, toEndpoint.tilt, eased));
         rotY = degToRad(lerp(fromEndpoint.orbit, toEndpoint.orbit, eased));

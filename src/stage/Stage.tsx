@@ -97,6 +97,8 @@ const StageComponent: React.FC<StageProps> = ({
         selectedCameraBlockId,
     } = useSelectionStore();
 
+    const isPlaying = usePlayheadStore((s) => s.isPlaying);
+
     const containerRef = useRef<HTMLDivElement | null>(null);
     const stageFrameRef = useRef<HTMLDivElement | null>(null);
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
@@ -358,7 +360,7 @@ const StageComponent: React.FC<StageProps> = ({
     }, [frame, isCameraSelected]);
 
     const exteriorSilhouettes = useMemo(() => {
-        if (usePlayheadStore.getState().isPlaying) {
+        if (isPlaying) {
             return [];
         }
 
@@ -399,6 +401,7 @@ const StageComponent: React.FC<StageProps> = ({
         }
         return silhouettes;
     }, [
+        isPlaying,
         frame.layers,
         effectiveViewportFrame.camera,
         project.defaultCamera,

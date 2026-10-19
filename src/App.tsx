@@ -139,13 +139,13 @@ export default function App() {
   const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
-  const [exportSettings, setExportSettings] = useState<ExportSettings>({
-    format: 'mp4',
+  const [exportSettings, setExportSettings] = useState<ExportSettings>(() => ({
+    format: isMediaRecorderMp4Supported() ? 'mp4' : 'webm',
     resolution: '1080p',
     fps: 60,
     quality: 'social',
     scope: 'entire',
-  });
+  }));
   const [exporting, setExporting] = useState<boolean>(false);
   const [exportProgressText, setExportProgressText] = useState<string>('');
   const [exportPercent, setExportPercent] = useState<number>(0);
@@ -363,13 +363,26 @@ export default function App() {
   }, [project.audio, isPlaying, hoverTimeMs]);
 
   useEffect(() => {
-    let lastTime = usePlayheadStore.getState().currentTimeMs;
+    let lastSyncPlayhead = usePlayheadStore.getState().currentTimeMs;
+    let lastSyncWallTime = performance.now();
+
     const unsub = usePlayheadStore.subscribe((state) => {
-      if (Math.abs(state.currentTimeMs - lastTime) > 200) {
-        lastTime = state.currentTimeMs;
-        syncAudioPlayback(project.audio, state.isPlaying && state.hoverTimeMs === null, state.currentTimeMs);
-      } else {
-        lastTime = state.currentTimeMs;
+      if (!state.isPlaying || state.hoverTimeMs !== null) {
+        lastSyncPlayhead = state.currentTimeMs;
+        lastSyncWallTime = performance.now();
+        return;
+      }
+
+      const elapsed = performance.now() - lastSyncWallTime;
+      const expectedTime = lastSyncPlayhead + elapsed;
+      const drift = Math.abs(state.currentTimeMs - expectedTime);
+
+      // Normal playback ticks advance smoothly with drift < 35ms.
+      // Any seek (small or large) causes drift > 45ms from the expected audio playback clock.
+      if (drift > 45) {
+        lastSyncPlayhead = state.currentTimeMs;
+        lastSyncWallTime = performance.now();
+        syncAudioPlayback(project.audio, true, state.currentTimeMs);
       }
     });
     return unsub;
@@ -1280,12 +1293,12 @@ export default function App() {
               {(
                 [
                   {
-                    id: 'mp4',
+                    id: isMediaRecorderMp4Supported() ? ('mp4' as const) : ('webm' as const),
                     label: isMediaRecorderMp4Supported() ? 'MP4 Video' : 'WebM Video',
                     desc: isMediaRecorderMp4Supported() ? 'With sound' : 'VP9 with sound',
                   },
-                  { id: 'gif', label: 'Animated GIF', desc: 'Silent loop' },
-                  { id: 'png', label: 'PNG Still', desc: 'Current frame' },
+                  { id: 'gif' as const, label: 'Animated GIF', desc: 'Silent loop' },
+                  { id: 'png' as const, label: 'PNG Still', desc: 'Current frame' },
                 ] as { id: ExportFormat; label: string; desc: string }[]
               ).map((fmt) => (
                 <button
@@ -1350,7 +1363,7 @@ export default function App() {
               <div>
                 <span className="text-[#a1a1aa] block mb-1">Quality</span>
                 <select
-                  disabled={exporting || exportSettings.format !== 'mp4'}
+                  disabled={exporting || (exportSettings.format !== 'mp4' && exportSettings.format !== 'webm')}
                   value={exportSettings.quality}
                   onChange={(e) =>
                     setExportSettings((s) => ({
@@ -1448,7 +1461,7 @@ export default function App() {
                 <span>
                   {exporting
                     ? 'Rendering...'
-                    : `Export ${exportSettings.format.toUpperCase()}`}
+                    : `Export ${exportSettings.format === 'webm' ? 'WebM' : exportSettings.format.toUpperCase()}`}
                 </span>
               </button>
             </div>

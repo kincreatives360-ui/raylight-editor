@@ -123,9 +123,10 @@ describe('Project IO Storage & File Operations', () => {
 
     const result = await importProjectFromFile(file);
     expect(result.success).toBe(true);
-    if (result.success) {
-      expect(result.data.name).toBe('Imported Showcase');
+    if (!result.success || !('data' in result)) {
+      throw new Error('Expected import to succeed');
     }
+    expect(result.data.name).toBe('Imported Showcase');
   });
 
   it('6. importProjectFromFile returns errors on malformed JSON or schema violations', async () => {
@@ -135,8 +136,10 @@ describe('Project IO Storage & File Operations', () => {
     });
     const malformedResult = await importProjectFromFile(malformedFile);
     expect(malformedResult.success).toBe(false);
-    if (!malformedResult.success) {
+    if ('errors' in malformedResult) {
       expect(malformedResult.errors[0]).toContain('Failed to parse JSON file');
+    } else {
+      expect.fail('Expected malformed JSON import to fail with errors');
     }
 
     // Schema violation: invalid fps (e.g. 120 is not 24|30|60)
@@ -151,43 +154,46 @@ describe('Project IO Storage & File Operations', () => {
     );
     const invalidResult = await importProjectFromFile(invalidFile);
     expect(invalidResult.success).toBe(false);
-    if (!invalidResult.success) {
+    if ('errors' in invalidResult) {
       expect(invalidResult.errors.some((err: string) => err.includes('fps'))).toBe(true);
+    } else {
+      expect.fail('Expected invalid schema import to fail with errors');
     }
   });
 
   it('7. exportProjectToFile safely triggers download without error in DOM and non-DOM environments', () => {
-    // Non-DOM environment
-    expect(() => exportProjectToFile(DEFAULT_PROJECT)).not.toThrow();
-
-    // DOM environment mock
-    const clickMock = vi.fn();
-    const appendChildMock = vi.fn();
-    const removeChildMock = vi.fn();
-
-    const mockAnchor = {
-      href: '',
-      download: '',
-      click: clickMock,
-    };
-
     const originalDoc = globalThis.document;
     const originalURL = globalThis.URL;
 
-    (globalThis as unknown as { document: unknown }).document = {
-      createElement: vi.fn(() => mockAnchor),
-      body: {
-        appendChild: appendChildMock,
-        removeChild: removeChildMock,
-      },
-    };
-
-    (globalThis as unknown as { URL: unknown }).URL = {
-      createObjectURL: vi.fn(() => 'blob:mock-url'),
-      revokeObjectURL: vi.fn(),
-    };
-
     try {
+      // Non-DOM environment: explicitly set document to undefined to exercise guard
+      delete (globalThis as unknown as { document?: unknown }).document;
+      expect(() => exportProjectToFile(DEFAULT_PROJECT)).not.toThrow();
+
+      // DOM environment mock
+      const clickMock = vi.fn();
+      const appendChildMock = vi.fn();
+      const removeChildMock = vi.fn();
+
+      const mockAnchor = {
+        href: '',
+        download: '',
+        click: clickMock,
+      };
+
+      (globalThis as unknown as { document: unknown }).document = {
+        createElement: vi.fn(() => mockAnchor),
+        body: {
+          appendChild: appendChildMock,
+          removeChild: removeChildMock,
+        },
+      };
+
+      (globalThis as unknown as { URL: unknown }).URL = {
+        createObjectURL: vi.fn(() => 'blob:mock-url'),
+        revokeObjectURL: vi.fn(),
+      };
+
       exportProjectToFile({ ...DEFAULT_PROJECT, name: 'My Great Video' });
       expect(mockAnchor.download).toBe('my-great-video.raylight.json');
       expect(clickMock).toHaveBeenCalled();

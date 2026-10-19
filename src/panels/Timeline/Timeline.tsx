@@ -37,14 +37,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         commitDragTransaction,
     } = useProjectStore();
 
-    const {
-        hoverTimeMs: storeHoverTimeMs,
-        setHoverTimeMs,
-        isPlaying,
-        setIsPlaying,
-        setCurrentTimeMs,
-        togglePlay,
-    } = usePlayheadStore();
+    const isPlaying = usePlayheadStore((s) => s.isPlaying);
+    const storeHoverTimeMs = usePlayheadStore((s) => s.hoverTimeMs);
+    const setHoverTimeMs = usePlayheadStore((s) => s.setHoverTimeMs);
+    const setIsPlaying = usePlayheadStore((s) => s.setIsPlaying);
+    const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
+    const togglePlay = usePlayheadStore((s) => s.togglePlay);
 
     const hoverTimeMs = propHoverTimeMs !== undefined ? propHoverTimeMs : storeHoverTimeMs;
     const onHoverTimeChange = propOnHoverTimeChange ?? setHoverTimeMs;
