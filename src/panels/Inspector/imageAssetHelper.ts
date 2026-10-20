@@ -4,7 +4,7 @@ import type { Project } from '../../model/types';
 export interface SaveImageAssetOptions {
     file: File;
     updateProject: (updater: (project: Project) => Project) => void;
-    onSave?: (assetId: string) => void;
+    onSave?: (assetId: string, dataUrl?: string) => void;
     assetId?: string;
 }
 
@@ -37,7 +37,7 @@ export function saveImageAsset({
                     },
                 },
             }));
-            onSave?.(assetId);
+            onSave?.(assetId, dataUrl);
         };
         image.onload = () => save(image.naturalWidth, image.naturalHeight);
         image.onerror = () => {

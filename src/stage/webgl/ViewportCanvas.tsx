@@ -115,7 +115,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const layers: EvaluatedLayerWithEffects[] = frame.layers;
     const activeBackground = resolveShotBackground(project, activeShot);
     const { isPlaying } = usePlayheadStore();
-    const isAnimatedBg = activeBackground.kind === 'shader';
+    const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
@@ -165,7 +165,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <SceneLighting light={activeShot?.light} />
 
                 {/* 3. Screen-Space Shot-Aware Background with Transition Support */}
-                <SceneBackground project={project} frame={frame} background={activeBackground} />
+                <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} />
 
                 {/* 4. 3D Scene Objects / Layers with Depth Awareness */}
                 <group name="raylight_layers_root">

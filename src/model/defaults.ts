@@ -416,12 +416,8 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
     aspectRatio: '16:9',
     fps: 60,
     background: {
-      kind: 'gradient',
-      angle: 135,
-      stops: [
-        { at: 0, color: '#0c0e17' },
-        { at: 1, color: '#161928' },
-      ],
+      kind: 'solid',
+      color: '#0c0e17',
     },
     assets: {},
     audio: createDefaultAudio(),

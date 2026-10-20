@@ -1022,7 +1022,10 @@ function renderSingleBackground(
       bg.preset,
       bg.colors,
       bg.color,
-      bg.backgroundColor
+      bg.backgroundColor,
+      bg.color1,
+      bg.color2,
+      bg.color3
     );
     const colors = palette.length > 0 ? palette : [bg.color || '#38bdf8', bg.backgroundColor || '#0c0e17'];
     const grad = ctx.createLinearGradient(0, 0, canvasW, canvasH);

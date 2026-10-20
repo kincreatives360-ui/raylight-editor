@@ -58,6 +58,7 @@ interface ColorPickerProps {
     compact?: boolean;
     showGradientMode?: boolean;
     className?: string;
+    children?: React.ReactNode;
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({
@@ -71,6 +72,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     compact = false,
     showGradientMode = true,
     className = '',
+    children,
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
@@ -83,6 +85,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color));
     const [position, setPosition] = useState({ left: 0, top: 0 });
     const [draggingSquare, setDraggingSquare] = useState(false);
+    const [draggingHue, setDraggingHue] = useState(false);
+    const hueBarRef = useRef<HTMLDivElement>(null);
     const [previousColor, setPreviousColor] = useState(color);
     const hueColor = useMemo(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }), [hsv.h]);
     const gradient = gradientValue ?? {
@@ -190,6 +194,51 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
     const handleSquareLostPointerCapture = (_event: React.PointerEvent<HTMLDivElement>) => {
         setDraggingSquare(false);
+    };
+
+    const handleHuePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        event.preventDefault();
+        event.stopPropagation();
+        try {
+            event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+            // ignore
+        }
+        setDraggingHue(true);
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (!rect.height) return;
+        const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        const h = Math.round(ratio * 359);
+        const next = { ...hsvRef.current, h };
+        setHsv(next);
+        const nextColor = hsvToHex(next);
+        setHexDraft(nextColor);
+        onChange(nextColor);
+    };
+
+    const handleHuePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (!draggingHue) return;
+        event.preventDefault();
+        const rect = event.currentTarget.getBoundingClientRect();
+        if (!rect.height) return;
+        const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+        const h = Math.round(ratio * 359);
+        const next = { ...hsvRef.current, h };
+        setHsv(next);
+        const nextColor = hsvToHex(next);
+        setHexDraft(nextColor);
+        onChange(nextColor);
+    };
+
+    const handleHuePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
+        setDraggingHue(false);
+        try {
+            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+                event.currentTarget.releasePointerCapture(event.pointerId);
+            }
+        } catch {
+            // ignore
+        }
     };
 
     const commitHex = (value: string) => {
@@ -317,15 +366,26 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         >
                             <span className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_5px_#000]" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
                         </div>
-                        <div className="relative h-full w-[17px] shrink-0 rounded-full select-none" style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}>
-                            <input aria-label="Hue" type="range" min="0" max="359" value={Math.round(hsv.h)} onChange={(event) => {
-                                const next = { ...hsv, h: Number(event.target.value) };
-                                setHsv(next);
-                                const nextColor = hsvToHex(next);
-                                setHexDraft(nextColor);
-                                onChange(nextColor);
-                            }} className="absolute inset-0 h-full w-full cursor-pointer opacity-0 [writing-mode:vertical-lr] [direction:rtl]" />
-                            <span className="pointer-events-none absolute left-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow" style={{ top: `${(hsv.h / 360) * 100}%` }} />
+                        <div
+                            ref={hueBarRef}
+                            role="slider"
+                            aria-label="Hue"
+                            aria-valuenow={Math.round(hsv.h)}
+                            aria-valuemin={0}
+                            aria-valuemax={359}
+                            tabIndex={0}
+                            onPointerDown={handleHuePointerDown}
+                            onPointerMove={handleHuePointerMove}
+                            onPointerUp={handleHuePointerUp}
+                            onPointerCancel={handleHuePointerUp}
+                            onLostPointerCapture={() => setDraggingHue(false)}
+                            className="relative h-full w-[17px] shrink-0 rounded-full select-none cursor-pointer touch-none shadow-inner"
+                            style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}
+                        >
+                            <span
+                                className="pointer-events-none absolute left-1/2 h-[18px] w-[18px] -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_4px_rgba(0,0,0,0.6)]"
+                                style={{ top: `${(hsv.h / 359) * 100}%` }}
+                            />
                         </div>
                     </div>
                     <div className="mt-3 flex items-center justify-between gap-1.5">
@@ -364,18 +424,22 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         </button>
                     </div>
                     <div
-                        className="relative h-9 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-canvas,#07080d)]"
+                        className="relative h-9 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-canvas,#07080d)] shadow-inner"
                         style={{ background: `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color}${Math.round((stop.opacity ?? 1) * 255).toString(16).padStart(2, '0')} ${stop.at * 100}%`).join(', ')})` }}
                     >
-                        <div className="absolute inset-0 rounded-lg bg-[linear-gradient(45deg,#333_25%,transparent_25%,transparent_75%,#333_75%),linear-gradient(45deg,#333_25%,#111_25%,#111_75%,#333_75%)] bg-[length:12px_12px] bg-[position:0_0,6px_6px] opacity-20" />
-                        <div className="absolute inset-0 rounded-lg" style={{ background: gradient.gradientType === 'radial' ? `radial-gradient(circle, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` }} />
+                        <div className="absolute inset-0 rounded-lg bg-[linear-gradient(45deg,#333_25%,transparent_25%,transparent_75%,#333_75%),linear-gradient(45deg,#333_25%,#111_25%,#111_75%,#333_75%)] bg-[length:12px_12px] bg-[position:0_0,6px_6px] opacity-20 pointer-events-none overflow-hidden rounded-lg" />
+                        <div className="absolute inset-0 rounded-lg pointer-events-none overflow-hidden" style={{ background: gradient.gradientType === 'radial' ? `radial-gradient(circle, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` }} />
                         <svg
-                            className="absolute inset-0 h-full w-full touch-none"
+                            className="absolute inset-0 h-full w-full touch-none overflow-visible"
                             viewBox="0 0 300 36"
                             preserveAspectRatio="none"
                             onPointerDown={(event) => {
                                 const bounds = event.currentTarget.getBoundingClientRect();
-                                const at = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+                                const padPx = (12 / 300) * bounds.width;
+                                const usableWidth = bounds.width - padPx * 2;
+                                const at = usableWidth > 0
+                                    ? Math.max(0, Math.min(1, (event.clientX - bounds.left - padPx) / usableWidth))
+                                    : 0;
                                 const nearest = gradient.stops.reduce((best, stop, index) => Math.abs(stop.at - at) < Math.abs(gradient.stops[best].at - at) ? index : best, 0);
                                 try {
                                     (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
@@ -388,14 +452,32 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 const raw = event.currentTarget.dataset.dragStop;
                                 if (raw === undefined || (event.buttons & 1) === 0) return;
                                 const bounds = event.currentTarget.getBoundingClientRect();
-                                const at = Math.max(0, Math.min(1, (event.clientX - bounds.left) / bounds.width));
+                                const padPx = (12 / 300) * bounds.width;
+                                const usableWidth = bounds.width - padPx * 2;
+                                const at = usableWidth > 0
+                                    ? Math.max(0, Math.min(1, (event.clientX - bounds.left - padPx) / usableWidth))
+                                    : 0;
                                 updateStop(Number(raw), { at });
                             }}
                             onPointerUp={(event) => { delete event.currentTarget.dataset.dragStop; }}
                             onPointerCancel={(event) => { delete event.currentTarget.dataset.dragStop; }}
                             onLostPointerCapture={(event) => { delete (event.currentTarget as SVGSVGElement).dataset.dragStop; }}
                         >
-                            {gradient.stops.map((stop, index) => <circle key={`gradient-stop-${index}`} cx={stop.at * 300} cy="18" r="7" fill={stop.color} stroke="white" strokeWidth="2" className="cursor-pointer" />)}
+                            {gradient.stops.map((stop, index) => {
+                                const cx = 12 + stop.at * (300 - 24);
+                                return (
+                                    <circle
+                                        key={`gradient-stop-${index}`}
+                                        cx={cx}
+                                        cy="18"
+                                        r="7.5"
+                                        fill={stop.color}
+                                        stroke="white"
+                                        strokeWidth="2.5"
+                                        className="cursor-pointer filter drop-shadow(0 1px 3px rgba(0,0,0,0.6))"
+                                    />
+                                );
+                            })}
                         </svg>
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[var(--text-muted,#a1a1aa)]">
@@ -500,9 +582,15 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 setOpen(true);
                 if (gradientValue) onEnterGradient?.();
             }
-        }} className={`${compact ? 'h-full w-full min-h-[18px] min-w-[18px] rounded border border-white/20' : 'flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-left hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100'} ${className}`}>
-            <span className={`${compact ? 'block h-full w-full rounded-[inherit]' : 'h-5 w-5 shrink-0 rounded-md border border-white/15'}`} style={{ background: gradientValue ? `linear-gradient(${gradientValue.angle}deg, ${gradientValue.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : color }} />
-            {!compact && <span className="font-mono text-[11px] text-[var(--text-primary,#f4f4f5)]">{gradientValue ? 'Gradient' : color.replace(/^#/, '').toUpperCase()}</span>}
+        }} className={children ? className : `${compact ? 'h-full w-full min-h-[18px] min-w-[18px] rounded border border-white/20' : 'flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-left hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100'} ${className}`}>
+            {children ? (
+                children
+            ) : (
+                <>
+                    <span className={`${compact ? 'block h-full w-full rounded-[inherit]' : 'h-5 w-5 shrink-0 rounded-md border border-white/15'}`} style={{ background: gradientValue ? `linear-gradient(${gradientValue.angle}deg, ${gradientValue.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : color }} />
+                    {!compact && <span className="font-mono text-[11px] text-[var(--text-primary,#f4f4f5)]">{gradientValue ? 'Gradient' : color.replace(/^#/, '').toUpperCase()}</span>}
+                </>
+            )}
         </button>
         {popup}
     </>;

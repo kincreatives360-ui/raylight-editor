@@ -48,12 +48,13 @@ export function evaluateCameraPose(
     artboardDimensions?: { width: number; height: number }
 ): EvaluatedCameraPose {
     const baseZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
-    const focalLength =
-        (evaluatedCamera as EvaluatedCamera)?.focalLength ??
-        defaultCamera.focalLength ??
-        DEFAULT_FOCAL_LENGTH;
-    const fov =
-        (evaluatedCamera as EvaluatedCamera)?.fovDegrees ?? focalLengthToFov(focalLength);
+    const isStatic = (evaluatedCamera as EvaluatedCamera)?.activeMode === 'static' || !(evaluatedCamera as EvaluatedCamera)?.activeMode;
+    const focalLength = isStatic && defaultCamera.focalLength
+        ? defaultCamera.focalLength
+        : ((evaluatedCamera as EvaluatedCamera)?.focalLength ?? defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH);
+    const fov = isStatic && defaultCamera.focalLength
+        ? focalLengthToFov(defaultCamera.focalLength)
+        : ((evaluatedCamera as EvaluatedCamera)?.fovDegrees ?? focalLengthToFov(focalLength));
     const { planeW, planeH } = getReferencePlaneDimensions(
         aspect,
         baseZ,

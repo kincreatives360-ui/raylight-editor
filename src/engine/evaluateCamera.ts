@@ -9,7 +9,7 @@ export interface EvaluatedCamera {
     zoom: number;
     fovDegrees: number;
     focalLength: number;
-    activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom';
+    activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom' | 'shake';
 }
 
 const BASE_FOV_DEGREES = 27.0006;

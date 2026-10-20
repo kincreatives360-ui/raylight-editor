@@ -40,6 +40,18 @@ export const FillSchema = z.discriminatedUnion('kind', [
 
 export const ShaderPresetSchema = z.enum([
   'silk',
+  'silkFlow',
+  'meshAurora',
+  'liquidMetal',
+  'sphereGradient',
+  'waterPlane',
+  'stripeMesh',
+  'topography',
+  'hyperspeed',
+  'plasma',
+  'dither',
+  'threads',
+  'chromaticWaves',
   'undertones',
   'mosaic',
   'meshGradient',
@@ -91,6 +103,11 @@ export const BackgroundSchema = z.discriminatedUnion('kind', [
     glow: z.number().min(0).max(2).default(1),
     shine: z.number().min(0).max(2).default(1),
     angle: z.number().min(-90).max(90).default(28),
+    noiseScale: z.number().optional(),
+    color1: z.string().optional(),
+    color2: z.string().optional(),
+    color3: z.string().optional(),
+    color4: z.string().optional(),
   }),
   z.object({
     kind: z.literal('image'),
@@ -234,6 +251,21 @@ export const LayerEffectsSchema = z.object({
     .optional(),
   layerBlur: z.number().min(0).optional(),
   backdropBlur: z.number().min(0).optional(),
+  liquidGlass: z
+    .object({
+      enabled: z.boolean(),
+      refraction: z.number().optional(),
+      roughness: z.number().optional(),
+      tint: z.string().optional(),
+    })
+    .optional(),
+  warp: z
+    .object({
+      enabled: z.boolean(),
+      amount: z.number().optional(),
+      frequency: z.number().optional(),
+    })
+    .optional(),
 });
 
 export const BlendModeSchema = z.enum([
@@ -306,20 +338,34 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
     .optional(),
 });
 
+export const ShapeMaskSchema = z.object({
+  enabled: z.boolean(),
+  shape: z.enum(['rectangle', 'circle', 'path']),
+  feather: z.number().min(0),
+  opacity: z.number().min(0).max(1),
+  grow: z.number(),
+  invert: z.boolean(),
+  show: z.boolean(),
+});
+
 export const ShapeLayerSchema = LayerBaseSchema.extend({
   kind: z.literal('shape'),
   shape: z.enum(['rectangle', 'ellipse', 'line', 'arrow', 'polygon']),
   points: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
   size: Size2DSchema,
-  cornerRadius: z.number().min(0).max(0.5),
+  cornerRadius: z.number().min(0).max(1),
   fill: FillSchema,
   stroke: z
     .object({
       color: z.string(),
       width: z.number(),
       opacity: z.number(),
+      align: z.enum(['inside', 'center', 'outside']).optional(),
+      style: z.enum(['solid', 'dashed', 'dotted']).optional(),
     })
     .optional(),
+  depth: z.number().optional(),
+  mask: ShapeMaskSchema.optional(),
 });
 
 export const TextLayerSchema = LayerBaseSchema.extend({
@@ -383,7 +429,7 @@ export const CameraBlockSchema = z.object({
   durationMs: z.number().min(50),
   fromFramingId: z.string(),
   toFramingId: z.string(),
-  mode: z.enum(['dolly', 'zoom', 'dollyzoom']),
+  mode: z.enum(['dolly', 'zoom', 'dollyzoom', 'shake']),
   easing: EasingSchema,
   from: CameraKeyframeEndpointSchema.optional(),
   to: CameraKeyframeEndpointSchema.optional(),

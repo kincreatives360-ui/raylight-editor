@@ -24,6 +24,7 @@ import {
 } from '../model/defaults';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { loadProjectFromBrowser } from '../storage/projectIO';
+import { useSelectionStore } from './useSelectionStore';
 
 const MAX_HISTORY_STEPS = 50;
 
@@ -307,6 +308,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 shot.layers.some((l) => l.groupId === g.id && l.id !== layerId)
             ),
         }));
+        try {
+            const sel = useSelectionStore.getState();
+            if (sel.selectedLayerIds.includes(layerId)) {
+                const remaining = sel.selectedLayerIds.filter((id) => id !== layerId);
+                if (remaining.length > 0) {
+                    sel.setSelectedLayerIds(remaining);
+                } else {
+                    sel.clearLayerSelection();
+                }
+            }
+        } catch {
+            // Ignore in headless tests
+        }
     },
 
     deleteMultipleLayersFromShot: (shotId, layerIds) => {
@@ -326,6 +340,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 shot.layers.some((l) => l.groupId === g.id && !idSet.has(l.id))
             ),
         }));
+        try {
+            const sel = useSelectionStore.getState();
+            const remaining = sel.selectedLayerIds.filter((id) => !idSet.has(id));
+            if (remaining.length !== sel.selectedLayerIds.length) {
+                if (remaining.length > 0) {
+                    sel.setSelectedLayerIds(remaining);
+                } else {
+                    sel.clearLayerSelection();
+                }
+            }
+        } catch {
+            // Ignore in headless tests
+        }
     },
 
     duplicateLayerInShot: (shotId, layerId) => {
@@ -642,9 +669,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         get().updateProject((proj) => {
             if (proj.shots.length <= 1) return proj;
             const filtered = proj.shots.filter((s) => s.id !== shotId);
+            const remainingShots = recalculateShotStartTimes(filtered);
+            try {
+                const sel = useSelectionStore.getState();
+                if (sel.selectedShotId === shotId && remainingShots.length > 0) {
+                    sel.selectShot(remainingShots[0].id);
+                }
+            } catch {
+                // Ignore in headless tests
+            }
             return {
                 ...proj,
-                shots: recalculateShotStartTimes(filtered),
+                shots: remainingShots,
             };
         });
     },
@@ -867,3 +903,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         return result;
     },
 }));
+
+if (typeof window !== 'undefined') {
+    (window as unknown as { useProjectStore: typeof useProjectStore }).useProjectStore = useProjectStore;
+}

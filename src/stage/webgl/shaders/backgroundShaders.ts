@@ -32,9 +32,789 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   "watercolor": "precision highp float;\n\n  uniform float uTime;\n  uniform float uAspect;\n  uniform vec3 uBase;\n  uniform float uWaves;\n  uniform float uFocus;\n  uniform float uGlow;\n  uniform float uShine;\n  \n  uniform vec3 uColors[5];\n  uniform float uColorCount;\n\n\n  varying vec2 vUv;\n\n  \n  #define TWO_PI 6.28318530718\n\n  float hash21(vec2 p) {\n    p = fract(p * vec2(0.3183099, 0.3678794)) + 0.1;\n    p += dot(p, p + 19.19);\n    return fract(p.x * p.y);\n  }\n\n  float valueNoise(vec2 st) {\n    vec2 i = floor(st);\n    vec2 f = fract(st);\n    float a = hash21(i);\n    float b = hash21(i + vec2(1.0, 0.0));\n    float c = hash21(i + vec2(0.0, 1.0));\n    float d = hash21(i + vec2(1.0, 1.0));\n    vec2 u = f * f * (3.0 - 2.0 * f);\n\n    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n  }\n\n  vec2 rotate2(vec2 uv, float th) {\n    return mat2(cos(th), sin(th), -sin(th), cos(th)) * uv;\n  }\n\n\n  vec2 gradDir(vec2 i) {\n    float a = hash21(i) * TWO_PI;\n\n    return vec2(cos(a), sin(a));\n  }\n\n  // Quintic gradient noise, roughly [-0.7, 0.7]. Smooth enough that the\n  // soft color fields never show the lattice.\n  float gnoise(vec2 x) {\n    vec2 i = floor(x);\n    vec2 f = fract(x);\n    vec2 u = f * f * f * (f * (f * 6.0 - 15.0) + 10.0);\n    float a = dot(gradDir(i), f);\n    float b = dot(gradDir(i + vec2(1.0, 0.0)), f - vec2(1.0, 0.0));\n    float c = dot(gradDir(i + vec2(0.0, 1.0)), f - vec2(0.0, 1.0));\n    float d = dot(gradDir(i + vec2(1.0, 1.0)), f - vec2(1.0, 1.0));\n\n    return mix(mix(a, b, u.x), mix(c, d, u.x), u.y);\n  }\n\n  // Color uniforms arrive linear (three's ColorManagement decodes hex on\n  // set); this pass composes in display space, so re-encode them first\n  // and a picked hex shows exactly.\n  vec3 toDisplay(vec3 c) {\n    return pow(max(c, vec3(0.0)), vec3(1.0 / 2.2));\n  }\n\n  void main() {\n    // Frame space with the SHORT axis spanning [-1, 1], so a portrait\n    // frame shows as many regions across as a landscape one shows down.\n    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0 / min(uAspect, 1.0);\n\n    float scale = clamp(uWaves, 0.25, 2.5);\n    float bleed = clamp(uFocus, 0.2, 2.0);\n    float pigment = clamp(uGlow, 0.0, 2.0);\n    float grainAmt = clamp(uShine, 0.0, 2.0);\n    float t = uTime;\n    float count = max(uColorCount, 1.0);\n\n    vec2 q = p / scale;\n\n    // Broad, slow flow so the regions drift and turn rather than slide.\n    vec2 flow = vec2(\n      gnoise(q * 0.55 + vec2(1.3, 0.021 * t)),\n      gnoise(q * 0.55 + vec2(7.9, -4.2) - vec2(0.017 * t, 0.0))\n    );\n    vec2 qw = q + 0.75 * flow;\n\n    // Plumes: a tent-shaped ridge along x (sharp peaks at the noise's\n    // zero crossings) lifts the lower color up into the one above it,\n    // like pigment wicking up through wet paper. The ridge itself drifts\n    // and morphs slowly so the peaks rise, lean and fade.\n    float rn = gnoise(vec2(qw.x * 0.5, qw.y * 0.2 - 0.03 * t) + 3.7);\n    float ridge = 1.0 - min(sqrt(rn * rn + 0.0025) * 1.8, 1.0);\n    float plume = ridge * sqrt(ridge);\n\n    // Fine vertical feathering: streaks of pigment carried up the paper.\n    float streak = gnoise(vec2(qw.x * 3.2, qw.y * 0.6 - 0.04 * t) + 9.1);\n\n    vec2 qs = qw;\n    qs.y -= bleed * (0.9 * (plume - 0.3) + 0.05 * streak);\n\n    // Each pigment has a home in a loose two-row layout (first half of\n    // the palette across the top, the rest along the bottom) so every\n    // color gets its own big region, then noise breaks the layout up.\n    // Zoomed far out the homes fade and the noise alone sets the regions.\n    vec2 ext = vec2(uAspect, 1.0) / min(uAspect, 1.0);\n    float homeW = smoothstep(0.3, 0.9, scale);\n    float topCount = floor((count + 1.0) * 0.5);\n    float botCount = max(count - topCount, 1.0);\n\n    // Per-pigment fields mixed wet-in-wet by a softmax: the temperature\n    // sets how wide the bleeds between neighboring colors are.\n    float sharp = 5.2 * pow(bleed, -0.3);\n    float wsum = 0.0;\n    vec3 lin = vec3(0.0);\n    vec3 absorb = vec3(0.0);\n\n    for (int i = 0; i < 5; i++) {\n      if (i >= int(count)) break;\n\n      float fi = float(i);\n      bool top = fi < topCount;\n      float j = top ? fi : fi - topCount;\n      float rowN = top ? topCount : botCount;\n      vec2 home = vec2(\n        ((j + 0.5) / rowN) * 2.0 - 1.0 + (top ? -0.1 : 0.35),\n        top ? 0.5 : -0.85\n      );\n      home *= ext * 0.8;\n      home += 0.14 * vec2(\n        sin(t * 0.05 * (1.0 + 0.3 * fi) + fi * 1.7),\n        cos(t * 0.043 * (1.0 + 0.2 * fi) + fi * 2.9)\n      );\n\n      vec2 d = qs - home;\n      vec2 drift = vec2(cos(fi * 2.4 + 0.7), sin(fi * 2.4 + 0.7)) * 0.02 * t;\n      float n = gnoise(qs * 0.42 + vec2(fi * 3.71, fi * -2.13) + drift)\n        + 0.3 * gnoise(qs * 0.9 + vec2(fi * -1.9, fi * 4.3) - drift);\n      n = mix(n, 0.7 * n - 0.75 * dot(d, d), homeW);\n      float w = exp(sharp * n);\n      vec3 c = clamp(toDisplay(uColors[i]), vec3(0.01), vec3(1.0));\n      wsum += w;\n      lin += w * c;\n      absorb += w * -log(c);\n    }\n\n    lin /= wsum;\n    absorb /= wsum;\n\n    // Mostly a straight blend so meeting colors stay clean and luminous,\n    // with a little subtractive mixing for depth where they overlap.\n    vec3 pig = mix(lin, exp(-absorb), 0.22);\n\n    // Gentle density variation inside each region: deeper pools of\n    // pigment and thinner, lighter washes.\n    float pool = gnoise(qw * 0.75 + vec2(-5.0, 0.012 * t)) * 0.7\n      + gnoise(qw * 1.6 + 11.0) * 0.3;\n    pig *= exp(-pool * 0.4 * (vec3(1.0) - pig));\n\n    // The paper tints the light areas a touch and is what the pigment\n    // fades toward. Past 1, Pigment deepens and saturates the wash.\n    vec3 paper = toDisplay(uBase);\n    float lightness = dot(pig, vec3(0.299, 0.587, 0.114));\n    vec3 col = mix(pig, paper, 0.04 + 0.1 * lightness * lightness);\n    float extra = max(pigment - 1.0, 0.0);\n    float luma = dot(col, vec3(0.299, 0.587, 0.114));\n    col = mix(vec3(luma), col, 1.0 + 0.45 * extra);\n    col *= 1.0 - 0.18 * extra * (1.0 - col);\n    col = mix(paper, col, smoothstep(0.0, 1.0, min(pigment, 1.0)));\n\n    // Paper grain: fine, even and frame-pinned, a little coarser in the\n    // lights than the darks like film. Added in display space.\n    vec2 g = p * 420.0;\n    float grain = gnoise(g) * 0.7 + gnoise(rotate2(g, 1.3) * 1.9 + 5.0) * 0.3;\n    col += grain * 0.1 * grainAmt * (0.6 + 0.4 * luma);\n\n    // Sub-LSB dither so the soft gradients never band.\n    col += (hash21(gl_FragCoord.xy) - 0.5) / 255.0;\n\n    col = pow(max(col, vec3(0.0)), vec3(2.2));\n\n    gl_FragColor = vec4(col, 1.0);\n\n    #include <tonemapping_fragment>\n    #include <colorspace_fragment>\n  }",
 
-  "voxels": "precision highp float;\n\n  uniform float uTime;\n  uniform float uAspect;\n  uniform vec3 uColor;\n  uniform vec3 uBase;\n  uniform float uWaves;\n  uniform float uFocus;\n  uniform float uGlow;\n\n  varying vec2 vUv;\n\n  float hash21(vec2 p) {\n    p = fract(p * vec2(0.3183099, 0.3678794)) + 0.1;\n    p += dot(p, p + 19.19);\n    return fract(p.x * p.y);\n  }\n\n  vec3 toDisplay(vec3 lin) {\n    return pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2));\n  }\n\n  // Lambert-ish brightness of a unit normal under the orbiting key light,\n  // remapped so the terminator side never drops to nothing.\n  float lit(vec3 n, vec3 l) {\n    float k = clamp(dot(n, l), 0.0, 1.0);\n\n    return 0.24 + 0.76 * k * k * (3.0 - 2.0 * k);\n  }\n\n  // The 3D forms, evaluated at one cell center in frame space (y spans\n  // -1..1). Returns (presence 0..1, brightness 0..1). Where forms overlap\n  // the one whose surface sits nearest the viewer wins, so they layer like\n  // solid objects.\n  vec2 forms(vec2 p, float t, float aspect, float scale, vec3 l) {\n    float bestZ = -1e3;\n    vec2 res = vec2(0.0);\n    float soft = 0.035;\n\n    // Orb: a full sphere drifting on a slow loop.\n    vec2 c1 = vec2(aspect * (0.22 * sin(t * 0.159) - 0.4), 0.22 * sin(t * 0.216 + 1.1) + 0.38);\n    float r1 = scale * (0.7 + 0.05 * sin(t * 0.286));\n    vec2 q1 = (p - c1) / r1;\n    float d1 = length(q1);\n\n    if (d1 < 1.0 + soft / r1) {\n      vec3 n = vec3(q1, sqrt(max(1.0 - d1 * d1, 0.0)));\n      float z = 0.4 + n.z * r1;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2(1.0 - smoothstep(1.0 - soft / r1, 1.0 + soft / r1, d1), lit(n, l));\n      }\n    }\n\n    // Lamp shade: the upper half of a wide sphere resting on the bottom\n    // of the frame, so its rows widen toward the flat rim.\n    vec2 c2 = vec2(aspect * (0.2 * cos(t * 0.122) + 0.38), -1.0 + 0.12 * sin(t * 0.185 + 2.3));\n    float r2 = scale * (1.08 + 0.07 * sin(t * 0.234 + 0.7));\n    vec2 q2 = (p - c2) / r2;\n    float d2 = length(q2);\n    float rim = smoothstep(-0.02, 0.02, q2.y + 0.04);\n\n    if (d2 < 1.0 + soft / r2 && rim > 0.0) {\n      vec3 n = vec3(q2, sqrt(max(1.0 - d2 * d2, 0.0)));\n      float z = n.z * r2;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2((1.0 - smoothstep(1.0 - soft / r2, 1.0 + soft / r2, d2)) * rim, lit(n, l));\n      }\n    }\n\n    // Tube: a long diagonal cylinder sweeping slowly across the back.\n    float ang = 0.62 + 0.18 * sin(t * 0.112);\n    vec2 dir = vec2(cos(ang), sin(ang));\n    vec2 nrm = vec2(-dir.y, dir.x);\n    vec2 c3 = vec2(aspect * 0.5 * sin(t * 0.096 + 4.0), 0.0);\n    float hw = scale * 0.36;\n    float across = dot(p - c3, nrm) / hw;\n\n    if (abs(across) < 1.0 + soft / hw) {\n      float nz = sqrt(max(1.0 - across * across, 0.0));\n      vec3 n = vec3(nrm * across, nz);\n      float z = -0.3 + nz * hw;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2(1.0 - smoothstep(1.0 - soft / hw, 1.0 + soft / hw, abs(across)), lit(n, l));\n      }\n    }\n\n    return res;\n  }\n\n  // Ink at one frame point (x in row units, y in rows). Returns the\n  // stippled ink in x and its expected value (the mean the stipple\n  // converges to) in y, so the caller can fade to the mean where the\n  // grain gets finer than a pixel.\n  vec2 inkAt(vec2 g, float t, float aspect, float rows, float scale, float shading, vec3 l) {\n    float row = floor(g.y);\n    float v = g.y - row;\n    float rh = hash21(vec2(row, 3.7));\n\n    // Cells are about 1.9 rows wide; each row gets its own width and\n    // phase, and a gentle monotonic warp lets widths vary along the row.\n    float cw = 1.9 * (0.82 + 0.36 * rh);\n    float xw = g.x + 0.3 * cw * sin(g.x * 0.85 / cw * 2.0 + row * 1.7) / 2.0 + rh * 7.0;\n    float ci = floor(xw / cw);\n    float u = xw / cw - ci;\n\n    vec2 center = vec2(((ci + 0.5) * cw - rh * 7.0) / rows, (row + 0.5) / rows);\n    vec2 p = (center - vec2(0.5 * aspect, 0.5)) * 2.0;\n    vec2 f = forms(p, t, aspect, scale, l);\n    float presence = f.x;\n\n    // Lighting through the Shading knob: 0 flattens every cell to a\n    // dense brick, 1 is natural, 2 deepens the shadow side.\n    float bright = mix(0.86, f.y, min(shading, 1.0));\n    bright = pow(clamp(bright, 0.0, 1.0), 1.0 + max(shading - 1.0, 0.0) * 1.3);\n\n    // Brick body with thin gaps, measured in row units so the gaps stay\n    // even on wide and narrow cells.\n    float ux = u * cw;\n    float gx = 0.09;\n    float gy = 0.085;\n    float edge = min(min(ux - gx, cw - gx - ux), min(v - gy, 1.0 - gy - v));\n    float body = step(0.0, edge);\n\n    // The lit share of the cell's face is solid stipple on its right;\n    // the rest keeps only a speckled outline, so dim cells read as\n    // hollow voxels or thin slivers seen edge-on.\n    // Each cell carries a little random tone so bars read as separate\n    // voxels rather than one smooth gradient.\n    float cellTone = clamp(bright + (hash21(vec2(ci, row) + 5.3) - 0.5) * 0.28, 0.0, 1.0);\n\n    // The lit share of the cell's face is solid stipple on its right; the\n    // rest thins out, and only cells deep in shadow fall back to a\n    // speckled outline, so dim cells read as hollow voxels or slivers\n    // seen edge-on.\n    float solidFrom = (cw - gx) - (cw - 2.0 * gx) * clamp(cellTone * 1.7 - 0.15, 0.1, 1.0);\n    float hollow = 1.0 - smoothstep(0.2, 0.45, cellTone);\n    float ring = (1.0 - step(0.11, edge)) * hollow;\n    float cap = step(ux, gx + 0.26);\n    float density = ux > solidFrom ? 0.3 + 0.64 * sqrt(cellTone) : 0.05 + 0.3 * cellTone;\n    density = max(density, ring * 0.6);\n    density *= cap > 0.5 ? 0.55 : 1.0;\n    density *= presence * body;\n\n    // Stipple: about 17 dots per row, each with its own fixed threshold\n    // and a soft switch so dots fade instead of popping as light moves.\n    vec2 dot = floor(vec2(g.x, g.y) * 17.0);\n    float th = 0.08 + 0.9 * hash21(dot);\n    float ink = smoothstep(th - 0.06, th + 0.06, density);\n\n    return vec2(ink, density);\n  }\n\n  void main() {\n    vec3 accent = toDisplay(uColor);\n    vec3 base = toDisplay(uBase);\n    float t = uTime;\n\n    // Forms are sized in frame heights; portrait frames shrink them so\n    // the narrow width still shows whole silhouettes, and get more rows\n    // so cells stay a sensible size across the width.\n    float fit = min(uAspect / 1.6, 1.0);\n    float scale = clamp(uFocus, 0.2, 3.0) * pow(fit, 0.85);\n\n    // PARAMS: about 22 rows at Rows 1 on a landscape frame.\n    float rows = 22.0 * uWaves * inversesqrt(fit);\n    float shading = max(uGlow, 0.0);\n\n    // The key light orbits slowly so shading rolls across the forms.\n    float la = t * 0.22;\n    vec3 l = normalize(vec3(0.7 * cos(la) + 0.2, 0.5 * sin(la) + 0.3, 0.42));\n\n    vec2 g = vec2(vUv.x * uAspect, vUv.y) * rows;\n    vec2 fw = fwidth(g);\n\n    // Four rotated-grid subsamples resolve the dots and brick edges at\n    // preview sizes; where a dot shrinks below a pixel the stipple fades\n    // to its mean so small frames never alias into moire.\n    vec2 acc = vec2(0.0);\n    acc += inkAt(g + fw * vec2(-0.125, -0.375), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(0.375, -0.125), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(0.125, 0.375), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(-0.375, 0.125), t, uAspect, rows, scale, shading, l);\n    acc *= 0.25;\n\n    float dotsPerPixel = max(fw.x, fw.y) * 17.0;\n    float ink = mix(acc.x, acc.y, smoothstep(0.8, 1.6, dotsPerPixel));\n\n    vec3 col = mix(base, accent, ink);\n\n    col = pow(max(col, vec3(0.0)), vec3(2.2));\n\n    gl_FragColor = vec4(col, 1.0);\n\n    #include <tonemapping_fragment>\n    #include <colorspace_fragment>\n  }"
+  "voxels": "precision highp float;\n\n  uniform float uTime;\n  uniform float uAspect;\n  uniform vec3 uColor;\n  uniform vec3 uBase;\n  uniform float uWaves;\n  uniform float uFocus;\n  uniform float uGlow;\n\n  varying vec2 vUv;\n\n  float hash21(vec2 p) {\n    p = fract(p * vec2(0.3183099, 0.3678794)) + 0.1;\n    p += dot(p, p + 19.19);\n    return fract(p.x * p.y);\n  }\n\n  vec3 toDisplay(vec3 lin) {\n    return pow(max(lin, vec3(0.0)), vec3(1.0 / 2.2));\n  }\n\n  // Lambert-ish brightness of a unit normal under the orbiting key light,\n  // remapped so the terminator side never drops to nothing.\n  float lit(vec3 n, vec3 l) {\n    float k = clamp(dot(n, l), 0.0, 1.0);\n\n    return 0.24 + 0.76 * k * k * (3.0 - 2.0 * k);\n  }\n\n  // The 3D forms, evaluated at one cell center in frame space (y spans\n  // -1..1). Returns (presence 0..1, brightness 0..1). Where forms overlap\n  // the one whose surface sits nearest the viewer wins, so they layer like\n  // solid objects.\n  vec2 forms(vec2 p, float t, float aspect, float scale, vec3 l) {\n    float bestZ = -1e3;\n    vec2 res = vec2(0.0);\n    float soft = 0.035;\n\n    // Orb: a full sphere drifting on a slow loop.\n    vec2 c1 = vec2(aspect * (0.22 * sin(t * 0.159) - 0.4), 0.22 * sin(t * 0.216 + 1.1) + 0.38);\n    float r1 = scale * (0.7 + 0.05 * sin(t * 0.286));\n    vec2 q1 = (p - c1) / r1;\n    float d1 = length(q1);\n\n    if (d1 < 1.0 + soft / r1) {\n      vec3 n = vec3(q1, sqrt(max(1.0 - d1 * d1, 0.0)));\n      float z = 0.4 + n.z * r1;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2(1.0 - smoothstep(1.0 - soft / r1, 1.0 + soft / r1, d1), lit(n, l));\n      }\n    }\n\n    // Lamp shade: the upper half of a wide sphere resting on the bottom\n    // of the frame, so its rows widen toward the flat rim.\n    vec2 c2 = vec2(aspect * (0.2 * cos(t * 0.122) + 0.38), -1.0 + 0.12 * sin(t * 0.185 + 2.3));\n    float r2 = scale * (1.08 + 0.07 * sin(t * 0.234 + 0.7));\n    vec2 q2 = (p - c2) / r2;\n    float d2 = length(q2);\n    float rim = smoothstep(-0.02, 0.02, q2.y + 0.04);\n\n    if (d2 < 1.0 + soft / r2 && rim > 0.0) {\n      vec3 n = vec3(q2, sqrt(max(1.0 - d2 * d2, 0.0)));\n      float z = n.z * r2;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2((1.0 - smoothstep(1.0 - soft / r2, 1.0 + soft / r2, d2)) * rim, lit(n, l));\n      }\n    }\n\n    // Tube: a long diagonal cylinder sweeping slowly across the back.\n    float ang = 0.62 + 0.18 * sin(t * 0.112);\n    vec2 dir = vec2(cos(ang), sin(ang));\n    vec2 nrm = vec2(-dir.y, dir.x);\n    vec2 c3 = vec2(aspect * 0.5 * sin(t * 0.096 + 4.0), 0.0);\n    float hw = scale * 0.36;\n    float across = dot(p - c3, nrm) / hw;\n\n    if (abs(across) < 1.0 + soft / hw) {\n      float nz = sqrt(max(1.0 - across * across, 0.0));\n      vec3 n = vec3(nrm * across, nz);\n      float z = -0.3 + nz * hw;\n\n      if (z > bestZ) {\n        bestZ = z;\n        res = vec2(1.0 - smoothstep(1.0 - soft / hw, 1.0 + soft / hw, abs(across)), lit(n, l));\n      }\n    }\n\n    return res;\n  }\n\n  // Ink at one frame point (x in row units, y in rows). Returns the\n  // stippled ink in x and its expected value (the mean the stipple\n  // converges to) in y, so the caller can fade to the mean where the\n  // grain gets finer than a pixel.\n  vec2 inkAt(vec2 g, float t, float aspect, float rows, float scale, float shading, vec3 l) {\n    float row = floor(g.y);\n    float v = g.y - row;\n    float rh = hash21(vec2(row, 3.7));\n\n    // Cells are about 1.9 rows wide; each row gets its own width and\n    // phase, and a gentle monotonic warp lets widths vary along the row.\n    float cw = 1.9 * (0.82 + 0.36 * rh);\n    float xw = g.x + 0.3 * cw * sin(g.x * 0.85 / cw * 2.0 + row * 1.7) / 2.0 + rh * 7.0;\n    float ci = floor(xw / cw);\n    float u = xw / cw - ci;\n\n    vec2 center = vec2(((ci + 0.5) * cw - rh * 7.0) / rows, (row + 0.5) / rows);\n    vec2 p = (center - vec2(0.5 * aspect, 0.5)) * 2.0;\n    vec2 f = forms(p, t, aspect, scale, l);\n    float presence = f.x;\n\n    // Lighting through the Shading knob: 0 flattens every cell to a\n    // dense brick, 1 is natural, 2 deepens the shadow side.\n    float bright = mix(0.86, f.y, min(shading, 1.0));\n    bright = pow(clamp(bright, 0.0, 1.0), 1.0 + max(shading - 1.0, 0.0) * 1.3);\n\n    // Brick body with thin gaps, measured in row units so the gaps stay\n    // even on wide and narrow cells.\n    float ux = u * cw;\n    float gx = 0.09;\n    float gy = 0.085;\n    float edge = min(min(ux - gx, cw - gx - ux), min(v - gy, 1.0 - gy - v));\n    float body = step(0.0, edge);\n\n    // The lit share of the cell's face is solid stipple on its right;\n    // the rest keeps only a speckled outline, so dim cells read as\n    // hollow voxels or thin slivers seen edge-on.\n    // Each cell carries a little random tone so bars read as separate\n    // voxels rather than one smooth gradient.\n    float cellTone = clamp(bright + (hash21(vec2(ci, row) + 5.3) - 0.5) * 0.28, 0.0, 1.0);\n\n    // The lit share of the cell's face is solid stipple on its right; the\n    // rest thins out, and only cells deep in shadow fall back to a\n    // speckled outline, so dim cells read as hollow voxels or slivers\n    // seen edge-on.\n    float solidFrom = (cw - gx) - (cw - 2.0 * gx) * clamp(cellTone * 1.7 - 0.15, 0.1, 1.0);\n    float hollow = 1.0 - smoothstep(0.2, 0.45, cellTone);\n    float ring = (1.0 - step(0.11, edge)) * hollow;\n    float cap = step(ux, gx + 0.26);\n    float density = ux > solidFrom ? 0.3 + 0.64 * sqrt(cellTone) : 0.05 + 0.3 * cellTone;\n    density = max(density, ring * 0.6);\n    density *= cap > 0.5 ? 0.55 : 1.0;\n    density *= presence * body;\n\n    // Stipple: about 17 dots per row, each with its own fixed threshold\n    // and a soft switch so dots fade instead of popping as light moves.\n    vec2 dot = floor(vec2(g.x, g.y) * 17.0);\n    float th = 0.08 + 0.9 * hash21(dot);\n    float ink = smoothstep(th - 0.06, th + 0.06, density);\n\n    return vec2(ink, density);\n  }\n\n  void main() {\n    vec3 accent = toDisplay(uColor);\n    vec3 base = toDisplay(uBase);\n    float t = uTime;\n\n    // Forms are sized in frame heights; portrait frames shrink them so\n    // the narrow width still shows whole silhouettes, and get more rows\n    // so cells stay a sensible size across the width.\n    float fit = min(uAspect / 1.6, 1.0);\n    float scale = clamp(uFocus, 0.2, 3.0) * pow(fit, 0.85);\n\n    // PARAMS: about 22 rows at Rows 1 on a landscape frame.\n    float rows = 22.0 * uWaves * inversesqrt(fit);\n    float shading = max(uGlow, 0.0);\n\n    // The key light orbits slowly so shading rolls across the forms.\n    float la = t * 0.22;\n    vec3 l = normalize(vec3(0.7 * cos(la) + 0.2, 0.5 * sin(la) + 0.3, 0.42));\n\n    vec2 g = vec2(vUv.x * uAspect, vUv.y) * rows;\n    vec2 fw = fwidth(g);\n\n    // Four rotated-grid subsamples resolve the dots and brick edges at\n    // preview sizes; where a dot shrinks below a pixel the stipple fades\n    // to its mean so small frames never alias into moire.\n    vec2 acc = vec2(0.0);\n    acc += inkAt(g + fw * vec2(-0.125, -0.375), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(0.375, -0.125), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(0.125, 0.375), t, uAspect, rows, scale, shading, l);\n    acc += inkAt(g + fw * vec2(-0.375, 0.125), t, uAspect, rows, scale, shading, l);\n    acc *= 0.25;\n\n    float dotsPerPixel = max(fw.x, fw.y) * 17.0;\n    float ink = mix(acc.x, acc.y, smoothstep(0.8, 1.6, dotsPerPixel));\n\n    vec3 col = mix(base, accent, ink);\n\n    col = pow(max(col, vec3(0.0)), vec3(2.2));\n\n    gl_FragColor = vec4(col, 1.0);\n\n    #include <tonemapping_fragment>\n    #include <colorspace_fragment>\n  }",
+
+  silkFlow: `precision highp float;
+
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+
+  varying vec2 vUv;
+
+  float hash21(vec2 p) {
+    p = fract(p * vec2(123.34, 456.21));
+    p += dot(p, p + 45.32);
+    return fract(p.x * p.y);
+  }
+
+  float noise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    vec2 u = f * f * (3.0 - 2.0 * f);
+    return mix(
+      mix(hash21(i + vec2(0.0, 0.0)), hash21(i + vec2(1.0, 0.0)), u.x),
+      mix(hash21(i + vec2(0.0, 1.0)), hash21(i + vec2(1.0, 1.0)), u.x),
+      u.y
+    );
+  }
+
+  float silkHeight(vec2 p, float t, float freq) {
+    vec2 w = p;
+    w.x += 0.85 * sin(p.y * 1.2 + t * 0.35);
+    w.y += 0.85 * cos(p.x * 1.1 - t * 0.28);
+    w.x += 0.45 * sin(w.y * 2.3 + t * 0.22);
+    w.y += 0.45 * cos(w.x * 2.1 - t * 0.18);
+
+    float h = sin((w.x * 0.6 + w.y * 1.8) * freq + t * 0.25);
+    h += 0.45 * sin((w.x * 1.2 - w.y * 1.4) * freq - t * 0.18);
+    h += 0.25 * noise((w * 3.5) + vec2(t * 0.15, -t * 0.12));
+    return h;
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
+    float speed = max(uSpeed, 0.05);
+    float t = (uTime + 12.0) * speed;
+    float freq = (uWaves > 0.0 ? uWaves : 1.0) * (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * 1.4;
+    float focus = uFocus > 0.0 ? uFocus : 1.0;
+    float glow = uGlow > 0.0 ? uGlow : 1.0;
+    float shine = uShine > 0.0 ? uShine : 1.0;
+
+    float eps = 0.02;
+    float h = silkHeight(p, t, freq);
+    float hx = silkHeight(p + vec2(eps, 0.0), t, freq);
+    float hy = silkHeight(p + vec2(0.0, eps), t, freq);
+
+    vec3 n = normalize(vec3(-(hx - h) / eps * 2.5 * focus, -(hy - h) / eps * 2.5 * focus, 1.0));
+    vec3 l = normalize(vec3(-0.4, 0.7, 0.6));
+    vec3 v = vec3(0.0, 0.0, 1.0);
+    vec3 hVec = normalize(l + v);
+
+    float ndl = max(dot(n, l), 0.0);
+    float ndh = max(dot(n, hVec), 0.0);
+    float fresnel = pow(1.0 - max(dot(n, v), 0.0), 3.0);
+
+    float normH = clamp((h + 1.6) / 3.2, 0.0, 1.0);
+    vec3 baseFold = mix(uColor1, uColor2, smoothstep(0.15, 0.85, normH));
+    vec3 crestColor = mix(baseFold, uColor3, smoothstep(0.5, 1.0, normH) * 0.8);
+
+    float sheen = pow(ndl, 14.0) * 1.2 * glow;
+    float glint = pow(ndh, 80.0) * 2.5 * shine;
+
+    vec3 col = crestColor * (0.35 + 0.65 * ndl * glow) + (uColor3 * sheen * 0.6) + vec3(glint * (0.6 + 0.4 * fresnel));
+    col = clamp(col, 0.0, 2.0);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  meshAurora: `precision highp float;
+
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+
+  varying vec2 vUv;
+
+  void main() {
+    vec2 uv = (vUv - 0.5) * vec2(uAspect, 1.0) / min(uAspect, 1.0) + 0.5;
+    float speed = max(uSpeed, 0.05);
+    float t = (uTime + 24.0) * speed * 0.35;
+    float scale = (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * (uWaves > 0.0 ? uWaves : 1.0);
+    float focus = max(uFocus, 0.1);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec2 q = uv;
+    for (int i = 1; i <= 3; i++) {
+      float fi = float(i);
+      q.x += (0.16 / fi) * sin(q.y * 3.4 * scale + t * 1.1 * fi + fi * 1.6) * focus;
+      q.y += (0.13 / fi) * cos(q.x * 3.1 * scale - t * 0.95 * fi + fi * 2.3) * focus;
+    }
+
+    vec2 p1 = vec2(0.25 + 0.25 * sin(t * 0.7), 0.75 + 0.2 * cos(t * 0.5));
+    vec2 p2 = vec2(0.75 + 0.2 * cos(t * 0.6 + 1.2), 0.3 + 0.25 * sin(t * 0.8 + 2.0));
+    vec2 p3 = vec2(0.5 + 0.3 * sin(t * 0.4 + 3.1), 0.5 + 0.3 * cos(t * 0.9 + 0.8));
+
+    float d1 = exp(-dot(q - p1, q - p1) * (3.2 / focus));
+    float d2 = exp(-dot(q - p2, q - p2) * (3.0 / focus));
+    float d3 = exp(-dot(q - p3, q - p3) * (2.8 / focus));
+
+    float sum = max(d1 + d2 + d3, 0.001);
+    vec3 col = (uColor1 * d1 + uColor2 * d2 + uColor3 * d3) / sum;
+
+    float ribbon = sin((q.x + q.y * 0.4) * 8.0 * scale + t * 1.4);
+    ribbon = 0.5 + 0.5 * ribbon;
+    float ribbonFringe = pow(ribbon, 4.0) * 0.6 * shine;
+    col += mix(uColor2, uColor3, ribbon) * ribbonFringe;
+
+    col *= (0.65 + 0.55 * glow);
+    col = clamp(col, 0.0, 2.0);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  liquidMetal: `precision highp float;
+
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+
+  varying vec2 vUv;
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
+    float speed = max(uSpeed, 0.05);
+    float t = (uTime + 45.0) * speed * 0.45;
+    float scale = (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * (uWaves > 0.0 ? uWaves : 1.0) * 0.8;
+    float focus = max(uFocus, 0.1);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec2 v = p * scale;
+    for (int i = 1; i <= 5; i++) {
+      float fi = float(i);
+      v += vec2(
+        (0.6 / fi) * sin(fi * v.y + t * 0.65 + 0.4 * fi),
+        (0.45 / fi) * cos(fi * v.x - t * 0.55 + 0.3 * fi)
+      );
+    }
+
+    float eps = 0.015;
+    float f = sin(v.x) * cos(v.y);
+    float fx = sin(v.x + eps) * cos(v.y);
+    float fy = sin(v.x) * cos(v.y + eps);
+
+    vec3 n = normalize(vec3(-(fx - f) / eps * 2.2 * focus, -(fy - f) / eps * 2.2 * focus, 1.0));
+    vec3 l = normalize(vec3(-0.35, 0.65, 0.7));
+    vec3 eye = vec3(0.0, 0.0, 1.0);
+    vec3 halfVec = normalize(l + eye);
+
+    float ndl = max(dot(n, l), 0.0);
+    float ndh = max(dot(n, halfVec), 0.0);
+    float fresnel = pow(1.0 - max(dot(n, eye), 0.0), 3.0);
+
+    float heightMap = clamp(0.5 + 0.5 * sin(v.x + v.y + t * 0.3), 0.0, 1.0);
+    vec3 metalAlloy = mix(uColor1, uColor2, smoothstep(0.2, 0.8, heightMap));
+    vec3 rimIridescence = mix(metalAlloy, uColor3, fresnel);
+
+    float specular = pow(ndh, 48.0 * shine) * 2.0 * shine;
+    float gloss = pow(ndl, 6.0) * 0.8 * glow;
+
+    vec3 col = rimIridescence * (0.3 + gloss) + vec3(specular) + uColor3 * (fresnel * 0.45 * shine);
+    col = clamp(col, 0.0, 2.0);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  sphereGradient: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float snoise3D(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float n = dot(i, vec3(1.0, 57.0, 113.0));
+    return mix(
+      mix(mix(fract(sin(n + 0.0) * 43758.5453), fract(sin(n + 1.0) * 43758.5453), f.x),
+          mix(fract(sin(n + 57.0) * 43758.5453), fract(sin(n + 58.0) * 43758.5453), f.x), f.y),
+      mix(mix(fract(sin(n + 113.0) * 43758.5453), fract(sin(n + 114.0) * 43758.5453), f.x),
+          mix(fract(sin(n + 170.0) * 43758.5453), fract(sin(n + 171.0) * 43758.5453), f.x), f.y), f.z);
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
+    float t = (uTime + 10.0) * max(uSpeed, 0.05) * 0.5;
+    float radius = 0.72 * max(uFocus, 0.2);
+    float dist = length(p);
+    float waves = max(uWaves, 0.1);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    if (dist <= radius) {
+      float z = sqrt(max(0.0, radius * radius - dist * dist));
+      vec3 n = normalize(vec3(p, z));
+      vec3 rotPos = vec3(
+        n.x * cos(t * 0.4) - n.z * sin(t * 0.4),
+        n.y,
+        n.x * sin(t * 0.4) + n.z * cos(t * 0.4)
+      );
+      float turb = snoise3D(rotPos * (2.4 * waves) + vec3(0.0, t * 0.3, t * 0.2));
+      turb += 0.5 * snoise3D(rotPos * (4.8 * waves) - vec3(t * 0.2, 0.0, t * 0.4));
+
+      vec3 lightDir = normalize(vec3(0.5, 0.8, 1.0));
+      float diff = max(dot(n, lightDir), 0.0);
+      float fresnel = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 2.5);
+
+      vec3 col = mix(uColor1, uColor2, smoothstep(-0.4, 0.6, turb + (n.y * 0.5)));
+      col = mix(col, uColor3, fresnel * 0.85);
+      col *= (0.4 + 0.8 * diff * glow);
+      col += vec3(pow(max(dot(reflect(-lightDir, n), vec3(0.0, 0.0, 1.0)), 0.0), 32.0)) * shine * 1.5;
+
+      col = pow(max(col, vec3(0.0)), vec3(2.2));
+      gl_FragColor = vec4(col, 1.0);
+    } else {
+      float halo = exp(-(dist - radius) * 4.0 / max(0.1, glow));
+      vec3 haloCol = mix(uColor2, uColor3, 0.5) * halo * 0.6 * glow;
+      vec3 col = uBase + haloCol;
+      col = pow(max(col, vec3(0.0)), vec3(2.2));
+      gl_FragColor = vec4(col, 1.0);
+    }
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  waterPlane: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 4.0;
+    float t = (uTime + 20.0) * max(uSpeed, 0.05) * 0.8;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec2 v = p * (1.2 * waves);
+    float h = 0.0;
+    h += sin(v.x * 2.0 + t * 1.2) * cos(v.y * 1.8 - t * 0.9);
+    h += 0.5 * sin(v.x * 3.4 - t * 1.5 + v.y * 2.2);
+    h += 0.25 * sin(length(v + vec2(sin(t * 0.5), cos(t * 0.6))) * 5.0 - t * 2.0);
+
+    float eps = 0.02;
+    float hx = sin((v.x + eps) * 2.0 + t * 1.2) * cos(v.y * 1.8 - t * 0.9);
+    float hy = sin(v.x * 2.0 + t * 1.2) * cos((v.y + eps) * 1.8 - t * 0.9);
+    vec3 n = normalize(vec3(-(hx - h) / eps * focus, -(hy - h) / eps * focus, 1.0));
+
+    vec3 light = normalize(vec3(-0.4, 0.6, 0.7));
+    float diff = max(dot(n, light), 0.0);
+    float fresnel = pow(1.0 - max(dot(n, vec3(0.0, 0.0, 1.0)), 0.0), 3.0);
+
+    vec2 cUv = v + vec2(h * 0.3);
+    float caustics = pow(abs(sin(cUv.x * 3.5 + t) * sin(cUv.y * 3.5 - t)), 2.0) * 1.6;
+    caustics += pow(abs(cos(cUv.x * 5.0 - t * 1.2) * cos(cUv.y * 5.0 + t * 1.1)), 2.5);
+
+    vec3 waterDeep = mix(uBase, uColor1, 0.8);
+    vec3 waterShallow = mix(uColor1, uColor2, clamp(h * 0.5 + 0.5, 0.0, 1.0));
+    vec3 col = mix(waterDeep, waterShallow, 0.6 + 0.4 * diff);
+    col += uColor3 * (caustics * 0.4 * focus) * glow;
+    col += vec3(pow(max(dot(reflect(-light, n), vec3(0.0, 0.0, 1.0)), 0.0), 40.0)) * shine * 2.2;
+    col += uColor2 * (fresnel * 0.5 * glow);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  stripeMesh: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float hash(vec2 p) {
+    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
+  void main() {
+    vec2 uv = vUv;
+    float t = (uTime + 30.0) * max(uSpeed, 0.05) * 0.6;
+    float waves = max(uWaves, 0.1);
+    float focus = max(uFocus, 0.1);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.0);
+
+    vec2 warp = vec2(
+      sin(uv.y * (4.0 * waves) + t * 0.8) * cos(uv.x * (2.5 * waves) - t * 0.5),
+      cos(uv.x * (4.0 * waves) - t * 0.7) * sin(uv.y * (3.0 * waves) + t * 0.6)
+    );
+    vec2 warpedUV = uv + warp * (0.28 * focus);
+
+    vec3 cTL = uColor1;
+    vec3 cTR = uColor2;
+    vec3 cBR = uColor3;
+    vec3 cBL = uBase;
+
+    vec2 st = clamp(warpedUV, 0.0, 1.0);
+    vec2 smoothSt = smoothstep(0.0, 1.0, st);
+    vec3 cTop = mix(cTL, cTR, smoothSt.x);
+    vec3 cBottom = mix(cBL, cBR, smoothSt.x);
+    vec3 col = mix(cBottom, cTop, 1.0 - smoothSt.y);
+
+    col *= (0.7 + 0.5 * glow);
+
+    float grain = hash(floor(vUv * vec2(uAspect, 1.0) * 800.0));
+    col += vec3((grain - 0.5) * 0.04 * shine);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  topography: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float topoNoise(vec2 p) {
+    vec2 i = floor(p);
+    vec2 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    float a = fract(sin(dot(i, vec2(127.1, 311.7))) * 43758.5453);
+    float b = fract(sin(dot(i + vec2(1.0, 0.0), vec2(127.1, 311.7))) * 43758.5453);
+    float c = fract(sin(dot(i + vec2(0.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    float d = fract(sin(dot(i + vec2(1.0, 1.0), vec2(127.1, 311.7))) * 43758.5453);
+    return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.5;
+    float t = (uTime + 15.0) * max(uSpeed, 0.05) * 0.35;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec2 q = p * (0.8 * waves);
+    float elevation = topoNoise(q + vec2(t * 0.2, t * 0.15));
+    elevation += 0.5 * topoNoise(q * 2.1 - vec2(t * 0.25, -t * 0.1));
+    elevation += 0.25 * topoNoise(q * 4.2 + vec2(t * 0.1, t * 0.3));
+
+    float numContours = 14.0 * focus;
+    float cPos = elevation * numContours;
+    float lineFrac = abs(fract(cPos) - 0.5) * 2.0;
+    float lineDist = fwidth(cPos) * 1.5;
+    float line = 1.0 - smoothstep(0.0, max(0.06, lineDist), lineFrac);
+
+    vec3 terrain = mix(uBase, uColor1, smoothstep(0.1, 0.6, elevation));
+    terrain = mix(terrain, uColor2, smoothstep(0.5, 1.2, elevation));
+    vec3 contourGlow = uColor3 * line * 1.8 * glow;
+    vec3 col = terrain + contourGlow + (uColor2 * line * 0.4 * shine);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  hyperspeed: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float hash(float n) {
+    return fract(sin(n) * 43758.5453);
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
+    float speed = max(uSpeed, 0.1);
+    float t = (uTime + 50.0) * speed * 2.2;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    float horizonY = -0.15;
+    float py = p.y - horizonY;
+    float depth = 1.0 / (abs(py) + 0.04);
+    vec2 road = vec2(p.x * depth * (1.2 * focus), depth * 0.5 + (py > 0.0 ? -t : t));
+
+    vec3 col = uBase;
+    float lane = floor(road.x * 4.0 * waves);
+    float laneFrac = fract(road.x * 4.0 * waves);
+
+    float streak = pow(abs(sin(road.y * 0.4 + hash(lane) * 6.28)), 16.0);
+    float railMask = smoothstep(0.12, 0.02, abs(laneFrac - 0.5));
+    float light = streak * railMask * smoothstep(0.0, 4.0, depth) * glow;
+
+    vec3 lightCol = mix(uColor1, uColor2, fract(lane * 0.37));
+    if (py < 0.0) lightCol = mix(lightCol, uColor3, 0.4);
+
+    col += lightCol * light * 2.5;
+
+    float horizonGlow = exp(-abs(py) * 12.0) * 0.8 * glow;
+    col += mix(uColor2, uColor1, 0.5) * horizonGlow;
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  plasma: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
+    float t = (uTime + 25.0) * max(uSpeed, 0.05) * 0.7;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec2 v = p * (1.2 * waves);
+    float v1 = sin(v.x * 2.5 + t);
+    float v2 = sin(v.y * 2.5 - t * 0.9);
+    float v3 = sin((v.x + v.y) * 2.0 + t * 1.2);
+    float dist = length(v + vec2(sin(t * 0.5), cos(t * 0.4)));
+    float v4 = sin(dist * (3.0 * focus) - t * 1.5);
+
+    float plasmaVal = (v1 + v2 + v3 + v4) * 0.25;
+
+    vec3 col1 = mix(uBase, uColor1, clamp(plasmaVal + 0.5, 0.0, 1.0));
+    vec3 col2 = mix(uColor2, uColor3, clamp(sin(plasmaVal * 3.14159 + t * 0.5) * 0.5 + 0.5, 0.0, 1.0));
+    vec3 col = mix(col1, col2, smoothstep(-0.3, 0.5, plasmaVal));
+
+    float filament = pow(1.0 - abs(plasmaVal), 4.0) * 0.7 * shine;
+    col += uColor3 * filament;
+    col *= (0.7 + 0.5 * glow);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  dither: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float getBayer4x4(vec2 p) {
+    vec2 ij = mod(floor(p), 4.0);
+    int x = int(ij.x);
+    int y = int(ij.y);
+    float m[16];
+    m[0]=0.0; m[1]=8.0; m[2]=2.0; m[3]=10.0;
+    m[4]=12.0; m[5]=4.0; m[6]=14.0; m[7]=6.0;
+    m[8]=3.0; m[9]=11.0; m[10]=1.0; m[11]=9.0;
+    m[12]=15.0; m[13]=7.0; m[14]=13.0; m[15]=5.0;
+    return m[y * 4 + x] / 16.0;
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
+    float t = (uTime + 8.0) * max(uSpeed, 0.05) * 0.4;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    float angle = 0.785;
+    mat2 rot = mat2(cos(angle), -sin(angle), sin(angle), cos(angle));
+    vec2 q = rot * p * waves;
+
+    float gradient = q.x * 0.4 + q.y * 0.3 + sin(q.x * 2.0 + t) * 0.15;
+    gradient = clamp(gradient * 0.5 + 0.5, 0.0, 1.0);
+
+    float pixelSize = max(2.0, 5.0 * (1.0 / focus));
+    float bayer = getBayer4x4(gl_FragCoord.xy / pixelSize);
+
+    float ditherVal = gradient + (bayer - 0.5) * (0.6 * shine);
+    ditherVal = clamp(ditherVal, 0.0, 1.0);
+
+    vec3 col;
+    if (ditherVal < 0.33) {
+      col = mix(uBase, uColor1, ditherVal / 0.33);
+    } else if (ditherVal < 0.66) {
+      col = mix(uColor1, uColor2, (ditherVal - 0.33) / 0.33);
+    } else {
+      col = mix(uColor2, uColor3, (ditherVal - 0.66) / 0.34);
+    }
+    col *= (0.75 + 0.4 * glow);
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  threads: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.5;
+    float t = (uTime + 35.0) * max(uSpeed, 0.05) * 0.6;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.2);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    vec3 col = uBase;
+    for (int i = 0; i < 9; i++) {
+      float fi = float(i);
+      float phase = fi * 0.7 + t * 0.5;
+      float freq = (1.2 + fi * 0.2) * waves;
+      float amp = (0.28 + 0.08 * sin(fi * 1.5 + t * 0.3)) * focus;
+      float y = sin(p.x * freq + phase) * amp + (fi - 4.0) * 0.09;
+
+      float d = abs(p.y - y);
+      float beam = 1.0 / (d * 85.0 + 1.0);
+      beam = pow(beam, 1.8) * glow;
+
+      vec3 strandColor = mix(uColor1, uColor2, fi / 8.0);
+      strandColor = mix(strandColor, uColor3, 0.5 + 0.5 * sin(p.x * 2.0 + t));
+      col += strandColor * beam * (0.35 + 0.3 * shine);
+    }
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
+
+  chromaticWaves: `precision highp float;
+  uniform float uTime;
+  uniform float uAspect;
+  uniform vec2 uResolution;
+  uniform float uSpeed;
+  uniform float uNoiseScale;
+  uniform vec3 uColor1;
+  uniform vec3 uColor2;
+  uniform vec3 uColor3;
+  uniform vec3 uBase;
+  uniform float uWaves;
+  uniform float uFocus;
+  uniform float uGlow;
+  uniform float uShine;
+  varying vec2 vUv;
+
+  float wavePass(vec2 p, float t, float freq) {
+    float w = sin(p.x * freq + t) * cos(p.y * freq * 0.8 - t * 0.7);
+    w += 0.5 * sin((p.x + p.y) * freq * 1.4 + t * 1.2);
+    return w;
+  }
+
+  void main() {
+    vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
+    float t = (uTime + 40.0) * max(uSpeed, 0.05) * 0.75;
+    float waves = max(uWaves, 0.2);
+    float focus = max(uFocus, 0.1);
+    float glow = max(uGlow, 0.1);
+    float shine = max(uShine, 0.1);
+
+    float freq = 1.6 * waves;
+    float disp = 0.045 * focus;
+
+    float rWave = wavePass(p + vec2(disp, 0.0), t, freq);
+    float gWave = wavePass(p, t + 0.1, freq);
+    float bWave = wavePass(p - vec2(disp, 0.0), t + 0.2, freq);
+
+    vec3 colR = mix(uColor1, uColor2, clamp(rWave * 0.5 + 0.5, 0.0, 1.0));
+    vec3 colG = mix(uColor2, uColor3, clamp(gWave * 0.5 + 0.5, 0.0, 1.0));
+    vec3 colB = mix(uColor3, uColor1, clamp(bWave * 0.5 + 0.5, 0.0, 1.0));
+
+    vec3 col = vec3(colR.r, colG.g, colB.b);
+    col *= (0.7 + 0.5 * glow);
+    float crest = pow(clamp(gWave * 0.5 + 0.5, 0.0, 1.0), 4.0) * shine;
+    col += uColor3 * crest * 0.6;
+
+    col = pow(max(col, vec3(0.0)), vec3(2.2));
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`,
 };
 
 export const IMAGE_VERTEX_SHADER = "varying vec2 vUv;\n  void main() {\n    vUv = uv;\n    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);\n  }";
 
-export const IMAGE_FRAGMENT_SHADER = "precision highp float;\n\n  uniform sampler2D uMap;\n  uniform vec2 uRepeat;\n  uniform vec2 uOffset;\n  uniform vec3 uColor;\n  uniform float uDim;\n  uniform float uBlur;\n\n  varying vec2 vUv;\n\n  void main() {\n    vec2 uv = uOffset + vUv * uRepeat;\n\n    // Contain fit letterboxes: outside the image rect the backdrop\n    // color shows through.\n    float inside =\n      step(0.0, uv.x) * step(uv.x, 1.0) *\n      step(0.0, uv.y) * step(uv.y, 1.0);\n\n    // Blur rides the mipmap chain (LOD bias) with a small poisson tap\n    // ring on top to smooth the box-y mip transitions. The plane is\n    // camera-locked, so mip blur stays stable frame to frame.\n    float bias = uBlur * 7.0;\n    float spread = uBlur * 0.02;\n\n    vec4 tex = texture2D(uMap, uv, bias);\n    tex += texture2D(uMap, uv + vec2( 0.94, -0.40) * spread, bias);\n    tex += texture2D(uMap, uv + vec2(-0.94,  0.46) * spread, bias);\n    tex += texture2D(uMap, uv + vec2(-0.09,  0.93) * spread, bias);\n    tex += texture2D(uMap, uv + vec2(  0.34, -0.79) * spread, bias);\n    tex *= 0.2;\n\n    // The texture is tagged sRGB, so sampling already yields linear\n    // values (hardware decode): no manual decode here, mirroring the\n    // video-layer rule that a second decode darkens the image.\n    vec3 col = mix(uColor, tex.rgb, tex.a * inside);\n    col *= 1.0 - uDim;\n\n    gl_FragColor = vec4(col, 1.0);\n\n    #include <tonemapping_fragment>\n    #include <colorspace_fragment>\n  }";
+export const IMAGE_FRAGMENT_SHADER = `precision highp float;
+
+  uniform sampler2D uMap;
+  uniform float uHasTexture;
+  uniform vec2 uRepeat;
+  uniform vec2 uOffset;
+  uniform vec3 uColor;
+  uniform float uDim;
+  uniform float uBlur;
+
+  varying vec2 vUv;
+
+  void main() {
+    if (uHasTexture < 0.5) {
+      gl_FragColor = vec4(uColor, 1.0);
+      return;
+    }
+
+    vec2 uv = uOffset + vUv * uRepeat;
+
+    // Contain fit letterboxes: outside the image rect the backdrop
+    // color shows through.
+    float inside =
+      step(0.0, uv.x) * step(uv.x, 1.0) *
+      step(0.0, uv.y) * step(uv.y, 1.0);
+
+    vec4 tex;
+    if (uBlur > 0.001) {
+      float spread = uBlur * 0.035;
+      tex = texture2D(uMap, uv) * 0.22;
+      tex += texture2D(uMap, uv + vec2( 0.94, -0.40) * spread) * 0.13;
+      tex += texture2D(uMap, uv + vec2(-0.94,  0.46) * spread) * 0.13;
+      tex += texture2D(uMap, uv + vec2(-0.09,  0.93) * spread) * 0.13;
+      tex += texture2D(uMap, uv + vec2( 0.34, -0.79) * spread) * 0.13;
+      tex += texture2D(uMap, uv + vec2( 0.55,  0.55) * spread * 1.5) * 0.065;
+      tex += texture2D(uMap, uv + vec2(-0.55, -0.55) * spread * 1.5) * 0.065;
+      tex += texture2D(uMap, uv + vec2(-0.55,  0.55) * spread * 1.5) * 0.065;
+      tex += texture2D(uMap, uv + vec2( 0.55, -0.55) * spread * 1.5) * 0.065;
+    } else {
+      tex = texture2D(uMap, uv);
+    }
+
+    // The texture is tagged sRGB, so sampling already yields linear
+    // values (hardware decode): no manual decode here, mirroring the
+    // video-layer rule that a second decode darkens the image.
+    vec3 col = mix(uColor, tex.rgb, tex.a * inside);
+    col *= 1.0 - clamp(uDim, 0.0, 1.0);
+
+    gl_FragColor = vec4(col, 1.0);
+
+    #include <tonemapping_fragment>
+    #include <colorspace_fragment>
+  }`;
+

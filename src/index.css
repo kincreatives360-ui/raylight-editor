@@ -6,43 +6,74 @@
 }
 
 :root {
-  /* Impeccable Live Scaling Parameter */
-  --p-scale: 1;
+  color-scheme: dark;
 
-  /* Typography Font Stacks */
+  /* Canonical Design Tokens (DESIGN.md Section 11.2) */
+  --ui-bg: #07080d;
+  --panel-bg: #0b0b0d;
+  --panel-raised: #111114;
+  --panel-hover: #18181b;
+  --panel-active: #1c1c1f;
+  --canvas-workspace: #080a10;
+  --surface-border: rgba(255, 255, 255, 0.08);
+  --surface-border-strong: rgba(255, 255, 255, 0.14);
+  --text-primary: #f3f4f6;
+  --text-secondary: #a1a1aa;
+  --text-muted: #71717a;
+  --text-disabled: #52525b;
+  --accent: #0088ff;
+  --accent-hover: #1d9bff;
+  --accent-soft: rgba(0, 136, 255, 0.14);
+  --focus-ring: rgba(56, 189, 248, 0.8);
+  --success: #34d399;
+  --warning: #fbbf24;
+  --danger: #f43f5e;
+  --purple: #8b5cf6;
+  --radius-xs: 3px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --control-height: 28px;
+  --row-height: 28px;
+  --sidebar-width: 240px;
+  --inspector-width: 300px;
+  --timeline-min-height: 180px;
+  --timeline-default-height: 280px;
+  --timeline-max-height: 60vh;
+
+  /* Live scaling & typography font stacks */
+  --p-scale: 1;
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Surface Tokens */
-  --bg-canvas: #07080d;
-  --bg-app: #0b0b0d;
-  --bg-panel: #111114;
-  --bg-surface: #161619;
-  --bg-subtle: #1c1c1f;
+  /* Backward-compatible token aliases */
+  --bg-canvas: var(--ui-bg);
+  --bg-app: var(--panel-bg);
+  --bg-panel: var(--panel-raised);
+  --bg-surface: var(--panel-hover);
+  --bg-subtle: var(--panel-active);
   --bg-muted: #242428;
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.08);
 
-  /* Border Tokens */
-  --border-subtle: rgba(255, 255, 255, 0.07);
-  --border-medium: rgba(255, 255, 255, 0.12);
-  --border-focus: #0088ff;
+  --border-subtle: var(--surface-border);
+  --border-medium: var(--surface-border-strong);
+  --border-focus: var(--accent);
 
-  /* Text & Contrast Tokens (WCAG AA compliant) */
-  --text-primary: #f4f4f5;
-  --text-secondary: #d4d4d8;
-  --text-muted: #a1a1aa;
   --text-subtle: #8a8a93;
-  --text-disabled: #71717a;
 
-  /* Accent Tokens */
-  --accent-primary: #0088ff;
-  --accent-hover: #0077e6;
-  --accent-glow: rgba(0, 136, 255, 0.25);
+  --accent-primary: var(--accent);
+  --accent-glow: var(--accent-soft);
   --accent-selection: #09355c;
-  --accent-danger: #f43f5e;
-  --accent-success: #10b981;
-  --accent-warning: #f59e0b;
+  --accent-danger: var(--danger);
+  --accent-success: var(--success);
+  --accent-warning: var(--warning);
 }
 
 * {

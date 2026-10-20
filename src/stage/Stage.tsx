@@ -524,6 +524,13 @@ const StageComponent: React.FC<StageProps> = ({
     // WORKSPACE MOUSE DOWN: Camera Orbit/Pan/Dolly, Hand Pan, Drawing, or Deselect
     // ============================================================================
     const handleWorkspaceMouseDown = (e: React.MouseEvent) => {
+        if (
+            useSelectionStore.getState().isTransformDragging ||
+            useProjectStore.getState().dragSnapshot !== null
+        ) {
+            return;
+        }
+
         // 0. Dedicated Camera Navigation Tool (C) OR Alt + Drag in Select Tool
         // Left-drag: Orbit | Middle-drag (or Shift+Left-drag): Pan | Right-drag: Dolly
         const isCameraAction = activeTool === 'camera' || (e.altKey && !isSpaceHeld);
@@ -849,6 +856,12 @@ const StageComponent: React.FC<StageProps> = ({
                     const h = bottom - top;
 
                     if (w < 8 && h < 8) {
+                        if (
+                            useSelectionStore.getState().isTransformDragging ||
+                            useProjectStore.getState().dragSnapshot !== null
+                        ) {
+                            return;
+                        }
                         if (!isMulti) clearLayerSelection();
                         return;
                     }
@@ -891,6 +904,12 @@ const StageComponent: React.FC<StageProps> = ({
                             setSelectedLayerIds(hitLayerIds);
                         }
                     } else if (!isMulti) {
+                        if (
+                            useSelectionStore.getState().isTransformDragging ||
+                            useProjectStore.getState().dragSnapshot !== null
+                        ) {
+                            return;
+                        }
                         clearLayerSelection();
                     }
                 };
@@ -902,6 +921,12 @@ const StageComponent: React.FC<StageProps> = ({
         }
 
         // 4. Clicking empty workspace deselects layers
+        if (
+            useSelectionStore.getState().isTransformDragging ||
+            useProjectStore.getState().dragSnapshot !== null
+        ) {
+            return;
+        }
         clearLayerSelection();
     };
 
@@ -1154,7 +1179,15 @@ const StageComponent: React.FC<StageProps> = ({
                             frame={effectiveViewportFrame}
                             selectedLayerIds={selectedLayerIds}
                             onSelectLayer={handleSelectLayerWithDeepSelect}
-                            onPointerMissed={() => clearLayerSelection()}
+                            onPointerMissed={() => {
+                                if (
+                                    useSelectionStore.getState().isTransformDragging ||
+                                    useProjectStore.getState().dragSnapshot !== null
+                                ) {
+                                    return;
+                                }
+                                clearLayerSelection();
+                            }}
                             cameraRef={cameraRef}
                         />
                     </div>

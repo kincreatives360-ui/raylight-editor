@@ -24,7 +24,6 @@ import {
     Play,
     Pause,
     Upload,
-    LayoutTemplate,
     Sparkles,
     Check,
     Smartphone,
@@ -41,6 +40,11 @@ import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 import { CURATED_SOUNDS } from '../../data/curatedSounds';
 import { STARTER_TEMPLATES, type StarterTemplate } from '../../data/starterTemplates';
 import { createDefaultCameraBlock } from '../../model/defaults';
+import {
+    SHADER_PRESETS,
+    SHADER_PRESET_METADATA,
+    DEFAULT_SHADER_CONFIGS,
+} from '../../model/backgroundPresets';
 
 interface LeftPanelProps {
     activeShot: Shot;
@@ -86,6 +90,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         selectBlock,
         selectCameraBlock,
         selectPreset,
+        clearLayerSelection,
+        inspectorTab,
         setInspectorTab,
         setTimelineView,
         setTimelineScrollTop,
@@ -96,7 +102,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
     const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
-    const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio' | 'templates'>('file');
+    const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
+    const [assetCategory, setAssetCategory] = useState<'uploads' | 'mockups' | 'shaders' | 'sfx' | 'templates'>('uploads');
     const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>('All');
     const [loadedTemplateId, setLoadedTemplateId] = useState<string | null>(null);
     const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
@@ -752,15 +759,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 )}
             </div>
 
-            {/* 2. SUB-HEADER: [File] | Assets + Search Icon */}
+            {/* 2. SUB-HEADER: Clean [File] | [Assets] + Search Icon */}
             <div className="h-9 border-y border-white/[0.07] px-3 flex items-center justify-between shrink-0" role="tablist" aria-label="Left panel views">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                     <button
                         role="tab"
                         aria-selected={activeTab === 'file'}
                         onClick={() => setActiveTab('file')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'file'
-                            ? 'bg-[#1f1f23] text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'file'
+                            ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
@@ -770,36 +777,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         role="tab"
                         aria-selected={activeTab === 'assets'}
                         onClick={() => setActiveTab('assets')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'assets'
-                            ? 'bg-[#1f1f23] text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'assets'
+                            ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
                         Assets
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={activeTab === 'audio'}
-                        onClick={() => setActiveTab('audio')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'audio'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
-                    >
-                        <Music className="w-3 h-3 text-[#38bdf8]" />
-                        <span>SFX</span>
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={activeTab === 'templates'}
-                        onClick={() => setActiveTab('templates')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'templates'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
-                    >
-                        <LayoutTemplate className="w-3 h-3 text-[#f59e0b]" />
-                        <span>Templates</span>
                     </button>
                 </div>
 
@@ -847,9 +830,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
             {/* =================================================================== */}
             {activeTab === 'file' && (
                 <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1" role="tree" aria-label="Project layer hierarchy">
+                    <div
+                        className="flex-1 overflow-y-auto p-2 space-y-1"
+                        role="tree"
+                        aria-label="Project layer hierarchy"
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                                clearLayerSelection();
+                            }
+                        }}
+                    >
                         {project.shots.map((shot) => {
-                            const isShotActive = shot.id === activeShot.id;
+                            const isShotSelected = shot.id === activeShot.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
 
@@ -860,19 +852,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             const rootGroups = shot.groups.filter((g) => !g.parentGroupId);
                             const ungroupedLayers = layersTopDown.filter((l) => !l.groupId);
 
-                            const hasGroupSelected = rootGroups.some((g) => {
-                                const gl = layersTopDown.filter((l) => l.groupId === g.id);
-                                return (
-                                    gl.length > 0 &&
-                                    gl.every((l) => selectedLayerIds.includes(l.id))
-                                );
-                            });
-
                             return (
                                 <div
                                     key={shot.id}
                                     className={
-                                        isShotActive && !hasGroupSelected
+                                        isShotSelected
                                             ? 'rounded-lg overflow-hidden my-1'
                                             : 'my-0.5'
                                     }
@@ -884,7 +868,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             setCurrentTimeMs(shot.startMs + 100);
                                         }}
                                         onDoubleClick={() => startRename(shot.id, shot.name)}
-                                        className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isShotActive && !hasGroupSelected
+                                        className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition rounded-lg ${isShotSelected
                                             ? 'bg-[#0088ff] text-white font-semibold'
                                             : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                             }`}
@@ -907,9 +891,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 )}
                                             </button>
                                             <Hash
-                                                className={`w-3.5 h-3.5 shrink-0 ${isShotActive && !hasGroupSelected
+                                                className={`w-3.5 h-3.5 shrink-0 ${isShotSelected
                                                     ? 'text-white'
-                                                    : 'text-[#0088ff]'
+                                                    : 'text-[#38bdf8]'
                                                     }`}
                                             />
                                             {isEditingShot ? (
@@ -1229,317 +1213,510 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 </div>
             )}
 
-            {/* ASSETS TAB */}
+            {/* =================================================================== */}
+            {/* ASSETS TAB: UNIFIED STUDIO ASSET LIBRARY                            */}
+            {/* =================================================================== */}
             {activeTab === 'assets' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    <button
-                        onClick={onUploadClick}
-                        className="w-full py-1.5 px-3 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Upload Media</span>
-                    </button>
-
-                    <div className="flex-1 overflow-y-auto space-y-2">
-                        {assetList.map((asset) => (
-                            <div
-                                key={asset.id}
-                                draggable
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData(
-                                        'application/x-raylight-asset-id',
-                                        asset.id
-                                    );
-                                    e.dataTransfer.effectAllowed = 'copy';
-                                }}
-                                onClick={() => {
-                                    const created = addLayerToShot(activeShot.id, 'image', {
-                                        assetId: asset.id,
-                                        name: asset.name,
-                                        rotation: { x: 0, y: 0, z: 0 },
-                                        device: undefined,
-                                    });
-                                    setInspectorTab('layer');
-                                    selectLayer(created.id);
-                                }}
-                                className="p-2 rounded-lg bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition"
+                <div className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
+                    {/* Subcategory Navigation Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] no-scrollbar shrink-0 border-b border-white/[0.06]">
+                        {[
+                            { id: 'uploads', label: 'Uploads' },
+                            { id: 'mockups', label: '3D Mockups' },
+                            { id: 'shaders', label: 'Shaders' },
+                            { id: 'sfx', label: 'Sound FX' },
+                            { id: 'templates', label: 'Templates' },
+                        ].map((cat) => (
+                            <button
+                                key={cat.id}
+                                type="button"
+                                onClick={() => setAssetCategory(cat.id as any)}
+                                className={`px-2.5 py-1 rounded-lg shrink-0 font-medium transition cursor-pointer ${
+                                    assetCategory === cat.id
+                                        ? 'bg-[#0088ff] text-white shadow-xs'
+                                        : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                }`}
                             >
-                                <div className="w-10 h-8 rounded bg-black border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                                    {asset.thumbUrl || asset.dataUrl ? (
-                                        <img
-                                            src={asset.thumbUrl || asset.dataUrl}
-                                            alt={asset.name}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        <ImageIcon className="w-4 h-4 text-[#0088ff]" />
-                                    )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-[11px] font-medium text-white truncate">
-                                        {asset.name}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-[#a1a1aa]">
-                                        {asset.width}&times;{asset.height}
-                                    </div>
-                                </div>
-                            </div>
+                                {cat.label}
+                            </button>
                         ))}
                     </div>
-                </div>
-            )}
 
-            {/* AUDIO & SFX TAB */}
-            {activeTab === 'audio' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    <button
-                        type="button"
-                        onClick={onSelectAudioClick}
-                        className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-lg shadow-[#0088ff]/20"
-                    >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Audio Track</span>
-                    </button>
+                    {/* SUBCATEGORY 1: UPLOADS */}
+                    {assetCategory === 'uploads' && (
+                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+                            <button
+                                onClick={onUploadClick}
+                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span>Upload Media</span>
+                            </button>
 
-                    {audioLabel && (
-                        <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                                <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                                {assetList.map((asset) => (
+                                    <div
+                                        key={asset.id}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData(
+                                                'application/x-raylight-asset-id',
+                                                asset.id
+                                            );
+                                            e.dataTransfer.effectAllowed = 'copy';
+                                        }}
+                                        onClick={() => {
+                                            const created = addLayerToShot(activeShot.id, 'image', {
+                                                assetId: asset.id,
+                                                name: asset.name,
+                                                rotation: { x: 0, y: 0, z: 0 },
+                                                device: undefined,
+                                            });
+                                            setInspectorTab('layer');
+                                            selectLayer(created.id);
+                                        }}
+                                        className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition group"
+                                    >
+                                        <div className="w-10 h-8 rounded-lg bg-black border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                            {asset.thumbUrl || asset.dataUrl ? (
+                                                <img
+                                                    src={asset.thumbUrl || asset.dataUrl}
+                                                    alt={asset.name}
+                                                    className="w-full h-full object-cover"
+                                                />
+                                            ) : (
+                                                <ImageIcon className="w-4 h-4 text-[#0088ff]" />
+                                            )}
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-[11px] font-medium text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                                {asset.name}
+                                            </div>
+                                            <div className="text-[10px] font-mono text-[#a1a1aa]">
+                                                {asset.width}&times;{asset.height}
+                                            </div>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            title="Set as Canvas Background"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateProject((proj) => ({
+                                                    ...proj,
+                                                    background: {
+                                                        kind: 'image',
+                                                        assetId: asset.id,
+                                                        src: asset.dataUrl,
+                                                        color: '#000000',
+                                                        fit: 'cover',
+                                                        dim: 0,
+                                                        blur: 0,
+                                                        opacity: 1,
+                                                    },
+                                                    shots: proj.shots.map((s) => ({ ...s, useProjectBackground: true })),
+                                                }));
+                                            }}
+                                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-[#0088ff] text-[#c4c4cc] hover:text-white text-[10px] font-medium transition cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 shadow-xs"
+                                        >
+                                            Set Bg
+                                        </button>
+                                    </div>
+                                ))}
+                                {assetList.length === 0 && (
+                                    <div className="py-10 text-center text-xs text-[#71717a] border border-dashed border-white/10 rounded-xl p-4">
+                                        No uploaded media yet.<br />Click Upload Media to add photos or videos.
+                                    </div>
+                                )}
                             </div>
-                            <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
                         </div>
                     )}
 
-                    {/* Sound Search Bar */}
-                    <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search 150+ sound effects..."
-                            value={soundSearchQuery}
-                            onChange={(e) => setSoundSearchQuery(e.target.value)}
-                            className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
-                        />
-                        {soundSearchQuery && (
-                            <button
-                                type="button"
-                                onClick={() => setSoundSearchQuery('')}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
-                            >
-                                <X className="w-3 h-3" />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar">
-                        {['All', 'Ambience', 'Click', 'Glitch', 'Impact', 'Pop', 'Riser', 'Slide', 'Typing', 'UI', 'Whoosh'].map((cat) => (
-                            <button
-                                key={cat}
-                                type="button"
-                                onClick={() => setSelectedSfxCategory(cat)}
-                                className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedSfxCategory === cat
-                                    ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
-                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
-                                    }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center">
-                        <span>Curated Sound FX Library</span>
-                        <span>{filteredCuratedSounds.length} sounds</span>
-                    </div>
-
-                    {/* SFX List */}
-                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
-                        {filteredCuratedSounds.map((sound) => {
-                            const isPlaying = playingSfxId === sound.id;
-                            const durationFormatted = sound.durationMs >= 1000
-                                ? `${(sound.durationMs / 1000).toFixed(1)}s`
-                                : `${sound.durationMs}ms`;
-
-                            return (
+                    {/* SUBCATEGORY 2: 3D MOCKUPS */}
+                    {assetCategory === 'mockups' && (
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                            {[
+                                {
+                                    name: 'iPhone 15 Pro',
+                                    subtitle: 'Natural Titanium CAD',
+                                    badge: 'CAD Model',
+                                    color: 'from-blue-600/30 to-indigo-950/60',
+                                    device: { type: 'iphone' as const, color: 'titanium' as const, gloss: 0.5, glare: 1.0 },
+                                },
+                                {
+                                    name: 'iPhone 16 Pro',
+                                    subtitle: 'Space Black Titanium',
+                                    badge: 'CAD Model',
+                                    color: 'from-zinc-800/50 to-black',
+                                    device: { type: 'iphone' as const, color: 'space-black' as const, gloss: 0.6, glare: 1.0 },
+                                },
+                                {
+                                    name: 'MacBook Pro 16"',
+                                    subtitle: 'Space Black Unibody',
+                                    badge: '3D Laptop',
+                                    color: 'from-slate-800/40 to-zinc-950',
+                                    device: { type: 'macbook' as const, color: 'space-black' as const, gloss: 0.4, lidAngle: 110 },
+                                },
+                                {
+                                    name: 'iPad Pro',
+                                    subtitle: 'Silver Liquid Retina',
+                                    badge: '3D Tablet',
+                                    color: 'from-cyan-900/30 to-blue-950',
+                                    device: { type: 'ipad' as const, color: 'silver' as const, gloss: 0.4 },
+                                },
+                                {
+                                    name: 'Studio Display',
+                                    subtitle: 'Aluminum 5K Retina',
+                                    badge: '5K Display',
+                                    color: 'from-neutral-800/40 to-neutral-950',
+                                    device: { type: 'display' as const, color: 'silver' as const, gloss: 0.3 },
+                                },
+                            ].map((item) => (
                                 <div
-                                    key={sound.id}
-                                    className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                    key={item.name}
+                                    onClick={() => {
+                                        const created = addLayerToShot(activeShot.id, 'image', {
+                                            name: item.name,
+                                            device: item.device,
+                                            receivesLight: true,
+                                        });
+                                        setInspectorTab('layer');
+                                        selectLayer(created.id);
+                                    }}
+                                    className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition cursor-pointer flex flex-col gap-2 group shadow-sm"
                                 >
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-xs font-semibold text-white truncate">
-                                                {sound.name}
-                                            </span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
-                                                {durationFormatted}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
-                                                {sound.category}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
-                                            title={isPlaying ? "Pause Preview" : "Preview Sound"}
-                                            aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
-                                            className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
-                                                ? 'bg-[#0088ff] text-white border-[#38bdf8]'
-                                                : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
-                                                }`}
-                                        >
-                                            {isPlaying ? (
-                                                <Pause className="w-3.5 h-3.5 fill-current" />
-                                            ) : (
-                                                <Play className="w-3.5 h-3.5 fill-current" />
-                                            )}
-                                        </button>
-
-                                        <button
-                                            type="button"
-                                            onClick={() => {
-                                                const clip: AudioClip = {
-                                                    id: `sfx-${sound.id}-${Date.now()}`,
-                                                    name: sound.name,
-                                                    dataUrl: sound.getUrl(),
-                                                    startMs: usePlayheadStore.getState().currentTimeMs,
-                                                    durationMs: sound.durationMs,
-                                                    offsetMs: 0,
-                                                    volume: 1,
-                                                    muted: false,
-                                                };
-                                                updateProject((p) => ({
-                                                    ...p,
-                                                    audio: {
-                                                        clips: [...(p.audio?.clips || []), clip],
-                                                        muted: p.audio?.muted || false,
-                                                        masterVolume: p.audio?.masterVolume ?? 1,
-                                                    },
-                                                }));
-                                            }}
-                                            title="Add to Timeline at Playhead"
-                                            aria-label={`Add ${sound.name} to Timeline at playhead`}
-                                            className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
-                                        >
-                                            <Plus className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                        {filteredCuratedSounds.length === 0 && (
-                            <div className="py-8 text-center text-xs text-[#71717a]">
-                                No sound effects match &quot;{soundSearchQuery}&quot;
-                            </div>
-                        )}
-                    </div>
-                </div>
-            )}
-
-            {/* TEMPLATES TAB */}
-            {activeTab === 'templates' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
-                        {['All', 'Device Showcase', 'Product Walkthrough', 'Cinematic Studio', 'Social & Vertical'].map((cat) => (
-                            <button
-                                key={cat}
-                                type="button"
-                                onClick={() => setSelectedTemplateCategory(cat)}
-                                className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedTemplateCategory === cat
-                                    ? 'bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/40'
-                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
-                                    }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
-
-                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center shrink-0">
-                        <span>Curated Starters</span>
-                        <span>{filteredTemplates.length} templates</span>
-                    </div>
-
-                    {/* Template Cards List */}
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-0.5">
-                        {filteredTemplates.map((tpl) => {
-                            const isLoaded = loadedTemplateId === tpl.id;
-                            const IconComponent = tpl.id.includes('iphone')
-                                ? Smartphone
-                                : tpl.id.includes('macbook')
-                                    ? Laptop
-                                    : tpl.id.includes('neon')
-                                        ? Flame
-                                        : Tv;
-
-                            return (
-                                <div
-                                    key={tpl.id}
-                                    className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition flex flex-col gap-2.5 group shadow-sm"
-                                >
-                                    {/* Visual Banner Preview */}
-                                    <div className={`h-20 rounded-lg bg-gradient-to-br ${tpl.thumbnailColor} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
+                                    <div className={`h-16 rounded-lg bg-gradient-to-br ${item.color} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
                                         <div className="flex items-center gap-2 z-10">
-                                            <div className="w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
-                                                <IconComponent className="w-4 h-4 text-amber-400" />
+                                            <div className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
+                                                <Smartphone className="w-4 h-4 text-[#0088ff]" />
                                             </div>
                                             <div>
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-[#d4d4d8] font-mono uppercase tracking-wider backdrop-blur-sm border border-white/10">
-                                                    {tpl.badge}
-                                                </span>
+                                                <div className="text-xs font-semibold text-white tracking-tight">{item.name}</div>
+                                                <div className="text-[10px] text-[#a1a1aa]">{item.subtitle}</div>
                                             </div>
                                         </div>
-                                        <div className="z-10 flex items-center gap-1">
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
-                                                {tpl.aspectRatio}
-                                            </span>
-                                        </div>
-                                        {/* Subtle ambient glow decoration */}
-                                        <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
+                                        <span className="z-10 text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
+                                            {item.badge}
+                                        </span>
                                     </div>
-
-                                    {/* Details */}
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-white tracking-tight group-hover:text-amber-400 transition-colors">
-                                            {tpl.name}
-                                        </h4>
-                                        <p className="text-[11px] text-[#a1a1aa] mt-1 line-clamp-2 leading-relaxed">
-                                            {tpl.description}
-                                        </p>
-                                    </div>
-
-                                    {/* Action Button */}
                                     <button
                                         type="button"
-                                        onClick={() => handleLoadTemplate(tpl)}
-                                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm ${isLoaded
-                                            ? 'bg-emerald-600 text-white border border-emerald-500'
-                                            : 'bg-[#f59e0b] hover:bg-[#d97706] text-black hover:text-black font-medium'
-                                            }`}
+                                        className="w-full py-1.5 px-3 rounded-lg bg-white/5 group-hover:bg-[#0088ff] text-[#d4d4d8] group-hover:text-white text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5"
                                     >
-                                        {isLoaded ? (
-                                            <>
-                                                <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                                                <span>Template Loaded!</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="w-3.5 h-3.5 fill-current" />
-                                                <span>Use Template</span>
-                                            </>
-                                        )}
+                                        <Plus className="w-3.5 h-3.5" />
+                                        <span>Add {item.name}</span>
                                     </button>
                                 </div>
-                            );
-                        })}
-                    </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* SUBCATEGORY 3: SHADERS */}
+                    {assetCategory === 'shaders' && (
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                            <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center">
+                                <span>Animated Shader Presets</span>
+                                <span>{SHADER_PRESETS.length} presets</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {SHADER_PRESETS.map((p) => {
+                                    const meta = SHADER_PRESET_METADATA[p];
+                                    const cfg = DEFAULT_SHADER_CONFIGS[p];
+                                    const pColors = cfg?.colors?.length ? cfg.colors : [cfg?.color || '#3b82f6', cfg?.backgroundColor || '#05050a'];
+                                    const c1 = pColors[0];
+                                    const c2 = pColors[1] || pColors[0];
+
+                                    return (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => {
+                                                updateProject((proj) => ({
+                                                    ...proj,
+                                                    background: {
+                                                        kind: 'shader',
+                                                        preset: p,
+                                                        color: c1,
+                                                        backgroundColor: c2,
+                                                        color1: c1,
+                                                        color2: c2,
+                                                        color3: pColors[2] || '#06b6d4',
+                                                        colors: pColors,
+                                                        speed: cfg?.speed ?? 1,
+                                                        waves: cfg?.waves ?? 1,
+                                                        noiseScale: cfg?.waves ?? 1,
+                                                        focus: cfg?.focus ?? 1,
+                                                        glow: cfg?.glow ?? 1,
+                                                        shine: cfg?.shine ?? 1,
+                                                        angle: cfg?.angle ?? 28,
+                                                    },
+                                                    shots: proj.shots.map((s) => ({ ...s, useProjectBackground: true })),
+                                                }));
+                                            }}
+                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.08] hover:border-[#0088ff] text-left transition cursor-pointer flex flex-col gap-1.5 group shadow-xs"
+                                        >
+                                            <div
+                                                className="w-full h-12 rounded-lg border border-white/10 relative overflow-hidden group-hover:scale-105 transition-transform"
+                                                style={{
+                                                    background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+                                                }}
+                                            />
+                                            <div>
+                                                <div className="text-[11px] font-semibold text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                                    {meta?.label || p}
+                                                </div>
+                                                <div className="text-[10px] text-[#71717a] truncate">
+                                                    Procedural GLSL
+                                                </div>
+                                            </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SUBCATEGORY 4: SOUND FX */}
+                    {assetCategory === 'sfx' && (
+                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+                            <button
+                                type="button"
+                                onClick={onSelectAudioClick}
+                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Upload Audio Track</span>
+                            </button>
+
+                            {audioLabel && (
+                                <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
+                                    </div>
+                                    <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
+                                </div>
+                            )}
+
+                            {/* Sound Search Bar */}
+                            <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Search 150+ sound effects..."
+                                    value={soundSearchQuery}
+                                    onChange={(e) => setSoundSearchQuery(e.target.value)}
+                                    className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
+                                />
+                                {soundSearchQuery && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setSoundSearchQuery('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
+                                    >
+                                        <X className="w-3 h-3" />
+                                    </button>
+                                )}
+                            </div>
+
+                            {/* Category Filter Pills */}
+                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
+                                {['All', 'Ambience', 'Click', 'Glitch', 'Impact', 'Pop', 'Riser', 'Slide', 'Typing', 'UI', 'Whoosh'].map((cat) => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setSelectedSfxCategory(cat)}
+                                        className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${
+                                            selectedSfxCategory === cat
+                                                ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
+                                                : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                        }`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* SFX List */}
+                            <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+                                {filteredCuratedSounds.map((sound) => {
+                                    const isPlaying = playingSfxId === sound.id;
+                                    const durationFormatted = sound.durationMs >= 1000
+                                        ? `${(sound.durationMs / 1000).toFixed(1)}s`
+                                        : `${sound.durationMs}ms`;
+
+                                    return (
+                                        <div
+                                            key={sound.id}
+                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-semibold text-white truncate">
+                                                        {sound.name}
+                                                    </span>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
+                                                        {durationFormatted}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
+                                                        {sound.category}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
+                                                    title={isPlaying ? "Pause Preview" : "Preview Sound"}
+                                                    aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
+                                                    className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
+                                                        ? 'bg-[#0088ff] text-white border-[#38bdf8]'
+                                                        : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
+                                                        }`}
+                                                >
+                                                    {isPlaying ? (
+                                                        <Pause className="w-3.5 h-3.5 fill-current" />
+                                                    ) : (
+                                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const clip: AudioClip = {
+                                                            id: `sfx-${sound.id}-${Date.now()}`,
+                                                            name: sound.name,
+                                                            dataUrl: sound.getUrl(),
+                                                            startMs: usePlayheadStore.getState().currentTimeMs,
+                                                            durationMs: sound.durationMs,
+                                                            offsetMs: 0,
+                                                            volume: 1,
+                                                            muted: false,
+                                                        };
+                                                        updateProject((p) => ({
+                                                            ...p,
+                                                            audio: {
+                                                                clips: [...(p.audio?.clips || []), clip],
+                                                                muted: p.audio?.muted || false,
+                                                                masterVolume: p.audio?.masterVolume ?? 1,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    title="Add to Timeline at Playhead"
+                                                    aria-label={`Add ${sound.name} to Timeline at playhead`}
+                                                    className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {filteredCuratedSounds.length === 0 && (
+                                    <div className="py-8 text-center text-xs text-[#71717a]">
+                                        No sound effects match &quot;{soundSearchQuery}&quot;
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* SUBCATEGORY 5: TEMPLATES */}
+                    {assetCategory === 'templates' && (
+                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+                            {/* Category Filter Pills */}
+                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
+                                {['All', 'Device Showcase', 'Product Walkthrough', 'Cinematic Studio', 'Social & Vertical'].map((cat) => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setSelectedTemplateCategory(cat)}
+                                        className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
+                                            selectedTemplateCategory === cat
+                                                ? 'bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/40'
+                                                : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                        }`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* Template Cards List */}
+                            <div className="flex-1 overflow-y-auto space-y-3 pr-0.5">
+                                {filteredTemplates.map((tpl) => {
+                                    const isLoaded = loadedTemplateId === tpl.id;
+                                    const IconComponent = tpl.id.includes('iphone')
+                                        ? Smartphone
+                                        : tpl.id.includes('macbook')
+                                            ? Laptop
+                                            : tpl.id.includes('neon')
+                                                ? Flame
+                                                : Tv;
+
+                                    return (
+                                        <div
+                                            key={tpl.id}
+                                            className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition flex flex-col gap-2.5 group shadow-sm"
+                                        >
+                                            <div className={`h-20 rounded-lg bg-gradient-to-br ${tpl.thumbnailColor} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
+                                                <div className="flex items-center gap-2 z-10">
+                                                    <div className="w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
+                                                        <IconComponent className="w-4 h-4 text-amber-400" />
+                                                    </div>
+                                                    <div>
+                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-[#d4d4d8] font-mono uppercase tracking-wider backdrop-blur-sm border border-white/10">
+                                                            {tpl.badge}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                                <div className="z-10 flex items-center gap-1">
+                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
+                                                        {tpl.aspectRatio}
+                                                    </span>
+                                                </div>
+                                                <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
+                                            </div>
+
+                                            <div>
+                                                <h4 className="text-xs font-semibold text-white tracking-tight group-hover:text-amber-400 transition-colors">
+                                                    {tpl.name}
+                                                </h4>
+                                                <p className="text-[11px] text-[#a1a1aa] mt-1 line-clamp-2 leading-relaxed">
+                                                    {tpl.description}
+                                                </p>
+                                            </div>
+
+                                            <button
+                                                type="button"
+                                                onClick={() => handleLoadTemplate(tpl)}
+                                                className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm ${
+                                                    isLoaded
+                                                        ? 'bg-emerald-600 text-white border border-emerald-500'
+                                                        : 'bg-[#f59e0b] hover:bg-[#d97706] text-black font-medium'
+                                                }`}
+                                            >
+                                                {isLoaded ? (
+                                                    <>
+                                                        <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
+                                                        <span>Template Loaded!</span>
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <Sparkles className="w-3.5 h-3.5 fill-current" />
+                                                        <span>Use Template</span>
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </aside>

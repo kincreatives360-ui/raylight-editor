@@ -1,6 +1,14 @@
-import { ColorField } from './ColorPicker';
-// src/panels/Inspector/RightSidebar.tsx
-import React, { useState, useRef } from 'react';
+import { ColorField, ColorPicker } from './ColorPicker';
+import {
+    SHADER_PRESETS,
+    SHADER_PRESET_METADATA,
+    DEFAULT_SHADER_CONFIGS,
+    isPaletteShader,
+    type ShaderPreset,
+} from '../../model/backgroundPresets';
+import { saveImageAsset } from './imageAssetHelper';
+import { RAYLIGHT_COLOR_PALETTE } from '../../model/types';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     AlignLeft,
     AlignCenterHorizontal,
@@ -46,19 +54,14 @@ import type {
     Vec3,
     PresetEasingName,
     SpringEasingName,
+    Background,
 } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { degToRad, radToDeg } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
-import { ASPECT_RATIO_CONFIG } from '../../stage/stageUtils';
 import { ScrubInput } from '../../ui/ScrubInput';
-import { SceneEffectsSection } from './sections/SceneEffectsSection';
-import { BackgroundSection } from './sections/BackgroundSection';
-import { SceneTransitionSection } from './sections/SceneTransitionSection';
-import { CameraSection } from './sections/CameraSection';
-import { LightingSection } from './sections/LightingSection';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
@@ -72,6 +75,1151 @@ const ALL_BLEND_MODES: BlendMode[] = [
     'add',
     'difference',
 ];
+
+const SHADER_STUDIO_PALETTES = [
+    { name: 'Electric', colors: ['#4f46e5', '#ec4899', '#06b6d4'] },
+    { name: 'Aurora', colors: ['#0f172a', '#10b981', '#6366f1'] },
+    { name: 'Chrome', colors: ['#1e293b', '#94a3b8', '#f8fafc'] },
+    { name: 'Sunset', colors: ['#450a0a', '#ea580c', '#facc15'] },
+    { name: 'Royal', colors: ['#030712', '#3b82f6', '#a855f7'] },
+];
+
+interface ShaderPreviewCanvasProps {
+    preset: ShaderPreset;
+    color1: string;
+    color2: string;
+    color3: string;
+    colors?: string[];
+    speed?: number;
+    waves?: number;
+    focus?: number;
+    glow?: number;
+    shine?: number;
+}
+
+const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
+    preset,
+    color1,
+    color2,
+    color3,
+    colors = [],
+    speed = 1,
+    waves = 1,
+    focus = 1,
+    glow = 1,
+    shine = 1,
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let animId: number;
+        let time = 0;
+        let last = performance.now();
+
+        const render = (now: number) => {
+            const dt = (now - last) / 1000;
+            last = now;
+            time += Math.min(dt, 0.1) * (speed || 1);
+
+            const w = canvas.clientWidth || 280;
+            const h = canvas.clientHeight || 80;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+
+            ctx.clearRect(0, 0, w, h);
+
+            const c1 = color1 || '#3b82f6';
+            const c2 = color2 || '#1e293b';
+            const c3 = color3 || '#a855f7';
+            const cList = colors.length > 0 ? colors : [c1, c2, c3];
+
+            switch (preset) {
+                case 'liquidMetal': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c2);
+                    grad.addColorStop(0.5, c1);
+                    grad.addColorStop(1, '#05070d');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let i = 0; i < 4; i++) {
+                        const phase = time * 1.5 + i * 1.2;
+                        const yMid = (h * 0.25) + (i * h * 0.22) + Math.sin(phase) * 8;
+                        const waveGrad = ctx.createLinearGradient(0, yMid - 15, w, yMid + 15);
+                        waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                        waveGrad.addColorStop(0.35, c1);
+                        waveGrad.addColorStop(0.5, '#ffffff');
+                        waveGrad.addColorStop(0.7, c3);
+                        waveGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+                        ctx.beginPath();
+                        ctx.moveTo(0, yMid);
+                        for (let x = 0; x <= w; x += 10) {
+                            const y = yMid + Math.sin(x * 0.025 * waves + phase) * (10 + i * 2)
+                                          + Math.cos(x * 0.04 - phase * 0.8) * 5;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.lineTo(0, h);
+                        ctx.closePath();
+                        ctx.fillStyle = waveGrad;
+                        ctx.globalAlpha = 0.55 * glow;
+                        ctx.fill();
+                    }
+
+                    const glintX = ((time * 60) % (w + 100)) - 50;
+                    const glintGrad = ctx.createLinearGradient(glintX - 30, 0, glintX + 30, h);
+                    glintGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                    glintGrad.addColorStop(0.5, `rgba(255,255,255,${0.45 * shine})`);
+                    glintGrad.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = glintGrad;
+                    ctx.globalAlpha = 1;
+                    ctx.fillRect(0, 0, w, h);
+                    break;
+                }
+
+                case 'waterPlane': {
+                    const baseGrad = ctx.createLinearGradient(0, 0, 0, h);
+                    baseGrad.addColorStop(0, c1);
+                    baseGrad.addColorStop(1, c2);
+                    ctx.fillStyle = baseGrad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.2;
+                    ctx.strokeStyle = c3;
+                    ctx.globalAlpha = 0.45 * glow;
+                    for (let x = 0; x < w; x += 18) {
+                        ctx.beginPath();
+                        for (let y = 0; y <= h; y += 6) {
+                            const dx = Math.sin(y * 0.06 + time * 1.8) * 8 * waves
+                                     + Math.cos(x * 0.05 + time) * 4;
+                            if (y === 0) ctx.moveTo(x + dx, y);
+                            else ctx.lineTo(x + dx, y);
+                        }
+                        ctx.stroke();
+                    }
+                    for (let y = 0; y < h; y += 14) {
+                        ctx.beginPath();
+                        for (let x = 0; x <= w; x += 8) {
+                            const dy = Math.cos(x * 0.06 - time * 1.5) * 6 * waves
+                                     + Math.sin(y * 0.05 + time * 0.7) * 4;
+                            if (x === 0) ctx.moveTo(x, y + dy);
+                            else ctx.lineTo(x, y + dy);
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'meshAurora': {
+                    ctx.fillStyle = c2 || '#050814';
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let k = 0; k < 3; k++) {
+                        const phase = time * 1.2 + k * 1.8;
+                        const rGrad = ctx.createLinearGradient(0, 0, 0, h);
+                        rGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                        rGrad.addColorStop(0.3, k === 0 ? c1 : k === 1 ? c3 : '#60a5fa');
+                        rGrad.addColorStop(0.8, c2);
+                        rGrad.addColorStop(1, '#000000');
+
+                        ctx.beginPath();
+                        ctx.moveTo(0, h);
+                        for (let x = 0; x <= w; x += 6) {
+                            const yTop = (h * 0.15) + Math.sin(x * 0.02 * waves + phase) * 14
+                                         + Math.cos(x * 0.045 - phase * 0.7) * 8;
+                            ctx.lineTo(x, yTop);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.closePath();
+                        ctx.fillStyle = rGrad;
+                        ctx.globalAlpha = 0.6 * glow;
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'sphereGradient': {
+                    ctx.fillStyle = c2 || '#090d16';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5 + Math.sin(time * 0.8) * 20;
+                    const cy = h * 0.5 + Math.cos(time * 0.6) * 6;
+                    const r = (h * 0.38) * (1 + Math.sin(time * 1.5) * 0.08);
+
+                    const corona = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 2.2);
+                    corona.addColorStop(0, c3);
+                    corona.addColorStop(0.4, c1);
+                    corona.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = corona;
+                    ctx.globalAlpha = 0.5 * glow;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const orb = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.05, cx, cy, r);
+                    orb.addColorStop(0, '#ffffff');
+                    orb.addColorStop(0.3, c1);
+                    orb.addColorStop(0.8, c3);
+                    orb.addColorStop(1, c2);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.fillStyle = orb;
+                    ctx.globalAlpha = 0.95;
+                    ctx.fill();
+                    break;
+                }
+
+                case 'topography': {
+                    ctx.fillStyle = '#050709';
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.3;
+                    for (let c = 0; c < 7; c++) {
+                        const yBase = (c / 6) * h;
+                        const phase = time * 0.8 + c * 0.6;
+                        ctx.strokeStyle = c % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = 0.7 * glow;
+                        ctx.beginPath();
+                        for (let x = 0; x <= w; x += 6) {
+                            const y = yBase + Math.sin(x * 0.03 * waves + phase) * 9
+                                          + Math.cos(x * 0.06 - phase * 0.5) * 4;
+                            if (x === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'hyperspeed': {
+                    ctx.fillStyle = '#030712';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5;
+                    const cy = h * 0.5;
+                    ctx.lineWidth = 1.5;
+
+                    for (let i = 0; i < 28; i++) {
+                        const angle = (i / 28) * Math.PI * 2 + 0.1;
+                        const distPhase = ((time * 1.5 + (i * 0.23)) % 1);
+                        const r1 = distPhase * (w * 0.1);
+                        const r2 = r1 + distPhase * (w * 0.35);
+
+                        const x1 = cx + Math.cos(angle) * r1;
+                        const y1 = cy + Math.sin(angle) * r1 * 0.6;
+                        const x2 = cx + Math.cos(angle) * r2;
+                        const y2 = cy + Math.sin(angle) * r2 * 0.6;
+
+                        ctx.strokeStyle = i % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = distPhase * 0.85 * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'plasma': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c2);
+                    grad.addColorStop(0.5, c1);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let j = 0; j < 3; j++) {
+                        const px = w * 0.5 + Math.sin(time * 1.2 + j * 2.1) * (w * 0.3);
+                        const py = h * 0.5 + Math.cos(time * 0.9 + j * 1.7) * (h * 0.3);
+                        const rad = ctx.createRadialGradient(px, py, 4, px, py, h * 0.6);
+                        rad.addColorStop(0, j === 0 ? '#ffffff' : c1);
+                        rad.addColorStop(0.5, c3);
+                        rad.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = rad;
+                        ctx.globalAlpha = 0.5 * glow;
+                        ctx.fillRect(0, 0, w, h);
+                    }
+                    break;
+                }
+
+                case 'dither': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c1);
+                    grad.addColorStop(0.5, c2);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.globalAlpha = 0.18 * shine;
+                    const shift = Math.floor(time * 4) % 4;
+                    for (let x = 0; x < w; x += 4) {
+                        for (let y = 0; y < h; y += 4) {
+                            if ((x + y + shift) % 8 === 0) {
+                                ctx.fillRect(x, y, 2, 2);
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                case 'threads': {
+                    ctx.fillStyle = '#050811';
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.4;
+                    for (let t = 0; t < 6; t++) {
+                        const phase = time * 1.4 + t * 1.1;
+                        ctx.strokeStyle = t % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = 0.8 * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(0, (t / 5) * h);
+                        ctx.bezierCurveTo(
+                            w * 0.33, (h * 0.8) * Math.sin(phase),
+                            w * 0.66, h - (h * 0.8) * Math.cos(phase),
+                            w, ((5 - t) / 5) * h
+                        );
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'chromaticWaves': {
+                    ctx.fillStyle = c2 || '#0b0f19';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const offsets = [
+                        { color: c1, dx: Math.sin(time * 1.6) * 6, alpha: 0.65 },
+                        { color: c3, dx: -Math.cos(time * 1.4) * 6, alpha: 0.65 },
+                        { color: '#ffffff', dx: 0, alpha: 0.3 },
+                    ];
+
+                    for (const o of offsets) {
+                        ctx.fillStyle = o.color;
+                        ctx.globalAlpha = o.alpha * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(0, h);
+                        for (let x = 0; x <= w; x += 8) {
+                            const y = h * 0.5 + Math.sin((x + o.dx) * 0.03 * waves + time * 1.8) * 16;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'prism': {
+                    ctx.fillStyle = c2 || '#07090e';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const sx = 0;
+                    const sy = 0;
+                    const fanColors = cList.length >= 3 ? cList : ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+                    for (let f = 0; f < fanColors.length; f++) {
+                        const angle = 0.2 + (f / fanColors.length) * 0.9 + Math.sin(time * 0.8) * 0.05;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(w, Math.tan(angle) * w);
+                        ctx.lineTo(w, Math.tan(angle + 0.15) * w);
+                        ctx.closePath();
+                        ctx.fillStyle = fanColors[f];
+                        ctx.globalAlpha = 0.45 * glow;
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'halo': {
+                    ctx.fillStyle = c2 || '#090a0f';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5 + Math.sin(time) * 10;
+                    const cy = h * 0.55;
+                    const rx = w * 0.4;
+                    const ry = h * 0.32;
+
+                    ctx.lineWidth = 3.5 * shine;
+                    ctx.strokeStyle = c1;
+                    ctx.globalAlpha = 0.85 * glow;
+                    ctx.beginPath();
+                    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = c3;
+                    ctx.stroke();
+                    break;
+                }
+
+                default: {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c1);
+                    grad.addColorStop(0.5, c2);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let s = 0; s < 2; s++) {
+                        const phase = time * 1.2 + s * Math.PI;
+                        ctx.beginPath();
+                        ctx.moveTo(0, h * 0.5);
+                        for (let x = 0; x <= w; x += 10) {
+                            const y = h * 0.5 + Math.sin(x * 0.02 * waves + phase) * 14;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.lineTo(0, h);
+                        ctx.closePath();
+                        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                        ctx.globalAlpha = 0.5 * shine;
+                        ctx.fill();
+                    }
+                    break;
+                }
+            }
+
+            ctx.globalAlpha = 1;
+            animId = requestAnimationFrame(render);
+        };
+
+        animId = requestAnimationFrame(render);
+        return () => cancelAnimationFrame(animId);
+    }, [preset, color1, color2, color3, colors, speed, waves, focus, glow, shine]);
+
+    return (
+        <div className="w-full h-full relative overflow-hidden transition-transform duration-500 group-hover:scale-105">
+            <canvas ref={canvasRef} className="w-full h-full block" />
+            <div className="absolute inset-0 bg-black/15 pointer-events-none" />
+        </div>
+    );
+};
+
+interface ProjectSettingsPanelProps {
+    onSwapImageClick?: () => void;
+}
+
+const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
+    onSwapImageClick: _onSwapImageClick,
+}) => {
+    const { project, updateProject } = useProjectStore();
+    const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const bg = project.background;
+    const bgMode: 'color' | 'image' | 'shader' =
+        bg.kind === 'shader' ? 'shader' : bg.kind === 'image' ? 'image' : 'color';
+
+    // Synchronize project background changes to all shots that inherit project background
+    const setProjectBackground = (newBg: Background) => {
+        updateProject((p) => ({
+            ...p,
+            background: newBg,
+            shots: p.shots.map((s) => ({
+                ...s,
+                useProjectBackground: true,
+            })),
+        }));
+    };
+
+    const handleModeChange = (mode: 'color' | 'image' | 'shader') => {
+        if (mode === bgMode) return;
+        if (mode === 'shader') {
+            const currentPreset: ShaderPreset = bg.kind === 'shader' ? bg.preset : 'silkFlow';
+            const cfg = DEFAULT_SHADER_CONFIGS[currentPreset] || DEFAULT_SHADER_CONFIGS.silkFlow;
+            let c1 = cfg.colors?.[0] || cfg.color || '#4f46e5';
+            let c2 = cfg.colors?.[1] || cfg.backgroundColor || '#ec4899';
+            let c3 = cfg.colors?.[2] || '#06b6d4';
+
+            if (bg.kind === 'solid') {
+                c1 = bg.color;
+            } else if (bg.kind === 'gradient' && bg.stops.length >= 2) {
+                c1 = bg.stops[0].color;
+                c2 = bg.stops[1].color;
+                if (bg.stops[2]) c3 = bg.stops[2].color;
+            }
+
+            setProjectBackground({
+                kind: 'shader',
+                preset: currentPreset,
+                color: c1,
+                colors: [c1, c2, c3],
+                color1: c1,
+                color2: c2,
+                color3: c3,
+                backgroundColor: c2,
+                speed: cfg.speed ?? 0.8,
+                waves: cfg.waves ?? 1.2,
+                noiseScale: cfg.waves ?? 1.2,
+                focus: cfg.focus ?? 1,
+                glow: cfg.glow ?? 0.85,
+                shine: cfg.shine ?? 0.6,
+                angle: cfg.angle ?? 28,
+            });
+        } else if (mode === 'image') {
+            const prevImageBg = bg.kind === 'image' ? bg : undefined;
+            const existingAsset = Object.values(project.assets || {}).find((a) => a.mimeType?.startsWith('image/'));
+            const letterboxColor = prevImageBg?.color || (bg.kind === 'shader' ? (bg.backgroundColor || '#000000') : '#000000');
+            setProjectBackground({
+                kind: 'image',
+                src: prevImageBg?.src || existingAsset?.dataUrl,
+                assetId: prevImageBg?.assetId || existingAsset?.id,
+                color: letterboxColor,
+                fit: prevImageBg?.fit || 'cover',
+                opacity: prevImageBg?.opacity ?? 1,
+                dim: prevImageBg?.dim ?? 0,
+                blur: prevImageBg?.blur ?? 0,
+            });
+        } else {
+            // mode === 'color' - Default to solid color, never reset existing color or force gradient
+            if (bg.kind === 'solid' || bg.kind === 'gradient') return;
+            let baseColor = '#0c0e17';
+            if (bg.kind === 'shader') {
+                baseColor = bg.color1 || bg.colors?.[0] || bg.color || '#0c0e17';
+            } else if (bg.kind === 'image' && bg.color) {
+                baseColor = bg.color;
+            }
+            setProjectBackground({
+                kind: 'solid',
+                color: baseColor,
+            });
+        }
+    };
+
+    const shaderBg = bg.kind === 'shader' ? bg : null;
+    const currentPreset = shaderBg?.preset || 'silkFlow';
+    const currentMeta = SHADER_PRESET_METADATA[currentPreset];
+    const isPalette = isPaletteShader(currentPreset);
+
+    const shaderColor1 = shaderBg?.color1 || shaderBg?.colors?.[0] || shaderBg?.color || '#4f46e5';
+    const shaderColor2 = shaderBg?.color2 || shaderBg?.colors?.[1] || shaderBg?.backgroundColor || '#ec4899';
+    const shaderColor3 = shaderBg?.color3 || shaderBg?.colors?.[2] || '#06b6d4';
+
+    const updateShaderKnob = (
+        knob: 'speed' | 'waves' | 'noiseScale' | 'focus' | 'glow' | 'shine',
+        val: number
+    ) => {
+        if (!shaderBg) return;
+        setProjectBackground({
+            ...shaderBg,
+            [knob]: val,
+            ...(knob === 'waves' ? { noiseScale: val } : {}),
+        });
+    };
+
+    const updateShaderColors = (c1?: string, c2?: string, c3?: string) => {
+        if (!shaderBg) return;
+        const col1 = c1 ?? shaderColor1;
+        const col2 = c2 ?? shaderColor2;
+        const col3 = c3 ?? shaderColor3;
+        setProjectBackground({
+            ...shaderBg,
+            color: col1,
+            backgroundColor: col2,
+            color1: col1,
+            color2: col2,
+            color3: col3,
+            colors: [col1, col2, col3],
+        });
+    };
+
+    const selectShaderPreset = (p: ShaderPreset) => {
+        const cfg = DEFAULT_SHADER_CONFIGS[p] || DEFAULT_SHADER_CONFIGS.silk;
+        const pColors = cfg.colors?.length ? [...cfg.colors] : [cfg.color, cfg.backgroundColor || '#05050a'];
+        const c1 = pColors[0] || cfg.color || '#4f46e5';
+        const c2 = pColors[1] || cfg.backgroundColor || '#ec4899';
+        const c3 = pColors[2] || (pColors.length > 2 ? pColors[2] : '#06b6d4');
+
+        setProjectBackground({
+            kind: 'shader',
+            preset: p,
+            color: cfg.color || c1,
+            backgroundColor: cfg.backgroundColor || c2,
+            color1: c1,
+            color2: c2,
+            color3: c3,
+            colors: pColors,
+            speed: cfg.speed ?? 1,
+            waves: cfg.waves ?? 1,
+            noiseScale: cfg.waves ?? 1,
+            focus: cfg.focus ?? 1,
+            glow: cfg.glow ?? 1,
+            shine: cfg.shine ?? 1,
+            angle: cfg.angle ?? 28,
+        });
+        setPresetMenuOpen(false);
+    };
+
+    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        saveImageAsset({
+            file,
+            updateProject,
+            onSave: (assetId, dataUrl) => {
+                setProjectBackground({
+                    kind: 'image',
+                    assetId,
+                    src: dataUrl,
+                    color: bg.kind === 'image' ? bg.color || '#000000' : '#000000',
+                    fit: bg.kind === 'image' ? bg.fit || 'cover' : 'cover',
+                    dim: bg.kind === 'image' ? bg.dim ?? 0 : 0,
+                    blur: bg.kind === 'image' ? bg.blur ?? 0 : 0,
+                    opacity: 1,
+                });
+            },
+        });
+        if (e.target) e.target.value = '';
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto px-4 py-3.5 flex flex-col justify-between select-none">
+            <div className="space-y-4">
+                {/* Title */}
+                <h2 className="text-[13px] font-semibold text-white tracking-wide">Project</h2>
+
+                {/* Name */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Name</label>
+                    <input
+                        type="text"
+                        value={project.name}
+                        onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="Untitled project"
+                        className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
+                    />
+                </div>
+
+                {/* Aspect Ratio */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Aspect Ratio</label>
+                    <div className="relative">
+                        <select
+                            value={project.aspectRatio}
+                            onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
+                            className="w-full h-8 px-3 pr-8 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none appearance-none cursor-pointer focus:border-white/20 transition"
+                        >
+                            <option value="16:9">Landscape 16:9</option>
+                            <option value="9:16">Portrait 9:16</option>
+                            <option value="1:1">Square 1:1</option>
+                            <option value="4:3">Standard 4:3</option>
+                            <option value="3:2">Photo 3:2</option>
+                            <option value="21:9">Cinema 21:9</option>
+                            <option value="4:5">Social 4:5</option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Lens */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Lens</label>
+                    <ScrubInput
+                        label={<span className="text-[#71717a] font-medium mr-1.5">F</span>}
+                        value={project.defaultCamera?.focalLength ?? 50}
+                        min={14}
+                        max={200}
+                        step={1}
+                        unit=" mm"
+                        onChange={(val) => {
+                            updateProject((p) => ({
+                                ...p,
+                                defaultCamera: {
+                                    position: p.defaultCamera?.position ?? { x: 0, y: 0, z: 2.65 },
+                                    rotation: p.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                                    focalLength: Math.max(14, Math.min(200, val)),
+                                },
+                            }));
+                        }}
+                        className="h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[12px] text-white hover:border-white/20 transition cursor-ew-resize"
+                    />
+                </div>
+
+                {/* Background Section */}
+                <div className="space-y-2.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>
+                    {/* 3-segmented button */}
+                    <div className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5">
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('color')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'color'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Color
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('image')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'image'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Image
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('shader')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'shader'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Shader
+                        </button>
+                    </div>
+
+                    {/* Mode == 'color' */}
+                    {bgMode === 'color' && (
+                        <div className="space-y-2.5 pt-0.5">
+                            <label className="text-[11px] text-[#8e8e93] block font-normal">Color & Gradient</label>
+                            <ColorPicker
+                                color={bg.kind === 'solid' ? bg.color : (bg.kind === 'gradient' ? bg.stops[0]?.color || '#090a12' : '#000000')}
+                                gradientValue={bg.kind === 'gradient' ? {
+                                    angle: bg.angle || 135,
+                                    gradientType: (bg.gradientType === 'angular' ? 'linear' : bg.gradientType) || 'linear',
+                                    stops: bg.stops,
+                                } : undefined}
+                                showGradientMode={true}
+                                onChange={(c) => {
+                                    setProjectBackground({ kind: 'solid', color: c });
+                                }}
+                                onGradientChange={(g) => {
+                                    setProjectBackground({
+                                        kind: 'gradient',
+                                        angle: g.angle,
+                                        gradientType: g.gradientType || 'linear',
+                                        stops: g.stops,
+                                    });
+                                }}
+                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2.5 text-[12px] text-white cursor-pointer transition"
+                            />
+
+                            {/* Quick swatches */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                                {RAYLIGHT_COLOR_PALETTE.map((swatch) => (
+                                    <button
+                                        key={swatch}
+                                        type="button"
+                                        onClick={() => setProjectBackground({ kind: 'solid', color: swatch })}
+                                        className="w-5 h-5 rounded-full border border-white/20 hover:scale-110 transition cursor-pointer shrink-0"
+                                        style={{ backgroundColor: swatch }}
+                                        title={swatch}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mode == 'image' */}
+                    {bgMode === 'image' && (
+                        <div className="space-y-3 pt-0.5">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleFileInput}
+                            />
+
+                            {/* Image Header & Preview Card */}
+                            <div className="space-y-1.5">
+                                <label className="text-[11px] text-[#8e8e93] block font-normal">Image</label>
+                                {bg.kind === 'image' && (bg.src || (bg.assetId && project.assets[bg.assetId]?.dataUrl)) ? (
+                                    <div
+                                        className="relative group rounded-xl overflow-hidden border border-white/[0.08] bg-[#141416] aspect-[16/9] max-h-36 cursor-pointer shadow-inner"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <img
+                                            src={bg.src || (bg.assetId ? project.assets[bg.assetId]?.dataUrl : '')}
+                                            alt="Background preview"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    fileInputRef.current?.click();
+                                                }}
+                                                className="px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 text-[11px] font-medium text-white shadow-xs transition"
+                                            >
+                                                Replace
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setProjectBackground({
+                                                        kind: 'image',
+                                                        src: undefined,
+                                                        assetId: undefined,
+                                                        color: bg.color || '#000000',
+                                                        fit: bg.fit || 'cover',
+                                                        dim: bg.dim ?? 0,
+                                                        blur: bg.blur ?? 0,
+                                                        opacity: 1,
+                                                    });
+                                                }}
+                                                className="p-1 rounded-md bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 transition"
+                                                title="Remove image"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full py-6 px-3 rounded-xl border border-dashed border-white/15 hover:border-white/30 bg-[#141416]/50 hover:bg-[#141416] flex flex-col items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa] hover:text-white cursor-pointer transition group"
+                                        >
+                                            <Upload className="w-4 h-4 text-[#8e8e93] group-hover:text-white transition" />
+                                            <span className="font-medium">Upload Image</span>
+                                            <span className="text-[10px] text-[#71717a]">PNG, JPG, WebP</span>
+                                        </button>
+                                        {Object.values(project.assets || {}).filter((a) => a.mimeType?.startsWith('image/')).length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <span className="text-[10px] text-[#71717a] block">From Project Assets:</span>
+                                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                                                    {Object.values(project.assets || {})
+                                                        .filter((a) => a.mimeType?.startsWith('image/'))
+                                                        .map((asset) => (
+                                                            <button
+                                                                key={asset.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setProjectBackground({
+                                                                        kind: 'image',
+                                                                        assetId: asset.id,
+                                                                        src: asset.dataUrl,
+                                                                        color: bg.kind === 'image' ? bg.color || '#000000' : '#000000',
+                                                                        fit: bg.kind === 'image' ? bg.fit || 'cover' : 'cover',
+                                                                        dim: bg.kind === 'image' ? bg.dim ?? 0 : 0,
+                                                                        blur: bg.kind === 'image' ? bg.blur ?? 0 : 0,
+                                                                        opacity: 1,
+                                                                    });
+                                                                }}
+                                                                className="w-10 h-10 rounded-lg border border-white/15 hover:border-[#0088ff] overflow-hidden shrink-0 transition relative group cursor-pointer"
+                                                                title={asset.name}
+                                                            >
+                                                                <img
+                                                                    src={asset.thumbUrl || asset.dataUrl}
+                                                                    alt={asset.name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {bg.kind === 'image' && (
+                                <>
+                                    {/* Fit: Fill (cover) / Fit (contain) */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Fit</label>
+                                        <div className="relative">
+                                            <select
+                                                value={(bg.fit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
+                                                onChange={(e) => setProjectBackground({ ...bg, fit: e.target.value as 'cover' | 'contain' })}
+                                                className="w-full h-8 pl-3 pr-8 rounded-lg bg-[#141416] border border-white/[0.08] hover:border-white/20 text-[11px] text-white appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] transition"
+                                            >
+                                                <option value="cover">Fill</option>
+                                                <option value="contain">Fit</option>
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Dim & Blur */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ScrubInput
+                                            label="Dim"
+                                            value={Math.round((bg.dim ?? 0) * 100)}
+                                            min={0}
+                                            max={100}
+                                            step={5}
+                                            unit="%"
+                                            onChange={(v) => setProjectBackground({ ...bg, dim: v / 100 })}
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        />
+                                        <ScrubInput
+                                            label="Blur"
+                                            value={Math.round(bg.blur ?? 0)}
+                                            min={0}
+                                            max={100}
+                                            step={1}
+                                            unit="%"
+                                            onChange={(v) => setProjectBackground({ ...bg, blur: v })}
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        />
+                                    </div>
+
+                                    {/* Backdrop Color */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Backdrop</label>
+                                        <ColorPicker
+                                            color={bg.color || '#000000'}
+                                            showGradientMode={false}
+                                            onChange={(c) => setProjectBackground({ ...bg, color: c })}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Mode == 'shader' */}
+                    {bgMode === 'shader' && shaderBg && (
+                        <div className="space-y-3 pt-0.5">
+                            {/* Preset Visual Card */}
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-[#8e8e93] font-normal">Preset</span>
+                                    <span className="text-[#0088ff] font-medium">{currentMeta?.label || currentPreset}</span>
+                                </div>
+                                <div
+                                    onClick={() => setPresetMenuOpen((v) => !v)}
+                                    className="h-20 rounded-xl border border-white/10 hover:border-white/25 overflow-hidden relative cursor-pointer group bg-[#060a14] transition shadow-inner"
+                                >
+                                    {/* Dynamic Shader Swatch Representation */}
+                                    <ShaderPreviewCanvas
+                                        preset={currentPreset}
+                                        color1={shaderColor1}
+                                        color2={shaderColor2}
+                                        color3={shaderColor3}
+                                        colors={shaderBg?.colors || [shaderColor1, shaderColor2, shaderColor3]}
+                                        speed={shaderBg?.speed ?? 1}
+                                        waves={shaderBg?.waves ?? 1}
+                                        focus={shaderBg?.focus ?? 1}
+                                        glow={shaderBg?.glow ?? 1}
+                                        shine={shaderBg?.shine ?? 1}
+                                    />
+                                    <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white shadow-sm flex items-center gap-1.5">
+                                        <span>{currentMeta?.label || currentPreset}</span>
+                                        <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
+                                    </div>
+                                </div>
+
+                                {/* Preset Selector Dropdown Grid */}
+                                {presetMenuOpen && (
+                                    <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-[#18181b] border border-white/15 mt-1 max-h-56 overflow-y-auto shadow-2xl z-30">
+                                        {SHADER_PRESETS.map((p) => {
+                                            const meta = SHADER_PRESET_METADATA[p];
+                                            const cfg = DEFAULT_SHADER_CONFIGS[p];
+                                            const isSelected = currentPreset === p;
+                                            const pColors = cfg?.colors?.length ? cfg.colors : [cfg?.color || '#3b82f6', cfg?.backgroundColor || '#05050a'];
+                                            return (
+                                                <button
+                                                    key={p}
+                                                    type="button"
+                                                    onClick={() => selectShaderPreset(p)}
+                                                    className={`p-2 rounded-lg text-left transition cursor-pointer border flex flex-col gap-1 ${
+                                                        isSelected
+                                                            ? 'bg-[#0088ff]/15 border-[#0088ff] text-white shadow-xs'
+                                                            : 'bg-white/[0.03] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.08] hover:border-white/15'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div
+                                                            className="w-3 h-3 rounded-full shrink-0 border border-white/20 shadow-xs"
+                                                            style={{
+                                                                background: `linear-gradient(135deg, ${pColors[0]} 0%, ${pColors[1] || pColors[0]} 100%)`,
+                                                            }}
+                                                        />
+                                                        <span className="text-[11px] font-medium truncate flex-1">{meta?.label || p}</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Color Stops Studio */}
+                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-[#8e8e93] font-normal">Color Stops</span>
+                                    <span className="text-[10px] text-[#71717a] font-mono">
+                                        {isPalette ? '3 Stops' : 'Accent & Base'}
+                                    </span>
+                                </div>
+
+                                <div className="grid grid-cols-3 gap-1.5">
+                                    {/* Color Stop 1 */}
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-[#71717a] block">Color 1</span>
+                                        <ColorPicker
+                                            label="Color 1"
+                                            color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
+                                            showGradientMode={false}
+                                            onChange={(c) => updateShaderColors(c, undefined, undefined)}
+                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
+                                        />
+                                    </div>
+
+                                    {/* Color Stop 2 */}
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-[#71717a] block">Color 2</span>
+                                        <ColorPicker
+                                            label="Color 2"
+                                            color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
+                                            showGradientMode={false}
+                                            onChange={(c) => updateShaderColors(undefined, c, undefined)}
+                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
+                                        />
+                                    </div>
+
+                                    {/* Color Stop 3 */}
+                                    <div className="space-y-1">
+                                        <span className="text-[10px] text-[#71717a] block">Color 3</span>
+                                        <ColorPicker
+                                            label="Color 3"
+                                            color={shaderColor3.startsWith('#') ? shaderColor3 : `#${shaderColor3}`}
+                                            showGradientMode={false}
+                                            onChange={(c) => updateShaderColors(undefined, undefined, c)}
+                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Curated Palette Swatches */}
+                                <div className="flex items-center gap-1.5 pt-1">
+                                    <span className="text-[10px] text-[#71717a] mr-1">Palettes:</span>
+                                    {SHADER_STUDIO_PALETTES.map((pal) => (
+                                        <button
+                                            key={pal.name}
+                                            type="button"
+                                            onClick={() => updateShaderColors(pal.colors[0], pal.colors[1], pal.colors[2])}
+                                            className="h-5 px-1.5 rounded border border-white/10 hover:border-white/30 flex items-center gap-1 bg-[#141416] transition cursor-pointer"
+                                            title={pal.name}
+                                        >
+                                            <div className="flex -space-x-1">
+                                                {pal.colors.map((c, i) => (
+                                                    <div
+                                                        key={i}
+                                                        className="w-2.5 h-2.5 rounded-full border border-black/40"
+                                                        style={{ backgroundColor: c }}
+                                                    />
+                                                ))}
+                                            </div>
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* Mini Studio Scrubbers */}
+                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                                <span className="text-[11px] text-[#8e8e93] block font-normal">Parameters Studio</span>
+
+                                {/* Row 1: Speed & Waves */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ScrubInput
+                                        label="Speed"
+                                        value={shaderBg.speed ?? 1}
+                                        min={0}
+                                        max={5}
+                                        step={0.1}
+                                        decimals={1}
+                                        unit=" x"
+                                        onChange={(v) => updateShaderKnob('speed', v)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.waves?.label || 'Waves'}
+                                        value={Math.round((shaderBg.waves ?? 1) * 100)}
+                                        min={10}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('waves', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+
+                                {/* Row 2: Focus & Glow */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.focus?.label || 'Focus'}
+                                        value={Math.round((shaderBg.focus ?? 1) * 100)}
+                                        min={10}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('focus', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.glow?.label || 'Glow'}
+                                        value={Math.round((shaderBg.glow ?? 1) * 100)}
+                                        min={0}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('glow', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+
+                                {/* Row 3: Shine */}
+                                <div>
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.shine?.label || 'Shine'}
+                                        value={Math.round((shaderBg.shine ?? 1) * 100)}
+                                        min={0}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('shine', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+
+            {/* Bottom Footer: Ask Raylight & Help */}
+            <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between text-[#8e8e93]">
+                <button
+                    type="button"
+                    onClick={() => {}}
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/5 hover:text-white text-[11px] font-medium transition cursor-pointer"
+                >
+                    <Sparkles className="w-3.5 h-3.5 text-white/70" />
+                    <span>Ask Raylight</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={() => {}}
+                    title="Help & documentation"
+                    className="w-6 h-6 rounded-lg hover:bg-white/5 hover:text-white flex items-center justify-center text-[12px] font-semibold transition cursor-pointer"
+                >
+                    ?
+                </button>
+            </div>
+        </div>
+    );
+};
 
 interface RightSidebarProps {
     activeShot: Shot;
@@ -90,7 +1238,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 }) => {
     const {
         project,
-        updateProject,
         updateShot,
         updateLayer,
         deleteLayerFromShot,
@@ -98,7 +1245,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const {
         selectedBlockId,
         selectedCameraBlockId,
-        selectShot,
         setTimelineLayerExpanded,
         selectBlock,
         selectCameraBlock,
@@ -111,7 +1257,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [aspectLocked, setAspectLocked] = useState(true);
     const [addAnimMenuOpen, setAddAnimMenuOpen] = useState(false);
     const [swapMenuOpen, setSwapMenuOpen] = useState(false);
-    const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
     const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
 
@@ -120,12 +1265,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const refStageW = 1920;
     const refStageH = 1080;
 
-    const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
     const isBlankState = isBlankProjectState(project);
     const effectiveMainTab = isBlankState ? 'design' : mainTab;
-
-    const isBottomLayerSelected =
-        Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
 
     const activeCameraBlock: CameraBlock | undefined =
         activeShot.cameraBlocks?.find((cb) => cb.id === selectedCameraBlockId);
@@ -280,37 +1421,42 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
             {/* 1. TOP HEADER BAR */}
             <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center">
                     <button
                         type="button"
                         onClick={toggleRightSidebar}
                         aria-label="Collapse Inspector sidebar ( ] )"
                         title="Collapse Inspector sidebar ( ] )"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition opacity-0 hover:opacity-100"
                     >
                         <PanelRightClose className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-[11px] font-semibold text-white">Inspector</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                    {/* User Profile Avatar with Teal Ring */}
+                    <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm cursor-pointer hover:opacity-90 transition">
+                        <img
+                            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                            alt="User Profile"
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+
                     <button
-                        onClick={() => setProjectPopoverOpen((v) => !v)}
+                        onClick={() => clearLayerSelection()}
                         title="Project Settings"
-                        className={`p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition ${projectPopoverOpen
-                            ? 'text-[#0088ff] bg-white/5'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
+                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                        <SlidersHorizontal className="w-4 h-4" />
                     </button>
 
                     <button
                         onClick={onOpenExportModal}
                         title="Export MP4 Video or GIF"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
-                        <Upload className="w-3.5 h-3.5" />
+                        <Upload className="w-4 h-4" />
                     </button>
 
                     <button
@@ -319,162 +1465,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             setTimeout(() => setShareToast(false), 2000);
                             onOpenExportModal();
                         }}
-                        className="px-3 py-1 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold text-[11px] cursor-pointer transition shadow-sm"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
                     >
                         {shareToast ? 'Copied!' : 'Share'}
                     </button>
                 </div>
             </div>
-
-            {/* PROJECT SETTINGS POPOVER */}
-            {projectPopoverOpen && (
-                <div className="mx-3 mt-2 mb-2 p-3 rounded-xl bg-[#16161a] border border-white/10 space-y-2.5 shadow-2xl z-30">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-white">
-                        <span>Project</span>
-                        <button
-                            onClick={() => setProjectPopoverOpen(false)}
-                            className="text-[#a1a1aa] hover:text-white cursor-pointer"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-
-                    {/* Name */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Name</span>
-                        <input
-                            type="text"
-                            value={project.name}
-                            onChange={(e) =>
-                                updateProject((p) => ({ ...p, name: e.target.value }))
-                            }
-                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none"
-                        />
-                    </div>
-
-                    {/* Aspect Ratio */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
-                        <select
-                            value={project.aspectRatio}
-                            onChange={(e) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    aspectRatio: e.target.value as AspectRatio,
-                                }))
-                            }
-                            className="w-full h-7 bg-[#1c1c1f] border border-white/10 rounded-lg px-2 text-[11px] text-white outline-none cursor-pointer"
-                        >
-                            {(Object.keys(ASPECT_RATIO_CONFIG) as AspectRatio[]).map((r) => (
-                                <option key={r} value={r}>
-                                    {r === '16:9'
-                                        ? 'Landscape 16:9'
-                                        : r === '9:16'
-                                            ? 'Portrait 9:16'
-                                            : r}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Lens (focal length) */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-[#a1a1aa]">Lens</span>
-                            <span className="text-[10px] font-mono text-[#38bdf8]">
-                                {project.defaultCamera?.focalLength ?? 50}mm
-                            </span>
-                        </div>
-                        <ScrubInput
-                            label="F"
-                            value={project.defaultCamera?.focalLength ?? 50}
-                            min={14}
-                            max={200}
-                            step={1}
-                            unit="mm"
-                            onChange={(mm) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    defaultCamera: {
-                                        position: p.defaultCamera?.position ?? {
-                                            x: 0,
-                                            y: 0,
-                                            z: 2.65,
-                                        },
-                                        rotation: p.defaultCamera?.rotation ?? {
-                                            x: 0,
-                                            y: 0,
-                                            z: 0,
-                                        },
-                                        focalLength: Math.max(14, Math.min(200, mm)),
-                                    },
-                                }))
-                            }
-                        />
-                        <div className="grid grid-cols-4 gap-1 pt-0.5">
-                            {[
-                                { mm: 24, label: '24mm' },
-                                { mm: 35, label: '35mm' },
-                                { mm: 50, label: '50mm' },
-                                { mm: 85, label: '85mm' },
-                            ].map((preset) => (
-                                <button
-                                    key={preset.mm}
-                                    type="button"
-                                    onClick={() =>
-                                        updateProject((p) => ({
-                                            ...p,
-                                            defaultCamera: {
-                                                position: p.defaultCamera?.position ?? {
-                                                    x: 0,
-                                                    y: 0,
-                                                    z: 2.65,
-                                                },
-                                                rotation: p.defaultCamera?.rotation ?? {
-                                                    x: 0,
-                                                    y: 0,
-                                                    z: 0,
-                                                },
-                                                focalLength: preset.mm,
-                                            },
-                                        }))
-                                    }
-                                    className={`py-1 rounded text-[10px] font-mono cursor-pointer transition ${
-                                        (project.defaultCamera?.focalLength ?? 50) === preset.mm
-                                            ? 'bg-[#0088ff] text-white font-semibold'
-                                            : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white hover:bg-white/10'
-                                    }`}
-                                >
-                                    {preset.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Unified Project Background Section */}
-                    <div className="rounded-lg border border-white/[0.06] overflow-hidden bg-black/20">
-                        <BackgroundSection scope="project" activeShot={activeShot} />
-                    </div>
-
-                    {/* FPS */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Frame Rate</span>
-                        <select
-                            value={project.fps}
-                            onChange={(e) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    fps: Number(e.target.value) as 30 | 60,
-                                }))
-                            }
-                            className="w-full bg-[#1c1c1f] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none cursor-pointer"
-                        >
-                            <option value={60}>60 FPS (Silky Smooth)</option>
-                            <option value={30}>30 FPS (Standard)</option>
-                        </select>
-                    </div>
-                </div>
-            )}
 
             {/* =================================================================== */}
             {/* CAMERA BLOCK INSPECTOR (When Camera Move is Selected)               */}
@@ -485,130 +1481,119 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     activeCameraBlock={activeCameraBlock}
                     onDone={() => selectCameraBlock(null)}
                 />
-            ) : (
+            ) : selectedLayer ? (
                 <>
-                    {/* 2. SUB-HEADER: Context navigation */}
-                    {selectedLayer ? (
-                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    onClick={() => setMainTab('design')}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                        }`}
-                                >
-                                    Design
-                                </button>
-                                <button
-                                    onClick={() => setMainTab('animate')}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                        }`}
-                                >
-                                    Animate
-                                </button>
-                            </div>
-
+                    {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
+                    <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-1.5">
                             <button
-                                onClick={() => {
-                                    clearLayerSelection();
-                                    selectShot(activeShot.id);
-                                }}
-                                title="Click to view Shot settings"
-                                className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
+                                onClick={() => setMainTab('design')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
+                                    }`}
                             >
-                                <Film className="w-3 h-3 text-[#0088ff]" />
-                                <span>{activeShot.name || 'Shot'}</span>
+                                Design
+                            </button>
+                            <button
+                                onClick={() => setMainTab('animate')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
+                                    }`}
+                            >
+                                Animate
                             </button>
                         </div>
-                    ) : (
-                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between bg-[#121215] shrink-0">
-                            <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
-                                <Film className="w-3.5 h-3.5 text-[#0088ff]" />
-                                <span className="truncate">{activeShot.name || 'Shot Settings'}</span>
-                            </span>
-                            <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                {(activeShot.durationMs / 1000).toFixed(2)}s
-                            </span>
-                        </div>
-                    )}
+
+                        <button
+                            onClick={() => {
+                                clearLayerSelection();
+                            }}
+                            title="Click to view Project settings"
+                            className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
+                        >
+                            <Film className="w-3 h-3 text-[#0088ff]" />
+                            <span>{activeShot.name || 'Shot'}</span>
+                        </button>
+                    </div>
 
                     {/* =============================================================== */}
                     {/* TAB 1: DESIGN (WHEN A LAYER IS SELECTED)                        */}
                     {/* =============================================================== */}
                     {effectiveMainTab === 'design' && selectedLayer && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            {/* LAYER HEADER: Name, Lock, Hide, Delete */}
-                            <div className="p-3.5 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[10px] font-semibold uppercase tracking-wider text-[#0088ff]">
-                                            {selectedLayer.kind}
-                                        </span>
-                                        <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                            #{selectedLayer.order}
-                                        </span>
+                            {/* LAYER HEADER: Name, Lock, Hide, Delete (Non-shape layers) */}
+                            {selectedLayer.kind !== 'shape' && (
+                                <div className="p-3.5 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[10px] font-semibold uppercase tracking-wider text-[#0088ff]">
+                                                {selectedLayer.kind}
+                                            </span>
+                                            <span className="text-[10px] text-[#a1a1aa] font-mono">
+                                                #{selectedLayer.order}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                        ...l,
+                                                        hidden: !l.hidden,
+                                                    }))
+                                                }
+                                                title={selectedLayer.hidden ? 'Show Layer' : 'Hide Layer'}
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
+                                            >
+                                                {selectedLayer.hidden ? (
+                                                    <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                                ) : (
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                        ...l,
+                                                        locked: !l.locked,
+                                                    }))
+                                                }
+                                                title={selectedLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
+                                            >
+                                                {selectedLayer.locked ? (
+                                                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                                ) : (
+                                                    <Unlock className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeleteSelectedLayer}
+                                                title="Delete Layer"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                    ...l,
-                                                    hidden: !l.hidden,
-                                                }))
-                                            }
-                                            title={selectedLayer.hidden ? 'Show Layer' : 'Hide Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
-                                        >
-                                            {selectedLayer.hidden ? (
-                                                <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                            ) : (
-                                                <Eye className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                    ...l,
-                                                    locked: !l.locked,
-                                                }))
-                                            }
-                                            title={selectedLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
-                                        >
-                                            {selectedLayer.locked ? (
-                                                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                                            ) : (
-                                                <Unlock className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleDeleteSelectedLayer}
-                                            title="Delete Layer"
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
+                                    <input
+                                        type="text"
+                                        value={selectedLayer.name}
+                                        onChange={(e) =>
+                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                ...l,
+                                                name: e.target.value,
+                                            }))
+                                        }
+                                        className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white font-medium outline-none focus:border-[#0088ff]"
+                                        placeholder="Layer name"
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={selectedLayer.name}
-                                    onChange={(e) =>
-                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                            ...l,
-                                            name: e.target.value,
-                                        }))
-                                    }
-                                    className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white font-medium outline-none focus:border-[#0088ff]"
-                                    placeholder="Layer name"
-                                />
-                            </div>
+                            )}
 
                             {/* 1. LAYER KIND SPECIFIC SECTIONS */}
 
@@ -899,8 +1884,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 </div>
                             )}
 
-                            {/* POSITION */}
-                            <div className="p-3.5 space-y-3">
+                            {/* GENERAL INSPECTOR SECTIONS (FOR NON-SHAPE LAYERS) */}
+                            {selectedLayer.kind !== 'shape' && (
+                                <>
+                                    {/* POSITION */}
+                                    <div className="p-3.5 space-y-3">
                                 <div className="text-[11px] font-medium text-[#e4e4e7]">
                                     Position
                                 </div>
@@ -1667,119 +2655,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                     </select>
                                 </div>
                             </div>
-
-                            {/* SCENE BACKGROUND & EFFECTS (WHEN BOTTOM LAYER IS SELECTED) */}
-                            {isBottomLayerSelected && (
-                                <div className="divide-y divide-white/[0.06] bg-black/20">
-                                    <div className="p-3 bg-white/[0.02]">
-                                        <span className="text-[10px] font-medium text-[#a1a1aa] uppercase tracking-wider block">
-                                            Stage Background &amp; Effects
-                                        </span>
-                                    </div>
-                                    <BackgroundSection activeShot={activeShot} />
-                                    <SceneEffectsSection activeShot={activeShot} />
-                                </div>
-                            )}
-                        </div>
+                        </>
                     )}
-
-                    {/* =============================================================== */}
-                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — UNIFIED SHOT/PROJECT INSPECTOR) */}
-                    {/* =============================================================== */}
-                    {effectiveMainTab === 'design' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06] text-xs select-none bg-[#111114]">
-                            {/* 1. PROJECT & SHOT IDENTITY */}
-                            <div className="p-3.5 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
-                                        <Film className="w-3.5 h-3.5 text-[#0088ff]" />
-                                        Shot &amp; Project Settings
-                                    </span>
-                                    <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                        {(activeShot.durationMs / 1000).toFixed(2)}s
-                                    </span>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#a1a1aa]">Project Name</span>
-                                        <input
-                                            type="text"
-                                            value={project.name}
-                                            onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
-                                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                        />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
-                                        <select
-                                            value={project.aspectRatio}
-                                            onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
-                                            className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                        >
-                                            <option value="16:9">16:9 Landscape</option>
-                                            <option value="4:3">4:3 Standard</option>
-                                            <option value="3:2">3:2 Photo</option>
-                                            <option value="21:9">21:9 Cinema</option>
-                                            <option value="1:1">1:1 Square</option>
-                                            <option value="9:16">9:16 Vertical</option>
-                                            <option value="3:4">3:4 Portrait</option>
-                                            <option value="2:3">2:3 Portrait</option>
-                                            <option value="4:5">4:5 Social</option>
-                                        </select>
-                                    </label>
-                                </div>
-
-                                <label className="block space-y-1">
-                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Name</span>
-                                    <input
-                                        type="text"
-                                        value={activeShot.name}
-                                        onChange={(e) =>
-                                            updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))
-                                        }
-                                        className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                    />
-                                </label>
-
-                                <div className="space-y-1">
-                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Duration</span>
-                                    <ScrubInput
-                                        label="Duration"
-                                        value={activeShot.durationMs}
-                                        min={300}
-                                        max={60000}
-                                        step={100}
-                                        decimals={0}
-                                        unit="ms"
-                                        onChange={(durationMs) =>
-                                            updateShot(activeShot.id, (s) => ({ ...s, durationMs }))
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            {/* 2. STAGE / SHOT BACKGROUND */}
-                            <BackgroundSection scope="shot" activeShot={activeShot} />
-
-                            {/* 3. CAMERA RIG & FRAMING */}
-                            <CameraSection activeShot={activeShot} />
-
-                            {/* 4. SCENE LIGHTING & MULTI-LIGHT SOURCES */}
-                            <LightingSection activeShot={activeShot} />
-
-                            {/* 5. SCENE EFFECTS */}
-                            <SceneEffectsSection activeShot={activeShot} />
-
-                            {/* 6. SHOT-TO-SHOT TRANSITION */}
-                            <SceneTransitionSection activeShot={activeShot} />
-                        </div>
-                    )}
+                    </div>
+                )}
 
                     {/* =============================================================== */}
                     {/* TAB 2: ANIMATE (WHEN A LAYER IS SELECTED)                       */}
                     {/* =============================================================== */}
-                    {effectiveMainTab === 'animate' && selectedLayer && (
+                    {effectiveMainTab === 'animate' && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
                             <div className="p-3.5 relative">
                                 <div className="flex items-center justify-between">
@@ -2543,115 +3427,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             </div>
                         </div>
                     )}
-
-                    {/* =============================================================== */}
-                    {/* TAB 2: ANIMATE (WHEN NO LAYER IS SELECTED — SCENE CAMERA)       */}
-                    {/* =============================================================== */}
-                    {effectiveMainTab === 'animate' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            <div className="p-3.5 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Scene Camera
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            const camId = `cam-blk-${Date.now()}`;
-                                            updateShot(activeShot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: [
-                                                    ...(s.cameraBlocks || []),
-                                                    {
-                                                        id: camId,
-                                                        label: 'Camera Move',
-                                                        startMs: 0,
-                                                        durationMs: s.durationMs,
-                                                        fromFramingId: s.framings[0]?.id || 'f1',
-                                                        toFramingId: s.framings[1]?.id || 'f2',
-                                                        mode: 'dolly',
-                                                        easing: { kind: 'preset', name: 'linear' },
-                                                        from: {
-                                                            anchorX: 0,
-                                                            anchorY: 0,
-                                                            zoom: 1,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        to: {
-                                                            anchorX: -0.05,
-                                                            anchorY: 0.02,
-                                                            zoom: 1.15,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        shake: { from: 0, to: 0 },
-                                                    },
-                                                ],
-                                            }));
-                                            selectCameraBlock(camId);
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white text-[10px] font-semibold cursor-pointer transition"
-                                    >
-                                        + Add Camera Move
-                                    </button>
-                                </div>
-
-                                {/* List existing camera moves */}
-                                {activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0 && (
-                                    <div className="space-y-1.5 pt-1">
-                                        {activeShot.cameraBlocks.map((cb, idx) => (
-                                            <div
-                                                key={cb.id}
-                                                onClick={() => selectCameraBlock(cb.id)}
-                                                className={`p-2.5 rounded-lg bg-[#161619] border transition flex items-center justify-between cursor-pointer ${selectedCameraBlockId === cb.id
-                                                    ? 'border-[#0088ff]/60 bg-[#0088ff]/10'
-                                                    : 'border-white/[0.06] hover:border-white/20'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <Film className="w-3.5 h-3.5 text-emerald-400" />
-                                                    <div>
-                                                        <div className="text-[11px] font-medium text-white">
-                                                            {cb.label || `Camera Move #${idx + 1}`}
-                                                        </div>
-                                                        <div className="text-[10px] text-[#a1a1aa] font-mono tabular-nums tracking-tight">
-                                                            {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
-                                                        }));
-                                                        if (selectedCameraBlockId === cb.id) {
-                                                            selectCameraBlock(null);
-                                                        }
-                                                    }}
-                                                    className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                                                    title="Delete Move"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
-                                            </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <p className="text-[10px] text-[#a1a1aa] leading-relaxed">
-                                    Add a Camera Move to unlock From / To keyframes, Zoom, Orbit,
-                                    Dolly/Warp modes, and Handheld Shake.
-                                </p>
-                            </div>
-
-                            <SceneTransitionSection activeShot={activeShot} />
-                        </div>
-                    )}
                 </>
+            ) : (
+                <ProjectSettingsPanel onSwapImageClick={onSwapImageClick} />
             )}
         </aside>
     );

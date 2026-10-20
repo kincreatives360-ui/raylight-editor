@@ -702,6 +702,23 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         []
     );
 
+    const cameraIslandShape = useMemo(() => {
+        if (!isPhone) return null;
+        const islandW = meshW * 0.44;
+        const islandH = meshW * 0.44;
+        const islandR = islandW * 0.28;
+        return createRoundedRectShape(islandW, islandH, islandR);
+    }, [isPhone, meshW]);
+
+    const cameraIslandExtrudeSettings = useMemo(() => ({
+        depth: 0.018,
+        bevelEnabled: true,
+        bevelSegments: 4,
+        steps: 1,
+        bevelSize: 0.006,
+        bevelThickness: 0.006,
+    }), []);
+
     if (!isSelected && (!evalLayer.visible || opacity <= 0.001)) return null;
 
     const renderOpacity = isSelected ? Math.max(0.65, opacity) : opacity;
@@ -761,6 +778,92 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                             roughness={chassisRoughness}
                             envMapIntensity={1.4}
                         />
+                    </mesh>
+                </group>
+            )}
+
+            {/* BACK CAMERA BUMP & TRIPLE LENS SYSTEM (iPhone) */}
+            {isPhone && cameraIslandShape && (
+                <group position={[-meshW * 0.22, meshH * 0.27, -0.048]}>
+                    {/* Camera Island Plateau */}
+                    <mesh castShadow receiveShadow>
+                        <extrudeGeometry args={[cameraIslandShape, cameraIslandExtrudeSettings]} />
+                        <meshStandardMaterial
+                            color={chassisHex}
+                            metalness={0.92}
+                            roughness={0.22}
+                            envMapIntensity={1.5}
+                        />
+                    </mesh>
+
+                    {/* Lens 1 (Top Left): Main Camera */}
+                    <group position={[-meshW * 0.095, meshW * 0.095, -0.014]}>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
+                        </mesh>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
+                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
+                        </mesh>
+                    </group>
+
+                    {/* Lens 2 (Bottom Left): Ultra Wide Camera */}
+                    <group position={[-meshW * 0.095, -meshW * 0.095, -0.014]}>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
+                        </mesh>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
+                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
+                        </mesh>
+                    </group>
+
+                    {/* Lens 3 (Right): Telephoto Camera */}
+                    <group position={[meshW * 0.095, 0, -0.014]}>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
+                        </mesh>
+                        <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
+                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
+                        </mesh>
+                    </group>
+
+                    {/* TrueTone Flash LED */}
+                    <mesh position={[meshW * 0.095, meshW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[meshW * 0.032, meshW * 0.032, 0.003, 16]} />
+                        <meshBasicMaterial color="#fff4d4" />
+                    </mesh>
+
+                    {/* LiDAR Scanner Sensor */}
+                    <mesh position={[meshW * 0.095, -meshW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[meshW * 0.024, meshW * 0.024, 0.003, 16]} />
+                        <meshBasicMaterial color="#1a1c23" />
+                    </mesh>
+                </group>
+            )}
+
+            {/* SIDE BUTTONS (iPhone) */}
+            {isPhone && (
+                <group position={[0, 0, -0.01]}>
+                    <mesh position={[-meshW * 0.508, meshH * 0.28, 0]}>
+                        <boxGeometry args={[0.008, meshH * 0.045, 0.014]} />
+                        <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
+                    </mesh>
+                    <mesh position={[-meshW * 0.508, meshH * 0.18, 0]}>
+                        <boxGeometry args={[0.008, meshH * 0.075, 0.014]} />
+                        <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
+                    </mesh>
+                    <mesh position={[-meshW * 0.508, meshH * 0.08, 0]}>
+                        <boxGeometry args={[0.008, meshH * 0.075, 0.014]} />
+                        <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
+                    </mesh>
+                    <mesh position={[meshW * 0.508, meshH * 0.16, 0]}>
+                        <boxGeometry args={[0.008, meshH * 0.12, 0.014]} />
+                        <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
                     </mesh>
                 </group>
             )}
@@ -854,15 +957,40 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 )}
             </mesh>
 
-            {/* 4. DYNAMIC ISLAND NOTCH (iPhone only) */}
-            {isPhone && (
-                <mesh
-                    position={[0, meshH * 0.42, 0.019]}
-                    rotation={[0, 0, Math.PI / 2]}
-                >
-                    <capsuleGeometry args={[meshW * 0.026, meshW * 0.15, 8, 16]} />
-                    <meshBasicMaterial color="#000000" />
+            {/* 4. GLASS SCREEN GLOSS & SPECULAR SHEEN OVERLAY (Devices) */}
+            {isDeviceScreen && (
+                <mesh position={[0, 0, 0.0175]} geometry={normalizedScreenGeometry}>
+                    <meshPhysicalMaterial
+                        color="#ffffff"
+                        transparent={true}
+                        opacity={Math.min(0.28, 0.06 + (device?.gloss ?? 0.5) * 0.2)}
+                        roughness={Math.max(0.04, 0.16 - (device?.gloss ?? 0.5) * 0.12)}
+                        metalness={0.08}
+                        transmission={0.9}
+                        ior={1.5}
+                        reflectivity={device?.glare ?? 1.0}
+                        envMapIntensity={1.6 * (device?.glare ?? 1.0)}
+                        depthWrite={false}
+                    />
                 </mesh>
+            )}
+
+            {/* 5. DYNAMIC ISLAND NOTCH (iPhone only) */}
+            {isPhone && (
+                <group position={[0, meshH * 0.42, 0.019]}>
+                    <mesh rotation={[0, 0, Math.PI / 2]}>
+                        <capsuleGeometry args={[meshW * 0.029, meshW * 0.154, 8, 16]} />
+                        <meshBasicMaterial color="#050508" />
+                    </mesh>
+                    <mesh rotation={[0, 0, Math.PI / 2]} position={[0, 0, 0.0005]}>
+                        <capsuleGeometry args={[meshW * 0.026, meshW * 0.148, 8, 16]} />
+                        <meshBasicMaterial color="#000000" />
+                    </mesh>
+                    <mesh position={[meshW * 0.048, 0, 0.001]}>
+                        <circleGeometry args={[meshW * 0.012, 16]} />
+                        <meshBasicMaterial color="#0a1220" />
+                    </mesh>
+                </group>
             )}
         </group>
     );

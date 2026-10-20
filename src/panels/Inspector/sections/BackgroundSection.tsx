@@ -114,7 +114,7 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     const gradientBarRef = useRef<HTMLDivElement>(null);
     const [selectedStopIdx, setSelectedStopIdx] = useState<number>(0);
     const [draggingStopIdx, setDraggingStopIdx] = useState<number | null>(null);
-    const [colorSubTab, setColorSubTab] = useState<'solid' | 'gradient'>('solid');
+    const [, setColorSubTab] = useState<'solid' | 'gradient'>('solid');
     const [selectedPaletteIdx, setSelectedPaletteIdx] = useState<number>(0);
 
     const isShotScope = scope === 'shot' && Boolean(activeShot);
@@ -221,64 +221,82 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
     }
 
     const handleTabChange = (tab: MainTab) => {
+        if (tab === mainTab) return;
         if (tab === 'alpha') {
             setBackground({ kind: 'transparent' });
         } else if (tab === 'color') {
-            if (colorSubTab === 'gradient' || effectiveBg.kind === 'gradient') {
-                setBackground({
-                    kind: 'gradient',
-                    angle: 90,
-                    gradientType: 'linear',
-                    stops: [
-                        { at: 0, color: '#090a12', opacity: 1 },
-                        { at: 1, color: '#1e293b', opacity: 1 },
-                    ],
-                });
-            } else {
-                const col = effectiveBg.kind === 'solid' ? effectiveBg.color : '#0c0e17';
-                setBackground({ kind: 'solid', color: col });
-            }
+            if (effectiveBg.kind === 'solid' || effectiveBg.kind === 'gradient') return;
+            const col = (effectiveBg.kind === 'shader' ? (effectiveBg.color1 || effectiveBg.color) : effectiveBg.kind === 'image' ? (effectiveBg.color || '#0c0e17') : '#0c0e17') || '#0c0e17';
+            setColorSubTab('solid');
+            setBackground({ kind: 'solid', color: col });
         } else if (tab === 'shader') {
-            const preset: ShaderPreset = 'silk';
-            const cfg = DEFAULT_SHADER_CONFIGS[preset];
+            const preset: ShaderPreset = effectiveBg.kind === 'shader' ? effectiveBg.preset : 'silkFlow';
+            const cfg = DEFAULT_SHADER_CONFIGS[preset] || DEFAULT_SHADER_CONFIGS.silkFlow;
+            let c1 = cfg.colors?.[0] || cfg.color;
+            let c2 = cfg.colors?.[1] || cfg.backgroundColor;
+            let c3 = cfg.colors?.[2] || '#06b6d4';
+            if (effectiveBg.kind === 'solid') {
+                c1 = effectiveBg.color;
+            } else if (effectiveBg.kind === 'gradient' && effectiveBg.stops.length >= 2) {
+                c1 = effectiveBg.stops[0].color;
+                c2 = effectiveBg.stops[1].color;
+                if (effectiveBg.stops[2]) c3 = effectiveBg.stops[2].color;
+            }
             setBackground({
                 kind: 'shader',
                 preset,
-                color: cfg.color,
-                colors: [...cfg.colors],
-                backgroundColor: cfg.backgroundColor,
+                color: c1,
+                colors: [c1, c2, c3],
+                color1: c1,
+                color2: c2,
+                color3: c3,
+                backgroundColor: c2,
                 speed: cfg.speed,
                 waves: cfg.waves,
+                noiseScale: cfg.waves,
                 focus: cfg.focus,
                 glow: cfg.glow,
                 shine: cfg.shine,
                 angle: cfg.angle,
             });
         } else if (tab === 'image') {
+            const prevImageBg = effectiveBg.kind === 'image' ? effectiveBg : undefined;
+            const existingAsset = Object.values(project.assets || {}).find((a) => a.mimeType?.startsWith('image/'));
+            const letterboxColor = prevImageBg?.color || (effectiveBg.kind === 'shader' ? (effectiveBg.backgroundColor || '#000000') : '#000000');
             setBackground({
                 kind: 'image',
-                color: '#000000',
-                fit: 'cover',
-                dim: 0,
-                blur: 0,
+                src: prevImageBg?.src || existingAsset?.dataUrl,
+                assetId: prevImageBg?.assetId || existingAsset?.id,
+                color: letterboxColor,
+                fit: prevImageBg?.fit || 'cover',
+                dim: prevImageBg?.dim ?? 0,
+                blur: prevImageBg?.blur ?? 0,
             });
         }
     };
 
     const handleSelectShaderPreset = (preset: ShaderPreset) => {
-        const cfg = DEFAULT_SHADER_CONFIGS[preset];
+        const cfg = DEFAULT_SHADER_CONFIGS[preset] || DEFAULT_SHADER_CONFIGS.silk;
+        const pColors = cfg.colors?.length ? [...cfg.colors] : [cfg.color, cfg.backgroundColor || '#05050a'];
+        const c1 = pColors[0] || cfg.color || '#4f46e5';
+        const c2 = pColors[1] || cfg.backgroundColor || '#ec4899';
+        const c3 = pColors[2] || (pColors.length > 2 ? pColors[2] : '#06b6d4');
         setBackground({
             kind: 'shader',
             preset,
-            color: cfg.color,
-            colors: [...cfg.colors],
-            backgroundColor: cfg.backgroundColor,
-            speed: effectiveBg.kind === 'shader' ? effectiveBg.speed : cfg.speed,
-            waves: cfg.waves,
-            focus: cfg.focus,
-            glow: cfg.glow,
-            shine: cfg.shine,
-            angle: cfg.angle,
+            color: cfg.color || c1,
+            colors: pColors,
+            color1: c1,
+            color2: c2,
+            color3: c3,
+            backgroundColor: c2,
+            speed: cfg.speed ?? 1,
+            waves: cfg.waves ?? 1,
+            noiseScale: cfg.waves ?? 1,
+            focus: cfg.focus ?? 1,
+            glow: cfg.glow ?? 1,
+            shine: cfg.shine ?? 1,
+            angle: cfg.angle ?? 28,
         });
     };
 
@@ -287,14 +305,15 @@ export const BackgroundSection: React.FC<BackgroundSectionProps> = ({
         saveImageAsset({
             file,
             updateProject,
-            onSave: (assetId) => {
+            onSave: (assetId, dataUrl) => {
                 setBackground({
                     kind: 'image',
                     assetId,
-                    color: '#000000',
-                    fit: 'cover',
-                    dim: 0,
-                    blur: 0,
+                    src: dataUrl,
+                    color: effectiveBg.kind === 'image' ? effectiveBg.color || '#000000' : '#000000',
+                    fit: effectiveBg.kind === 'image' ? effectiveBg.fit || 'cover' : 'cover',
+                    dim: effectiveBg.kind === 'image' ? effectiveBg.dim ?? 0 : 0,
+                    blur: effectiveBg.kind === 'image' ? effectiveBg.blur ?? 0 : 0,
                 });
             },
         });

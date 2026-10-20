@@ -29,8 +29,6 @@ import type {
   ExportSettings,
   ExportFormat,
   ExportResolution,
-  ExportQuality,
-  ExportScope,
 } from './engine/exporter';
 import { isMediaRecorderMp4Supported } from './engine/exportCapabilities';
 import { estimateExportMetrics } from './engine/exportMetrics';
@@ -1341,85 +1339,116 @@ export default function App() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Resolution</span>
-                <select
-                  disabled={exporting || exportSettings.format === 'gif'}
-                  value={exportSettings.resolution}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      resolution: e.target.value as ExportResolution,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+            {/* Scope */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-[#8e8e93] block font-medium">Scope</span>
+              <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-2 gap-0.5">
+                <button
+                  type="button"
+                  disabled={exporting || exportSettings.format === 'png'}
+                  onClick={() => setExportSettings((s) => ({ ...s, scope: 'entire' }))}
+                  className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                    exportSettings.scope === 'entire'
+                      ? 'bg-[#0088ff] text-white shadow-xs'
+                      : 'text-[#8e8e93] hover:text-white'
+                  }`}
                 >
-                  <option value="720p">720p HD</option>
-                  <option value="1080p">1080p Full HD</option>
-                  <option value="4k">4K Ultra HD</option>
-                </select>
-              </div>
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Frame Rate</span>
-                <select
-                  disabled={exporting || exportSettings.format !== 'mp4'}
-                  value={exportSettings.fps}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      fps: Number(e.target.value) as 24 | 30 | 60,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                  Entire Timeline ({project.shots.length} shots)
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting || exportSettings.format === 'png'}
+                  onClick={() => setExportSettings((s) => ({ ...s, scope: 'shot' }))}
+                  className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-2 ${
+                    exportSettings.scope === 'shot'
+                      ? 'bg-[#0088ff] text-white shadow-xs'
+                      : 'text-[#8e8e93] hover:text-white'
+                  }`}
                 >
-                  <option value={60}>60 FPS (Smooth)</option>
-                  <option value={30}>30 FPS (Standard)</option>
-                  <option value={24}>24 FPS (Cinematic)</option>
-                </select>
+                  Selected Shot ({activeShot.name})
+                </button>
               </div>
             </div>
 
+            {/* Resolution & Frame Rate Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Quality</span>
-                <select
-                  disabled={exporting || (exportSettings.format !== 'mp4' && exportSettings.format !== 'webm')}
-                  value={exportSettings.quality}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      quality: e.target.value as ExportQuality,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
-                >
-                  <option value="studio">Studio (Sharpest)</option>
-                  <option value="social">Social Media</option>
-                  <option value="web">Web (Smallest)</option>
-                </select>
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#8e8e93] block font-medium">Resolution</span>
+                <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                  {(['720p', '1080p', '4k'] as ExportResolution[]).map((res) => (
+                    <button
+                      key={res}
+                      type="button"
+                      disabled={exporting || exportSettings.format === 'gif'}
+                      onClick={() => setExportSettings((s) => ({ ...s, resolution: res }))}
+                      className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                        exportSettings.resolution === res
+                          ? 'bg-[#0088ff] text-white shadow-xs'
+                          : 'text-[#8e8e93] hover:text-white'
+                      }`}
+                    >
+                      {res === '4k' ? '4K' : res.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Scope</span>
-                <select
-                  disabled={exporting || exportSettings.format === 'png'}
-                  value={exportSettings.scope}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      scope: e.target.value as ExportScope,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
-                >
-                  <option value="entire">
-                    Entire Timeline ({project.shots.length} Shots)
-                  </option>
-                  <option value="shot">
-                    Selected Shot ({activeShot.name})
-                  </option>
-                </select>
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#8e8e93] block font-medium">Frame Rate</span>
+                <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                  {([24, 30, 60] as (24 | 30 | 60)[]).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      disabled={exporting || exportSettings.format !== 'mp4'}
+                      onClick={() => setExportSettings((s) => ({ ...s, fps: f }))}
+                      className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                        exportSettings.fps === f
+                          ? 'bg-[#0088ff] text-white shadow-xs'
+                          : 'text-[#8e8e93] hover:text-white'
+                      }`}
+                    >
+                      {f} FPS
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Quality & Compression */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-[#8e8e93] block font-medium">Compression</span>
+              <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                {[
+                  { id: 'studio' as const, label: 'Studio (Sharp)' },
+                  { id: 'social' as const, label: 'Social Media' },
+                  { id: 'web' as const, label: 'Web (Fast)' },
+                ].map((q) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    disabled={exporting || (exportSettings.format !== 'mp4' && exportSettings.format !== 'webm')}
+                    onClick={() => setExportSettings((s) => ({ ...s, quality: q.id }))}
+                    className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-1 ${
+                      exportSettings.quality === q.id
+                        ? 'bg-[#0088ff] text-white shadow-xs'
+                        : 'text-[#8e8e93] hover:text-white'
+                    }`}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Made in Raylight Badge */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#18181c] border border-white/[0.08]">
+              <div>
+                <span className="text-[11px] text-white font-medium block">Made in Raylight Watermark</span>
+                <span className="text-[10px] text-[#71717a]">Free plan watermark included on export</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
+                Included
+              </span>
             </div>
 
             <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono tabular-nums text-[11px] space-y-1.5 text-[#f4f4f5] tracking-tight">

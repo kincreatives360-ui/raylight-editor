@@ -11,6 +11,7 @@ interface ScrubInputProps {
     decimals?: number;
     unit?: string;
     onChange: (newValue: number) => void;
+    className?: string;
 }
 
 export const ScrubInput: React.FC<ScrubInputProps> = ({
@@ -22,6 +23,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     decimals = 0,
     unit = '',
     onChange,
+    className,
 }) => {
     const { beginDragTransaction, commitDragTransaction } = useProjectStore();
     const [isEditing, setIsEditing] = useState(false);
@@ -175,7 +177,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             }}
             title="Drag left/right to scrub, use arrow keys, or click/press Enter to type exact value"
             style={{ touchAction: 'none' }}
-            className="h-7 px-2.5 rounded-md bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100"
+            className={`h-7 px-2.5 rounded-md bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
         >
             <span className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
                 {label}

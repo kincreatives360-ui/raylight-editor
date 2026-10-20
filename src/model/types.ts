@@ -103,6 +103,11 @@ export type Background =
     glow: number;
     shine: number;
     angle: number;
+    noiseScale?: number;
+    color1?: string;
+    color2?: string;
+    color3?: string;
+    color4?: string;
   }
   | {
     kind: 'image';
@@ -190,11 +195,26 @@ export interface GlowEffect {
   radius: number;
 }
 
+export interface LiquidGlassEffect {
+  enabled: boolean;
+  refraction?: number;
+  roughness?: number;
+  tint?: string;
+}
+
+export interface WarpEffect {
+  enabled: boolean;
+  amount?: number;
+  frequency?: number;
+}
+
 export interface LayerEffects {
   dropShadow?: DropShadowEffect;
   glow?: GlowEffect;
   layerBlur?: number;
   backdropBlur?: number;
+  liquidGlass?: LiquidGlassEffect;
+  warp?: WarpEffect;
 }
 
 export interface DeviceFrame {
@@ -247,6 +267,16 @@ export interface ImageLayer extends LayerBase {
   device?: DeviceFrame;
 }
 
+export interface ShapeMask {
+  enabled: boolean;
+  shape: 'rectangle' | 'circle' | 'path';
+  feather: number;
+  opacity: number;
+  grow: number;
+  invert: boolean;
+  show: boolean;
+}
+
 export interface ShapeLayer extends LayerBase {
   kind: 'shape';
   shape: 'rectangle' | 'ellipse' | 'line' | 'arrow' | 'polygon';
@@ -256,7 +286,15 @@ export interface ShapeLayer extends LayerBase {
   size: Size2D;
   cornerRadius: number;
   fill: Fill;
-  stroke?: { color: string; width: number; opacity: number };
+  stroke?: {
+    color: string;
+    width: number;
+    opacity: number;
+    align?: 'inside' | 'center' | 'outside';
+    style?: 'solid' | 'dashed' | 'dotted';
+  };
+  depth?: number;
+  mask?: ShapeMask;
 }
 
 export interface TextLayer extends LayerBase {
@@ -321,7 +359,7 @@ export interface CameraBlock {
   durationMs: number;
   fromFramingId: string;
   toFramingId: string;
-  mode: 'dolly' | 'zoom' | 'dollyzoom'; // 'dollyzoom' = 'Warp' in Raylight UI
+  mode: 'dolly' | 'zoom' | 'dollyzoom' | 'shake'; // 'dollyzoom' = 'Warp' in Raylight UI
   easing: Easing;
   from?: CameraKeyframeEndpoint;
   to?: CameraKeyframeEndpoint;

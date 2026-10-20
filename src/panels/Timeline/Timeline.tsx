@@ -54,6 +54,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectedCameraBlockId,
         selectedLightBlockId,
         selectedPresetType,
+        inspectorTab,
+        clearLayerSelection,
         timelineView,
         timelineZoom,
         timelineHeightPx,
@@ -287,6 +289,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         if (
             target.closest('button, input, [role="button"], [data-timeline-item], [data-cam-pill], [data-light-pill], [data-preset-pill]')
         ) return;
+        clearLayerSelection();
         const targetTime = hoverTimeMs !== null ? hoverTimeMs : timeAtClientX(event.clientX);
         setCurrentTimeMs(targetTime);
     };
@@ -1298,7 +1301,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         <div className="space-y-2 pt-2">
                             <div className="h-8 relative flex items-center gap-1">
                                 {project.shots.map((shot, shotIndex) => {
-                                    const isSelected = shot.id === activeShot?.id;
+                                    const isSelected = inspectorTab === 'shot' && shot.id === activeShot?.id;
                                     const width = Math.max(16, shot.durationMs * pxPerMs - 2);
                                     return (
                                         <div
@@ -1327,7 +1330,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             style={{ width: `${width}px` }}
                                             className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
                                                     ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-[0_0_12px_rgba(129,118,217,0.22)]'
-                                                    : 'border-[#0284c7]/80 bg-gradient-to-b from-[#062c52]/75 to-[#031529]/85 text-sky-200/80 hover:border-[#38bdf8]'
+                                                    : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
                                                 }`}
                                         >
                                             <span className="truncate">{shot.name}</span>
