@@ -491,7 +491,7 @@ export default function App() {
       if (copiedLayersRef.current.length > 0) {
         e.preventDefault();
         const clonedLayers: Layer[] = copiedLayersRef.current.map((orig, i) => {
-          const clone: Layer = JSON.parse(JSON.stringify(orig));
+          const clone: Layer = structuredClone(orig);
           clone.id = `layer-${orig.kind}-${Date.now()}-${i}`;
           clone.name = `${orig.name} Copy`;
           clone.position = {
@@ -612,7 +612,7 @@ export default function App() {
           selectedLayerIds.includes(l.id)
         );
         if (toCopy.length > 0) {
-          copiedLayersRef.current = JSON.parse(JSON.stringify(toCopy));
+          copiedLayersRef.current = structuredClone(toCopy);
         }
         return;
       }
@@ -1197,7 +1197,7 @@ export default function App() {
             onClick={toggleLeftPanel}
             title="Expand Left Panel ( [ )"
             aria-label="Expand Left Panel"
-            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
           >
             <PanelLeftOpen className="w-3.5 h-3.5 text-[#0088ff]" />
             <span className="hidden sm:inline">Panels</span>
@@ -1272,7 +1272,7 @@ export default function App() {
             onClick={toggleRightSidebar}
             title="Expand Inspector ( ] )"
             aria-label="Expand Inspector"
-            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
           >
             <PanelRightOpen className="w-3.5 h-3.5 text-[#0088ff]" />
             <span className="hidden sm:inline">Inspector</span>
@@ -1480,7 +1480,7 @@ export default function App() {
                 </div>
                 <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
                   <div
-                    className="h-full bg-[#0088ff] transition-all duration-150"
+                    className="h-full bg-[#0088ff] transition-[width] duration-150 ease-out"
                     style={{ width: `${exportPercent}%` }}
                   />
                 </div>

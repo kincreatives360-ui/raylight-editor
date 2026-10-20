@@ -684,7 +684,8 @@ export type ValidationResult =
 
 function migrateLegacyProject(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
-  const project = JSON.parse(JSON.stringify(raw));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const project = structuredClone(raw) as Record<string, any>;
 
   if (project.assets && typeof project.assets === 'object') {
     for (const asset of Object.values(project.assets)) {

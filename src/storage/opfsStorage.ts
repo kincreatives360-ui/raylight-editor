@@ -42,6 +42,9 @@ export async function saveMediaToOPFS(
     let payload: Blob | ArrayBuffer | string;
     if (typeof data === 'string' && data.startsWith('data:')) {
       const response = await fetch(data);
+      if (!response.ok) {
+        throw new Error(`Failed to read data URL (${response.status} ${response.statusText})`);
+      }
       payload = await response.blob();
     } else {
       payload = data;

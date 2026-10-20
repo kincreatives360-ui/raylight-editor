@@ -96,7 +96,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       role="dialog"
       aria-modal="true"
       aria-labelledby="shortcuts-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-all animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150"
       onClick={handleClose}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
@@ -174,9 +174,9 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-              {filteredShortcuts.map((sc, idx) => (
+              {filteredShortcuts.map((sc) => (
                 <div
-                  key={`${sc.category}-${idx}`}
+                  key={sc.description}
                   className="flex items-center justify-between p-2.5 rounded-xl bg-[#191920]/70 hover:bg-[#1f1f28] border border-white/[0.04] transition group"
                 >
                   <span className="text-gray-300 font-medium text-[11px] pr-2">
@@ -185,7 +185,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                   <div className="flex items-center gap-1 shrink-0">
                     {sc.keys.map((k, kidx) => (
                       <kbd
-                        key={kidx}
+                        key={`${k}-${kidx}`}
                         className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[10px] font-semibold tracking-tight shadow-xs select-none"
                       >
                         {k}

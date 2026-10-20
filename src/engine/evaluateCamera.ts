@@ -48,12 +48,14 @@ export function evaluateShotCameraAtTime(
         (a, b) => a.startMs - b.startMs
     );
 
+    const framingMap = new Map(framings.map((f) => [f.id, f]));
+
     for (let i = 0; i < sortedBlocks.length; i++) {
         const block = sortedBlocks[i];
         const fromFraming =
-            framings.find((f) => f.id === block.fromFramingId) || defaultFraming;
+            (block.fromFramingId ? framingMap.get(block.fromFramingId) : undefined) || defaultFraming;
         const toFraming =
-            framings.find((f) => f.id === block.toFramingId) || fromFraming;
+            (block.toFramingId ? framingMap.get(block.toFramingId) : undefined) || fromFraming;
 
         const fromEndpoint = block.from || {
             anchorX: fromFraming.target.x,
@@ -114,6 +116,7 @@ export function evaluateShotCameraAtTime(
 
         targetX = lerp(fromEndpoint.anchorX, toEndpoint.anchorX, eased);
         targetY = lerp(fromEndpoint.anchorY, toEndpoint.anchorY, eased);
+        targetZ = lerp(fromFraming.target.z, toFraming.target.z, eased);
         const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
         const safeToZoom = Number.isFinite(toEndpoint.zoom) && toEndpoint.zoom > 0 ? toEndpoint.zoom : safeFromZoom;
         const targetZoom = lerp(safeFromZoom, safeToZoom, eased);

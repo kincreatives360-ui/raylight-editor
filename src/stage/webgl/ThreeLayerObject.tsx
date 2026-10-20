@@ -620,6 +620,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         evalLayer.size.height,
     ]);
 
+    // Dispose previous texture whenever a new one is generated or component unmounts
+    useEffect(() => {
+        return () => {
+            if (texture) {
+                texture.dispose();
+            }
+        };
+    }, [texture]);
+
     // Live frame redraw for video layers as currentTimeMs updates
     useEffect(() => {
         if (!isVideoAsset || !videoElement || !texture) return;
@@ -656,13 +665,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         // eslint-disable-next-line react-hooks/immutability
         texture.needsUpdate = true;
     }, [currentTimeMs, isVideoAsset, videoElement, texture, isBrowser, layer, totalBlurPx]);
-
-    // Dispose texture on replace/unmount to prevent GPU memory leaks
-    useEffect(() => {
-        return () => {
-            texture?.dispose();
-        };
-    }, [texture]);
 
     const cornerRadiusWorld = useMemo(() => {
         if (isPhone) return Math.min(meshW, meshH) * 0.14;

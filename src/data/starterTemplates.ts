@@ -343,7 +343,7 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
         },
       });
 
-      const effects = JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS));
+      const effects = structuredClone(DEFAULT_SCENE_EFFECTS);
       effects.bloom = { enabled: true, intensity: 1.4, threshold: 0.4 };
       effects.vignette = { enabled: true, intensity: 0.55 };
 

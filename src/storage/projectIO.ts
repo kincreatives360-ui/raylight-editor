@@ -229,7 +229,7 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
 // Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
 export function saveProjectToBrowser(project: Project): void {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    // 1. Dual-write to IndexedDB for unlimited asset quota
+    // 1. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
     void saveProjectToIndexedDB(project);
 
     // 2. Synchronous LocalStorage save with payload truncation guard
@@ -240,7 +240,7 @@ export function saveProjectToBrowser(project: Project): void {
         });
         localStorage.setItem(AUTO_SAVE_KEY, payload);
     } catch {
-        // If localStorage throws QuotaExceededError, try saving without heavy asset base64s
+        // If localStorage throws QuotaExceededError, fallback to saving without heavy asset base64s
         try {
             const lightweightAssets: Record<string, AssetRecord> = {};
             for (const [id, a] of Object.entries(project.assets || {})) {

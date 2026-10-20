@@ -175,6 +175,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         shaderPassRef.current = shaderPass;
 
         return () => {
+            shaderPass.material.dispose();
             composer.dispose();
             composerRef.current = null;
             shaderPassRef.current = null;

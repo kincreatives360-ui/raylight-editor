@@ -54,7 +54,7 @@ export function createDefaultCameraBlock(
 }
 
 export function createDefaultEffects(): SceneEffects {
-  return JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS));
+  return structuredClone(DEFAULT_SCENE_EFFECTS);
 }
 
 export function createDefaultAudio(): ProjectAudio {
@@ -394,7 +394,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     lightBlocks: [],
     effectBlocks: [],
     light: { ...DEFAULT_LIGHT_RIG },
-    effects: JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS)),
+    effects: structuredClone(DEFAULT_SCENE_EFFECTS),
     effectsOrder: [...DEFAULT_EFFECTS_ORDER],
     transition: {
       type: 'crossfade',

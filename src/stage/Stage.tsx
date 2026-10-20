@@ -1230,7 +1230,7 @@ const StageComponent: React.FC<StageProps> = ({
 
                     {/* Drag & Drop Target Glow Overlay */}
                     {isDraggingOver && (
-                        <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse">
+                        <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse motion-reduce:animate-none">
                             <div className="w-12 h-12 rounded-full bg-[var(--accent-primary,#0088ff)]/20 border border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center text-[var(--accent-primary,#0088ff)]">
                                 <UploadCloud className="w-6 h-6" />
                             </div>
@@ -1393,7 +1393,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse pointer-events-none z-30">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse motion-reduce:animate-none pointer-events-none z-30">
                     <span className="w-2 h-2 rounded-full bg-white" />
                     <span>REC (⇧A)</span>
                 </div>

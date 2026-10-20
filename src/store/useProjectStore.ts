@@ -365,7 +365,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             .toString(36)
             .slice(2, 5)}`;
 
-        const cloned: Layer = JSON.parse(JSON.stringify(original));
+        const cloned: Layer = structuredClone(original);
         cloned.id = copyId;
         cloned.name = `${original.name} Copy`;
         cloned.order = shot.layers.length;
@@ -644,7 +644,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const original = state.project.shots.find((s) => s.id === shotId);
         if (!original) return null;
 
-        const cloned: Shot = JSON.parse(JSON.stringify(original));
+        const cloned: Shot = structuredClone(original);
         cloned.id = `shot-${Date.now()}`;
         cloned.name = `${original.name} (Copy)`;
         cloned.layers = cloned.layers.map((l, idx) => ({
@@ -698,7 +698,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const firstDuration = localSplitMs;
         const secondDuration = target.durationMs - localSplitMs;
 
-        const secondShot: Shot = JSON.parse(JSON.stringify(target));
+        const secondShot: Shot = structuredClone(target);
         secondShot.id = `shot-${Date.now()}`;
         secondShot.name = `${target.name} (Part 2)`;
         secondShot.startMs = target.startMs + firstDuration;

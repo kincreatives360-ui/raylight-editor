@@ -33,17 +33,19 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import type { ShapeLayer, ShapeMask } from '../../../model/types';
+import type { AnimationBlockProperty } from '../../../model/schema';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { ColorPicker } from '../ColorPicker';
 import { ScrubInput } from '../../../ui/ScrubInput';
 
+import { degToRad, radToDeg } from '../../../model/defaults';
+
 interface ShapeSectionProps {
     activeShotId: string;
     layer: ShapeLayer;
+    onAddAnimationBlock?: (property: AnimationBlockProperty) => void;
 }
 
-const radToDeg = (rad: number) => Math.round((rad * 180) / Math.PI);
-const degToRad = (deg: number) => (deg * Math.PI) / 180;
 const refStageW = 1920;
 const refStageH = 1080;
 
@@ -71,23 +73,30 @@ const ToggleSwitch: React.FC<{ checked: boolean; onChange: (v: boolean) => void 
 export const ShapeSection: React.FC<ShapeSectionProps> = ({
     activeShotId,
     layer,
+    onAddAnimationBlock,
 }) => {
     const { updateLayer } = useProjectStore();
     const [aspectLocked, setAspectLocked] = useState(false);
     const [effectsMenuOpen, setEffectsMenuOpen] = useState(false);
+    const [strokeAlignOpen, setStrokeAlignOpen] = useState(false);
     const effectsMenuRef = useRef<HTMLDivElement>(null);
+    const strokeAlignRef = useRef<HTMLDivElement>(null);
 
-    // Close effects menu on outside click
+    // Close menus on outside click
     useEffect(() => {
-        if (!effectsMenuOpen) return;
+        if (!effectsMenuOpen && !strokeAlignOpen) return;
         const handleClickOutside = (e: MouseEvent) => {
-            if (effectsMenuRef.current && !effectsMenuRef.current.contains(e.target as Node)) {
+            const target = e.target as Node;
+            if (effectsMenuOpen && effectsMenuRef.current && !effectsMenuRef.current.contains(target)) {
                 setEffectsMenuOpen(false);
+            }
+            if (strokeAlignOpen && strokeAlignRef.current && !strokeAlignRef.current.contains(target)) {
+                setStrokeAlignOpen(false);
             }
         };
         window.addEventListener('mousedown', handleClickOutside);
         return () => window.removeEventListener('mousedown', handleClickOutside);
-    }, [effectsMenuOpen]);
+    }, [effectsMenuOpen, strokeAlignOpen]);
 
     const handleQuickAlign = (axis: 'x' | 'y', targetNorm: number) => {
         updateLayer(activeShotId, layer.id, (l) => ({
@@ -386,54 +395,56 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     </div>
                 </div>
 
-                {/* Rotation: 4 button pill */}
+                {/* Rotation: 3 button pill + reset button */}
                 <div className="space-y-1.5">
                     <span className="text-[11px] text-[#a1a1aa] block">
                         Rotation
                     </span>
-                    <div className="grid grid-cols-4 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
-                        <button
-                            type="button"
-                            onClick={() =>
-                                updateLayer(activeShotId, layer.id, (l) => ({
-                                    ...l,
-                                    rotation: {
-                                        ...l.rotation,
-                                        z: degToRad((radToDeg(l.rotation.z) + 90) % 360),
-                                    },
-                                }))
-                            }
-                            title="Rotate 90° Clockwise"
-                            className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                        >
-                            <RotateCw className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() =>
-                                updateLayer(activeShotId, layer.id, (l) => ({
-                                    ...l,
-                                    scale: { ...l.scale, x: l.scale.x * -1 },
-                                }))
-                            }
-                            title="Flip Horizontally"
-                            className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                        >
-                            <FlipHorizontal className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() =>
-                                updateLayer(activeShotId, layer.id, (l) => ({
-                                    ...l,
-                                    scale: { ...l.scale, y: l.scale.y * -1 },
-                                }))
-                            }
-                            title="Flip Vertically"
-                            className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                        >
-                            <FlipVertical className="w-3.5 h-3.5" />
-                        </button>
+                    <div className="flex items-center gap-1.5">
+                        <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06] flex-1">
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    updateLayer(activeShotId, layer.id, (l) => ({
+                                        ...l,
+                                        rotation: {
+                                            ...l.rotation,
+                                            z: degToRad((radToDeg(l.rotation.z) + 90) % 360),
+                                        },
+                                    }))
+                                }
+                                title="Rotate 90° Clockwise"
+                                className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                            >
+                                <RotateCw className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    updateLayer(activeShotId, layer.id, (l) => ({
+                                        ...l,
+                                        scale: { ...l.scale, x: l.scale.x * -1 },
+                                    }))
+                                }
+                                title="Flip Horizontally"
+                                className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                            >
+                                <FlipHorizontal className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    updateLayer(activeShotId, layer.id, (l) => ({
+                                        ...l,
+                                        scale: { ...l.scale, y: l.scale.y * -1 },
+                                    }))
+                                }
+                                title="Flip Vertically"
+                                className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                            >
+                                <FlipVertical className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
                         <button
                             type="button"
                             onClick={() =>
@@ -448,7 +459,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                 }))
                             }
                             title="Reset Rotation & Flip"
-                            className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                            className="w-7 h-7 rounded-lg bg-[#1c1c1f] hover:bg-white/10 border border-white/[0.06] flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition shrink-0"
                         >
                             <Maximize2 className="w-3.5 h-3.5" />
                         </button>
@@ -778,12 +789,20 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                             <span className="font-mono text-[11px] text-[#a1a1aa]">
                                 {Math.round(fillOpacity * 100)} %
                             </span>
-                            <div className="relative flex items-center justify-center text-[#a1a1aa] hover:text-white">
+                            <button
+                                type="button"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onAddAnimationBlock?.('opacity');
+                                }}
+                                title="Add Opacity Animation Block"
+                                className="relative flex items-center justify-center text-[#a1a1aa] hover:text-white p-0.5 cursor-pointer transition"
+                            >
                                 <Diamond className="w-3.5 h-3.5 fill-none" />
-                                <span className="absolute -top-1 -right-1 text-[8px] font-bold leading-none select-none">
+                                <span className="absolute -top-1 -right-1 text-[10px] font-bold leading-none select-none">
                                     +
                                 </span>
-                            </div>
+                            </button>
                         </div>
                     </ColorPicker>
                 )}
@@ -840,12 +859,20 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                 <span className="font-mono text-[11px] text-[#a1a1aa]">
                                     {Math.round(strokeOpacity * 100)} %
                                 </span>
-                                <div className="relative flex items-center justify-center text-[#a1a1aa] hover:text-white">
+                                <button
+                                    type="button"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        onAddAnimationBlock?.('opacity');
+                                    }}
+                                    title="Add Opacity Animation Block"
+                                    className="relative flex items-center justify-center text-[#a1a1aa] hover:text-white p-0.5 cursor-pointer transition"
+                                >
                                     <Diamond className="w-3.5 h-3.5 fill-none" />
-                                    <span className="absolute -top-1 -right-1 text-[8px] font-bold leading-none select-none">
+                                    <span className="absolute -top-1 -right-1 text-[10px] font-bold leading-none select-none">
                                         +
                                     </span>
-                                </div>
+                                </button>
                             </div>
                         </ColorPicker>
 
@@ -853,21 +880,36 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         <div className="space-y-1.5">
                             <span className="text-[11px] text-[#a1a1aa] block">Width</span>
                             <div className="flex items-center gap-1.5">
-                                <div className="relative">
-                                    <select
-                                        value={layer.stroke?.align || 'inside'}
-                                        onChange={(e) =>
-                                            updateStroke({
-                                                align: e.target.value as 'inside' | 'center' | 'outside',
-                                            })
-                                        }
-                                        className="h-7 px-2.5 pr-6 rounded-lg bg-[#1c1c1f] hover:bg-[#242428] border border-white/[0.06] text-[11px] text-white outline-none cursor-pointer appearance-none capitalize"
+                                <div className="relative" ref={strokeAlignRef}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setStrokeAlignOpen((v) => !v)}
+                                        className="h-7 px-2.5 rounded-lg bg-[#1c1c1f] hover:bg-[#252529] border border-white/[0.06] flex items-center gap-1.5 text-[11px] text-white cursor-pointer transition select-none"
                                     >
-                                        <option value="inside">Inside</option>
-                                        <option value="center">Center</option>
-                                        <option value="outside">Outside</option>
-                                    </select>
-                                    <ChevronDown className="w-3 h-3 text-[#a1a1aa] absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        <span className="capitalize">{layer.stroke?.align || 'inside'}</span>
+                                        <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
+                                    </button>
+                                    {strokeAlignOpen && (
+                                        <div className="absolute left-0 top-8 z-30 w-24 rounded-xl bg-[#18181b] border border-white/10 p-1 shadow-2xl space-y-0.5">
+                                            {(['inside', 'center', 'outside'] as const).map((mode) => (
+                                                <button
+                                                    key={mode}
+                                                    type="button"
+                                                    onClick={() => {
+                                                        updateStroke({ align: mode });
+                                                        setStrokeAlignOpen(false);
+                                                    }}
+                                                    className={`w-full px-2 py-1 rounded-lg text-left text-[11px] capitalize cursor-pointer transition ${
+                                                        (layer.stroke?.align || 'inside') === mode
+                                                            ? 'bg-[#0088ff] text-white font-medium'
+                                                            : 'text-[#e4e4e7] hover:bg-white/10 hover:text-white'
+                                                    }`}
+                                                >
+                                                    {mode}
+                                                </button>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
 
                                 <div className="flex-1">

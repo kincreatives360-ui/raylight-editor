@@ -93,6 +93,31 @@ const SpotLightItem: React.FC<{
     );
 };
 
+const SpotGizmoLine: React.FC<{
+    position: [number, number, number];
+    targetPos: [number, number, number];
+    colorHex: string;
+}> = ({ position, targetPos, colorHex }) => {
+    const [p0, p1, p2] = position;
+    const [t0, t1, t2] = targetPos;
+    const linePositions = useMemo(
+        () => new Float32Array([p0, p1, p2, t0, t1, t2]),
+        [p0, p1, p2, t0, t1, t2]
+    );
+
+    return (
+        <line>
+            <bufferGeometry>
+                <bufferAttribute
+                    attach="attributes-position"
+                    args={[linePositions, 3]}
+                />
+            </bufferGeometry>
+            <lineDashedMaterial color={colorHex} dashSize={0.2} gapSize={0.1} />
+        </line>
+    );
+};
+
 /** Lightweight 3D wireframe helper gizmo showing light positions and orientations */
 const LightGizmo: React.FC<{
     source: SceneLight;
@@ -130,15 +155,7 @@ const LightGizmo: React.FC<{
                         <meshBasicMaterial color={colorHex} wireframe />
                     </mesh>
                 </group>
-                <line>
-                    <bufferGeometry>
-                        <bufferAttribute
-                            attach="attributes-position"
-                            args={[new Float32Array([...position, ...targetPos]), 3]}
-                        />
-                    </bufferGeometry>
-                    <lineDashedMaterial color={colorHex} dashSize={0.2} gapSize={0.1} />
-                </line>
+                <SpotGizmoLine position={position} targetPos={targetPos} colorHex={colorHex} />
             </group>
         );
     }
@@ -209,6 +226,41 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
     // Cap at maximum 8 active lights for peak real-time shader performance
     const sources = (rig.sources?.filter((source) => source.enabled) || []).slice(0, 8);
 
+    const computedSources = useMemo(() => {
+        return sources.map((source) => {
+            const position: [number, number, number] = [
+                (source.position?.x ?? 0) * 6,
+                (source.position?.y ?? 0) * 6,
+                (source.position?.z ?? 1) * 5,
+            ];
+            const baseColor = new THREE.Color(source.color || '#ffffff');
+            const srcTemp = source.temperature ?? temp;
+            const srcTempColor = srcTemp
+                ? (() => {
+                    const { r, g, b } = kelvinToRgb(srcTemp);
+                    return new THREE.Color(r / 255, g / 255, b / 255);
+                })()
+                : lightColor;
+            const color = baseColor.multiply(srcTempColor);
+            const sourceIntensity = resolveSourceIntensity(rig, source);
+            const castShadow = shadowPlan.sourceIds.has(source.id);
+            const targetPos: [number, number, number] = [
+                (source.target?.x ?? 0) * 6,
+                (source.target?.y ?? 0) * 6,
+                (source.target?.z ?? 0) * 5,
+            ];
+
+            return {
+                source,
+                position,
+                targetPos,
+                color,
+                sourceIntensity,
+                castShadow,
+            };
+        });
+    }, [sources, temp, lightColor, rig, shadowPlan]);
+
     return (
         <group name="raylight_scene_lighting">
             {/* 1. SCENE AMBIENT (Shadow Floor): lights all surfaces equally, no direction or falloff */}
@@ -253,24 +305,7 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
             )}
 
             {/* 3. MULTIPLE INDEPENDENT LIGHT SOURCES (Point, Spot, Area, Directional) */}
-            {sources.map((source) => {
-                const position: [number, number, number] = [
-                    (source.position?.x ?? 0) * 6,
-                    (source.position?.y ?? 0) * 6,
-                    (source.position?.z ?? 1) * 5,
-                ];
-                const baseColor = new THREE.Color(source.color || '#ffffff');
-                const srcTemp = source.temperature ?? temp;
-                const srcTempColor = srcTemp
-                    ? (() => {
-                        const { r, g, b } = kelvinToRgb(srcTemp);
-                        return new THREE.Color(r / 255, g / 255, b / 255);
-                    })()
-                    : lightColor;
-                const color = baseColor.clone().multiply(srcTempColor);
-                const sourceIntensity = resolveSourceIntensity(rig, source);
-                const castShadow = shadowPlan.sourceIds.has(source.id);
-
+            {computedSources.map(({ source, position, targetPos, color, sourceIntensity, castShadow }) => {
                 if (source.type === 'ambient') {
                     return <ambientLight key={source.id} intensity={sourceIntensity * 0.5} color={color} />;
                 }
@@ -293,11 +328,6 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                 }
 
                 if (source.type === 'spot') {
-                    const targetPos: [number, number, number] = [
-                        (source.target?.x ?? 0) * 6,
-                        (source.target?.y ?? 0) * 6,
-                        (source.target?.z ?? 0) * 5,
-                    ];
                     return (
                         <React.Fragment key={source.id}>
                             <SpotLightItem

@@ -23,12 +23,26 @@ import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
 import { getShaderColors } from '../model/backgroundPresets';
 import { resolveKeyIntensity } from './lightMath';
 
+const MAX_IMAGE_CACHE_SIZE = 100;
 const imageElementCache = new Map<string, HTMLImageElement>();
+const MAX_VIDEO_CACHE_SIZE = 20;
 const videoElementCache = new Map<string, HTMLVideoElement>();
 
 export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
   let video = videoElementCache.get(dataUrl);
   if (!video) {
+    if (videoElementCache.size >= MAX_VIDEO_CACHE_SIZE) {
+      const oldestKey = videoElementCache.keys().next().value;
+      if (oldestKey) {
+        const oldVid = videoElementCache.get(oldestKey);
+        if (oldVid) {
+          oldVid.pause();
+          oldVid.removeAttribute('src');
+          oldVid.load();
+        }
+        videoElementCache.delete(oldestKey);
+      }
+    }
     video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
@@ -39,6 +53,19 @@ export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
     videoElementCache.set(dataUrl, video);
   }
   return video;
+}
+
+export function clearImageElementCache(): void {
+  imageElementCache.clear();
+}
+
+export function clearVideoElementCache(): void {
+  for (const video of videoElementCache.values()) {
+    video.pause();
+    video.removeAttribute('src');
+    video.load();
+  }
+  videoElementCache.clear();
 }
 
 export async function syncAndSeekAllProjectVideos(
@@ -114,6 +141,10 @@ export async function preloadProjectImages(project: Project): Promise<void> {
           const img = new Image();
           img.crossOrigin = 'anonymous';
           img.onload = () => {
+            if (imageElementCache.size >= MAX_IMAGE_CACHE_SIZE) {
+              const oldestKey = imageElementCache.keys().next().value;
+              if (oldestKey) imageElementCache.delete(oldestKey);
+            }
             imageElementCache.set(url, img);
             resolve();
           };

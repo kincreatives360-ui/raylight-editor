@@ -1220,17 +1220,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 <div className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
                     {/* Subcategory Navigation Pills */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] no-scrollbar shrink-0 border-b border-white/[0.06]">
-                        {[
+                        {([
                             { id: 'uploads', label: 'Uploads' },
                             { id: 'mockups', label: '3D Mockups' },
                             { id: 'shaders', label: 'Shaders' },
                             { id: 'sfx', label: 'Sound FX' },
                             { id: 'templates', label: 'Templates' },
-                        ].map((cat) => (
+                        ] as const).map((cat) => (
                             <button
                                 key={cat.id}
                                 type="button"
-                                onClick={() => setAssetCategory(cat.id as any)}
+                                onClick={() => setAssetCategory(cat.id)}
                                 className={`px-2.5 py-1 rounded-lg shrink-0 font-medium transition cursor-pointer ${
                                     assetCategory === cat.id
                                         ? 'bg-[#0088ff] text-white shadow-xs'

@@ -631,7 +631,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 <button
                     type="button"
                     onClick={onSelectAudioClick}
-                    aria-label="Audio Waveform & Sound Stems"
+                    aria-label="Audio Tracks & Sound FX Library"
                     title="Audio Tracks & Sound FX Library"
                     className="w-7 h-7 rounded-lg flex items-center justify-center text-[#a1a1aa] hover:text-white hover:bg-white/10 transition cursor-pointer"
                 >
@@ -642,7 +642,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 <button
                     type="button"
                     onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium mockups')}
-                    className="ml-0.5 px-2.5 py-1 rounded-lg bg-gradient-to-r from-[#0088ff] to-[#6366f1] text-white text-[11px] font-semibold hover:brightness-110 shadow-sm transition cursor-pointer flex items-center gap-1"
+                    aria-label="Upgrade to Pro"
+                    className="ml-0.5 px-2.5 py-1 rounded-lg bg-linear-to-r from-[#0088ff] to-[#6366f1] text-white text-[11px] font-semibold hover:brightness-110 shadow-sm transition cursor-pointer flex items-center gap-1"
                 >
                     <span>Upgrade</span>
                 </button>

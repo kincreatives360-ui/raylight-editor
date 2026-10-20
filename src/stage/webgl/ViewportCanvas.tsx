@@ -103,6 +103,52 @@ const WebGLContextGuard: React.FC = () => {
     return null;
 };
 
+interface WebGLErrorBoundaryState {
+    hasError: boolean;
+    error: Error | null;
+}
+
+class WebGLErrorBoundary extends React.Component<{ children: React.ReactNode }, WebGLErrorBoundaryState> {
+    constructor(props: { children: React.ReactNode }) {
+        super(props);
+        this.state = { hasError: false, error: null };
+    }
+
+    static getDerivedStateFromError(error: Error): WebGLErrorBoundaryState {
+        return { hasError: true, error };
+    }
+
+    override componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+        console.error('[Raylight Viewport ErrorBoundary]', error, errorInfo);
+    }
+
+    override render() {
+        if (this.state.hasError) {
+            return (
+                <div className="w-full h-full flex flex-col items-center justify-center p-6 bg-[#0b0b0d] text-center select-none">
+                    <div className="w-12 h-12 rounded-xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-amber-400 mb-3">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                        </svg>
+                    </div>
+                    <h3 className="text-sm font-semibold text-white mb-1">WebGL Viewport Fallback</h3>
+                    <p className="text-[11px] text-gray-400 max-w-sm mb-4">
+                        {this.state.error?.message || 'A GPU shader or mesh initialization error occurred.'}
+                    </p>
+                    <button
+                        type="button"
+                        onClick={() => this.setState({ hasError: false, error: null })}
+                        className="px-3 py-1.5 rounded-lg bg-sky-500 hover:bg-sky-400 text-white text-xs font-medium transition cursor-pointer shadow-md"
+                    >
+                        Reset Canvas
+                    </button>
+                </div>
+            );
+        }
+        return this.props.children;
+    }
+}
+
 export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     project,
     frame,
@@ -119,23 +165,24 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
-            <Canvas
-                id="raylight-stage-webgl-canvas"
-                shadows
-                flat
-                frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
-                dpr={[1, 2]}
-                gl={{
-                    antialias: true,
-                    alpha: true,
-                    preserveDrawingBuffer: true,
-                    toneMapping: THREE.NoToneMapping,
-                    outputColorSpace: THREE.SRGBColorSpace,
-                    powerPreference: 'high-performance',
-                }}
-                style={{ width: '100%', height: '100%', display: 'block' }}
-                onPointerMissed={onPointerMissed}
-            >
+            <WebGLErrorBoundary>
+                <Canvas
+                    id="raylight-stage-webgl-canvas"
+                    shadows
+                    flat
+                    frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
+                    dpr={[1, 2]}
+                    gl={{
+                        antialias: true,
+                        alpha: true,
+                        preserveDrawingBuffer: true,
+                        toneMapping: THREE.NoToneMapping,
+                        outputColorSpace: THREE.SRGBColorSpace,
+                        powerPreference: 'high-performance',
+                    }}
+                    style={{ width: '100%', height: '100%', display: 'block' }}
+                    onPointerMissed={onPointerMissed}
+                >
                 <ViewportRenderBridge
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
@@ -183,6 +230,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 {/* 5. Realtime Cinematic Scene Effects (Bloom, Vignette, Chromatic Aberration, Grain, Glitch) */}
                 <SceneEffectsPipeline effects={frame.effects} />
             </Canvas>
-        </div>
-    );
+        </WebGLErrorBoundary>
+    </div>
+);
 };

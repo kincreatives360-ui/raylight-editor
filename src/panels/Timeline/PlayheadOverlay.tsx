@@ -19,16 +19,16 @@ export const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
 
     // Keep layout props in refs so transient callback always has freshest zoom/view values
     const pxPerMsRef = useRef(pxPerMs);
-    pxPerMsRef.current = pxPerMs;
-
     const timelineViewRef = useRef(timelineView);
-    timelineViewRef.current = timelineView;
-
     const activeShotStartMsRef = useRef(activeShotStartMs);
-    activeShotStartMsRef.current = activeShotStartMs;
-
     const scrollContainerRefRef = useRef(scrollContainerRef);
-    scrollContainerRefRef.current = scrollContainerRef;
+
+    useEffect(() => {
+        pxPerMsRef.current = pxPerMs;
+        timelineViewRef.current = timelineView;
+        activeShotStartMsRef.current = activeShotStartMs;
+        scrollContainerRefRef.current = scrollContainerRef;
+    });
 
     useEffect(() => {
         const updatePlayhead = (currentTimeMs: number, isPlaying: boolean) => {

@@ -102,6 +102,8 @@ function createGradientTexture(bg: Extract<Background, { kind: 'gradient' }>): T
 const EMPTY_BG_TEXTURE = new THREE.DataTexture(new Uint8Array([0, 0, 0, 0]), 1, 1);
 EMPTY_BG_TEXTURE.needsUpdate = true;
 
+const _scratchBgVec3 = new THREE.Vector3();
+
 interface SingleBackgroundBillboardProps {
   bg: Background;
   opacity?: number;
@@ -128,11 +130,11 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
 
   useEffect(() => {
     if (!dataUrl) {
-      setLoadedTextureInfo(null);
       return;
     }
 
     let active = true;
+    let currentTex: THREE.Texture | null = null;
     const loader = new THREE.TextureLoader();
     loader.setCrossOrigin('anonymous');
     loader.load(
@@ -142,6 +144,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
           tex.dispose();
           return;
         }
+        currentTex = tex;
         tex.colorSpace = THREE.SRGBColorSpace;
         tex.minFilter = THREE.LinearFilter;
         tex.magFilter = THREE.LinearFilter;
@@ -153,12 +156,14 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
       undefined,
       (err) => {
         console.warn('[SceneBackground] Texture load error:', err);
-        if (active) setLoadedTextureInfo(null);
       }
     );
 
     return () => {
       active = false;
+      if (currentTex) {
+        currentTex.dispose();
+      }
     };
   }, [dataUrl, invalidate]);
 
@@ -326,9 +331,9 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     const planeH = 2 * distance * Math.tan(fovRad / 2);
     const planeW = planeH * aspect;
 
-    const offset = new THREE.Vector3(slideX * planeW, 0, -distance);
-    offset.applyQuaternion(pCam.quaternion);
-    mesh.position.copy(pCam.position).add(offset);
+    _scratchBgVec3.set(slideX * planeW, 0, -distance);
+    _scratchBgVec3.applyQuaternion(pCam.quaternion);
+    mesh.position.copy(pCam.position).add(_scratchBgVec3);
     mesh.quaternion.copy(pCam.quaternion);
     mesh.scale.set(planeW, planeH, 1);
 
@@ -347,27 +352,29 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
       continuousTimeRef.current += Math.min(delta, 0.1) * speed;
     }
 
+    const activeUniforms = shaderMatRef.current?.uniforms ?? uniforms;
+
     if (bg.kind === 'shader') {
-      if (uniforms.uTime) {
-        uniforms.uTime.value = continuousTimeRef.current;
+      if (activeUniforms.uTime) {
+        activeUniforms.uTime.value = continuousTimeRef.current;
       }
-      if (uniforms.uAspect) {
-        uniforms.uAspect.value = aspect;
+      if (activeUniforms.uAspect) {
+        activeUniforms.uAspect.value = aspect;
       }
-      if (uniforms.uResolution) {
-        uniforms.uResolution.value.set(aspect * 1080, 1080);
+      if (activeUniforms.uResolution) {
+        activeUniforms.uResolution.value.set(aspect * 1080, 1080);
       }
-      if (uniforms.uSpeed) {
-        uniforms.uSpeed.value = speed;
+      if (activeUniforms.uSpeed) {
+        activeUniforms.uSpeed.value = speed;
       }
-      if (uniforms.uNoiseScale) {
-        uniforms.uNoiseScale.value = bg.noiseScale ?? bg.waves ?? 1;
+      if (activeUniforms.uNoiseScale) {
+        activeUniforms.uNoiseScale.value = bg.noiseScale ?? bg.waves ?? 1;
       }
       // Keep R3F render loop animating smoothly at 60fps
       invalidate();
     } else if (bg.kind === 'noise') {
-      if (uniforms.uTime) {
-        uniforms.uTime.value = continuousTimeRef.current;
+      if (activeUniforms.uTime) {
+        activeUniforms.uTime.value = continuousTimeRef.current;
       }
       invalidate();
     } else if (bg.kind === 'image' && imageTexture?.image) {

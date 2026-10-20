@@ -109,7 +109,14 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     }
 
     const hsvRef = useRef<Hsv>(hsv);
-    hsvRef.current = hsv;
+    useEffect(() => {
+        hsvRef.current = hsv;
+    }, [hsv]);
+
+    const onExitGradientRef = useRef(onExitGradient);
+    useEffect(() => {
+        onExitGradientRef.current = onExitGradient;
+    }, [onExitGradient]);
 
     useEffect(() => {
         if (!open) return;
@@ -135,7 +142,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 return;
             }
             setOpen(false);
-            onExitGradient?.();
+            onExitGradientRef.current?.();
         };
         window.addEventListener('pointerdown', onPointerDown);
         return () => {
@@ -143,7 +150,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             window.removeEventListener('scroll', updatePosition, true);
             window.removeEventListener('pointerdown', onPointerDown);
         };
-    }, [open, pickerMode, onExitGradient]);
+    }, [open, pickerMode]);
 
     const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -364,7 +371,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             className="relative min-w-0 flex-1 touch-none cursor-crosshair rounded-xl select-none"
                             style={{ backgroundColor: hueColor, backgroundImage: 'linear-gradient(to top, #000, transparent), linear-gradient(to right, #fff, transparent)' }}
                         >
-                            <span className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_5px_#000]" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
+                            <span className="pointer-events-none absolute h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-full border-2 border-white shadow-[0_1px_5px_rgba(0,0,0,0.6)]" style={{ left: `${hsv.s * 100}%`, top: `${(1 - hsv.v) * 100}%` }} />
                         </div>
                         <div
                             ref={hueBarRef}
@@ -502,7 +509,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     </div>
                     <div className="max-h-[180px] space-y-1 overflow-y-auto">
                         {gradient.stops.map((stop, index) => (
-                            <div key={`${index}-${stop.at}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
+                            <div key={`stop-${index}-${stop.color}-${stop.at}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
                                 <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
                                     <input
                                         aria-label={`Stop ${index + 1} position`}
@@ -510,7 +517,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                         min="0"
                                         max="100"
                                         value={Math.round(stop.at * 100)}
-                                        onChange={(event) => updateStop(index, { at: Math.max(0, Math.min(100, Number(event.target.value))) / 100 })}
+                                        onChange={(event) => {
+                                            const val = event.target.value.trim();
+                                            const num = val === '' ? 0 : Number(val);
+                                            if (Number.isFinite(num)) {
+                                                updateStop(index, { at: Math.max(0, Math.min(100, num)) / 100 });
+                                            }
+                                        }}
                                         onKeyDown={(e) => e.stopPropagation()}
                                         className="w-7 bg-transparent text-right outline-none"
                                     />
@@ -546,7 +559,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                         min="0"
                                         max="100"
                                         value={Math.round((stop.opacity ?? 1) * 100)}
-                                        onChange={(event) => updateStop(index, { opacity: Math.max(0, Math.min(100, Number(event.target.value))) / 100 })}
+                                        onChange={(event) => {
+                                            const val = event.target.value.trim();
+                                            const num = val === '' ? 100 : Number(val);
+                                            if (Number.isFinite(num)) {
+                                                updateStop(index, { opacity: Math.max(0, Math.min(100, num)) / 100 });
+                                            }
+                                        }}
                                         onKeyDown={(e) => e.stopPropagation()}
                                         className="w-7 bg-transparent text-right outline-none"
                                     />

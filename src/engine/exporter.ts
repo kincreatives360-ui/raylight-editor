@@ -447,14 +447,16 @@ export async function runVideoExportPipeline(
             if (audioContext.state === 'suspended') {
                 await audioContext.resume();
             }
-            for (const clip of activeAudioClips) {
-                if (clip.dataUrl && !clipBuffers.has(clip.dataUrl)) {
-                    const buf = await decodeAudioFromDataUrl(clip.dataUrl);
-                    if (buf) {
-                        clipBuffers.set(clip.dataUrl, buf);
-                    }
-                }
-            }
+            await Promise.all(
+                activeAudioClips
+                    .filter((clip) => clip.dataUrl && !clipBuffers.has(clip.dataUrl))
+                    .map(async (clip) => {
+                        const buf = await decodeAudioFromDataUrl(clip.dataUrl!);
+                        if (buf) {
+                            clipBuffers.set(clip.dataUrl!, buf);
+                        }
+                    })
+            );
         } catch (e) {
             console.warn('[Exporter] Audio track integration skipped:', e);
         }
@@ -588,10 +590,12 @@ export async function runVideoExportPipeline(
                         const playDuration = Math.max(0, (effectiveEndMs - effectiveStartMs) / 1000);
                         const scheduledStart = baseAudioTime + Math.max(0, (clip.startMs - startMs) / 1000);
                         const elapsedBeforeStart = Math.max(0, startMs - clip.startMs);
-                        const bufferOffset = ((clip.offsetMs || 0) + elapsedBeforeStart) / 1000;
+                        const bufferOffset = Math.max(0, ((clip.offsetMs || 0) + elapsedBeforeStart) / 1000);
+                        const remainingBufferTime = Math.max(0, buffer.duration - bufferOffset);
+                        const safePlayDuration = Math.min(playDuration, remainingBufferTime);
 
-                        if (playDuration > 0 && bufferOffset < buffer.duration) {
-                            source.start(scheduledStart, bufferOffset, playDuration);
+                        if (safePlayDuration > 0 && bufferOffset < buffer.duration) {
+                            source.start(scheduledStart, bufferOffset, safePlayDuration);
                         }
                     }
                 }

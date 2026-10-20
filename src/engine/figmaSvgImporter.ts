@@ -150,6 +150,10 @@ export function parseFigmaSvgToLayers(
         svgEl.querySelectorAll('rect, circle, ellipse, line, text, image, path')
     );
 
+    const hasNonPathElements = candidates.some(
+        (c) => !c.closest('defs, clipPath, mask, pattern') && c.tagName.toLowerCase() !== 'path'
+    );
+
     for (const el of candidates) {
         // Skip elements inside <defs>, <clipPath>, or <mask>
         if (el.closest('defs, clipPath, mask, pattern')) continue;
@@ -410,6 +414,47 @@ export function parseFigmaSvgToLayers(
             });
 
             layers.push(imgLayer);
+            zDepthCursor += 0.04;
+        }
+
+        // 6. <path> -> Vector ImageLayer
+        else if (tag === 'path') {
+            if (!hasNonPathElements) continue;
+            const d = el.getAttribute('d');
+            if (!d) continue;
+
+            const pathFill = el.getAttribute('fill') || '#ffffff';
+            const pathStroke = el.getAttribute('stroke');
+            const pathStrokeWidth = parseNumericAttr(el, 'stroke-width', 0);
+            const pathOpacity = parseNumericAttr(el, 'opacity', 1);
+
+            const strokeAttr = pathStroke ? ` stroke="${pathStroke}" stroke-width="${pathStrokeWidth}"` : '';
+            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}"><path d="${d}" fill="${pathFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
+            const encoded = `data:image/svg+xml;utf8,${encodeURIComponent(pathSvg)}`;
+            const assetId = `asset-figma-path-${Date.now()}-${orderCounter}`;
+
+            assets[assetId] = {
+                id: assetId,
+                name: rawName || 'Figma Vector Path',
+                mimeType: 'image/svg+xml',
+                dataUrl: encoded,
+                thumbUrl: encoded,
+                width: boardW,
+                height: boardH,
+            };
+
+            const pathLayer: ImageLayer = createDefaultImageLayer({
+                name: rawName || 'Figma Vector Path',
+                assetId,
+                order: orderCounter++,
+                outMs: shotDurationMs,
+                position: { x: 0, y: 0, z: Number(zDepthCursor.toFixed(3)) },
+                rotation: { x: 0, y: 0, z: 0 },
+                size: { width: 1, height: 1 },
+                device: undefined,
+            });
+
+            layers.push(pathLayer);
             zDepthCursor += 0.04;
         }
     }

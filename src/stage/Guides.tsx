@@ -75,14 +75,14 @@ export const Guides: React.FC<GuidesProps> = ({
             )}
 
             {/* Active Emerald Smart-Snap Alignment Lines (DESIGN.md §4.4) */}
-            {guides.map((g, idx) => {
+            {guides.map((g) => {
                 if (g.axis === 'x') {
                     const screenX =
                         frameWidth / 2 + g.positionFrac * frameWidth * cameraZoom + camOffsetX;
                     return (
                         <div
-                            key={`x-${idx}`}
-                            className="absolute top-0 bottom-0 left-0 w-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)] will-change-transform"
+                            key={`x-${g.positionFrac}-${g.label}`}
+                            className="absolute top-0 bottom-0 left-0 w-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                             style={{ transform: `translate3d(${screenX}px, 0, 0)` }}
                         >
                             <span className="absolute top-2 left-1.5 px-1.5 py-0.5 rounded bg-[var(--accent-success,#10b981)] text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">
@@ -96,8 +96,8 @@ export const Guides: React.FC<GuidesProps> = ({
                     frameHeight / 2 + g.positionFrac * frameHeight * cameraZoom + camOffsetY;
                 return (
                     <div
-                        key={`y-${idx}`}
-                        className="absolute top-0 left-0 right-0 h-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)] will-change-transform"
+                        key={`y-${g.positionFrac}-${g.label}`}
+                        className="absolute top-0 left-0 right-0 h-px bg-[var(--accent-success,#10b981)] shadow-[0_0_8px_rgba(16,185,129,0.5)]"
                         style={{ transform: `translate3d(0, ${screenY}px, 0)` }}
                     >
                         <span className="absolute left-2 -top-5 px-1.5 py-0.5 rounded bg-[var(--accent-success,#10b981)] text-white text-[10px] font-mono tabular-nums whitespace-nowrap shadow-sm">

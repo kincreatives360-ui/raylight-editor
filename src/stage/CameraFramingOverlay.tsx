@@ -344,7 +344,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     className="absolute top-1.5 left-1.5 px-2 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-[10px] font-mono text-emerald-300 flex items-center gap-1.5 shadow-md pointer-events-auto cursor-move hover:scale-105 transition-transform"
                     title="Drag to reposition From camera anchor"
                 >
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
                     <span className="font-semibold">From: {Number(fromEp.zoom.toFixed(2))}x</span>
                     {fromEp.orbit !== 0 && <span className="text-emerald-400/70">• {fromEp.orbit}°</span>}
                 </div>
@@ -398,7 +398,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     className="absolute bottom-1.5 right-1.5 px-2 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/50 text-[10px] font-mono text-sky-300 flex items-center gap-1.5 shadow-md pointer-events-auto cursor-move hover:scale-105 transition-transform"
                     title="Drag to reposition To camera anchor"
                 >
-                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse" />
+                    <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse motion-reduce:animate-none" />
                     <span className="font-semibold">To: {Number(toEp.zoom.toFixed(2))}x ({activeBlock.mode})</span>
                     {toEp.orbit !== 0 && <span className="text-sky-400/70">• {toEp.orbit}°</span>}
                 </div>

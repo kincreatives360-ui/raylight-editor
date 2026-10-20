@@ -97,12 +97,14 @@ interface ShaderPreviewCanvasProps {
     shine?: number;
 }
 
+const EMPTY_SHADER_COLORS: string[] = [];
+
 const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
     preset,
     color1,
     color2,
     color3,
-    colors = [],
+    colors = EMPTY_SHADER_COLORS,
     speed = 1,
     waves = 1,
     focus = 1,
@@ -1612,6 +1614,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 <ShapeSection
                                     activeShotId={activeShot.id}
                                     layer={selectedLayer}
+                                    onAddAnimationBlock={handleAddAnimationBlock}
                                 />
                             )}
 
@@ -3012,7 +3015,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 {selectedLayer.entrances && selectedLayer.entrances.length > 0 ? (
                                     <div className="space-y-2.5">
                                         {selectedLayer.entrances.map((ent, idx) => (
-                                            <div key={ent.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                            <div key={ent.id || `ent-${ent.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
                                                 <div className="flex items-center gap-1.5">
                                                     <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                         <Sparkles className="w-3 h-3 text-[#0088ff]" />
@@ -3245,7 +3248,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 {selectedLayer.exits && selectedLayer.exits.length > 0 ? (
                                     <div className="space-y-2.5">
                                         {selectedLayer.exits.map((ext, idx) => (
-                                            <div key={ext.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                            <div key={ext.id || `ext-${ext.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
                                                 <div className="flex items-center gap-1.5">
                                                     <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                         <Sparkles className="w-3 h-3 text-rose-400" />
