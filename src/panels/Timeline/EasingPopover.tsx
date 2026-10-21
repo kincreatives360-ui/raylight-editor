@@ -187,6 +187,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
             aria-label="Easing curve editor"
             className="w-[256px] rounded-2xl bg-[#141416] border border-white/10 shadow-2xl p-3 flex flex-col gap-2.5 text-white select-none backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
             onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
             <div className="flex items-center justify-between px-0.5">

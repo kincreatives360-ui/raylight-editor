@@ -1316,7 +1316,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         blur: 0,
                                                         opacity: 1,
                                                     },
-                                                    shots: proj.shots.map((s) => ({ ...s, useProjectBackground: true })),
                                                 }));
                                             }}
                                             className="px-2 py-1 rounded-md bg-white/10 hover:bg-[#0088ff] text-[#c4c4cc] hover:text-white text-[10px] font-medium transition cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 shadow-xs"
@@ -1452,7 +1451,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         shine: cfg?.shine ?? 1,
                                                         angle: cfg?.angle ?? 28,
                                                     },
-                                                    shots: proj.shots.map((s) => ({ ...s, useProjectBackground: true })),
                                                 }));
                                             }}
                                             className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.08] hover:border-[#0088ff] text-left transition cursor-pointer flex flex-col gap-1.5 group shadow-xs"

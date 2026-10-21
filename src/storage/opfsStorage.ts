@@ -109,7 +109,8 @@ export async function loadMediaDataUrlFromOPFS(
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ''));
         reader.onerror = () => resolve(null);
-        reader.readAsDataURL(blob);
+        const retypedBlob = blob.slice(0, blob.size, effectiveMime);
+        reader.readAsDataURL(retypedBlob);
       });
     }
 
@@ -153,10 +154,11 @@ export async function pruneOPFSAssets(activeAssetIds: Set<string>): Promise<void
 
   try {
     // Iterate over all directory entries and remove unreferenced assets
-    // Using values() or entries() if supported
+    // Using keys(), falling back to entries() or values() if unavailable
     const dirAny = dir as unknown as {
-      values?: () => AsyncIterable<FileSystemHandle>;
       keys?: () => AsyncIterable<string>;
+      entries?: () => AsyncIterable<[string, FileSystemHandle]>;
+      values?: () => AsyncIterable<FileSystemHandle>;
     };
 
     if (typeof dirAny.keys === 'function') {
@@ -164,6 +166,26 @@ export async function pruneOPFSAssets(activeAssetIds: Set<string>): Promise<void
         if (!activeAssetIds.has(name)) {
           try {
             await dir.removeEntry(name);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } else if (typeof dirAny.entries === 'function') {
+      for await (const [name] of dirAny.entries()) {
+        if (!activeAssetIds.has(name)) {
+          try {
+            await dir.removeEntry(name);
+          } catch {
+            // ignore
+          }
+        }
+      }
+    } else if (typeof dirAny.values === 'function') {
+      for await (const handle of dirAny.values()) {
+        if (!activeAssetIds.has(handle.name)) {
+          try {
+            await dir.removeEntry(handle.name);
           } catch {
             // ignore
           }

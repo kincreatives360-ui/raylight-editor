@@ -103,6 +103,7 @@ describe('evaluateEffects', () => {
       const evaluated = evaluateEffectsAtTime(shot, 1);
       const activeKeys = evaluated.orderedEnabledPasses.map((p) => p.key);
 
+      expect(activeKeys).toEqual(['bloom', 'vignette']);
       expect(activeKeys).toContain('bloom');
       expect(activeKeys).toContain('vignette');
       expect(activeKeys).not.toContain('glitch');

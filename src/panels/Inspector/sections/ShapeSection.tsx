@@ -761,18 +761,28 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     <ColorPicker
                         color={fillColor}
                         onChange={(newColor) =>
-                            updateLayer(activeShotId, layer.id, (l) =>
-                                l.kind === 'shape'
-                                    ? {
+                            updateLayer(activeShotId, layer.id, (l) => {
+                                if (l.kind !== 'shape') return l;
+                                if (l.fill.kind === 'gradient') {
+                                    return {
                                         ...l,
                                         fill: {
-                                            kind: 'solid',
-                                            color: newColor,
-                                            opacity: l.fill.kind === 'solid' ? (l.fill.opacity || 1) : 1,
+                                            ...l.fill,
+                                            stops: l.fill.stops.length > 0
+                                                ? [{ ...l.fill.stops[0], color: newColor }, ...l.fill.stops.slice(1)]
+                                                : [{ at: 0, color: newColor, opacity: 1 }, { at: 1, color: '#000000', opacity: 1 }],
                                         },
-                                    }
-                                    : l
-                            )
+                                    };
+                                }
+                                return {
+                                    ...l,
+                                    fill: {
+                                        kind: 'solid',
+                                        color: newColor,
+                                        opacity: l.fill.opacity ?? 1,
+                                    },
+                                };
+                            })
                         }
                         className="w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] hover:bg-[#242428] border border-white/[0.06] flex items-center justify-between cursor-pointer transition select-none"
                     >
@@ -1093,22 +1103,21 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     <span className="text-[13px] font-semibold text-[#e4e4e7]">
                         Layer effects
                     </span>
-                    <button
-                        type="button"
-                        onClick={() => setEffectsMenuOpen((v) => !v)}
-                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                        title="Add Layer Effect"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                    </button>
-                </div>
+                    <div className="relative" ref={effectsMenuRef}>
+                        <button
+                            type="button"
+                            onClick={() => setEffectsMenuOpen((v) => !v)}
+                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
+                            title="Add Layer Effect"
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                        </button>
 
-                {/* Floating effects popover menu */}
-                {effectsMenuOpen && (
-                    <div
-                        ref={effectsMenuRef}
-                        className="absolute right-3.5 top-9 z-30 w-44 rounded-xl bg-[#18181b] border border-white/10 p-1.5 shadow-2xl space-y-0.5 backdrop-blur-md"
-                    >
+                        {/* Floating effects popover menu */}
+                        {effectsMenuOpen && (
+                            <div
+                                className="absolute right-0 top-8 z-30 w-44 rounded-xl bg-[#18181b] border border-white/10 p-1.5 shadow-2xl space-y-0.5 backdrop-blur-md"
+                            >
                         {[
                             { id: 'dropShadow', label: 'Drop shadow', icon: Copy },
                             { id: 'glow', label: 'Glow', icon: Zap },
@@ -1135,6 +1144,8 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         })}
                     </div>
                 )}
+                    </div>
+                </div>
 
                 {/* Active Effects Cards */}
                 <div className="space-y-2">

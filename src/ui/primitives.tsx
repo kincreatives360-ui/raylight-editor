@@ -197,7 +197,8 @@ export const NumericField: React.FC<NumericFieldProps> = ({
 
 export interface ColorFieldProps {
     value: string;
-    onChange: ((color: string) => void) | ((event: { target: { value: string } }) => void);
+    onChange: (color: string) => void;
+    onChangeEvent?: (event: { target: { value: string } }) => void;
     label?: string;
     title?: string;
     gradientValue?: GradientValue;
@@ -210,6 +211,7 @@ export interface ColorFieldProps {
 export const ColorField: React.FC<ColorFieldProps> = ({
     value,
     onChange,
+    onChangeEvent,
     label = 'Color',
     title,
     gradientValue,
@@ -219,17 +221,8 @@ export const ColorField: React.FC<ColorFieldProps> = ({
     className = '',
 }) => {
     const handleChange = (newColor: string) => {
-        if (typeof onChange === 'function') {
-            try {
-                // If caller expects event object { target: { value } }
-                (onChange as (event: { target: { value: string } }) => void)({
-                    target: { value: newColor },
-                });
-            } catch {
-                // Fallback for direct string callers
-                (onChange as (color: string) => void)(newColor);
-            }
-        }
+        onChange(newColor);
+        onChangeEvent?.({ target: { value: newColor } });
     };
 
     return (

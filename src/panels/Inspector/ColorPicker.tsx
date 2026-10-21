@@ -100,7 +100,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         hexInputRef.current !== null &&
         hexInputRef.current === document.activeElement;
 
-    if (color !== previousColor && !draggingSquare) {
+    if (color !== previousColor && !draggingSquare && !draggingHue) {
         setPreviousColor(color);
         if (!isHexInputFocused) {
             setHexDraft(color);
@@ -381,6 +381,26 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             aria-valuemin={0}
                             aria-valuemax={359}
                             tabIndex={0}
+                            onKeyDown={(event) => {
+                                let newH: number | null = null;
+                                if (event.key === 'ArrowUp') {
+                                    newH = Math.max(0, hsv.h - 1);
+                                } else if (event.key === 'ArrowDown') {
+                                    newH = Math.min(359, hsv.h + 1);
+                                } else if (event.key === 'Home') {
+                                    newH = 0;
+                                } else if (event.key === 'End') {
+                                    newH = 359;
+                                }
+                                if (newH !== null) {
+                                    event.preventDefault();
+                                    const next = { ...hsvRef.current, h: newH };
+                                    setHsv(next);
+                                    const nextColor = hsvToHex(next);
+                                    setHexDraft(nextColor);
+                                    onChange(nextColor);
+                                }
+                            }}
                             onPointerDown={handleHuePointerDown}
                             onPointerMove={handleHuePointerMove}
                             onPointerUp={handleHuePointerUp}
@@ -509,7 +529,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     </div>
                     <div className="max-h-[180px] space-y-1 overflow-y-auto">
                         {gradient.stops.map((stop, index) => (
-                            <div key={`stop-${index}-${stop.color}-${stop.at}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
+                            <div key={`stop-${index}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
                                 <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
                                     <input
                                         aria-label={`Stop ${index + 1} position`}

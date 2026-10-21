@@ -160,6 +160,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         dragging: boolean;
     } | null>(null);
     const suppressShotClickRef = useRef<string | null>(null);
+    const suppressPillClickRef = useRef<string | null>(null);
     const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
@@ -400,13 +401,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 targets.add(l.inMs);
                 targets.add(l.outMs);
             }
-            if (l.entrance.type !== 'none') {
+            if (l.entrance.type !== 'none' && `${l.id}-entrance` !== excludeId && l.id !== excludeId) {
                 const entStart = l.inMs + (l.entrance.delayMs || 0);
                 const entDur = Math.max(80, l.entrance.durationMs || 500);
                 targets.add(entStart);
                 targets.add(entStart + entDur);
             }
-            if (l.exit.type !== 'none') {
+            if (l.exit.type !== 'none' && `${l.id}-exit` !== excludeId && l.id !== excludeId) {
                 const extDur = Math.max(80, l.exit.durationMs || 500);
                 const extEnd = l.outMs - (l.exit.delayMs || 0);
                 targets.add(Math.max(l.inMs, extEnd - extDur));
@@ -571,7 +572,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         const origDur = Math.max(100, preset.durationMs || 500);
         const layerSpan = Math.max(200, layer.outMs - layer.inMs);
         const pointerId = e.pointerId;
-        const snapTargets = getSnapTargets(shot);
+        const snapTargets = getSnapTargets(shot, `${layer.id}-${which}`);
         let hasMoved = false;
 
         try {
@@ -674,9 +675,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 const origGlobalEnd = layer.outMs - origDelay;
 
                 if (mode === 'move') {
-                    const snapStart = snapTime(origGlobalEnd - origDur - deltaMs, snapTargets, snapThresholdMs);
-                    const snapEnd = snapTime(origGlobalEnd - deltaMs, snapTargets, snapThresholdMs);
-                    let targetGlobalEnd = origGlobalEnd - deltaMs;
+                    const snapStart = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
+                    const snapEnd = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
+                    let targetGlobalEnd = origGlobalEnd + deltaMs;
                     let snapped = false;
                     if (snapEnd.snapped) {
                         targetGlobalEnd = snapEnd.time;
@@ -699,7 +700,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         snapped,
                     });
                 } else if (mode === 'left') {
-                    const snap = snapTime(origGlobalEnd - origDur - deltaMs, snapTargets, snapThresholdMs);
+                    const snap = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
                     const targetDur = origGlobalEnd - snap.time;
                     nextDur = Math.max(
                         80,
@@ -715,7 +716,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         snapped: snap.snapped,
                     });
                 } else if (mode === 'right') {
-                    const snap = snapTime(origGlobalEnd - deltaMs, snapTargets, snapThresholdMs);
+                    const snap = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
                     const targetDelay = layer.outMs - snap.time;
                     nextDelay = Math.max(
                         0,
@@ -752,8 +753,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
             if (hasMoved) {
+                suppressPillClickRef.current = `${layer.id}-${which}`;
                 commitDragTransaction();
                 setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressPillClickRef.current === `${layer.id}-${which}`) {
+                        suppressPillClickRef.current = null;
+                    }
+                }, 0);
             }
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
@@ -877,8 +884,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
             if (hasMoved) {
+                suppressPillClickRef.current = block.id;
                 commitDragTransaction();
                 setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressPillClickRef.current === block.id) {
+                        suppressPillClickRef.current = null;
+                    }
+                }, 0);
             }
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
@@ -1945,6 +1958,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                 data-preset-pill="in"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === `${layer.id}-entrance`) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
                                                                     selectPreset('entrance', layer.id);
                                                                     setEasingPopoverTarget({
                                                                         easing: layer.entrance.easing || { kind: 'preset', name: 'ease-out' },
@@ -2014,6 +2031,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                 data-preset-pill="out"
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === `${layer.id}-exit`) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
                                                                     selectPreset('exit', layer.id);
                                                                     setEasingPopoverTarget({
                                                                         easing: layer.exit.easing || { kind: 'preset', name: 'ease-out' },
@@ -2102,6 +2123,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             <div
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === blk.id) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
                                                                     selectBlock(blk.id, layer.id);
                                                                     setEasingPopoverTarget({
                                                                         easing: blk.easing,
@@ -2264,7 +2289,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     {easingPopoverTarget && (
                         <EasingPopover
                             easing={easingPopoverTarget.easing}
-                            onChange={easingPopoverTarget.onChange}
+                            onChange={(nextEasing) => {
+                                easingPopoverTarget.onChange(nextEasing);
+                                setEasingPopoverTarget((prev) =>
+                                    prev ? { ...prev, easing: nextEasing } : null
+                                );
+                            }}
                             onClose={() => setEasingPopoverTarget(null)}
                             anchorRect={easingPopoverTarget.anchorRect}
                         />

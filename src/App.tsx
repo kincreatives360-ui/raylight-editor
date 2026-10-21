@@ -206,6 +206,8 @@ export default function App() {
   }, []);
 
   const handleOpenExportModal = useCallback(() => {
+    setExportProgressText('');
+    setExportError('');
     setExportModalOpen(true);
   }, []);
 
@@ -1026,6 +1028,8 @@ export default function App() {
   const handleStartExport = async () => {
     setIsPlaying(false);
     setExportError('');
+    setExportProgressText('');
+    let controller: AbortController | null = null;
     try {
       if (exportSettings.format === 'png') {
         const { exportCurrentFrameAsPng } = await import('./engine/exporter');
@@ -1043,7 +1047,7 @@ export default function App() {
         window.clearTimeout(exportCloseTimerRef.current);
         exportCloseTimerRef.current = null;
       }
-      const controller = new AbortController();
+      controller = new AbortController();
       exportAbortRef.current = controller;
       setExporting(true);
       setExportPercent(0);
@@ -1074,7 +1078,7 @@ export default function App() {
         }, 1200);
       }
     } catch (error) {
-      if (controller.signal.aborted) {
+      if (controller?.signal.aborted) {
         setExportProgressText('Export cancelled.');
       } else {
         setExportError(error instanceof Error ? error.message : 'Export failed.');

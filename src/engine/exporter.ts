@@ -497,6 +497,12 @@ export async function runVideoExportPipeline(
                 }
                 return;
             }
+            if (abortSignal?.aborted) {
+                if (finalizationResolve) {
+                    finalizationResolve();
+                }
+                return;
+            }
             if (chunks.length === 0) {
                 const err = new Error('Video export finished without any recorded data.');
                 recordingError = err;
@@ -506,12 +512,6 @@ export async function runVideoExportPipeline(
                 return;
             }
             try {
-                if (abortSignal?.aborted) {
-                    if (finalizationResolve) {
-                        finalizationResolve();
-                    }
-                    return;
-                }
                 const actualMime = recorder?.mimeType || selectedMime;
                 const isMp4 = actualMime.includes('mp4');
                 const ext = isMp4 ? 'mp4' : 'webm';

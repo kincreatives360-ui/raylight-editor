@@ -251,15 +251,16 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     if (!uniforms) return;
     if (bg.kind === 'shader') {
       const palette = getShaderColors(bg.preset, bg.colors, bg.color, bg.backgroundColor, bg.color1, bg.color2, bg.color3);
+      const cfg = DEFAULT_SHADER_CONFIGS[bg.preset] || DEFAULT_SHADER_CONFIGS.silk;
       uniforms.uColor?.value.set(bg.color);
       uniforms.uBase?.value.set(bg.backgroundColor);
       if (uniforms.uColor1) uniforms.uColor1.value.set(bg.color1 || palette[0] || bg.color || '#4f46e5');
       if (uniforms.uColor2) uniforms.uColor2.value.set(bg.color2 || palette[1] || '#ec4899');
       if (uniforms.uColor3) uniforms.uColor3.value.set(bg.color3 || palette[2] || '#06b6d4');
       if (uniforms.uColor4) uniforms.uColor4.value.set(bg.color4 || palette[3] || '#1a1a2e');
-      if (uniforms.uSpeed) uniforms.uSpeed.value = bg.speed ?? 1;
-      if (uniforms.uNoiseScale) uniforms.uNoiseScale.value = bg.noiseScale ?? bg.waves ?? 1;
-      if (uniforms.uWaves) uniforms.uWaves.value = bg.waves;
+      if (uniforms.uSpeed) uniforms.uSpeed.value = bg.speed ?? cfg.speed ?? 1;
+      if (uniforms.uNoiseScale) uniforms.uNoiseScale.value = bg.noiseScale ?? bg.waves ?? cfg.waves ?? 1;
+      if (uniforms.uWaves) uniforms.uWaves.value = bg.waves ?? cfg.waves ?? 1;
       if (uniforms.uFocus) uniforms.uFocus.value = bg.focus;
       if (uniforms.uGlow) uniforms.uGlow.value = bg.glow;
       if (uniforms.uShine) uniforms.uShine.value = bg.shine;
@@ -338,7 +339,8 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     mesh.scale.set(planeW, planeH, 1);
 
     const currentTimeMs = usePlayheadStore.getState().currentTimeMs;
-    const speed = bg.kind === 'shader' ? (bg.speed ?? 1) : 1;
+    const cfg = bg.kind === 'shader' ? (DEFAULT_SHADER_CONFIGS[bg.preset] || DEFAULT_SHADER_CONFIGS.silk) : null;
+    const speed = bg.kind === 'shader' ? (bg.speed ?? cfg?.speed ?? 1) : 1;
 
     // Detect manual playhead scrubbing vs continuous frame playback
     const dtMs = currentTimeMs - prevTimeMsRef.current;

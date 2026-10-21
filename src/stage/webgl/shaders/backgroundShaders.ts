@@ -83,8 +83,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
-    float speed = max(uSpeed, 0.05);
-    float t = (uTime + 12.0) * speed;
+    float t = uTime + 12.0;
     float freq = (uWaves > 0.0 ? uWaves : 1.0) * (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * 1.4;
     float focus = uFocus > 0.0 ? uFocus : 1.0;
     float glow = uGlow > 0.0 ? uGlow : 1.0;
@@ -140,8 +139,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 uv = (vUv - 0.5) * vec2(uAspect, 1.0) / min(uAspect, 1.0) + 0.5;
-    float speed = max(uSpeed, 0.05);
-    float t = (uTime + 24.0) * speed * 0.35;
+    float t = (uTime + 24.0) * 0.35;
     float scale = (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * (uWaves > 0.0 ? uWaves : 1.0);
     float focus = max(uFocus, 0.1);
     float glow = max(uGlow, 0.1);
@@ -199,8 +197,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
-    float speed = max(uSpeed, 0.05);
-    float t = (uTime + 45.0) * speed * 0.45;
+    float t = (uTime + 45.0) * 0.45;
     float scale = (uNoiseScale > 0.0 ? uNoiseScale : 1.0) * (uWaves > 0.0 ? uWaves : 1.0) * 0.8;
     float focus = max(uFocus, 0.1);
     float glow = max(uGlow, 0.1);
@@ -276,7 +273,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
-    float t = (uTime + 10.0) * max(uSpeed, 0.05) * 0.5;
+    float t = (uTime + 10.0) * 0.5;
     float radius = 0.72 * max(uFocus, 0.2);
     float dist = length(p);
     float waves = max(uWaves, 0.1);
@@ -335,7 +332,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 4.0;
-    float t = (uTime + 20.0) * max(uSpeed, 0.05) * 0.8;
+    float t = (uTime + 20.0) * 0.8;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -396,7 +393,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 uv = vUv;
-    float t = (uTime + 30.0) * max(uSpeed, 0.05) * 0.6;
+    float t = (uTime + 30.0) * 0.6;
     float waves = max(uWaves, 0.1);
     float focus = max(uFocus, 0.1);
     float glow = max(uGlow, 0.1);
@@ -460,7 +457,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.5;
-    float t = (uTime + 15.0) * max(uSpeed, 0.05) * 0.35;
+    float t = (uTime + 15.0) * 0.35;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -511,8 +508,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0);
-    float speed = max(uSpeed, 0.1);
-    float t = (uTime + 50.0) * speed * 2.2;
+    float t = (uTime + 50.0) * 2.2;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -564,7 +560,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
-    float t = (uTime + 25.0) * max(uSpeed, 0.05) * 0.7;
+    float t = (uTime + 25.0) * 0.7;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -624,7 +620,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.0;
-    float t = (uTime + 8.0) * max(uSpeed, 0.05) * 0.4;
+    float t = (uTime + 8.0) * 0.4;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -678,7 +674,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 2.5;
-    float t = (uTime + 35.0) * max(uSpeed, 0.05) * 0.6;
+    float t = (uTime + 35.0) * 0.6;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.2);
     float glow = max(uGlow, 0.1);
@@ -732,7 +728,7 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
 
   void main() {
     vec2 p = (vUv - 0.5) * vec2(uAspect, 1.0) * 3.0;
-    float t = (uTime + 40.0) * max(uSpeed, 0.05) * 0.75;
+    float t = (uTime + 40.0) * 0.75;
     float waves = max(uWaves, 0.2);
     float focus = max(uFocus, 0.1);
     float glow = max(uGlow, 0.1);

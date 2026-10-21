@@ -185,9 +185,28 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                 for (const id of neededIds) {
                     const req = assetStore.get(id);
                     req.onsuccess = async () => {
-                        if (req.result) {
-                            assetMap[id] = req.result as AssetRecord;
-                        } else {
+                        try {
+                            if (req.result) {
+                                assetMap[id] = req.result as AssetRecord;
+                            } else {
+                                const diskDataUrl = await loadMediaDataUrlFromOPFS(
+                                    id,
+                                    baseProject.assets[id]?.mimeType
+                                );
+                                if (diskDataUrl) {
+                                    assetMap[id] = {
+                                        ...baseProject.assets[id],
+                                        dataUrl: diskDataUrl,
+                                    };
+                                }
+                            }
+                        } finally {
+                            pending--;
+                            if (pending === 0) finish();
+                        }
+                    };
+                    req.onerror = async () => {
+                        try {
                             const diskDataUrl = await loadMediaDataUrlFromOPFS(
                                 id,
                                 baseProject.assets[id]?.mimeType
@@ -198,23 +217,10 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                                     dataUrl: diskDataUrl,
                                 };
                             }
+                        } finally {
+                            pending--;
+                            if (pending === 0) finish();
                         }
-                        pending--;
-                        if (pending === 0) finish();
-                    };
-                    req.onerror = async () => {
-                        const diskDataUrl = await loadMediaDataUrlFromOPFS(
-                            id,
-                            baseProject.assets[id]?.mimeType
-                        );
-                        if (diskDataUrl) {
-                            assetMap[id] = {
-                                ...baseProject.assets[id],
-                                dataUrl: diskDataUrl,
-                            };
-                        }
-                        pending--;
-                        if (pending === 0) finish();
                     };
                 }
             };

@@ -79,6 +79,14 @@ function parseNumericAttr(
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function escapeSvgAttr(val: string): string {
+    return val
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 // Parses a Figma "Copy as SVG" string into separate editable Text, Shape, and Image layers
 export function parseFigmaSvgToLayers(
     svgText: string,
@@ -428,8 +436,10 @@ export function parseFigmaSvgToLayers(
             const pathStrokeWidth = parseNumericAttr(el, 'stroke-width', 0);
             const pathOpacity = parseNumericAttr(el, 'opacity', 1);
 
-            const strokeAttr = pathStroke ? ` stroke="${pathStroke}" stroke-width="${pathStrokeWidth}"` : '';
-            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}"><path d="${d}" fill="${pathFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
+            const escapedD = escapeSvgAttr(d);
+            const escapedFill = escapeSvgAttr(pathFill);
+            const strokeAttr = pathStroke ? ` stroke="${escapeSvgAttr(pathStroke)}" stroke-width="${pathStrokeWidth}"` : '';
+            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}"><path d="${escapedD}" fill="${escapedFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
             const encoded = `data:image/svg+xml;utf8,${encodeURIComponent(pathSvg)}`;
             const assetId = `asset-figma-path-${Date.now()}-${orderCounter}`;
 

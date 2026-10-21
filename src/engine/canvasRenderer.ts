@@ -30,29 +30,42 @@ const videoElementCache = new Map<string, HTMLVideoElement>();
 
 export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
   let video = videoElementCache.get(dataUrl);
-  if (!video) {
-    if (videoElementCache.size >= MAX_VIDEO_CACHE_SIZE) {
-      const oldestKey = videoElementCache.keys().next().value;
-      if (oldestKey) {
-        const oldVid = videoElementCache.get(oldestKey);
-        if (oldVid) {
-          oldVid.pause();
-          oldVid.removeAttribute('src');
-          oldVid.load();
-        }
-        videoElementCache.delete(oldestKey);
-      }
-    }
-    video = document.createElement('video');
-    video.crossOrigin = 'anonymous';
-    video.muted = true;
-    video.playsInline = true;
-    video.preload = 'auto';
-    video.src = dataUrl;
-    video.load();
+  if (video) {
+    videoElementCache.delete(dataUrl);
     videoElementCache.set(dataUrl, video);
+    return video;
   }
+  if (videoElementCache.size >= MAX_VIDEO_CACHE_SIZE) {
+    const oldestKey = videoElementCache.keys().next().value;
+    if (oldestKey) {
+      const oldVid = videoElementCache.get(oldestKey);
+      if (oldVid) {
+        oldVid.pause();
+        oldVid.removeAttribute('src');
+        oldVid.load();
+      }
+      videoElementCache.delete(oldestKey);
+    }
+  }
+  video = document.createElement('video');
+  video.crossOrigin = 'anonymous';
+  video.muted = true;
+  video.playsInline = true;
+  video.preload = 'auto';
+  video.src = dataUrl;
+  video.load();
+  videoElementCache.set(dataUrl, video);
   return video;
+}
+
+export function getOrCreateImageElement(dataUrl: string): HTMLImageElement | undefined {
+  const img = imageElementCache.get(dataUrl);
+  if (img) {
+    imageElementCache.delete(dataUrl);
+    imageElementCache.set(dataUrl, img);
+    return img;
+  }
+  return undefined;
 }
 
 export function clearImageElementCache(): void {
@@ -134,7 +147,7 @@ export async function preloadProjectImages(project: Project): Promise<void> {
     Array.from(urls).map(
       (url) =>
         new Promise<void>((resolve) => {
-          if (imageElementCache.has(url)) {
+          if (getOrCreateImageElement(url)) {
             resolve();
             return;
           }
@@ -602,7 +615,7 @@ function drawLayerOnCanvas(
     const asset = project.assets[imgLayer.assetId];
     const isVideo = layer.kind === 'video' || (asset && asset.mimeType?.startsWith('video/'));
     const cachedImg = !isVideo && asset?.dataUrl
-      ? imageElementCache.get(asset.dataUrl)
+      ? getOrCreateImageElement(asset.dataUrl)
       : undefined;
     const cachedVideo = isVideo && asset?.dataUrl
       ? getOrCreateVideoElement(asset.dataUrl)
@@ -1076,7 +1089,7 @@ function renderSingleBackground(
     }
 
     if (dataUrl) {
-      const img = imageElementCache.get(dataUrl);
+      const img = getOrCreateImageElement(dataUrl);
       const imgOpacity = bg.opacity ?? 1;
       ctx.globalAlpha *= imgOpacity;
 

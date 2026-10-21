@@ -904,6 +904,6 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     },
 }));
 
-if (typeof window !== 'undefined') {
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
     (window as unknown as { useProjectStore: typeof useProjectStore }).useProjectStore = useProjectStore;
 }

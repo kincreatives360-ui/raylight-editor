@@ -717,10 +717,16 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                 left: `${h.pos.x}px`,
                                 top: `${h.pos.y}px`,
                                 transform: 'translate(-50%, -50%)',
-                                cursor: 'nwse-resize',
+                                cursor: h.cursor,
                             }}
-                            title="Scale & Rotate handle"
-                            className="w-5 h-5 rounded-full bg-[#0088ff] border-2 border-white shadow-xl flex items-center justify-center absolute pointer-events-auto hover:scale-125 transition-transform duration-100 ease-out z-20 cursor-nwse-resize"
+                            title={isCropping ? "Crop handle" : "Scale handle"}
+                            className={`w-5 h-5 rounded-full ${
+                                isCropping
+                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
+                                    : isAnimateMode
+                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
+                                        : 'bg-[#0088ff] border-white'
+                            } border-2 shadow-xl flex items-center justify-center absolute pointer-events-auto hover:scale-125 transition-transform duration-100 ease-out z-20`}
                         >
                             <Sparkles className="w-2.5 h-2.5 text-white" />
                         </div>

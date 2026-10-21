@@ -207,9 +207,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     onBlur={commitTextInput}
                     onKeyDown={(e) => {
                         e.stopPropagation();
-                        e.preventDefault();
-                        if (e.key === 'Enter') commitTextInput();
-                        if (e.key === 'Escape') {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitTextInput();
+                        } else if (e.key === 'Escape') {
+                            e.preventDefault();
                             setIsEditing(false);
                             containerRef.current?.blur();
                         }

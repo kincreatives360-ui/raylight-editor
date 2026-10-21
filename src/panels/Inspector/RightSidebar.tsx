@@ -87,6 +87,9 @@ const ALL_BLEND_MODES: BlendMode[] = [
 
 
 
+const DEFAULT_AVATAR_PLACEHOLDER =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' clip-rule='evenodd' /%3E%3C/svg%3E";
+
 interface ShaderPreviewCanvasProps {
     preset: ShaderPreset;
     color1: string;
@@ -529,10 +532,6 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
         updateProject((p) => ({
             ...p,
             background: newBg,
-            shots: p.shots.map((s) => ({
-                ...s,
-                useProjectBackground: true,
-            })),
         }));
     };
 
@@ -1013,7 +1012,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         color1={shaderColor1}
                                         color2={shaderColor2}
                                         color3={shaderColor3}
-                                        colors={shaderBg?.colors || [shaderColor1, shaderColor2, shaderColor3]}
+                                        colors={shaderBg?.colors}
                                         speed={shaderBg?.speed ?? 1}
                                         waves={shaderBg?.waves ?? 1}
                                         focus={shaderBg?.focus ?? 1}
@@ -1504,7 +1503,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     {/* User Profile Avatar with Teal Ring */}
                     <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm cursor-pointer hover:opacity-90 transition">
                         <img
-                            src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80"
+                            src={DEFAULT_AVATAR_PLACEHOLDER}
                             alt="User Profile"
                             className="w-full h-full object-cover"
                         />
@@ -2928,6 +2927,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         )}
 
+                                        {blk.property === 'scale' && typeof blk.amount === 'number' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
+                                                <ScrubInput
+                                                    label="Δ"
+                                                    value={Math.round(Number(blk.amount || 1) * 100)}
+                                                    min={10}
+                                                    max={500}
+                                                    step={5}
+                                                    unit="%"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
+                                                />
+                                            </div>
+                                        )}
+
                                         {blk.property === 'scale' && typeof blk.amount === 'object' && (
                                             <div className="space-y-1.5">
                                                 <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
@@ -3008,12 +3022,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 <label className="text-[11px] text-[#8e8e93] block font-normal">Blur</label>
                                                 <ScrubInput
                                                     label="Radius"
-                                                    value={Math.round(Number(blk.amount || 0))}
+                                                    value={Math.round(Number(blk.amount || 0) * 100)}
                                                     min={0}
                                                     max={100}
                                                     step={1}
-                                                    unit="px"
-                                                    onChange={(amount) => handleUpdateBlock(blk.id, { amount })}
+                                                    unit="%"
+                                                    onChange={(amount) => handleUpdateBlock(blk.id, { amount: amount / 100 })}
                                                 />
                                             </div>
                                         )}
@@ -3786,7 +3800,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             {easingPopoverConfig && (
                 <EasingPopover
                     easing={easingPopoverConfig.easing}
-                    onChange={easingPopoverConfig.onChange}
+                    onChange={(nextEasing) => {
+                        easingPopoverConfig.onChange(nextEasing);
+                        setEasingPopoverConfig((prev) =>
+                            prev ? { ...prev, easing: nextEasing } : null
+                        );
+                    }}
                     onClose={() => setEasingPopoverConfig(null)}
                     anchorRect={easingPopoverConfig.anchorRect}
                 />

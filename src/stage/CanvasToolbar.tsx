@@ -124,7 +124,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
     const handleApplyPreset = (presetName: string) => {
         if (!activeShot) return;
-        const targetLayer = selectedLayer || activeShot.layers[0];
+        const targetLayer = selectedLayer;
 
         if (!targetLayer && presetName !== 'Camera Shake') {
             showToast('Please select a layer to apply preset');
@@ -417,13 +417,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         { id: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowRight },
     ];
 
-    const lightItems = [
-        { id: 'spot', label: 'Spot', key: 'B', desc: 'Focused cone light' },
-        { id: 'point', label: 'Point', key: '', desc: 'Omnidirectional source' },
-        { id: 'area', label: 'Area', key: '', desc: 'Rectangular studio softbox' },
-        { id: 'sun', label: 'Sun', key: '', desc: 'Global directional key light' },
-    ];
-
     /* ── Render a flat dropdown menu ── */
     const DropdownMenu: React.FC<{
         children: React.ReactNode;
@@ -668,7 +661,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
 
-                {/* 7 ─ Lighting ▼ */}
+                {/* 7 ─ Lighting */}
                 <div className="relative flex items-center">
                     <button
                         type="button"
@@ -679,38 +672,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     >
                         <Sun className="w-3.5 h-3.5" />
                     </button>
-                    <button
-                        type="button"
-                        aria-label="Lighting options"
-                        aria-expanded={openMenu === 'light'}
-                        onClick={() => toggleMenu('light')}
-                        className={chevronBtn}
-                    >
-                        <ChevronDown className="w-3 h-3" />
-                    </button>
-
-                    {openMenu === 'light' && (
-                        <DropdownMenu align="right">
-                            {lightItems.map((item) => (
-                                <button
-                                    key={item.id}
-                                    type="button"
-                                    onClick={() => {
-                                        if (onToggleLightRig) onToggleLightRig();
-                                        setOpenMenu(null);
-                                        showToast(`Active lighting: ${item.label}`);
-                                    }}
-                                    className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer text-[#d4d4d8] hover:bg-white/5 hover:text-white transition"
-                                >
-                                    <div>
-                                        <div className="font-medium text-white">{item.label}</div>
-                                        <div className="text-[10px] text-[#71717a]">{item.desc}</div>
-                                    </div>
-                                    {item.key && <span className="text-[10px] font-mono opacity-60">{item.key}</span>}
-                                </button>
-                            ))}
-                        </DropdownMenu>
-                    )}
                 </div>
 
                 {/* 8 ─ Components & Motion Presets ▼ */}
