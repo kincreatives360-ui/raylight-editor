@@ -33,12 +33,20 @@ import {
     SlidersHorizontal,
     Upload,
     Sparkles,
+    CircleDot,
+    Move,
+    Layers,
+    Scan,
     Image as ImageIcon,
     Square,
     Film,
     Trash2,
-    Laptop,
     PanelRightClose,
+    Compass,
+    RotateCw,
+    Maximize2,
+    Laptop,
+    Spline,
 } from 'lucide-react';
 import type {
     Shot,
@@ -65,6 +73,7 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { EasingPopover } from '../Timeline/EasingPopover';
 
 const ALL_BLEND_MODES: BlendMode[] = [
     'normal',
@@ -76,13 +85,7 @@ const ALL_BLEND_MODES: BlendMode[] = [
     'difference',
 ];
 
-const SHADER_STUDIO_PALETTES = [
-    { name: 'Electric', colors: ['#4f46e5', '#ec4899', '#06b6d4'] },
-    { name: 'Aurora', colors: ['#0f172a', '#10b981', '#6366f1'] },
-    { name: 'Chrome', colors: ['#1e293b', '#94a3b8', '#f8fafc'] },
-    { name: 'Sunset', colors: ['#450a0a', '#ea580c', '#facc15'] },
-    { name: 'Royal', colors: ['#030712', '#3b82f6', '#a855f7'] },
-];
+
 
 interface ShaderPreviewCanvasProps {
     preset: ShaderPreset;
@@ -506,10 +509,12 @@ const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
 
 interface ProjectSettingsPanelProps {
     onSwapImageClick?: () => void;
+    onOpenShortcuts?: () => void;
 }
 
 const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     onSwapImageClick: _onSwapImageClick,
+    onOpenShortcuts: _onOpenShortcuts,
 }) => {
     const { project, updateProject } = useProjectStore();
     const [presetMenuOpen, setPresetMenuOpen] = useState(false);
@@ -1056,81 +1061,46 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                 )}
                             </div>
 
-                            {/* Color Stops Studio */}
+                            {/* Shader Colors matching Raylight: Color & Accent */}
                             <div className="space-y-2 pt-1 border-t border-white/[0.06]">
-                                <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-[#8e8e93] font-normal">Color Stops</span>
-                                    <span className="text-[10px] text-[#71717a] font-mono">
-                                        {isPalette ? '3 Stops' : 'Accent & Base'}
-                                    </span>
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Color</label>
+                                    <ColorPicker
+                                        label="Color"
+                                        color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
+                                        showGradientMode={false}
+                                        onChange={(c) => updateShaderColors(c, undefined, undefined)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                    />
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-1.5">
-                                    {/* Color Stop 1 */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a] block">Color 1</span>
-                                        <ColorPicker
-                                            label="Color 1"
-                                            color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
-                                            showGradientMode={false}
-                                            onChange={(c) => updateShaderColors(c, undefined, undefined)}
-                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
-                                        />
-                                    </div>
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Accent</label>
+                                    <ColorPicker
+                                        label="Accent"
+                                        color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
+                                        showGradientMode={false}
+                                        onChange={(c) => updateShaderColors(undefined, c, undefined)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                    />
+                                </div>
 
-                                    {/* Color Stop 2 */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a] block">Color 2</span>
-                                        <ColorPicker
-                                            label="Color 2"
-                                            color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
-                                            showGradientMode={false}
-                                            onChange={(c) => updateShaderColors(undefined, c, undefined)}
-                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
-                                        />
-                                    </div>
-
-                                    {/* Color Stop 3 */}
-                                    <div className="space-y-1">
-                                        <span className="text-[10px] text-[#71717a] block">Color 3</span>
+                                {isPalette && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Color 3</label>
                                         <ColorPicker
                                             label="Color 3"
                                             color={shaderColor3.startsWith('#') ? shaderColor3 : `#${shaderColor3}`}
                                             showGradientMode={false}
                                             onChange={(c) => updateShaderColors(undefined, undefined, c)}
-                                            className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-1.5 transition w-full"
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
                                         />
                                     </div>
-                                </div>
-
-                                {/* Curated Palette Swatches */}
-                                <div className="flex items-center gap-1.5 pt-1">
-                                    <span className="text-[10px] text-[#71717a] mr-1">Palettes:</span>
-                                    {SHADER_STUDIO_PALETTES.map((pal) => (
-                                        <button
-                                            key={pal.name}
-                                            type="button"
-                                            onClick={() => updateShaderColors(pal.colors[0], pal.colors[1], pal.colors[2])}
-                                            className="h-5 px-1.5 rounded border border-white/10 hover:border-white/30 flex items-center gap-1 bg-[#141416] transition cursor-pointer"
-                                            title={pal.name}
-                                        >
-                                            <div className="flex -space-x-1">
-                                                {pal.colors.map((c, i) => (
-                                                    <div
-                                                        key={i}
-                                                        className="w-2.5 h-2.5 rounded-full border border-black/40"
-                                                        style={{ backgroundColor: c }}
-                                                    />
-                                                ))}
-                                            </div>
-                                        </button>
-                                    ))}
-                                </div>
+                                )}
                             </div>
 
-                            {/* Mini Studio Scrubbers */}
+                            {/* Shader Parameters Grid */}
                             <div className="space-y-2 pt-1 border-t border-white/[0.06]">
-                                <span className="text-[11px] text-[#8e8e93] block font-normal">Parameters Studio</span>
 
                                 {/* Row 1: Speed & Waves */}
                                 <div className="grid grid-cols-2 gap-2">
@@ -1199,26 +1169,6 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     )}
                 </div>
             </div>
-
-            {/* Bottom Footer: Ask Raylight & Help */}
-            <div className="pt-4 border-t border-white/[0.06] flex items-center justify-between text-[#8e8e93]">
-                <button
-                    type="button"
-                    onClick={() => {}}
-                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg hover:bg-white/5 hover:text-white text-[11px] font-medium transition cursor-pointer"
-                >
-                    <Sparkles className="w-3.5 h-3.5 text-white/70" />
-                    <span>Ask Raylight</span>
-                </button>
-                <button
-                    type="button"
-                    onClick={() => {}}
-                    title="Help & documentation"
-                    className="w-6 h-6 rounded-lg hover:bg-white/5 hover:text-white flex items-center justify-center text-[12px] font-semibold transition cursor-pointer"
-                >
-                    ?
-                </button>
-            </div>
         </div>
     );
 };
@@ -1229,6 +1179,7 @@ interface RightSidebarProps {
     selectedLayerIds: string[];
     onSwapImageClick: () => void;
     onOpenExportModal: () => void;
+    onOpenShortcuts?: () => void;
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
@@ -1237,6 +1188,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     selectedLayerIds,
     onSwapImageClick,
     onOpenExportModal,
+    onOpenShortcuts,
 }) => {
     const {
         project,
@@ -1247,9 +1199,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const {
         selectedBlockId,
         selectedCameraBlockId,
+        setTimelineView,
         setTimelineLayerExpanded,
         selectBlock,
         selectCameraBlock,
+        selectPreset,
         clearLayerSelection,
         toggleRightSidebar,
         rightSidebarWidth,
@@ -1258,9 +1212,16 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
     const [aspectLocked, setAspectLocked] = useState(true);
     const [addAnimMenuOpen, setAddAnimMenuOpen] = useState(false);
+    const [inMenuOpen, setInMenuOpen] = useState(false);
+    const [outMenuOpen, setOutMenuOpen] = useState(false);
     const [swapMenuOpen, setSwapMenuOpen] = useState(false);
     const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
+    const [easingPopoverConfig, setEasingPopoverConfig] = useState<{
+        easing: Easing;
+        onChange: (easing: Easing) => void;
+        anchorRect?: DOMRect | null;
+    } | null>(null);
 
     const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -1373,9 +1334,76 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             ...l,
             blocks: [...l.blocks, newBlock],
         }));
+        setTimelineView('scene');
         setTimelineLayerExpanded(selectedLayer.id, true);
         selectBlock(id, selectedLayer.id);
         setAddAnimMenuOpen(false);
+    };
+
+    const handleAddPreset = (
+        which: 'in' | 'out',
+        presetType: 'fade' | 'slide' | 'float' | 'wipe'
+    ) => {
+        if (!selectedLayer) return;
+        setTimelineView('scene');
+        setTimelineLayerExpanded(selectedLayer.id, true);
+        selectPreset(which === 'in' ? 'entrance' : 'exit', selectedLayer.id);
+
+        let mappedType: TransitionType = 'fade';
+        let distance = 0;
+        let durationMs = 500;
+        if (presetType === 'fade') {
+            mappedType = 'fade';
+            durationMs = 500;
+        } else if (presetType === 'slide') {
+            mappedType = which === 'in' ? 'slide-up' : 'slide-down';
+            distance = 0.25;
+            durationMs = 500;
+        } else if (presetType === 'float') {
+            mappedType = 'float-out';
+            distance = 0.15;
+            durationMs = 650;
+        } else if (presetType === 'wipe') {
+            mappedType = 'mask-sweep';
+            distance = 0.5;
+            durationMs = 500;
+        }
+
+        const newPreset = {
+            id: `${which}-${Date.now()}`,
+            type: mappedType,
+            durationMs,
+            delayMs: 0,
+            distance,
+            easing: { kind: 'preset' as const, name: 'ease-in-out' as const },
+        };
+
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            if (which === 'in') {
+                if (l.entrances && l.entrances.length > 0) {
+                    const next = [...l.entrances, newPreset];
+                    return { ...l, entrances: next, entrance: next[0] };
+                }
+                if (l.entrance && l.entrance.type !== 'none') {
+                    const first = { ...l.entrance, id: `ent-${Date.now()}-1` };
+                    return { ...l, entrances: [first, newPreset], entrance: first };
+                }
+                return { ...l, entrance: newPreset };
+            } else {
+                if (l.exits && l.exits.length > 0) {
+                    const next = [...l.exits, newPreset];
+                    return { ...l, exits: next, exit: next[0] };
+                }
+                if (l.exit && l.exit.type !== 'none') {
+                    const first = { ...l.exit, id: `ext-${Date.now()}-1` };
+                    return { ...l, exits: [first, newPreset], exit: first };
+                }
+                return { ...l, exit: newPreset };
+            }
+        });
+
+        if (which === 'in') setInMenuOpen(false);
+        else setOutMenuOpen(false);
     };
 
     const handleUpdateBlock = (
@@ -1406,7 +1434,44 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         clearLayerSelection();
     };
 
+    const handleSetBlockDirection = (blk: AnimationBlock, sign: 1 | -1) => {
+        if (!selectedLayer) return;
+        if (typeof blk.amount === 'object') {
+            const vec = blk.amount as Vec3;
+            if (blk.property === 'tilt') {
+                const curY = Math.abs(vec.y || degToRad(8));
+                handleUpdateBlock(blk.id, { amount: { ...vec, y: sign * curY } });
+            } else if (blk.property === 'rotation') {
+                const curZ = Math.abs(vec.z || degToRad(15));
+                handleUpdateBlock(blk.id, { amount: { ...vec, z: sign * curZ } });
+            } else {
+                const curX = Math.abs(vec.x || 0.35);
+                handleUpdateBlock(blk.id, { amount: { ...vec, x: sign * curX } });
+            }
+        } else if (typeof blk.amount === 'number') {
+            const curVal = Math.abs(blk.amount || 1);
+            handleUpdateBlock(blk.id, { amount: sign * curVal });
+        }
+    };
 
+    const getEasingDisplayLabel = (easing: Easing) => {
+        if (easing.kind === 'preset') {
+            if (easing.name === 'ease-in-out') return 'Ease in and out';
+            if (easing.name === 'ease-in') return 'Ease in';
+            if (easing.name === 'ease-out') return 'Ease out';
+            if (easing.name === 'linear') return 'Linear';
+            if (easing.name === 'ease-out-back') return 'Back';
+            if (easing.name === 'ease-out-expo') return 'Expo';
+            return easing.name.replace(/-/g, ' ');
+        }
+        if (easing.kind === 'spring') {
+            return `Spring: ${easing.name}`;
+        }
+        if (easing.kind === 'bezier') {
+            return 'Custom Bezier';
+        }
+        return 'Ease in and out';
+    };
 
     return (
         <aside
@@ -2671,210 +2736,318 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             <div className="p-3.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Keyframe Blocks
+                                        Animations{selectedLayer.blocks.length > 0 ? ` (${selectedLayer.blocks.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() => setAddAnimMenuOpen((v) => !v)}
-                                        className="px-2 py-1 rounded-md bg-[#0088ff]/15 hover:bg-[#0088ff]/25 text-[#0088ff] hover:text-white flex items-center gap-1 text-[10px] font-medium cursor-pointer transition"
+                                        onClick={() => {
+                                            setAddAnimMenuOpen((v) => !v);
+                                            setInMenuOpen(false);
+                                            setOutMenuOpen(false);
+                                        }}
+                                        title="Add Animation Block"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
-                                        <Plus className="w-3 h-3" />
-                                        <span>Add</span>
+                                        <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
                                 {addAnimMenuOpen && (
-                                    <div className="mt-2 p-1 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl space-y-0.5 text-[11px] z-20">
-                                        {(
-                                            [
-                                                { id: 'position', label: 'Position & Depth (X, Y, Z)' },
-                                                { id: 'tilt', label: '3D Tilt (Pitch & Yaw)' },
-                                                { id: 'rotation', label: '2D Roll Rotation' },
-                                                { id: 'scale', label: 'Scale Multiplier' },
-                                                { id: 'size', label: 'Width & Height Size' },
-                                                { id: 'opacity', label: 'Opacity Fade' },
-                                                { id: 'cornerRadius', label: 'Corner Radius' },
-                                                { id: 'layerBlur', label: 'Layer Blur' },
-                                                { id: 'shimmer', label: 'Light Shimmer Sweep' },
-                                                { id: 'maskSweep', label: 'Mask Reveal Sweep' },
-                                            ] as { id: AnimationBlockProperty; label: string }[]
-                                        ).map((item) => (
-                                            <button
-                                                key={item.id}
-                                                onClick={() => handleAddAnimationBlock(item.id)}
-                                                className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white cursor-pointer transition"
-                                            >
-                                                + {item.label}
-                                            </button>
-                                        ))}
+                                    <div className="absolute right-3.5 top-9 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Properties
+                                        </div>
+                                        {[
+                                            { id: 'position', label: 'Position', icon: Move, color: 'text-indigo-400' },
+                                            { id: 'tilt', label: '3D Tilt', icon: Compass, color: 'text-sky-400' },
+                                            { id: 'rotation', label: 'Rotation', icon: RotateCw, color: 'text-teal-400' },
+                                            { id: 'scale', label: 'Scale', icon: Maximize2, color: 'text-purple-400' },
+                                            { id: 'opacity', label: 'Opacity', icon: CircleDot, color: 'text-blue-400' },
+                                            { id: 'size', label: 'Size (W & H)', icon: Square, color: 'text-amber-400' },
+                                            { id: 'layerBlur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
+                                            { id: 'maskSweep', label: 'Mask Sweep', icon: Scan, color: 'text-emerald-400' },
+                                        ].map((item) => {
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                    className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                >
+                                                    <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                    <span>{item.label}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
 
                             {/* ANIMATION BLOCKS LIST */}
                             {selectedLayer.blocks.map((blk) => {
-                                const isVec = typeof blk.amount === 'object';
-                                const isAngle =
-                                    blk.property === 'tilt' || blk.property === 'rotation';
-                                const isSize = blk.property === 'size';
-                                const scaleFactor = isAngle ? 1 : refStageW;
                                 const isSelectedBlock = selectedBlockId === blk.id;
+
+                                // Determine icon
+                                const getBlockIcon = (prop: AnimationBlockProperty) => {
+                                    switch (prop) {
+                                        case 'tilt': return <Compass className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'position': return <Move className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'rotation': return <RotateCw className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'scale': return <Maximize2 className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'opacity': return <Eye className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'size': return <Square className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'layerBlur': return <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'maskSweep': return <Scan className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        default: return <CircleDot className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                    }
+                                };
+
+                                // Direction sign check
+                                const isNegDirection = typeof blk.amount === 'object'
+                                    ? (blk.property === 'tilt' ? ((blk.amount as Vec3).y || 0) < 0 : (blk.property === 'rotation' ? ((blk.amount as Vec3).z || 0) < 0 : ((blk.amount as Vec3).x || 0) < 0))
+                                    : (Number(blk.amount) < 0);
 
                                 return (
                                     <div
                                         key={blk.id}
                                         onClick={() => selectBlock(blk.id, selectedLayer.id)}
-                                        className={`p-3.5 space-y-3 transition cursor-pointer ${isSelectedBlock
+                                        className={`p-3.5 space-y-3 transition cursor-pointer border-b border-white/[0.06] ${isSelectedBlock
                                             ? 'bg-[#0088ff]/5 border-l-2 border-l-[#0088ff]'
                                             : 'hover:bg-white/[0.01]'
                                             }`}
                                     >
+                                        {/* Card Header: Icon + Title + Delete */}
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[11px] font-medium text-[#e4e4e7] capitalize flex items-center gap-1.5">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${isSelectedBlock ? 'bg-[#0088ff]' : 'bg-[#a1a1aa]'}`} />
-                                                {blk.label || `${blk.property} animation`}
+                                            <span className="text-[12px] font-medium text-white capitalize flex items-center gap-2">
+                                                {getBlockIcon(blk.property)}
+                                                <span>{blk.label || (blk.property === 'tilt' ? 'Tilt' : blk.property === 'maskSweep' ? 'Mask Sweep' : blk.property)}</span>
                                             </span>
                                             <button
+                                                type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleDeleteBlock(blk.id);
                                                 }}
-                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
+                                                className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer transition"
                                                 title="Delete Animation Block"
                                             >
                                                 <X className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
 
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#a1a1aa] block capitalize">
-                                                Delta Amount
-                                            </span>
-                                            {isVec ? (
-                                                <div className={`grid gap-1.5 ${isSize ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                        {/* Property-Specific Inputs */}
+                                        {blk.property === 'tilt' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Tilt</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
                                                     <ScrubInput
-                                                        label={isSize ? 'ΔW' : 'X'}
-                                                        value={
-                                                            isAngle
-                                                                ? radToDeg((blk.amount as Vec3).x)
-                                                                : Math.round((blk.amount as Vec3).x * scaleFactor)
-                                                        }
-                                                        min={-3000}
-                                                        max={3000}
-                                                        step={isAngle ? 1 : 10}
-                                                        unit={isAngle ? '°' : isSize ? 'px' : ''}
-                                                        onChange={(v) =>
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: isAngle
-                                                                        ? degToRad(v)
-                                                                        : Number((v / scaleFactor).toFixed(4)),
-                                                                },
-                                                            })
-                                                        }
+                                                        label="X"
+                                                        value={Math.round(radToDeg((blk.amount as Vec3).x || 0))}
+                                                        min={-180}
+                                                        max={180}
+                                                        step={1}
+                                                        unit="°"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: degToRad(v) }
+                                                        })}
                                                     />
                                                     <ScrubInput
-                                                        label={isSize ? 'ΔH' : 'Y'}
-                                                        value={
-                                                            isAngle
-                                                                ? radToDeg((blk.amount as Vec3).y)
-                                                                : Math.round((blk.amount as Vec3).y * refStageH)
-                                                        }
-                                                        min={-3000}
-                                                        max={3000}
-                                                        step={isAngle ? 1 : 10}
-                                                        unit={isAngle ? '°' : isSize ? 'px' : ''}
-                                                        onChange={(v) =>
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    y: isAngle
-                                                                        ? degToRad(v)
-                                                                        : Number((v / refStageH).toFixed(4)),
-                                                                },
-                                                            })
-                                                        }
+                                                        label="Y"
+                                                        value={Math.round(radToDeg((blk.amount as Vec3).y || 0))}
+                                                        min={-180}
+                                                        max={180}
+                                                        step={1}
+                                                        unit="°"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: degToRad(v) }
+                                                        })}
                                                     />
-                                                    {!isSize && (
-                                                        <ScrubInput
-                                                            label="Z"
-                                                            value={
-                                                                isAngle
-                                                                    ? radToDeg((blk.amount as Vec3).z)
-                                                                    : Math.round((blk.amount as Vec3).z * 500)
-                                                            }
-                                                            min={-1500}
-                                                            max={1500}
-                                                            step={isAngle ? 1 : 10}
-                                                            unit={isAngle ? '°' : ''}
-                                                            onChange={(v) =>
-                                                                handleUpdateBlock(blk.id, {
-                                                                    amount: {
-                                                                        ...(blk.amount as Vec3),
-                                                                        z: isAngle
-                                                                            ? degToRad(v)
-                                                                            : Number((v / 500).toFixed(4)),
-                                                                    },
-                                                                })
-                                                            }
-                                                        />
-                                                    )}
                                                 </div>
-                                            ) : (
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'position' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-2.5">
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Position</label>
+                                                        <Crosshair className="w-3 h-3 text-[#71717a]" />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-1.5">
+                                                        <ScrubInput
+                                                            label="X"
+                                                            value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                            min={-3000}
+                                                            max={3000}
+                                                            step={10}
+                                                            onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                            })}
+                                                        />
+                                                        <ScrubInput
+                                                            label="Y"
+                                                            value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                            min={-3000}
+                                                            max={3000}
+                                                            step={10}
+                                                            onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                            })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Depth</label>
+                                                    <ScrubInput
+                                                        label="Z"
+                                                        value={Math.round((blk.amount as Vec3).z * 500)}
+                                                        min={-1500}
+                                                        max={1500}
+                                                        step={10}
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), z: Number((v / 500).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'rotation' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Rotation</label>
+                                                <ScrubInput
+                                                    label="Roll"
+                                                    value={Math.round(radToDeg((blk.amount as Vec3).z || 0))}
+                                                    min={-360}
+                                                    max={360}
+                                                    step={1}
+                                                    unit="°"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, {
+                                                        amount: { ...(blk.amount as Vec3), z: degToRad(v) }
+                                                    })}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'scale' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="X"
+                                                        value={Math.round(((blk.amount as Vec3).x || 1) * 100)}
+                                                        min={10}
+                                                        max={500}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: v / 100 }
+                                                        })}
+                                                    />
+                                                    <ScrubInput
+                                                        label="Y"
+                                                        value={Math.round(((blk.amount as Vec3).y || 1) * 100)}
+                                                        min={10}
+                                                        max={500}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: v / 100 }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'opacity' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Opacity</label>
                                                 <ScrubInput
                                                     label="Δ"
-                                                    value={blk.amount as number}
-                                                    min={blk.property === 'opacity' ? -1 : -2}
-                                                    max={blk.property === 'opacity' ? 1 : 30}
-                                                    step={0.05}
-                                                    decimals={2}
-                                                    onChange={(amount) =>
-                                                        handleUpdateBlock(blk.id, { amount })
-                                                    }
+                                                    value={Math.round(Number(blk.amount || 1) * 100)}
+                                                    min={-100}
+                                                    max={100}
+                                                    step={5}
+                                                    unit="%"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
                                                 />
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
 
-                                        {/* DIRECTION BUTTONS (ONLY FOR POSITION) */}
-                                        {isVec && blk.property === 'position' && (
+                                        {blk.property === 'size' && typeof blk.amount === 'object' && (
                                             <div className="space-y-1.5">
-                                                <span className="text-[10px] text-[#a1a1aa] block">
-                                                    Direction
-                                                </span>
-                                                <div className="grid grid-cols-2 gap-1 bg-[#161619] p-0.5 rounded-lg border border-white/[0.05]">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Size</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="ΔW"
+                                                        value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                        min={-2000}
+                                                        max={2000}
+                                                        step={10}
+                                                        unit="px"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                    <ScrubInput
+                                                        label="ΔH"
+                                                        value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                        min={-2000}
+                                                        max={2000}
+                                                        step={10}
+                                                        unit="px"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'layerBlur' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Blur</label>
+                                                <ScrubInput
+                                                    label="Radius"
+                                                    value={Math.round(Number(blk.amount || 0))}
+                                                    min={0}
+                                                    max={100}
+                                                    step={1}
+                                                    unit="px"
+                                                    onChange={(amount) => handleUpdateBlock(blk.id, { amount })}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* DIRECTION BUTTONS (Segmented ← / →) */}
+                                        {['position', 'tilt', 'rotation', 'scale', 'maskSweep'].includes(blk.property) && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Direction</label>
+                                                <div className="grid grid-cols-2 gap-1 bg-[#141416] p-0.5 rounded-lg border border-white/[0.06]">
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: -Math.abs((blk.amount as Vec3).x || 0.35),
-                                                                },
-                                                            });
+                                                            handleSetBlockDirection(blk, -1);
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x <= 0
-                                                            ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#a1a1aa] hover:text-white'
+                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${isNegDirection
+                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
-                                                        title="Left Direction"
+                                                        title="Left / In to rest"
                                                     >
                                                         <ArrowLeft className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: Math.abs((blk.amount as Vec3).x || 0.35),
-                                                                },
-                                                            });
+                                                            handleSetBlockDirection(blk, 1);
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x > 0
-                                                            ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#a1a1aa] hover:text-white'
+                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${!isNegDirection
+                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
-                                                        title="Right Direction"
+                                                        title="Right / Out from rest"
                                                     >
                                                         <ArrowRight className="w-3.5 h-3.5" />
                                                     </button>
@@ -2882,8 +3055,51 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         )}
 
-                                        {/* Timing (Start & Length) + Easing */}
-                                        <div className="grid grid-cols-2 gap-1.5">
+                                        {/* Easing (Dropdown + Sliders Bezier Popover Button) */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEasingPopoverConfig({
+                                                            easing: blk.easing,
+                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                        });
+                                                    }}
+                                                    className="flex-1 h-8 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 px-2.5 flex items-center justify-between text-[11px] text-white transition cursor-pointer"
+                                                >
+                                                    <span className="flex items-center gap-2 truncate">
+                                                        <Spline className="w-3 h-3 text-[#0088ff] shrink-0" />
+                                                        <span className="capitalize">{getEasingDisplayLabel(blk.easing)}</span>
+                                                    </span>
+                                                    <ChevronDown className="w-3.5 h-3.5 text-[#71717a] shrink-0" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEasingPopoverConfig({
+                                                            easing: blk.easing,
+                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                        });
+                                                    }}
+                                                    title="Open interactive 2D Bezier curve editor"
+                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${blk.easing.kind === 'bezier'
+                                                        ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                        : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.08] hover:text-white hover:border-white/20'
+                                                        }`}
+                                                >
+                                                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Timing (Start & Duration) */}
+                                        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
                                             <ScrubInput
                                                 label="🕒"
                                                 value={blk.startMs}
@@ -2891,9 +3107,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 max={Math.max(0, activeShot.durationMs - 80)}
                                                 step={20}
                                                 unit=" ms"
-                                                onChange={(startMs) =>
-                                                    handleUpdateBlock(blk.id, { startMs })
-                                                }
+                                                onChange={(startMs) => handleUpdateBlock(blk.id, { startMs })}
+                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
                                             />
                                             <ScrubInput
                                                 label="⏱"
@@ -2902,115 +3117,68 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 max={activeShot.durationMs}
                                                 step={20}
                                                 unit=" ms"
-                                                onChange={(durationMs) =>
-                                                    handleUpdateBlock(blk.id, { durationMs })
-                                                }
+                                                onChange={(durationMs) => handleUpdateBlock(blk.id, { durationMs })}
+                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
                                             />
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#a1a1aa] block">
-                                                Easing
-                                            </span>
-                                            <select
-                                                value={
-                                                    blk.easing.kind === 'bezier'
-                                                        ? 'bezier'
-                                                        : `${blk.easing.kind}:${blk.easing.name}`
-                                                }
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    const easing: Easing =
-                                                        val === 'bezier'
-                                                            ? {
-                                                                kind: 'bezier',
-                                                                x1: 0.16,
-                                                                y1: 1,
-                                                                x2: 0.3,
-                                                                y2: 1,
-                                                            }
-                                                            : val.startsWith('spring:')
-                                                                ? {
-                                                                    kind: 'spring',
-                                                                    name: val.split(':')[1] as SpringEasingName,
-                                                                }
-                                                                : {
-                                                                    kind: 'preset',
-                                                                    name: val.split(':')[1] as PresetEasingName,
-                                                                };
-                                                    handleUpdateBlock(blk.id, { easing });
-                                                }}
-                                                className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
-                                            >
-                                                <option value="preset:ease-in-out">
-                                                    Ease in and out
-                                                </option>
-                                                <option value="preset:ease-out">Ease out</option>
-                                                <option value="preset:ease-out-expo">
-                                                    Ease out expo
-                                                </option>
-                                                <option value="preset:ease-out-back">
-                                                    Ease out back
-                                                </option>
-                                                <option value="spring:gentle">Spring: Gentle</option>
-                                                <option value="spring:quick">Spring: Quick</option>
-                                                <option value="spring:bouncy">Spring: Bouncy</option>
-                                                <option value="preset:linear">Linear</option>
-                                            </select>
                                         </div>
                                     </div>
                                 );
                             })}
 
                             {/* IN SECTION (Entrance Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5">
+                            <div className="p-3.5 space-y-2.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        In (Entrance){(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
+                                        In{(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                if (l.entrances && l.entrances.length > 0) {
-                                                    const nextEnt = {
-                                                        id: `ent-${Date.now()}`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 650,
-                                                        delayMs: 0,
-                                                        distance: 0.18,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    const next = [...l.entrances, nextEnt];
-                                                    return { ...l, entrances: next, entrance: next[0] };
-                                                }
-                                                if (l.entrance && l.entrance.type !== 'none') {
-                                                    const first = { ...l.entrance, id: `ent-${Date.now()}-1` };
-                                                    const second = {
-                                                        id: `ent-${Date.now()}-2`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 650,
-                                                        delayMs: 0,
-                                                        distance: 0.18,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    return { ...l, entrances: [first, second], entrance: first };
-                                                }
-                                                return {
-                                                    ...l,
-                                                    entrance: {
-                                                        ...l.entrance,
-                                                        type: 'fade',
-                                                        durationMs: l.entrance.durationMs || 650,
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        title="Add / Stack Entrance"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        onClick={() => {
+                                            setInMenuOpen((v) => !v);
+                                            setOutMenuOpen(false);
+                                            setAddAnimMenuOpen(false);
+                                        }}
+                                        title="Add In Preset"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
+
+                                {inMenuOpen && (
+                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Presets
+                                        </div>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'fade')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
+                                            <span>Fade</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'slide')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span>Slide</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'float')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Float</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'wipe')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Wipe</span>
+                                        </button>
+                                    </div>
+                                )}
 
                                 {selectedLayer.entrances && selectedLayer.entrances.length > 0 ? (
                                     <div className="space-y-2.5">
@@ -3092,9 +3260,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    selectedLayer.entrance.type !== 'none' && (
-                                        <div className="space-y-2">
+                                ) : selectedLayer.entrance.type !== 'none' ? (
+                                    <div className="space-y-2">
                                             <div className="flex items-center gap-1.5">
                                                 <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                     <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
@@ -3190,60 +3357,141 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     }
                                                 />
                                             </div>
+
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] text-[#a1a1aa] block">
+                                                    Easing
+                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <select
+                                                        value={
+                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                                ? 'bezier'
+                                                                : selectedLayer.entrance.easing
+                                                                    ? `${selectedLayer.entrance.easing.kind}:${selectedLayer.entrance.easing.name}`
+                                                                    : 'preset:ease-out'
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const easing: Easing =
+                                                                val === 'bezier'
+                                                                    ? {
+                                                                        kind: 'bezier',
+                                                                        x1: 0.65,
+                                                                        y1: 0,
+                                                                        x2: 0.35,
+                                                                        y2: 1,
+                                                                    }
+                                                                    : val.startsWith('spring:')
+                                                                        ? {
+                                                                            kind: 'spring',
+                                                                            name: val.split(':')[1] as SpringEasingName,
+                                                                        }
+                                                                        : {
+                                                                            kind: 'preset',
+                                                                            name: val.split(':')[1] as PresetEasingName,
+                                                                        };
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                entrance: { ...l.entrance, easing },
+                                                            }));
+                                                        }}
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="preset:ease-in-out">Ease in and out</option>
+                                                        <option value="preset:ease-in">Ease in</option>
+                                                        <option value="preset:ease-out">Ease out</option>
+                                                        <option value="preset:ease-out-expo">Ease out expo</option>
+                                                        <option value="preset:ease-out-back">Ease out back</option>
+                                                        <option value="preset:linear">Linear</option>
+                                                        <option value="spring:gentle">Spring: Gentle</option>
+                                                        <option value="spring:quick">Spring: Quick</option>
+                                                        <option value="spring:bouncy">Spring: Bouncy</option>
+                                                        <option value="bezier">Custom bezier</option>
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEasingPopoverConfig({
+                                                                easing: selectedLayer.entrance.easing || { kind: 'preset', name: 'ease-out' },
+                                                                onChange: (easing) =>
+                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                        ...l,
+                                                                        entrance: { ...l.entrance, easing },
+                                                                    })),
+                                                                anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                            });
+                                                        }}
+                                                        title="Open interactive Bezier curve editor"
+                                                        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
+                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                                ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                        }`}
+                                                    >
+                                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                )}
-                            </div>
+                                    ) : null}
+                                </div>
 
                             {/* OUT SECTION (Exit Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5">
+                            <div className="p-3.5 space-y-2.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Out (Exit){(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
+                                        Out{(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                if (l.exits && l.exits.length > 0) {
-                                                    const nextExt = {
-                                                        id: `ext-${Date.now()}`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 550,
-                                                        delayMs: 0,
-                                                        distance: 0.16,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    const next = [...l.exits, nextExt];
-                                                    return { ...l, exits: next, exit: next[0] };
-                                                }
-                                                if (l.exit && l.exit.type !== 'none') {
-                                                    const first = { ...l.exit, id: `ext-${Date.now()}-1` };
-                                                    const second = {
-                                                        id: `ext-${Date.now()}-2`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 550,
-                                                        delayMs: 0,
-                                                        distance: 0.16,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    return { ...l, exits: [first, second], exit: first };
-                                                }
-                                                return {
-                                                    ...l,
-                                                    exit: {
-                                                        ...l.exit,
-                                                        type: 'fade',
-                                                        durationMs: l.exit.durationMs || 550,
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        title="Add / Stack Exit"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        onClick={() => {
+                                            setOutMenuOpen((v) => !v);
+                                            setInMenuOpen(false);
+                                            setAddAnimMenuOpen(false);
+                                        }}
+                                        title="Add Out Preset"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
+
+                                {outMenuOpen && (
+                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Presets
+                                        </div>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'fade')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
+                                            <span>Fade</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'slide')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span>Slide</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'float')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Float</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'wipe')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Wipe</span>
+                                        </button>
+                                    </div>
+                                )}
 
                                 {selectedLayer.exits && selectedLayer.exits.length > 0 ? (
                                     <div className="space-y-2.5">
@@ -3325,9 +3573,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    selectedLayer.exit.type !== 'none' && (
-                                        <div className="space-y-2">
+                                ) : selectedLayer.exit.type !== 'none' ? (
+                                    <div className="space-y-2">
                                             <div className="flex items-center gap-1.5">
                                                 <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                     <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
@@ -3424,15 +3671,125 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     }
                                                 />
                                             </div>
+
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] text-[#a1a1aa] block">
+                                                    Easing
+                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <select
+                                                        value={
+                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                                ? 'bezier'
+                                                                : selectedLayer.exit.easing
+                                                                    ? `${selectedLayer.exit.easing.kind}:${selectedLayer.exit.easing.name}`
+                                                                    : 'preset:ease-out'
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const easing: Easing =
+                                                                val === 'bezier'
+                                                                    ? {
+                                                                        kind: 'bezier',
+                                                                        x1: 0.65,
+                                                                        y1: 0,
+                                                                        x2: 0.35,
+                                                                        y2: 1,
+                                                                    }
+                                                                    : val.startsWith('spring:')
+                                                                        ? {
+                                                                            kind: 'spring',
+                                                                            name: val.split(':')[1] as SpringEasingName,
+                                                                        }
+                                                                        : {
+                                                                            kind: 'preset',
+                                                                            name: val.split(':')[1] as PresetEasingName,
+                                                                        };
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                exit: { ...l.exit, easing },
+                                                            }));
+                                                        }}
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="preset:ease-in-out">Ease in and out</option>
+                                                        <option value="preset:ease-in">Ease in</option>
+                                                        <option value="preset:ease-out">Ease out</option>
+                                                        <option value="preset:ease-out-expo">Ease out expo</option>
+                                                        <option value="preset:ease-out-back">Ease out back</option>
+                                                        <option value="preset:linear">Linear</option>
+                                                        <option value="spring:gentle">Spring: Gentle</option>
+                                                        <option value="spring:quick">Spring: Quick</option>
+                                                        <option value="spring:bouncy">Spring: Bouncy</option>
+                                                        <option value="bezier">Custom bezier</option>
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEasingPopoverConfig({
+                                                                easing: selectedLayer.exit.easing || { kind: 'preset', name: 'ease-out' },
+                                                                onChange: (easing) =>
+                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                        ...l,
+                                                                        exit: { ...l.exit, easing },
+                                                                    })),
+                                                                anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                            });
+                                                        }}
+                                                        title="Open interactive Bezier curve editor"
+                                                        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
+                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                                ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                        }`}
+                                                    >
+                                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                )}
-                            </div>
+                                    ) : null}
+                                </div>
                         </div>
                     )}
                 </>
             ) : (
-                <ProjectSettingsPanel onSwapImageClick={onSwapImageClick} />
+                <ProjectSettingsPanel
+                    onSwapImageClick={onSwapImageClick}
+                    onOpenShortcuts={onOpenShortcuts}
+                />
+            )}
+
+            {/* Persistent Inspector Footer: Ask Raylight & Help */}
+            <div className="p-3 border-t border-white/[0.06] flex items-center justify-end gap-2 shrink-0 bg-[#0b0b0d]">
+                <button
+                    type="button"
+                    onClick={onOpenShortcuts}
+                    title="Ask Raylight AI Assistant & Shortcuts"
+                    className="h-7 px-3 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                >
+                    <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />
+                    <span>Ask Raylight</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onOpenShortcuts}
+                    title="Help & Shortcuts (?)"
+                    className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-[#a1a1aa] hover:text-white flex items-center justify-center text-[11px] font-medium shadow-sm transition cursor-pointer"
+                >
+                    ?
+                </button>
+            </div>
+
+            {/* Floating Visual Bezier Curve Popover */}
+            {easingPopoverConfig && (
+                <EasingPopover
+                    easing={easingPopoverConfig.easing}
+                    onChange={easingPopoverConfig.onChange}
+                    onClose={() => setEasingPopoverConfig(null)}
+                    anchorRect={easingPopoverConfig.anchorRect}
+                />
             )}
         </aside>
     );

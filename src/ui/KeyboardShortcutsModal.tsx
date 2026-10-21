@@ -100,6 +100,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       onClick={handleClose}
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
+          e.preventDefault();
           e.stopPropagation();
           handleClose();
         }

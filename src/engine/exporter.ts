@@ -349,12 +349,14 @@ export async function runVideoExportPipeline(
         });
         await new Promise((r) => setTimeout(r, 20));
 
+        if (abortSignal?.aborted) return;
         const gifBlob = buildAnimatedGifBlob(
             framesData,
             gifW,
             gifH,
             Math.round(100 / gifFps)
         );
+        if (abortSignal?.aborted) return;
         downloadBlob(gifBlob, `${cleanName}.gif`);
 
         onProgress({
@@ -504,6 +506,12 @@ export async function runVideoExportPipeline(
                 return;
             }
             try {
+                if (abortSignal?.aborted) {
+                    if (finalizationResolve) {
+                        finalizationResolve();
+                    }
+                    return;
+                }
                 const actualMime = recorder?.mimeType || selectedMime;
                 const isMp4 = actualMime.includes('mp4');
                 const ext = isMp4 ? 'mp4' : 'webm';

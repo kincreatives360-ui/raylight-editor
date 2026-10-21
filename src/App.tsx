@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { Download, X, Sparkles, PanelLeftOpen, PanelRightOpen, Check, Loader2 } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -1066,13 +1066,19 @@ export default function App() {
       );
 
       if (!controller.signal.aborted) {
+        setExportPercent(100);
+        setExportProgressText('Export Complete!');
         exportCloseTimerRef.current = window.setTimeout(() => {
           setExportModalOpen(false);
           exportCloseTimerRef.current = null;
-        }, 600);
+        }, 1200);
       }
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : 'Export failed.');
+      if (controller.signal.aborted) {
+        setExportProgressText('Export cancelled.');
+      } else {
+        setExportError(error instanceof Error ? error.message : 'Export failed.');
+      }
     } finally {
       setExporting(false);
       exportAbortRef.current = null;
@@ -1207,7 +1213,7 @@ export default function App() {
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
           <StageErrorBoundary>
-            <Suspense fallback={<div className="flex-1 bg-[var(--bg-canvas,#07080d)]" />}>
+            <Suspense fallback={<div className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />}>
               <Stage
                 project={project}
                 frame={frame}
@@ -1264,6 +1270,7 @@ export default function App() {
               selectedLayerIds={selectedLayerIds}
               onSwapImageClick={handleUploadClick}
               onOpenExportModal={handleOpenExportModal}
+              onOpenShortcuts={handleOpenShortcuts}
             />
           </>
         ) : (
@@ -1473,17 +1480,30 @@ export default function App() {
             </div>
 
             {exporting && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-mono tabular-nums text-[#38bdf8] tracking-tight">
-                  <span>{exportProgressText}</span>
-                  <span className="font-semibold">{exportPercent}%</span>
+              <div className="space-y-2 p-3 rounded-xl bg-[#18181c] border border-[#0088ff]/30 shadow-lg animate-fade-in">
+                <div className="flex justify-between items-center text-[11px] font-mono tabular-nums tracking-tight">
+                  <span className="flex items-center gap-2 text-[#38bdf8] font-medium truncate">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0088ff] shrink-0" />
+                    <span className="truncate">{exportProgressText}</span>
+                  </span>
+                  <span className="font-semibold text-white shrink-0 ml-2">{exportPercent}%</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative">
                   <div
-                    className="h-full bg-[#0088ff] transition-[width] duration-150 ease-out"
+                    className="h-full bg-gradient-to-r from-[#0088ff] via-[#38bdf8] to-[#0088ff] shadow-[0_0_12px_rgba(0,136,255,0.5)] transition-[width] duration-150 ease-out"
                     style={{ width: `${exportPercent}%` }}
                   />
                 </div>
+              </div>
+            )}
+
+            {!exporting && exportProgressText && exportProgressText.includes('Complete') && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center justify-between text-[11px] font-medium shadow-md animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{exportProgressText} Saved to Downloads.</span>
+                </div>
+                <span className="text-[10px] text-emerald-400/80 font-mono px-1.5 py-0.5 rounded bg-emerald-500/20">Ready</span>
               </div>
             )}
 

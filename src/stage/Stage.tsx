@@ -131,7 +131,10 @@ const StageComponent: React.FC<StageProps> = ({
         const handleDismiss = () => setContextMenu(null);
         window.addEventListener('click', handleDismiss);
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setContextMenu(null);
+            if (e.key === 'Escape' && !e.defaultPrevented) {
+                e.preventDefault();
+                setContextMenu(null);
+            }
         };
         window.addEventListener('keydown', handleKey);
         return () => {
@@ -1119,7 +1122,7 @@ const StageComponent: React.FC<StageProps> = ({
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
-            className={`flex-1 bg-[var(--bg-canvas,#07080d)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
+            className={`flex-1 bg-[var(--canvas-workspace,#080a10)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
                     : activeTool === 'camera'
                         ? 'cursor-move active:cursor-grabbing'

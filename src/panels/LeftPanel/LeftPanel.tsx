@@ -488,8 +488,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             onChange={(e) => setEditingText(e.target.value)}
                             onBlur={() => commitLayerRename(shot.id, layer.id)}
                             onKeyDown={(e) => {
+                                e.stopPropagation();
                                 if (e.key === 'Enter') commitLayerRename(shot.id, layer.id);
-                                if (e.key === 'Escape') setEditingId(null);
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                             }}
                             onClick={(e) => e.stopPropagation()}
                             className="w-full bg-black/90 border border-[#0088ff] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -607,8 +608,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 onChange={(e) => setEditingText(e.target.value)}
                                 onBlur={() => commitGroupRename(shot.id, group.id)}
                                 onKeyDown={(e) => {
+                                    e.stopPropagation();
                                     if (e.key === 'Enter') commitGroupRename(shot.id, group.id);
-                                    if (e.key === 'Escape') setEditingId(null);
+                                    if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -903,8 +905,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     onChange={(e) => setEditingText(e.target.value)}
                                                     onBlur={() => commitShotRename(shot.id)}
                                                     onKeyDown={(e) => {
+                                                        e.stopPropagation();
                                                         if (e.key === 'Enter') commitShotRename(shot.id);
-                                                        if (e.key === 'Escape') setEditingId(null);
+                                                        if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                                                     }}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -1106,13 +1109,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     .sort((a, b) => b.order - a.order)
                                     .map((layer) => {
                                         const isSelected = selectedLayerIds.includes(layer.id);
-                                        const isExpanded = expandedTimelineLayerIds.includes(
-                                            layer.id
-                                        );
                                         const hasAnimItems =
                                             layer.entrance.type !== 'none' ||
                                             layer.exit.type !== 'none' ||
                                             layer.blocks.length > 0;
+                                        const isExpanded =
+                                            expandedTimelineLayerIds.includes(layer.id) ||
+                                            (isSelected && hasAnimItems);
 
                                         return (
                                             <div key={`mirror-${layer.id}`} style={{ order: 10 }} className="space-y-0.5">

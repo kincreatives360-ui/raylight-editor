@@ -123,6 +123,14 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             return;
         }
 
+        // Escape: blur spinbutton so global shortcuts don't fire
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            (e.currentTarget as HTMLElement).blur();
+            return;
+        }
+
         // Prevent spinbutton focus from leaking hotkeys (Space, Backspace, Delete) to global stage
         if (e.code === 'Space' || e.key === 'Backspace' || e.key === 'Delete') {
             e.stopPropagation();
@@ -199,10 +207,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     onBlur={commitTextInput}
                     onKeyDown={(e) => {
                         e.stopPropagation();
+                        e.preventDefault();
                         if (e.key === 'Enter') commitTextInput();
                         if (e.key === 'Escape') {
-                            e.preventDefault();
                             setIsEditing(false);
+                            containerRef.current?.blur();
                         }
                     }}
                     className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] outline-none tracking-tight caret-[var(--accent-primary,#0088ff)]"
