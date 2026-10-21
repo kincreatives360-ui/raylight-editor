@@ -217,6 +217,24 @@ export interface LayerEffects {
   warp?: WarpEffect;
 }
 
+export type ScreenFit = 'contain' | 'cover';
+
+export interface DeviceModelSpec {
+  id: string;
+  name?: string;
+  kind: 'gltf' | 'procedural';
+  assetUrl?: string;
+  nominalWidth: number;
+  nominalHeight: number;
+  nominalDepth?: number;
+  screenMeshName?: string;
+  screenWidth: number;
+  screenHeight: number;
+  defaultFit: ScreenFit;
+  chassisCornerRadius?: number;
+  screenCornerRadius?: number;
+}
+
 export interface DeviceFrame {
   type: 'iphone' | 'ipad' | 'macbook' | 'browser' | 'samsung-galaxy' | 'display';
   color: string;
@@ -224,8 +242,10 @@ export interface DeviceFrame {
   lidAngle?: number;
   screenGlow?: number;
   glare?: number;
-  screenFit?: 'stretch' | 'fit' | 'fill';
+  screenFit?: ScreenFit;
   staging?: 'none' | 'floating' | 'held' | 'desk';
+  modelSpecId?: string;
+  orientation?: 'portrait' | 'landscape';
 }
 
 export interface LayerBase {

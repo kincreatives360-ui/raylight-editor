@@ -78,36 +78,45 @@ Digging deep into the architecture of Raylight, the timeline is powered by a hig
     * $P_2 = (x_2 \times 100, (1 - y_2) \times 100)$
     * $P_3 = (100, 0)$
   * Path representation: `<path d={`M 0,100 C ${x1 * 100},${(1 - y1) * 100} ${x2 * 100},${(1 - y2) * 100} 100,0`} />`.
-* **Interactive Handles**: Draggable handles at $P_1$ and $P_2$ using pointer capture.
+  * **Bezier Coordinate Contract for Overshoot/Anticipation ($y_1, y_2 \in [-0.5, 1.5]$)**:
+    * In standard easing physics (e.g. `Back` and `Elastic`), vertical control values $y_1$ and $y_2$ exceed the unit range $[0, 1]$ to express anticipation (negative values dipping below 0) and overshoot (values rising above 1).
+    * **SVG Overflow Contract**: Coordinates are **not** clamped to the $0–100$ viewBox. Instead, the SVG element is rendered with `overflow: visible` (along with internal margin padding, e.g. `padX = 24`, `padY = 24` in `EasingPopover.tsx`). This ensures that control handles and Bezier curve excursions during `Back` and `Elastic` motion remain fully visible and interactively draggable rather than clipped at the top/bottom unit boundary.
+* **Interactive Handles**: Draggable handles at $P_1$ and $P_2$ using pointer capture with unconstrained $[-0.6, 1.6]$ support on vertical axes.
 
 ---
 
 ## 3. Gap Analysis Against Our Codebase
+
+> [!NOTE]
+> **Audit Snapshot & Implementation Progress (Updated October 21, 2026)**:
+> This audit originally served as a pre-change gap analysis. As of the current codebase:
+> - **Interactive Bezier Curve Popover**: Fully implemented in `src/panels/Timeline/EasingPopover.tsx` with live draggable tangent handles, 3×4 preset grid, coordinate scrubbers, and SVG overflow support.
+> - **In & Out Animation Presets**: Fully implemented in `RightSidebar.tsx` with animated flyout menus.
+> - **Subtrack Rows & Ghost Drag Preview**: Implemented in `Timeline.tsx`.
 
 | Feature / Interaction | Raylight (Video & Web) | Our Current Codebase | Status / Gap |
 |---|---|---|:---:|
 | **Empty Timeline Shot Card** | Dashed rounded card `+ Add shot` | Handled in `Timeline.tsx` (`isBlankState`) | **Aligned** |
 | **Layer Clip Bar** | Violet/purple gradient bar with layer name | Rendered in `Timeline.tsx` with selection ring | **Aligned** |
 | **Playhead Pill Handle** | Blue pill showing live timecode (`0.00`, `1.25`) | In `PlayheadOverlay.tsx`, but styling can be tuned to match exact blue pill look | **Minor Polish** |
-| **Subtrack Rows for Properties** | Indented subtrack rows under layer with property icons | Partially implemented in `Timeline.tsx`; needs explicit subtrack expansion when `In`/`Out` presets are clicked | **Needs Upgrade** |
-| **"In" & "Out" Animation Presets** | Dropdown with Fade, Slide, Float, Wipe in `Animate` tab | `RightSidebar.tsx` has basic animation controls, but lacks the quick preset injection menu | **Needs Implementation** |
-| **Interactive Bezier Curve Popover** | Full visual graph with draggable tangent handles, 3x4 preset grid, X1/Y1/X2/Y2 inputs | Only numerical easing presets exist in `easing.ts`; **no visual Bezier curve popover** currently exists | **Missing Feature** |
-| **Dashed Ghost Drag Preview** | Dotted green/cyan ghost outline during block move/trim | Immediate state mutation during drag without ghost overlay | **Needs Implementation** |
+| **Subtrack Rows for Properties** | Indented subtrack rows under layer with property icons | Implemented in `Timeline.tsx` with property subtracks and direct easing triggers | **Aligned / Completed** |
+| **"In" & "Out" Animation Presets** | Dropdown with Fade, Slide, Float, Wipe in `Animate` tab | Implemented in `RightSidebar.tsx` via quick preset flyout injection | **Aligned / Completed** |
+| **Interactive Bezier Curve Popover** | Full visual graph with draggable tangent handles, 3x4 preset grid, X1/Y1/X2/Y2 inputs | Implemented in `src/panels/Timeline/EasingPopover.tsx` with live draggable handles, presets, and coordinate scrubbers | **Aligned / Completed** |
+| **Dashed Ghost Drag Preview** | Dotted green/cyan ghost outline during block move/trim | Rendered during active block drag/trim | **Aligned / Completed** |
 | **Timeline Zoom Slider** | Range slider in top-right with blue fill track | Top-right zoom controls exist, needs exact styled slider | **Minor Polish** |
 
 ---
 
-## 4. Implementation Plan for Our Codebase
+## 4. Implementation Plan & Completed Work
 
-We will implement this in 4 targeted steps:
+### Step 1: Visual Easing Curve Editor Popover (`EasingPopover.tsx`) — **Completed**
 
-### Step 1: Visual Easing Curve Editor Popover (`EasingPopover.tsx`)
+Created [src/panels/Timeline/EasingPopover.tsx](../src/panels/Timeline/EasingPopover.tsx):
 
-Create [src/panels/Timeline/EasingPopover.tsx](../src/panels/Timeline/EasingPopover.tsx):
-
-1. **Interactive Curve Canvas/SVG (240×180px)**:
+1. **Interactive Curve Canvas/SVG (216×176px)**:
    * Grid lines and diagonal reference line from $(0, 100)$ to $(100, 0)$.
    * Draggable circular handles for control points $P_1(x_1, y_1)$ and $P_2(x_2, y_2)$ with connecting vector lines.
+   * `overflow: visible` rendering supporting $y_1, y_2 \in [-0.5, 1.5]$ for `Back` and `Elastic` curves.
 2. **3×4 Preset Grid**:
    * Thumbnails for `Linear`, `Ease In`, `Ease Out`, `Ease In Out`, `Back`, `Elastic`, `Bounce`, `Springs`.
    * Clicking a preset updates the curve immediately.
@@ -115,27 +124,27 @@ Create [src/panels/Timeline/EasingPopover.tsx](../src/panels/Timeline/EasingPopo
    * Tabs: `Whole`, `Start`, `End`, `Ease in and out`.
    * Number inputs for $X_1$, $Y_1$, $X_2$, $Y_2$ with step scrubbing.
 
-### Step 2: In / Out Animation Preset Menu in Inspector (`RightSidebar.tsx`)
+### Step 2: In / Out Animation Preset Menu in Inspector (`RightSidebar.tsx`) — **Completed**
 
 In the **Animate** tab:
 
-1. Add `+` action button next to **`In`** and **`Out`**.
-2. Open a flyout menu with the 4 presets:
+1. Added `+` action button next to **`In`** and **`Out`**.
+2. Flyout menu with presets:
    * **Fade**: adds `opacity` block ($0 \to 1$ or $1 \to 0$).
    * **Slide**: adds `position` block (slide from bottom/left).
    * **Float**: adds gentle hover oscillation.
    * **Wipe**: adds mask wipe block.
-3. Automatically expand the layer's subtrack on the timeline and select the newly created animation block.
+3. Automatically expands the layer's subtrack on the timeline and selects the newly created animation block.
 
-### Step 3: Subtrack Rows & Ghost Drag Overlays in `Timeline.tsx`
+### Step 3: Subtrack Rows & Ghost Drag Overlays in `Timeline.tsx` — **Completed**
 
 1. **Indented Subtrack Rows**:
-   * When a layer has animation blocks (`opacity`, `position`, `transform`), render dedicated sub-rows below the main layer bar.
-   * Left track header shows property icon (`Diamond` for keyframes, `Eye` for opacity).
+   * Rendered dedicated sub-rows below the main layer bar for animated properties.
+   * Left track header shows property icon.
 2. **Ghost Drag Preview**:
-   * When dragging an animation block or trimming its edges, render a dashed ghost outline at the snapped target coordinates (`snappedStartMs`, `snappedDurationMs`) so the user sees exactly where it will land.
+   * Dashed ghost outline during move/trim.
 3. **Click-to-Open Easing Popover**:
-   * Clicking any animation block opens the new `EasingPopover` positioned relative to the block.
+   * Clicking any animation block opens `EasingPopover`.
 
 ### Step 4: Playhead & Zoom Slider Polish
 

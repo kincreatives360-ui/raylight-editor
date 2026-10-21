@@ -11,6 +11,8 @@ import type {
 import { getLayer3DWorldTransform } from './cameraMath';
 import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
+import { resolveDeviceColor, resolveDeviceModelSpec } from '../../model/defaults';
+import { computeDeviceGeometry, drawSourceWithFit } from '../../engine/deviceFitMath';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -179,12 +181,26 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const cameraZ = project.defaultCamera?.position?.z ?? 2.65;
     const focalLength = project.defaultCamera?.focalLength ?? 50;
 
-    const { worldX, worldY, worldZ, meshW, meshH } = getLayer3DWorldTransform(
+    const { worldX, worldY, worldZ, meshW: boxW, meshH: boxH } = getLayer3DWorldTransform(
         evalLayer,
         aspect,
         cameraZ,
         focalLength
     );
+
+    const device =
+        (layer.kind === 'image' || layer.kind === 'video')
+            ? (layer as ImageLayer | VideoLayer).device
+            : undefined;
+
+    // Physical device geometry comes from the canonical model spec, fitted uniformly
+    // inside the layer box. It never depends on the source image/video dimensions.
+    const deviceGeom = device
+        ? computeDeviceGeometry(resolveDeviceModelSpec(device), boxW, boxH, device.orientation)
+        : null;
+    // meshW/meshH = the screen surface (device) or the layer surface (no device).
+    const meshW = deviceGeom ? deviceGeom.screenW : boxW;
+    const meshH = deviceGeom ? deviceGeom.screenH : boxH;
 
     const rot = evalLayer.rotation;
     const scale = evalLayer.scale ?? { x: 1, y: 1, z: 1 };
@@ -203,10 +219,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     // Selective playhead subscription: Only video layers re-render on RAF ticks; static layers stay idle
     const currentTimeMs = usePlayheadStore((s) => (isVideoAsset ? s.currentTimeMs : 0));
 
-    const device =
-        (layer.kind === 'image' || layer.kind === 'video')
-            ? (layer as ImageLayer | VideoLayer).device
-            : undefined;
     const isPhone = device?.type === 'iphone';
     const isIpad = device?.type === 'ipad';
     const isMacbook = device?.type === 'macbook';
@@ -270,7 +282,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
-        const layerAspect = Math.max(0.2, Math.min(5, meshW / Math.max(0.01, meshH)));
+        // Texture aspect always matches the surface it is mapped onto (screen or layer).
+        const layerAspect = meshW / Math.max(0.01, meshH);
         const baseLong = 1024;
         const canvasW =
             layerAspect >= 1
@@ -310,52 +323,29 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
             const drawFitted = (
                 source: CanvasImageSource,
-                srcX: number,
-                srcY: number,
-                srcW: number,
-                srcH: number,
+                naturalW: number,
+                naturalH: number,
                 dstX: number,
                 dstY: number,
                 dstW: number,
                 dstH: number
             ) => {
-                const fit = device?.screenFit || 'stretch';
-                if (fit === 'stretch') {
-                    ctx.drawImage(source, srcX, srcY, srcW, srcH, dstX, dstY, dstW, dstH);
+                if (naturalW <= 0 || naturalH <= 0) return; // e.g. video before metadata
+                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
+                if (!device) {
+                    // Non-device layers: legacy behavior, source fills the layer box.
+                    ctx.drawImage(
+                        source,
+                        crop.x * naturalW,
+                        crop.y * naturalH,
+                        Math.max(1, crop.width * naturalW),
+                        Math.max(1, crop.height * naturalH),
+                        dstX, dstY, dstW, dstH
+                    );
                     return;
                 }
-                const srcAspect = srcW / srcH;
-                const dstAspect = dstW / dstH;
-
-                if (fit === 'fit') {
-                    ctx.fillStyle = '#0a0a0c';
-                    ctx.fillRect(dstX, dstY, dstW, dstH);
-                    let renderW = dstW;
-                    let renderH = dstH;
-                    let rx = dstX;
-                    let ry = dstY;
-                    if (srcAspect > dstAspect) {
-                        renderH = dstW / srcAspect;
-                        ry = dstY + (dstH - renderH) / 2;
-                    } else {
-                        renderW = dstH * srcAspect;
-                        rx = dstX + (dstW - renderW) / 2;
-                    }
-                    ctx.drawImage(source, srcX, srcY, srcW, srcH, rx, ry, renderW, renderH);
-                } else if (fit === 'fill') {
-                    let actualSrcX = srcX;
-                    let actualSrcY = srcY;
-                    let actualSrcW = srcW;
-                    let actualSrcH = srcH;
-                    if (srcAspect > dstAspect) {
-                        actualSrcW = srcH * dstAspect;
-                        actualSrcX = srcX + (srcW - actualSrcW) / 2;
-                    } else {
-                        actualSrcH = srcW / dstAspect;
-                        actualSrcY = srcY + (srcH - actualSrcH) / 2;
-                    }
-                    ctx.drawImage(source, actualSrcX, actualSrcY, actualSrcW, actualSrcH, dstX, dstY, dstW, dstH);
-                }
+                const fit = device.screenFit ?? resolveDeviceModelSpec(device).defaultFit;
+                drawSourceWithFit(ctx, source, naturalW, naturalH, crop, dstX, dstY, dstW, dstH, fit);
             };
 
             if (isVideoAsset && videoElement) {
@@ -363,20 +353,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 if (totalBlurPx > 0) {
                     ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
                 }
-                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-                const vw = videoElement.videoWidth || 1920;
-                const vh = videoElement.videoHeight || 1080;
-                const sx = crop.x * vw;
-                const sy = crop.y * vh;
-                const sw = Math.max(1, crop.width * vw);
-                const sh = Math.max(1, crop.height * vh);
-
+                if (device) {
+                    ctx.fillStyle = '#0a0a0c';
+                    ctx.fillRect(0, topBarH, canvasW, canvasH - topBarH);
+                }
                 drawFitted(
                     videoElement,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
+                    videoElement.videoWidth,
+                    videoElement.videoHeight,
                     0,
                     topBarH,
                     canvasW,
@@ -388,18 +372,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 if (totalBlurPx > 0) {
                     ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
                 }
-                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-                const sx = crop.x * loadedImg.naturalWidth;
-                const sy = crop.y * loadedImg.naturalHeight;
-                const sw = Math.max(1, crop.width * loadedImg.naturalWidth);
-                const sh = Math.max(1, crop.height * loadedImg.naturalHeight);
-
                 drawFitted(
                     loadedImg,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
+                    loadedImg.naturalWidth,
+                    loadedImg.naturalHeight,
                     0,
                     topBarH,
                     canvasW,
@@ -416,7 +392,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 );
             }
 
-            // Draw Dynamic Island / Camera punch hole for phones
+            // Draw Dynamic Island for iPhone (Samsung punch-hole is rendered via 3D mesh)
             if (isPhone) {
                 const pillW = canvasW * 0.28;
                 const pillH = canvasH * 0.038;
@@ -429,18 +405,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 ctx.fillStyle = '#0f172a';
                 ctx.beginPath();
                 ctx.arc(pillX + pillW * 0.78, pillY + pillH * 0.5, pillH * 0.26, 0, Math.PI * 2);
-                ctx.fill();
-            } else if (isSamsung) {
-                const holeR = Math.max(5, canvasW * 0.018);
-                const holeX = canvasW * 0.5;
-                const holeY = canvasH * 0.035;
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.arc(holeX, holeY, holeR, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = '#0f172a';
-                ctx.beginPath();
-                ctx.arc(holeX, holeY, holeR * 0.5, 0, Math.PI * 2);
                 ctx.fill();
             }
 
@@ -685,7 +649,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         meshH,
         isBrowser,
         isPhone,
-        isSamsung,
         device,
         evalLayer.shimmerProgress,
         evalLayer.textContentOverride,
@@ -710,100 +673,53 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         if (!ctx) return;
         const topBarH = isBrowser ? Math.round(image.height * 0.07) : 0;
         const imgL = layer as ImageLayer | VideoLayer;
+        const vw = videoElement.videoWidth;
+        const vh = videoElement.videoHeight;
+        if (vw <= 0 || vh <= 0) return; // metadata not loaded yet
         const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-        const vw = videoElement.videoWidth || 1920;
-        const vh = videoElement.videoHeight || 1080;
-        const sx = crop.x * vw;
-        const sy = crop.y * vh;
-        const sw = Math.max(1, crop.width * vw);
-        const sh = Math.max(1, crop.height * vh);
+        const dstH = image.height - topBarH;
 
         ctx.save();
         if (totalBlurPx > 0) {
             ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
         }
-        const fit = device?.screenFit || 'stretch';
-        if (fit === 'stretch') {
+        if (device) {
+            const fit = device.screenFit ?? resolveDeviceModelSpec(device).defaultFit;
+            drawSourceWithFit(ctx, videoElement, vw, vh, crop, 0, topBarH, image.width, dstH, fit);
+        } else {
             ctx.drawImage(
                 videoElement,
-                sx,
-                sy,
-                sw,
-                sh,
+                crop.x * vw,
+                crop.y * vh,
+                Math.max(1, crop.width * vw),
+                Math.max(1, crop.height * vh),
                 0,
                 topBarH,
                 image.width,
-                image.height - topBarH
+                dstH
             );
-        } else if (fit === 'fit') {
-            const dstW = image.width;
-            const dstH = image.height - topBarH;
-            ctx.fillStyle = '#0a0a0c';
-            ctx.fillRect(0, topBarH, dstW, dstH);
-            const srcAspect = sw / sh;
-            const dstAspect = dstW / dstH;
-            let renderW = dstW;
-            let renderH = dstH;
-            let rx = 0;
-            let ry = topBarH;
-            if (srcAspect > dstAspect) {
-                renderH = dstW / srcAspect;
-                ry = topBarH + (dstH - renderH) / 2;
-            } else {
-                renderW = dstH * srcAspect;
-                rx = (dstW - renderW) / 2;
-            }
-            ctx.drawImage(videoElement, sx, sy, sw, sh, rx, ry, renderW, renderH);
-        } else if (fit === 'fill') {
-            const dstW = image.width;
-            const dstH = image.height - topBarH;
-            const srcAspect = sw / sh;
-            const dstAspect = dstW / dstH;
-            let actualSrcX = sx;
-            let actualSrcY = sy;
-            let actualSrcW = sw;
-            let actualSrcH = sh;
-            if (srcAspect > dstAspect) {
-                actualSrcW = sh * dstAspect;
-                actualSrcX = sx + (sw - actualSrcW) / 2;
-            } else {
-                actualSrcH = sw / dstAspect;
-                actualSrcY = sy + (sh - actualSrcH) / 2;
-            }
-            ctx.drawImage(videoElement, actualSrcX, actualSrcY, actualSrcW, actualSrcH, 0, topBarH, dstW, dstH);
         }
         ctx.restore();
         // eslint-disable-next-line react-hooks/immutability
         texture.needsUpdate = true;
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, isBrowser, layer, totalBlurPx, device?.screenFit]);
+    }, [currentTimeMs, isVideoAsset, videoElement, texture, isBrowser, layer, totalBlurPx, device]);
 
     const cornerRadiusWorld = useMemo(() => {
-        if (isPhone) return Math.min(meshW, meshH) * 0.14;
-        if (isIpad) return Math.min(meshW, meshH) * 0.07;
-        if (isSamsung) return Math.min(meshW, meshH) * 0.035;
-        if (isMacbook || isBrowser) return Math.min(meshW, meshH) * 0.045;
+        if (deviceGeom) return deviceGeom.screenCornerRadius;
         if (layer.kind !== 'text') {
             return (layer.cornerRadius ?? 0.03) * Math.min(meshW, meshH) * 0.5;
         }
         return 0.005;
-    }, [isPhone, isIpad, isSamsung, isMacbook, isBrowser, layer, meshW, meshH]);
+    }, [deviceGeom?.screenCornerRadius, layer, meshW, meshH]); // eslint-disable-line react-hooks/exhaustive-deps
 
-    const chassisW = isPhone ? meshW * 1.05 : isIpad ? meshW * 1.04 : isSamsung ? meshW * 1.04 : meshW * 1.05;
-    const chassisH = isPhone ? meshH * 1.025 : isIpad ? meshH * 1.03 : isSamsung ? meshH * 1.02 : meshH * 1.04;
-    const chassisR = isPhone
-        ? Math.min(chassisW, chassisH) * 0.14
-        : isSamsung
-            ? Math.min(chassisW, chassisH) * 0.035
-            : Math.min(chassisW, chassisH) * 0.07;
+    // Chassis = physical device body from the model spec (independent of the screen content).
+    const chassisW = deviceGeom ? deviceGeom.deviceW : meshW * 1.05;
+    const chassisH = deviceGeom ? deviceGeom.deviceH : meshH * 1.04;
+    const chassisR = deviceGeom ? deviceGeom.chassisCornerRadius : Math.min(chassisW, chassisH) * 0.07;
 
     const chassisShape = useMemo(
         () => createRoundedRectShape(chassisW, chassisH, chassisR),
         [chassisW, chassisH, chassisR]
-    );
-
-    const roundedShape = useMemo(
-        () => createRoundedRectShape(meshW, meshH, cornerRadiusWorld),
-        [meshW, meshH, cornerRadiusWorld]
     );
 
     const normalizedScreenGeometry = useMemo(
@@ -836,6 +752,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const islandR = islandW * 0.28;
         return createRoundedRectShape(islandW, islandH, islandR);
     }, [isPhone, chassisW]);
+
+    // Browser window chrome shape (the rounded window frame)
+    const browserFrameShape = useMemo(
+        () => isBrowser ? createRoundedRectShape(chassisW, chassisH, chassisR) : null,
+        [isBrowser, chassisW, chassisH, chassisR]
+    );
 
     const cameraIslandExtrudeSettings = useMemo(() => ({
         depth: 0.016,
@@ -876,19 +798,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const stagingOffsetY = device?.staging === 'floating' ? 0.03 : device?.staging === 'held' ? -0.04 : 0;
     const stagingOffsetZ = device?.staging === 'floating' ? 0.06 : 0;
 
-    const getChassisHexColor = (color?: string) => {
-        if (!color) return '#1c1c1f';
-        if (color.startsWith('#') || color.startsWith('rgb')) return color;
-        switch (color) {
-            case 'silver': return '#e2e8f0';
-            case 'black': return '#18181c';
-            case 'space-black': return '#121316';
-            case 'titanium': return '#484745';
-            case 'midnight': return '#161c28';
-            default: return color;
-        }
-    };
-    const chassisHex = getChassisHexColor(device?.color);
+    const chassisHex = resolveDeviceColor(device?.color);
 
     return (
         <group
@@ -920,7 +830,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
             {/* BACK CAMERA BUMP & TRIPLE LENS SYSTEM (iPhone) */}
             {isPhone && cameraIslandShape && (
-                <group position={[-meshW * 0.22, meshH * 0.27, -0.048]}>
+                <group position={[-chassisW * 0.22, chassisH * 0.27, -0.048]}>
                     {/* Camera Island Plateau */}
                     <mesh castShadow receiveShadow>
                         <extrudeGeometry args={[cameraIslandShape, cameraIslandExtrudeSettings]} />
@@ -933,50 +843,50 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     </mesh>
 
                     {/* Lens 1 (Top Left): Main Camera */}
-                    <group position={[-meshW * 0.095, meshW * 0.095, -0.014]}>
+                    <group position={[-chassisW * 0.095, chassisW * 0.095, -0.014]}>
                         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.075, chassisW * 0.075, 0.012, 32]} />
                             <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
                         </mesh>
                         <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
-                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.062, chassisW * 0.062, 0.002, 32]} />
                             <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
                         </mesh>
                     </group>
 
                     {/* Lens 2 (Bottom Left): Ultra Wide Camera */}
-                    <group position={[-meshW * 0.095, -meshW * 0.095, -0.014]}>
+                    <group position={[-chassisW * 0.095, -chassisW * 0.095, -0.014]}>
                         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.075, chassisW * 0.075, 0.012, 32]} />
                             <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
                         </mesh>
                         <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
-                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.062, chassisW * 0.062, 0.002, 32]} />
                             <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
                         </mesh>
                     </group>
 
                     {/* Lens 3 (Right): Telephoto Camera */}
-                    <group position={[meshW * 0.095, 0, -0.014]}>
+                    <group position={[chassisW * 0.095, 0, -0.014]}>
                         <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
-                            <cylinderGeometry args={[meshW * 0.075, meshW * 0.075, 0.012, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.075, chassisW * 0.075, 0.012, 32]} />
                             <meshStandardMaterial color={chassisHex} metalness={0.96} roughness={0.18} />
                         </mesh>
                         <mesh rotation={[Math.PI / 2, 0, 0]} position={[0, 0, -0.0065]}>
-                            <cylinderGeometry args={[meshW * 0.062, meshW * 0.062, 0.002, 32]} />
+                            <cylinderGeometry args={[chassisW * 0.062, chassisW * 0.062, 0.002, 32]} />
                             <meshStandardMaterial color="#05070d" metalness={0.3} roughness={0.05} />
                         </mesh>
                     </group>
 
                     {/* TrueTone Flash LED */}
-                    <mesh position={[meshW * 0.095, meshW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
-                        <cylinderGeometry args={[meshW * 0.032, meshW * 0.032, 0.003, 16]} />
+                    <mesh position={[chassisW * 0.095, chassisW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[chassisW * 0.032, chassisW * 0.032, 0.003, 16]} />
                         <meshBasicMaterial color="#fff4d4" />
                     </mesh>
 
                     {/* LiDAR Scanner Sensor */}
-                    <mesh position={[meshW * 0.095, -meshW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
-                        <cylinderGeometry args={[meshW * 0.024, meshW * 0.024, 0.003, 16]} />
+                    <mesh position={[chassisW * 0.095, -chassisW * 0.11, -0.002]} rotation={[Math.PI / 2, 0, 0]}>
+                        <cylinderGeometry args={[chassisW * 0.024, chassisW * 0.024, 0.003, 16]} />
                         <meshBasicMaterial color="#1a1c23" />
                     </mesh>
                 </group>
@@ -985,20 +895,20 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             {/* SIDE BUTTONS (iPhone) */}
             {isPhone && (
                 <group position={[0, 0, -0.01]}>
-                    <mesh position={[-meshW * 0.508, meshH * 0.28, 0]}>
-                        <boxGeometry args={[0.008, meshH * 0.045, 0.014]} />
+                    <mesh position={[-chassisW * 0.508, chassisH * 0.28, 0]}>
+                        <boxGeometry args={[0.008, chassisH * 0.045, 0.014]} />
                         <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
                     </mesh>
-                    <mesh position={[-meshW * 0.508, meshH * 0.18, 0]}>
-                        <boxGeometry args={[0.008, meshH * 0.075, 0.014]} />
+                    <mesh position={[-chassisW * 0.508, chassisH * 0.18, 0]}>
+                        <boxGeometry args={[0.008, chassisH * 0.075, 0.014]} />
                         <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
                     </mesh>
-                    <mesh position={[-meshW * 0.508, meshH * 0.08, 0]}>
-                        <boxGeometry args={[0.008, meshH * 0.075, 0.014]} />
+                    <mesh position={[-chassisW * 0.508, chassisH * 0.08, 0]}>
+                        <boxGeometry args={[0.008, chassisH * 0.075, 0.014]} />
                         <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
                     </mesh>
-                    <mesh position={[meshW * 0.508, meshH * 0.16, 0]}>
-                        <boxGeometry args={[0.008, meshH * 0.12, 0.014]} />
+                    <mesh position={[chassisW * 0.508, chassisH * 0.16, 0]}>
+                        <boxGeometry args={[0.008, chassisH * 0.12, 0.014]} />
                         <meshStandardMaterial color={chassisHex} metalness={0.95} roughness={0.2} />
                     </mesh>
                 </group>
@@ -1009,7 +919,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 <>
                     {/* Display unibody lid backing */}
                     <mesh position={[0, 0, -0.006]} castShadow receiveShadow>
-                        <boxGeometry args={[meshW * 1.05, meshH * 1.04, 0.012]} />
+                        <boxGeometry args={[chassisW, chassisH, 0.012]} />
                         <meshStandardMaterial
                             color={chassisHex}
                             metalness={0.92}
@@ -1037,12 +947,38 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 </>
             )}
 
+            {/* 2b. 3D BROWSER WINDOW CHASSIS */}
+            {isBrowser && browserFrameShape && (
+                <group position={[0, 0, -0.008]}>
+                    {/* Window frame body */}
+                    <mesh castShadow receiveShadow>
+                        <boxGeometry args={[chassisW, chassisH, 0.008]} />
+                        <meshStandardMaterial
+                            color={chassisHex}
+                            metalness={0.88}
+                            roughness={0.3}
+                            envMapIntensity={1.2}
+                        />
+                    </mesh>
+                    {/* Window shadow / drop */}
+                    <mesh position={[0, -chassisH * 0.004, -0.005]}>
+                        <boxGeometry args={[chassisW * 1.01, chassisH * 1.01, 0.003]} />
+                        <meshStandardMaterial
+                            color="#0a0a0f"
+                            transparent
+                            opacity={0.4}
+                            depthWrite={false}
+                        />
+                    </mesh>
+                </group>
+            )}
+
             {/* 3. 3D PRO / STUDIO DISPLAY CHASSIS & STAND */}
             {isDisplay && (
                 <group position={[0, 0, -0.02]}>
                     {/* Bezel frame around display */}
                     <mesh castShadow receiveShadow>
-                        <boxGeometry args={[meshW * 1.04, meshH * 1.04, 0.02]} />
+                        <boxGeometry args={[chassisW, chassisH, 0.02]} />
                         <meshStandardMaterial
                             color={chassisHex}
                             metalness={0.92}
@@ -1161,13 +1097,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 <group
                     position={[
                         0,
-                        -meshH * (device.type === 'macbook' ? 0.38 : 0.53),
+                        -chassisH * (device.type === 'macbook' ? 0.38 : 0.53),
                         -0.05 - (device.staging === 'floating' ? 0.04 : 0)
                     ]}
                     rotation={[-Math.PI / 2, 0, 0]}
                 >
                     <mesh>
-                        <planeGeometry args={[meshW * 1.5, meshW * 0.85]} />
+                        <planeGeometry args={[chassisW * 1.5, chassisW * 0.85]} />
                         <meshBasicMaterial
                             map={contactShadowTexture}
                             transparent={true}

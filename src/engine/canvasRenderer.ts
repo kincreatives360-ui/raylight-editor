@@ -22,11 +22,14 @@ import type { EvaluatedEffects } from './evaluateEffects';
 import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
 import { getShaderColors } from '../model/backgroundPresets';
 import { resolveKeyIntensity } from './lightMath';
+import { resolveDeviceModelSpec } from '../model/defaults';
+import { computeDeviceGeometry, drawSourceWithFit } from './deviceFitMath';
 
 const MAX_IMAGE_CACHE_SIZE = 100;
 const imageElementCache = new Map<string, HTMLImageElement>();
 const MAX_VIDEO_CACHE_SIZE = 20;
 const videoElementCache = new Map<string, HTMLVideoElement>();
+
 
 export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
   let video = videoElementCache.get(dataUrl);
@@ -463,8 +466,16 @@ function drawLayerOnCanvas(
   const screenCenterX = canvasW / 2 + relX * totalScale;
   const screenCenterY = canvasH / 2 + relY * totalScale;
 
-  const baseW = Math.max(16, evalLayer.size.width * canvasW);
-  const baseH = Math.max(16, evalLayer.size.height * canvasH);
+  const boxW = Math.max(16, evalLayer.size.width * canvasW);
+  const boxH = Math.max(16, evalLayer.size.height * canvasH);
+  // Device bodies keep their model proportions, fitted uniformly into the layer box.
+  const layerDevice =
+    layer.kind === 'image' || layer.kind === 'video' ? (layer as ImageLayer | VideoLayer).device : undefined;
+  const deviceGeom = layerDevice
+    ? computeDeviceGeometry(resolveDeviceModelSpec(layerDevice), boxW, boxH, layerDevice.orientation)
+    : null;
+  const baseW = deviceGeom ? deviceGeom.deviceW : boxW;
+  const baseH = deviceGeom ? deviceGeom.deviceH : boxH;
 
   const rx = evalLayer.rotation.x;
   const ry = evalLayer.rotation.y;
@@ -527,12 +538,8 @@ function drawLayerOnCanvas(
     const sideColor = isSilver ? '#94a3b8' : '#1e293b';
     const rimColor = isSilver ? '#e2e8f0' : '#334155';
 
-    const radiusPx = device
-      ? device.type === 'iphone'
-        ? Math.min(baseW, baseH) * 0.14
-        : device.type === 'ipad'
-          ? Math.min(baseW, baseH) * 0.07
-          : Math.min(baseW, baseH) * 0.045
+    const radiusPx = deviceGeom
+      ? deviceGeom.chassisCornerRadius
       : imgLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
 
     const extrudeSteps = device ? 8 : 4;
@@ -569,12 +576,15 @@ function drawLayerOnCanvas(
       ctx.stroke();
     }
 
-    const bezel = device ? Math.max(6, baseW * 0.026) : 0;
-    const topChrome = device?.type === 'browser' ? baseH * 0.07 : 0;
-    const screenX = -baseW / 2 + bezel;
-    const screenY = -baseH / 2 + bezel + topChrome;
-    const screenW = Math.max(10, baseW - bezel * 2);
-    const screenH = Math.max(10, baseH - bezel * 2 - topChrome);
+    // Screen rect from the model spec (centered; browser content sits below its chrome bar).
+    const screenW = deviceGeom ? deviceGeom.screenW : baseW;
+    const screenH = deviceGeom ? deviceGeom.screenH : baseH;
+    const sideBezel = (baseW - screenW) / 2;
+    const screenX = -screenW / 2;
+    const screenY =
+      device?.type === 'browser' ? baseH / 2 - sideBezel - screenH : -screenH / 2;
+    const topChrome = device?.type === 'browser' ? screenY + baseH / 2 : 0;
+    const screenRadius = deviceGeom ? deviceGeom.screenCornerRadius : radiusPx;
 
     if (device?.type === 'browser') {
       ctx.fillStyle = isSilver ? '#f1f5f9' : '#0f172a';
@@ -608,10 +618,14 @@ function drawLayerOnCanvas(
       screenY,
       screenW,
       screenH,
-      Math.max(2, radiusPx - bezel)
+      Math.max(2, screenRadius)
     );
     ctx.clip();
 
+    // Device screens use the model default fit unless overridden; plain layers keep 'contain'.
+    const screenFit = device
+      ? device.screenFit ?? resolveDeviceModelSpec(device).defaultFit
+      : 'contain';
     const asset = project.assets[imgLayer.assetId];
     const isVideo = layer.kind === 'video' || (asset && asset.mimeType?.startsWith('video/'));
     const cachedImg = !isVideo && asset?.dataUrl
@@ -620,51 +634,19 @@ function drawLayerOnCanvas(
     const cachedVideo = isVideo && asset?.dataUrl
       ? getOrCreateVideoElement(asset.dataUrl)
       : undefined;
-    const crop = imgLayer.crop || { x: 0, y: 0, width: 1, height: 1 };
 
-    if (cachedVideo) {
-      const vw = cachedVideo.videoWidth || 1920;
-      const vh = cachedVideo.videoHeight || 1080;
-      const sx = crop.x * vw;
-      const sy = crop.y * vh;
-      const sw = Math.max(1, crop.width * vw);
-      const sh = Math.max(1, crop.height * vh);
-      ctx.drawImage(
-        cachedVideo,
-        sx,
-        sy,
-        sw,
-        sh,
-        screenX,
-        screenY,
-        screenW,
-        screenH
+    if (cachedVideo && cachedVideo.videoWidth > 0 && cachedVideo.videoHeight > 0) {
+      drawSourceWithFit(
+        ctx, cachedVideo, cachedVideo.videoWidth, cachedVideo.videoHeight, imgLayer.crop,
+        screenX, screenY, screenW, screenH, screenFit, '#05070d'
       );
-    } else if (cachedImg) {
-      const sx = crop.x * cachedImg.naturalWidth;
-      const sy = crop.y * cachedImg.naturalHeight;
-      const sw = Math.max(1, crop.width * cachedImg.naturalWidth);
-      const sh = Math.max(1, crop.height * cachedImg.naturalHeight);
-      ctx.drawImage(
-        cachedImg,
-        sx,
-        sy,
-        sw,
-        sh,
-        screenX,
-        screenY,
-        screenW,
-        screenH
+    } else if (cachedImg && cachedImg.naturalWidth > 0 && cachedImg.naturalHeight > 0) {
+      drawSourceWithFit(
+        ctx, cachedImg, cachedImg.naturalWidth, cachedImg.naturalHeight, imgLayer.crop,
+        screenX, screenY, screenW, screenH, screenFit, '#05070d'
       );
-    } else {
-      drawDefaultImagePlaceholder(
-        ctx,
-        screenX,
-        screenY,
-        screenW,
-        screenH,
-        imgLayer.name
-      );
+    } else if (!cachedVideo) {
+      drawDefaultImagePlaceholder(ctx, screenX, screenY, screenW, screenH, imgLayer.name);
     }
 
     if (device?.type === 'iphone') {

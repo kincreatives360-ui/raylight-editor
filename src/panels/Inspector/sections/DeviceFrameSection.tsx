@@ -11,7 +11,8 @@ import {
     Plus,
     Check,
 } from 'lucide-react';
-import type { ImageLayer, VideoLayer, Layer, DeviceFrame as DeviceFrameType } from '../../../model/types';
+import type { ImageLayer, VideoLayer, Layer, DeviceFrame as DeviceFrameType, ScreenFit } from '../../../model/types';
+import { resolveDeviceColor, getDeviceModelSpecByType } from '../../../model/defaults';
 import { ColorPicker } from '../ColorPicker';
 
 interface DeviceFrameSectionProps {
@@ -87,10 +88,12 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
     const device = layer.device;
     const currentDeviceType = device?.type || 'none';
     const currentDeviceLabel = DEVICE_OPTIONS.find((d) => d.id === currentDeviceType)?.label || 'None';
-    const currentChassisColor = device?.color || '#1c1c1f';
-    const currentScreenFit = device?.screenFit || 'stretch';
-    const currentStaging = device?.staging || 'held';
-    const currentStagingLabel = STAGING_OPTIONS.find((s) => s.id === currentStaging)?.label || 'Held in hand';
+    const currentChassisColor = resolveDeviceColor(device?.color);
+    const currentScreenFit: ScreenFit =
+        device?.screenFit ?? (device ? getDeviceModelSpecByType(device.type)?.defaultFit : undefined) ?? 'contain';
+    const currentOrientation = device?.orientation;
+    const currentStaging = device?.staging || 'none';
+    const currentStagingLabel = STAGING_OPTIONS.find((s) => s.id === currentStaging)?.label || 'None';
 
     const handleSelectDevice = (type: DeviceFrameType['type'] | 'none') => {
         setDeviceMenuOpen(false);
@@ -100,6 +103,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
                 return { ...l, device: undefined };
             }
             const devOption = DEVICE_OPTIONS.find((d) => d.id === type);
+            const modelSpec = getDeviceModelSpecByType(type);
             return {
                 ...l,
                 size: devOption?.defaultSize || l.size,
@@ -110,8 +114,9 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
                     glare: l.device?.glare ?? 1.0,
                     lidAngle: l.device?.lidAngle ?? 100,
                     screenGlow: l.device?.screenGlow ?? 0.4,
-                    screenFit: l.device?.screenFit || 'stretch',
+                    screenFit: modelSpec?.defaultFit || (l.device?.screenFit || 'contain'),
                     staging: l.device?.staging || 'held',
+                    modelSpecId: modelSpec?.id,
                 },
             };
         });
@@ -123,17 +128,19 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
         } else {
             updateLayer(activeShotId, layer.id, (l) => {
                 if (l.kind !== 'image' && l.kind !== 'video') return l;
+                const modelSpec = getDeviceModelSpecByType(device.type);
                 return {
                     ...l,
                     device: {
-                        type: l.device?.type || 'iphone',
+                        type: device.type,
                         color: '#1c1c1f',
                         gloss: 0.5,
                         glare: 1.0,
                         lidAngle: 100,
                         screenGlow: 0.4,
-                        screenFit: 'stretch',
+                        screenFit: modelSpec?.defaultFit || 'contain',
                         staging: 'held',
+                        modelSpecId: modelSpec?.id,
                     },
                 };
             });
@@ -182,7 +189,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
         });
     };
 
-    const handleSelectScreenFit = (fit: 'stretch' | 'fit' | 'fill') => {
+    const handleSelectScreenFit = (fit: ScreenFit) => {
         setScreenFitMenuOpen(false);
         updateLayer(activeShotId, layer.id, (l) => {
             if (l.kind !== 'image' && l.kind !== 'video') return l;
@@ -193,6 +200,24 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
                     ...l.device,
                     screenFit: fit,
                 },
+            };
+        });
+    };
+
+    // Rotates the device body (portrait <-> landscape). The body is never stretched to the content.
+    const handleToggleOrientation = () => {
+        updateLayer(activeShotId, layer.id, (l) => {
+            if (l.kind !== 'image' && l.kind !== 'video') return l;
+            if (!l.device) return l;
+            const spec = getDeviceModelSpecByType(l.device.type);
+            const native = spec && spec.nominalWidth > spec.nominalHeight ? 'landscape' : 'portrait';
+            const current = l.device.orientation ?? native;
+            const next = current === 'portrait' ? 'landscape' : 'portrait';
+            return {
+                ...l,
+                // Swap the layer box so the rotated device keeps its on-canvas size.
+                size: { width: l.size.height, height: l.size.width },
+                device: { ...l.device, orientation: next },
             };
         });
     };
@@ -353,16 +378,17 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
                             </button>
                         </div>
 
-                        {/* Row 2: Screen Mapping (Screen bounds icon + Stretch / Fit / Fill) */}
+                        {/* Row 2: Screen Mapping (orientation toggle + Contain / Cover) */}
                         {device && (
                             <div className="flex items-center gap-1.5">
                                 <button
                                     type="button"
-                                    onClick={() => handleSelectScreenFit(currentScreenFit === 'stretch' ? 'fit' : currentScreenFit === 'fit' ? 'fill' : 'stretch')}
-                                    className="h-7 px-2.5 rounded-lg bg-[#18181b] hover:bg-[#202024] border border-white/10 flex items-center gap-1.5 text-[11px] text-[#d4d4d8] transition cursor-pointer"
+                                    title="Toggle device orientation"
+                                    onClick={handleToggleOrientation}
+                                    className="h-7 px-2.5 rounded-lg bg-[#18181b] hover:bg-[#202024] border border-white/10 flex items-center gap-1.5 text-[11px] text-[#d4d4d8] transition cursor-pointer capitalize"
                                 >
                                     <Maximize2 className="w-3 h-3 text-[#71717a]" />
-                                    <span>Screen</span>
+                                    <span>{currentOrientation ?? 'Native'}</span>
                                 </button>
 
                                 <div className="relative flex-1" ref={screenFitRef}>
@@ -377,7 +403,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
 
                                     {screenFitMenuOpen && (
                                         <div className="absolute right-0 top-8 w-32 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-40 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
-                                            {(['stretch', 'fit', 'fill'] as const).map((fit) => (
+                                            {(['contain', 'cover'] as const).map((fit) => (
                                                 <button
                                                     key={fit}
                                                     type="button"
@@ -472,7 +498,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({
                     </button>
                 </div>
 
-                {stagingExpanded && (
+                {stagingExpanded && device && (
                     <div className="relative" ref={stagingMenuRef}>
                         <button
                             type="button"

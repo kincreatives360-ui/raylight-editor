@@ -15,6 +15,7 @@ import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 
+
 interface ViewportCanvasProps {
     project: Project;
     frame: EvaluatedProjectFrame;
