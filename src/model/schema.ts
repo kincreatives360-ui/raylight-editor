@@ -329,11 +329,13 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
   device: z
     .object({
       type: z.enum(['iphone', 'ipad', 'macbook', 'browser', 'samsung-galaxy', 'display']),
-      color: z.enum(['silver', 'black', 'space-black', 'titanium', 'midnight']),
+      color: z.string(),
       gloss: z.number().min(0).max(1),
       lidAngle: z.number().optional(),
       screenGlow: z.number().optional(),
       glare: z.number().optional(),
+      screenFit: z.enum(['stretch', 'fit', 'fill']).optional(),
+      staging: z.enum(['none', 'floating', 'held', 'desk']).optional(),
     })
     .optional(),
 });

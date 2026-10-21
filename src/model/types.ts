@@ -219,11 +219,13 @@ export interface LayerEffects {
 
 export interface DeviceFrame {
   type: 'iphone' | 'ipad' | 'macbook' | 'browser' | 'samsung-galaxy' | 'display';
-  color: 'silver' | 'black' | 'space-black' | 'titanium' | 'midnight';
+  color: string;
   gloss: number;
   lidAngle?: number;
   screenGlow?: number;
   glare?: number;
+  screenFit?: 'stretch' | 'fit' | 'fill';
+  staging?: 'none' | 'floating' | 'held' | 'desk';
 }
 
 export interface LayerBase {

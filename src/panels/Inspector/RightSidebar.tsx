@@ -45,13 +45,11 @@ import {
     Compass,
     RotateCw,
     Maximize2,
-    Laptop,
     Spline,
 } from 'lucide-react';
 import type {
     Shot,
     Layer,
-    DeviceFrame as DeviceFrameType,
     TransitionType,
     AnimationBlock,
     AnimationBlockProperty,
@@ -73,6 +71,7 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { DeviceFrameSection } from './sections/DeviceFrameSection';
 import { EasingPopover } from '../Timeline/EasingPopover';
 
 const ALL_BLEND_MODES: BlendMode[] = [
@@ -1213,7 +1212,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [addAnimMenuOpen, setAddAnimMenuOpen] = useState(false);
     const [inMenuOpen, setInMenuOpen] = useState(false);
     const [outMenuOpen, setOutMenuOpen] = useState(false);
-    const [swapMenuOpen, setSwapMenuOpen] = useState(false);
     const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
     const [easingPopoverConfig, setEasingPopoverConfig] = useState<{
@@ -1242,34 +1240,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     : l
             ),
         }));
-    };
-
-    const handleSetDeviceType = (type: 'none' | DeviceFrameType['type']) => {
-        if (!selectedLayer || (selectedLayer.kind !== 'image' && selectedLayer.kind !== 'video')) return;
-        updateLayer(activeShot.id, selectedLayer.id, (l) => {
-            if (l.kind !== 'image' && l.kind !== 'video') return l;
-            if (type === 'none') return { ...l, device: undefined };
-            const defaultSize =
-                type === 'iphone' || type === 'samsung-galaxy'
-                    ? { width: 0.28, height: 0.58 }
-                    : type === 'ipad'
-                        ? { width: 0.48, height: 0.56 }
-                        : type === 'display'
-                            ? { width: 0.72, height: 0.48 }
-                            : { width: 0.64, height: 0.56 };
-            return {
-                ...l,
-                size: defaultSize,
-                device: {
-                    type,
-                    color: l.device?.color || 'silver',
-                    gloss: l.device?.gloss ?? 0.78,
-                    glare: l.device?.glare ?? 0.35,
-                    lidAngle: l.device?.lidAngle ?? 100,
-                    screenGlow: l.device?.screenGlow ?? 0.4,
-                },
-            };
-        });
     };
 
     const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1682,202 +1652,61 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 />
                             )}
 
-                            {/* IMAGE / VIDEO LAYER: Source, Device Frame & Crop */}
+                            {/* IMAGE / VIDEO LAYER: Source & Crop Header */}
                             {(selectedLayer.kind === 'image' || selectedLayer.kind === 'video') && (
-                                <div className="p-3.5 space-y-3 relative">
-                                    <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
-                                        <span>Image &amp; Frame</span>
-                                        <div className="flex items-center gap-1">
+                                <>
+                                    <div className="p-3.5 space-y-3 relative">
+                                        <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
+                                            <span>Media Source</span>
                                             <button
                                                 onClick={onSwapImageClick}
-                                                className="h-6 px-2 rounded-l-md bg-[#1c1c1f] hover:bg-[#252529] text-[10px] text-[#e4e4e7] flex items-center gap-1 cursor-pointer transition"
+                                                className="h-6 px-2 rounded-md bg-[#1c1c1f] hover:bg-[#252529] text-[10px] text-[#e4e4e7] flex items-center gap-1 cursor-pointer transition"
                                             >
                                                 <ImageIcon className="w-3 h-3 text-[#0088ff]" />
                                                 <span>Swap</span>
                                             </button>
-                                            <button
-                                                onClick={() => setSwapMenuOpen((v) => !v)}
-                                                className="h-6 px-1 rounded-r-md bg-[#1c1c1f] hover:bg-[#252529] text-[#a1a1aa] cursor-pointer transition border-l border-black/40"
-                                            >
-                                                <ChevronDown className="w-3 h-3" />
-                                            </button>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-12 rounded-lg bg-[#18181b] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                                            {project.assets[selectedLayer.assetId]?.dataUrl ? (
-                                                project.assets[selectedLayer.assetId].mimeType?.startsWith('video/') ? (
-                                                    <video
-                                                        src={project.assets[selectedLayer.assetId].dataUrl}
-                                                        className="w-full h-full object-cover"
-                                                        muted
-                                                    />
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-12 rounded-lg bg-[#18181b] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                                {project.assets[selectedLayer.assetId]?.dataUrl ? (
+                                                    project.assets[selectedLayer.assetId].mimeType?.startsWith('video/') ? (
+                                                        <video
+                                                            src={project.assets[selectedLayer.assetId].dataUrl}
+                                                            className="w-full h-full object-cover"
+                                                            muted
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={project.assets[selectedLayer.assetId].dataUrl}
+                                                            alt={selectedLayer.name}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    )
                                                 ) : (
-                                                    <img
-                                                        src={project.assets[selectedLayer.assetId].dataUrl}
-                                                        alt={selectedLayer.name}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                )
-                                            ) : (
-                                                <ImageIcon className="w-4 h-4 text-[#0088ff]" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 text-[11px] text-[#a1a1aa]">
-                                            <div className="text-white font-medium capitalize">
-                                                {selectedLayer.device?.type
-                                                    ? `${selectedLayer.device.type} Frame`
-                                                    : 'Bare Screenshot'}
+                                                    <ImageIcon className="w-4 h-4 text-[#0088ff]" />
+                                                )}
                                             </div>
-                                            <div className="text-[10px] text-[#a1a1aa]">
-                                                {project.assets[selectedLayer.assetId]?.name ||
-                                                    'Active asset'}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {swapMenuOpen && (
-                                        <div className="p-1 rounded-xl bg-[#18181b] border border-white/10 space-y-0.5 text-[11px] shadow-2xl z-20">
-                                            {(
-                                                [
-                                                    'none',
-                                                    'iphone',
-                                                    'ipad',
-                                                    'macbook',
-                                                    'samsung-galaxy',
-                                                    'display',
-                                                    'browser',
-                                                ] as const
-                                            ).map((dev) => (
-                                                <button
-                                                    key={dev}
-                                                    onClick={() => {
-                                                        handleSetDeviceType(dev);
-                                                        setSwapMenuOpen(false);
-                                                    }}
-                                                    className={`w-full px-2 py-1.5 rounded-lg text-left capitalize cursor-pointer transition ${(!selectedLayer.device && dev === 'none') ||
-                                                        selectedLayer.device?.type === dev
-                                                        ? 'bg-[#0088ff] text-white font-medium'
-                                                        : 'text-[#d4d4d8] hover:bg-white/5'
-                                                        }`}
-                                                >
-                                                    {dev === 'none'
-                                                        ? 'Bare Screenshot'
-                                                        : dev === 'samsung-galaxy'
-                                                            ? 'Samsung Galaxy Ultra'
-                                                            : dev === 'display'
-                                                                ? 'Pro Display XDR'
-                                                                : `${dev} 3D Frame`}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* 3D Device Frame Settings */}
-                                    {selectedLayer.device && (
-                                        <div className="p-2.5 rounded-xl bg-[#161619] border border-white/[0.06] space-y-2 pt-2">
-                                            <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                                                <span className="flex items-center gap-1 text-[#e4e4e7]">
-                                                    <Laptop className="w-3 h-3 text-[#0088ff]" />
-                                                    Frame Details
-                                                </span>
-                                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded flex-wrap justify-end">
-                                                    {(['silver', 'black', 'space-black', 'titanium', 'midnight'] as const).map((clr) => (
-                                                        <button
-                                                            key={clr}
-                                                            type="button"
-                                                            onClick={() =>
-                                                                updateLayer(
-                                                                    activeShot.id,
-                                                                    selectedLayer.id,
-                                                                    (l) =>
-                                                                        (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                            ? {
-                                                                                ...l,
-                                                                                device: { ...l.device, color: clr },
-                                                                            }
-                                                                            : l
-                                                                )
-                                                            }
-                                                            className={`px-2 py-0.5 rounded text-[10px] capitalize cursor-pointer transition ${selectedLayer.device?.color === clr
-                                                                ? 'bg-[#2a2a30] text-white font-medium'
-                                                                : 'text-[#a1a1aa] hover:text-white'
-                                                                }`}
-                                                        >
-                                                            {clr.replace('-', ' ')}
-                                                        </button>
-                                                    ))}
+                                            <div className="flex-1 text-[11px] text-[#a1a1aa]">
+                                                <div className="text-white font-medium capitalize">
+                                                    {selectedLayer.device?.type
+                                                        ? `${selectedLayer.device.type} Frame`
+                                                        : 'Bare Screenshot'}
+                                                </div>
+                                                <div className="text-[10px] text-[#a1a1aa] truncate max-w-[140px]">
+                                                    {project.assets[selectedLayer.assetId]?.name ||
+                                                        'Active asset'}
                                                 </div>
                                             </div>
-
-                                            <div className="grid grid-cols-3 gap-1">
-                                                <ScrubInput
-                                                    label="Gloss"
-                                                    value={selectedLayer.device.gloss}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(gloss) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, gloss } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Glare"
-                                                    value={selectedLayer.device.glare ?? 0.35}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(glare) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, glare } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Glow"
-                                                    value={selectedLayer.device.screenGlow ?? 0.4}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(screenGlow) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, screenGlow } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-
-                                            {selectedLayer.device.type === 'macbook' && (
-                                                <ScrubInput
-                                                    label="Lid"
-                                                    value={selectedLayer.device.lidAngle ?? 100}
-                                                    min={35}
-                                                    max={125}
-                                                    step={1}
-                                                    unit="°"
-                                                    onChange={(lidAngle) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, lidAngle } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                            )}
                                         </div>
-                                    )}
+                                    </div>
+
+                                    {/* 3D DEVICE FRAME & STAGING SECTIONS (EXACT RAYLIGHT REFERENCE) */}
+                                    <DeviceFrameSection
+                                        layer={selectedLayer}
+                                        activeShotId={activeShot.id}
+                                        updateLayer={updateLayer}
+                                    />
 
                                     {/* Image Border & Stroke */}
                                     <div className="space-y-1.5 pt-1">
@@ -1948,7 +1777,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                </>
                             )}
 
                             {/* GENERAL INSPECTOR SECTIONS (FOR NON-SHAPE LAYERS) */}
