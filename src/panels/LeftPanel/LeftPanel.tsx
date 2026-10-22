@@ -24,22 +24,16 @@ import {
     Play,
     Pause,
     Upload,
-    Sparkles,
-    Check,
-    Smartphone,
-    Laptop,
-    Tv,
-    Flame,
 } from 'lucide-react';
 import type { Shot, Layer, Group, AudioClip } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
+import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 import { CURATED_SOUNDS } from '../../data/curatedSounds';
-import { STARTER_TEMPLATES, type StarterTemplate } from '../../data/starterTemplates';
-import { createDefaultCameraBlock } from '../../model/defaults';
+import { getSoundCategoryLabels, normalizeSoundCategory } from '../../data/soundCategories';
 import {
     SHADER_PRESETS,
     SHADER_PRESET_METADATA,
@@ -65,13 +59,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         updateShot,
         updateLayer,
         addLayerToShot,
+        addCameraBlockToShot,
+        toggleProjectAudioMuted,
         deleteLayerFromShot,
         moveLayerToOrderAndGroup,
         updateGroupInShot,
         addShot,
         duplicateShot,
         deleteShot,
-        loadProjectJson,
     } = useProjectStore();
 
     const {
@@ -103,43 +98,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
     const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
-    const [assetCategory, setAssetCategory] = useState<'uploads' | 'mockups' | 'shaders' | 'sfx' | 'templates'>('uploads');
-    const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>('All');
-    const [loadedTemplateId, setLoadedTemplateId] = useState<string | null>(null);
+    const [assetCategory, setAssetCategory] = useState<'uploads' | 'shaders' | 'sfx'>('uploads');
     const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
     const [soundSearchQuery, setSoundSearchQuery] = useState<string>('');
     const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
     const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-
-    const filteredTemplates = useMemo(() => {
-        return STARTER_TEMPLATES.filter((tpl) => {
-            if (selectedTemplateCategory !== 'All' && tpl.category !== selectedTemplateCategory) {
-                return false;
-            }
-            return true;
-        });
-    }, [selectedTemplateCategory]);
-
-    const handleLoadTemplate = (tpl: StarterTemplate) => {
-        const hasExistingContent = project.shots.length > 1 || (project.shots[0]?.layers && project.shots[0].layers.length > 0);
-        if (hasExistingContent) {
-            const confirmMsg = `Load "${tpl.name}"? This will replace your current workspace.`;
-            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) {
-                return;
-            }
-        }
-        const newProject = tpl.getProject();
-        const result = loadProjectJson(newProject);
-        if (result.success) {
-            if (newProject.shots.length > 0) {
-                selectShot(newProject.shots[0].id);
-            }
-            setSelectedLayerIds([]);
-            setCurrentTimeMs(0);
-            setLoadedTemplateId(tpl.id);
-            setTimeout(() => setLoadedTemplateId(null), 2500);
-        }
-    };
 
     useEffect(() => {
         return () => {
@@ -185,47 +148,41 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         });
     };
 
-    const filteredCuratedSounds = useMemo(() => {
-        const list: {
-            id: string;
-            name: string;
-            category: string;
-            durationMs: number;
-            description: string;
-            getUrl: () => string;
-        }[] = [
-            ...CURATED_SOUNDS.map((s) => ({
-                id: s.slug,
-                name: s.name,
-                category: s.category.charAt(0).toUpperCase() + s.category.slice(1),
-                durationMs: s.durationMs,
-                description: `${s.category} sound effect`,
-                getUrl: () => s.src,
-            })),
-            ...BUILTIN_SOUND_PACKS.map((s) => ({
-                id: s.id,
-                name: s.name,
-                category: s.category,
-                durationMs: s.durationMs,
-                description: s.description,
-                getUrl: () => s.generateWavDataUrl(),
-            })),
-        ];
+    const soundItems = useMemo(() => [
+        ...CURATED_SOUNDS.map((sound) => ({
+            id: sound.slug,
+            name: sound.name,
+            category: normalizeSoundCategory(sound.category),
+            durationMs: sound.durationMs,
+            description: `${sound.category} sound effect`,
+            getUrl: () => sound.src,
+        })),
+        ...BUILTIN_SOUND_PACKS.map((sound) => ({
+            id: sound.id,
+            name: sound.name,
+            category: normalizeSoundCategory(sound.category),
+            durationMs: sound.durationMs,
+            description: sound.description,
+            getUrl: () => sound.generateWavDataUrl(),
+        })),
+    ], []);
 
+    const soundCategories = useMemo(
+        () => getSoundCategoryLabels(soundItems.map((sound) => sound.category)),
+        [soundItems]
+    );
+
+    const filteredCuratedSounds = useMemo(() => {
         const q = soundSearchQuery.trim().toLowerCase();
-        return list.filter((item) => {
-            const matchesCategory =
-                selectedSfxCategory === 'All' ||
-                item.category.toLowerCase() === selectedSfxCategory.toLowerCase();
-            if (!matchesCategory) return false;
+        return soundItems.filter((item) => {
+            if (selectedSfxCategory !== 'All' && item.category !== selectedSfxCategory) {
+                return false;
+            }
             if (!q) return true;
-            return (
-                item.name.toLowerCase().includes(q) ||
-                item.category.toLowerCase().includes(q) ||
-                item.description.toLowerCase().includes(q)
-            );
+            return [item.name, item.category, item.description]
+                .some((field) => field.toLowerCase().includes(q));
         });
-    }, [soundSearchQuery, selectedSfxCategory]);
+    }, [soundItems, soundSearchQuery, selectedSfxCategory]);
 
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -477,7 +434,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     } ${isSelected || isInsideSelectedContainer
                         ? 'bg-[#09355c] text-white font-medium'
                         : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
-                    } ${layer.hidden ? 'opacity-40' : ''}`}
+                    } ${isLayerEffectivelyHidden(layer, shot.groups) ? 'opacity-40' : ''}`}
             >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     {renderLayerIcon(layer, isSelected)}
@@ -735,21 +692,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         </button>
                         <button
                             onClick={() => {
-                                const camId = `cam-blk-${Date.now()}`;
-                                updateShot(activeShot.id, (s) => ({
-                                    ...s,
-                                    cameraBlocks: [
-                                        ...(s.cameraBlocks || []),
-                                        createDefaultCameraBlock(
-                                            camId,
-                                            0,
-                                            s.durationMs,
-                                            s.framings[0]?.id || 'f1',
-                                            s.framings[1]?.id || 'f2'
-                                        ),
-                                    ],
-                                }));
-                                selectCameraBlock(camId);
+                                const block = addCameraBlockToShot(activeShot.id);
+                                if (!block) return;
+                                selectCameraBlock(block.id);
                                 setTimelineView('scene');
                                 setAddMenuOpen(false);
                             }}
@@ -1026,14 +971,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                updateProject((p) => ({
-                                                    ...p,
-                                                    audio: {
-                                                        clips: p.audio?.clips || [],
-                                                        muted: !p.audio?.muted,
-                                                        masterVolume: p.audio?.masterVolume ?? 1,
-                                                    },
-                                                }));
+                                                toggleProjectAudioMuted();
                                             }}
                                             title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                             className="p-1 hover:text-white cursor-pointer"
@@ -1066,21 +1004,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         if (activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0) {
                                             selectCameraBlock(activeShot.cameraBlocks[0].id);
                                         } else {
-                                            const camId = `cam-blk-${Date.now()}`;
-                                            updateShot(activeShot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: [
-                                                    ...(s.cameraBlocks || []),
-                                                    createDefaultCameraBlock(
-                                                        camId,
-                                                        0,
-                                                        s.durationMs,
-                                                        s.framings[0]?.id || 'f1',
-                                                        s.framings[1]?.id || 'f2'
-                                                    ),
-                                                ],
-                                            }));
-                                            selectCameraBlock(camId);
+                                            const block = addCameraBlockToShot(activeShot.id);
+                                            if (block) selectCameraBlock(block.id);
                                         }
                                     }}
                                     style={{ order: 30 }}
@@ -1225,10 +1150,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] no-scrollbar shrink-0 border-b border-white/[0.06]">
                         {([
                             { id: 'uploads', label: 'Uploads' },
-                            { id: 'mockups', label: '3D Mockups' },
                             { id: 'shaders', label: 'Shaders' },
                             { id: 'sfx', label: 'Sound FX' },
-                            { id: 'templates', label: 'Templates' },
                         ] as const).map((cat) => (
                             <button
                                 key={cat.id}
@@ -1273,7 +1196,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 assetId: asset.id,
                                                 name: asset.name,
                                                 rotation: { x: 0, y: 0, z: 0 },
-                                                device: undefined,
                                             });
                                             setInspectorTab('layer');
                                             selectLayer(created.id);
@@ -1333,84 +1255,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         </div>
                     )}
 
-                    {/* SUBCATEGORY 2: 3D MOCKUPS */}
-                    {assetCategory === 'mockups' && (
-                        <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
-                            {[
-                                {
-                                    name: 'iPhone 15 Pro',
-                                    subtitle: 'Natural Titanium CAD',
-                                    badge: 'CAD Model',
-                                    color: 'from-blue-600/30 to-indigo-950/60',
-                                    device: { type: 'iphone' as const, color: 'titanium' as const, gloss: 0.5, glare: 1.0 },
-                                },
-                                {
-                                    name: 'iPhone 16 Pro',
-                                    subtitle: 'Space Black Titanium',
-                                    badge: 'CAD Model',
-                                    color: 'from-zinc-800/50 to-black',
-                                    device: { type: 'iphone' as const, color: 'space-black' as const, gloss: 0.6, glare: 1.0 },
-                                },
-                                {
-                                    name: 'MacBook Pro 16"',
-                                    subtitle: 'Space Black Unibody',
-                                    badge: '3D Laptop',
-                                    color: 'from-slate-800/40 to-zinc-950',
-                                    device: { type: 'macbook' as const, color: 'space-black' as const, gloss: 0.4, lidAngle: 110 },
-                                },
-                                {
-                                    name: 'iPad Pro',
-                                    subtitle: 'Silver Liquid Retina',
-                                    badge: '3D Tablet',
-                                    color: 'from-cyan-900/30 to-blue-950',
-                                    device: { type: 'ipad' as const, color: 'silver' as const, gloss: 0.4 },
-                                },
-                                {
-                                    name: 'Studio Display',
-                                    subtitle: 'Aluminum 5K Retina',
-                                    badge: '5K Display',
-                                    color: 'from-neutral-800/40 to-neutral-950',
-                                    device: { type: 'display' as const, color: 'silver' as const, gloss: 0.3 },
-                                },
-                            ].map((item) => (
-                                <div
-                                    key={item.name}
-                                    onClick={() => {
-                                        const created = addLayerToShot(activeShot.id, 'image', {
-                                            name: item.name,
-                                            device: item.device,
-                                            receivesLight: true,
-                                        });
-                                        setInspectorTab('layer');
-                                        selectLayer(created.id);
-                                    }}
-                                    className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition cursor-pointer flex flex-col gap-2 group shadow-sm"
-                                >
-                                    <div className={`h-16 rounded-lg bg-gradient-to-br ${item.color} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
-                                        <div className="flex items-center gap-2 z-10">
-                                            <div className="w-8 h-8 rounded-lg bg-black/50 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
-                                                <Smartphone className="w-4 h-4 text-[#0088ff]" />
-                                            </div>
-                                            <div>
-                                                <div className="text-xs font-semibold text-white tracking-tight">{item.name}</div>
-                                                <div className="text-[10px] text-[#a1a1aa]">{item.subtitle}</div>
-                                            </div>
-                                        </div>
-                                        <span className="z-10 text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
-                                            {item.badge}
-                                        </span>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        className="w-full py-1.5 px-3 rounded-lg bg-white/5 group-hover:bg-[#0088ff] text-[#d4d4d8] group-hover:text-white text-xs font-medium transition cursor-pointer flex items-center justify-center gap-1.5"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                        <span>Add {item.name}</span>
-                                    </button>
-                                </div>
-                            ))}
-                        </div>
-                    )}
+
 
                     {/* SUBCATEGORY 3: SHADERS */}
                     {assetCategory === 'shaders' && (
@@ -1521,7 +1366,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
                             {/* Category Filter Pills */}
                             <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
-                                {['All', 'Ambience', 'Click', 'Glitch', 'Impact', 'Pop', 'Riser', 'Slide', 'Typing', 'UI', 'Whoosh'].map((cat) => (
+                                {soundCategories.map((cat) => (
                                     <button
                                         key={cat}
                                         type="button"
@@ -1625,101 +1470,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         </div>
                     )}
 
-                    {/* SUBCATEGORY 5: TEMPLATES */}
-                    {assetCategory === 'templates' && (
-                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
-                            {/* Category Filter Pills */}
-                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
-                                {['All', 'Device Showcase', 'Product Walkthrough', 'Cinematic Studio', 'Social & Vertical'].map((cat) => (
-                                    <button
-                                        key={cat}
-                                        type="button"
-                                        onClick={() => setSelectedTemplateCategory(cat)}
-                                        className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${
-                                            selectedTemplateCategory === cat
-                                                ? 'bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/40'
-                                                : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
-                                        }`}
-                                    >
-                                        {cat}
-                                    </button>
-                                ))}
-                            </div>
-
-                            {/* Template Cards List */}
-                            <div className="flex-1 overflow-y-auto space-y-3 pr-0.5">
-                                {filteredTemplates.map((tpl) => {
-                                    const isLoaded = loadedTemplateId === tpl.id;
-                                    const IconComponent = tpl.id.includes('iphone')
-                                        ? Smartphone
-                                        : tpl.id.includes('macbook')
-                                            ? Laptop
-                                            : tpl.id.includes('neon')
-                                                ? Flame
-                                                : Tv;
-
-                                    return (
-                                        <div
-                                            key={tpl.id}
-                                            className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition flex flex-col gap-2.5 group shadow-sm"
-                                        >
-                                            <div className={`h-20 rounded-lg bg-gradient-to-br ${tpl.thumbnailColor} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
-                                                <div className="flex items-center gap-2 z-10">
-                                                    <div className="w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
-                                                        <IconComponent className="w-4 h-4 text-amber-400" />
-                                                    </div>
-                                                    <div>
-                                                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-[#d4d4d8] font-mono uppercase tracking-wider backdrop-blur-sm border border-white/10">
-                                                            {tpl.badge}
-                                                        </span>
-                                                    </div>
-                                                </div>
-                                                <div className="z-10 flex items-center gap-1">
-                                                    <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
-                                                        {tpl.aspectRatio}
-                                                    </span>
-                                                </div>
-                                                <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
-                                            </div>
-
-                                            <div>
-                                                <h4 className="text-xs font-semibold text-white tracking-tight group-hover:text-amber-400 transition-colors">
-                                                    {tpl.name}
-                                                </h4>
-                                                <p className="text-[11px] text-[#a1a1aa] mt-1 line-clamp-2 leading-relaxed">
-                                                    {tpl.description}
-                                                </p>
-                                            </div>
-
-                                            <button
-                                                type="button"
-                                                onClick={() => handleLoadTemplate(tpl)}
-                                                className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm ${
-                                                    isLoaded
-                                                        ? 'bg-emerald-600 text-white border border-emerald-500'
-                                                        : 'bg-[#f59e0b] hover:bg-[#d97706] text-black font-medium'
-                                                }`}
-                                            >
-                                                {isLoaded ? (
-                                                    <>
-                                                        <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                                                        <span>Template Loaded!</span>
-                                                    </>
-                                                ) : (
-                                                    <>
-                                                        <Sparkles className="w-3.5 h-3.5 fill-current" />
-                                                        <span>Use Template</span>
-                                                    </>
-                                                )}
-                                            </button>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    )}
                 </div>
             )}
         </aside>
     );
 });
+

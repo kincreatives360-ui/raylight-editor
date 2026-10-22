@@ -1011,7 +1011,6 @@ const StageComponent: React.FC<StageProps> = ({
                 position: { x: dropX, y: dropY, z: 0 },
                 size,
                 rotation: { x: 0, y: 0, z: 0 },
-                device: undefined,
             });
             selectLayer(newLayer.id, false);
             return;
@@ -1060,7 +1059,6 @@ const StageComponent: React.FC<StageProps> = ({
                         position: { x: dropX, y: dropY, z: 0 },
                         size,
                         rotation: { x: 0, y: 0, z: 0 },
-                        device: undefined,
                     });
                     selectLayer(newLayer.id, false);
                 } catch (err) {

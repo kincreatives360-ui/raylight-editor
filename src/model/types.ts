@@ -217,37 +217,6 @@ export interface LayerEffects {
   warp?: WarpEffect;
 }
 
-export type ScreenFit = 'contain' | 'cover';
-
-export interface DeviceModelSpec {
-  id: string;
-  name?: string;
-  kind: 'gltf' | 'procedural';
-  assetUrl?: string;
-  nominalWidth: number;
-  nominalHeight: number;
-  nominalDepth?: number;
-  screenMeshName?: string;
-  screenWidth: number;
-  screenHeight: number;
-  defaultFit: ScreenFit;
-  chassisCornerRadius?: number;
-  screenCornerRadius?: number;
-}
-
-export interface DeviceFrame {
-  type: 'iphone' | 'ipad' | 'macbook' | 'browser' | 'samsung-galaxy' | 'display';
-  color: string;
-  gloss: number;
-  lidAngle?: number;
-  screenGlow?: number;
-  glare?: number;
-  screenFit?: ScreenFit;
-  staging?: 'none' | 'floating' | 'held' | 'desk';
-  modelSpecId?: string;
-  orientation?: 'portrait' | 'landscape';
-}
-
 export interface LayerBase {
   id: string;
   name: string;
@@ -270,7 +239,7 @@ export interface LayerBase {
   effects: LayerEffects;
   /** Optional alpha-mask source layer ID. */
   maskLayerId?: string;
-  /** When true, layer surface reacts to 3D scene lighting. Default false for text, true for images/video/devices. */
+  /** When true, layer surface reacts to 3D scene lighting. Default false for text and true for images/video. */
   receivesLight?: boolean;
   /** Optional 3D surface material response */
   material?: {
@@ -286,7 +255,6 @@ export interface ImageLayer extends LayerBase {
   cornerRadius: number;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
-  device?: DeviceFrame;
 }
 
 export interface ShapeMask {
@@ -341,7 +309,6 @@ export interface VideoLayer extends LayerBase {
   cornerRadius: number;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
-  device?: DeviceFrame;
 }
 
 export type Layer = ImageLayer | VideoLayer | ShapeLayer | TextLayer;
@@ -673,3 +640,4 @@ export function resolveShotBackground(project: Project, shot?: Shot): Background
   }
   return shot.background ?? project?.background ?? { kind: 'solid', color: '#0c0e17' };
 }
+

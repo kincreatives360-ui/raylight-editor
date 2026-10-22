@@ -4,9 +4,10 @@ import * as THREE from 'three';
 import { Move, RotateCw, Compass, Lock, Crop, Type, Sparkles } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
-import type {
-    EvaluatedLayerWithEffects,
-    EvaluatedProjectFrame,
+import {
+    isLayerEffectivelyLocked,
+    type EvaluatedLayerWithEffects,
+    type EvaluatedProjectFrame,
 } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -71,7 +72,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryEval = selectedEvalLayers[0];
     const { layer } = primaryEval;
-    const isLocked = layer.locked;
+    const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
 
     const aspect = frameWidth / Math.max(frameHeight, 1);
     const defaultCamera = project.defaultCamera || {
@@ -209,7 +210,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     ...s,
                     layers: s.layers.map((l) => {
                         const initPos = startPositions[l.id];
-                        if (!initPos || l.locked) return l;
+                        if (!initPos || isLayerEffectivelyLocked(l, s.groups)) return l;
                         return {
                             ...l,
                             position: {

@@ -84,16 +84,25 @@ export async function loadGoogleFont(rawFontName: string): Promise<boolean> {
     }
 
     try {
+        let isLoaded = true;
         if ('fonts' in document) {
             // Await font readiness with a safety timeout so slow networks do not freeze UI
             const fontCheckPromise = document.fonts.load(`16px "${primaryName}"`);
-            const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 2500));
-            await Promise.race([fontCheckPromise, timeoutPromise]);
+            const timeoutPromise = new Promise<'timeout'>((resolve) => setTimeout(() => {
+                resolve('timeout');
+            }, 2500));
+            const raceResult = await Promise.race([fontCheckPromise, timeoutPromise]);
+            if (raceResult === 'timeout') {
+                isLoaded = document.fonts.check(`16px "${primaryName}"`);
+                if (!isLoaded) {
+                    console.warn(`[Raylight FontLoader] Timeout loading font "${primaryName}". Using system fallback.`);
+                    return false;
+                }
+            }
         }
         loadedFonts.add(primaryName.toLowerCase());
-        return true;
+        return isLoaded;
     } catch {
-        loadedFonts.add(primaryName.toLowerCase());
         return false;
     }
 }

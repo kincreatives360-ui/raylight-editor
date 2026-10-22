@@ -50,7 +50,7 @@ Every text token meets or exceeds **WCAG AA** contrast requirements against the 
 * `--accent-glow` (`rgba(0, 136, 255, 0.25)`): Subtle drop shadows on active indicators.
 * `--accent-danger` (`#f43f5e`): Delete layer, reset project, and destructive alerts.
 * `--accent-success` (`#10b981`): Validation checkmarks, export completion, and active audio indicators.
-* `--accent-warning` (`#f59e0b`): Starter templates tab, warning banners, and keyframe friction notices.
+* `--accent-warning` (`#f59e0b`): Warning banners and keyframe friction notices.
 
 ### Browser Surface Theming
 System-level browser interactions are styled to match the dark studio palette:
@@ -118,11 +118,6 @@ font-feature-settings: 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv11' 1, 'tnum' 1, 'zero' 
 * **Safe Zones:** TV/Mobile action-safe and title-safe dashed outlines.
 * **Rule-of-Thirds Grid:** Low-opacity 3×3 grid overlay for cinematic camera framing.
 * **Transform Handles:** 8-point bounding box with rotation anchor and 3D plane axis indicators.
-
-### 5. Starter Template Cards (`src/panels/LeftPanel/LeftPanel.tsx`)
-* **Visual Banner Previews:** Rich gradient backdrops with device icon badges.
-* **Aspect Ratio Pills:** Clear `16:9` or `9:16` indicators.
-* **One-Click Load:** Instant project loading with confirmation toast feedback.
 
 ---
 

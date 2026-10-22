@@ -19,7 +19,7 @@ The core product philosophy is **"Motion design without the heavyweight desktop 
 3. **Frontend Engineers & UI Designers:** Rapidly prototyping interactive 3D UI showcases, responsive micro-animations, and portfolio presentations with clean JSON export and reproducibility.
 
 ### Primary User Journeys
-* **Journey A — Template to Teaser in 60 Seconds:** Open editor → Select curated Starter Template (e.g. *iPhone 15 Pro Showcase*) → Swap screen media asset → Customize headline typography → Export 60fps MP4 video.
+* **Journey A — Build a Teaser:** Create a shot → Add media and typography → Animate the composition → Export a 60fps MP4 video.
 * **Journey B — Custom Multi-Shot Choreography:** Create new shot → Position 3D device frame with titanium finish → Configure two camera framings (Wide Establishing and Macro Push-In) → Bind camera block with spring physics easing → Add ambient lighting and specular rim spotlight → Split clip at transition point → Synchronize whoosh sound FX.
 * **Journey C — Multi-Platform Social Delivery:** Switch project aspect ratio between `16:9` (Widescreen landscape) and `9:16` (Vertical Reels/TikTok) → Adjust safe-zone guides → Export 1080p / 4K UHD video package.
 
@@ -91,12 +91,6 @@ interface Project {
 * **Curated Sound FX Library (`src/data/curatedSounds.ts`):** 150+ professional audio samples across 10 categories (Ambience, Click, Glitch, Impact, Pop, Riser, Slide, Typing, UI, Whoosh) with live audio preview and 1-click timeline instantiation.
 * **Waveform Audio Playback:** WebAudio mixing with volume envelope, mute/solo flags, and playhead synchronization.
 
-### Starter Templates
-* **iPhone 15 Pro Showcase:** 3D Titanium hardware reveal with dramatic spring push-in, specular rim light, and whoosh SFX.
-* **MacBook Pro Walkthrough:** Space Black Retina showcase with smooth orbit pan, studio rim lighting, and chime SFX.
-* **Neon Cyber Teaser:** High-energy visual teaser with cyan/magenta lighting, bloom, vignette, and sub-impact audio.
-* **9:16 Social Hook:** Vertical portrait framing with mobile safe-zone typography and bubble pop SFX.
-
 ### Production Export Pipeline
 * **Resolution Presets:** 4K UHD (`3840×2160`), 1080p Full HD (`1920×1080`), 720p HD (`1280×720`).
 * **Frame Rate Support:** 24 fps (Cinematic), 30 fps (Web), 60 fps (Ultra-Smooth).
@@ -117,7 +111,6 @@ interface Project {
 | **Lighting** | Multi-source studio rig + shadow mapping | 7 studio presets + directional/spot/point | **100%** |
 | **Audio Library** | Curated Sound FX browser | 150+ tracks with search & category filters | **100%** |
 | **Timeline** | Keyframe blocks + Clip Splitting | Scissors tool + `S` hotkey + track rack | **100%** |
-| **Templates** | Production starter templates | 4 templates with 1-click load in LeftPanel | **100%** |
 | **Export** | 4K UHD, 1080p, 60fps MP4 | Full client-side MediaRecorder pipeline | **100%** |
 | **Accessibility** | Dark studio UI, ARIA standards | WCAG AA contrast, sub-10px text eliminated | **100%** |
 

@@ -171,7 +171,7 @@ export const BUILTIN_SOUND_PACKS: BuiltinSoundItem[] = [
         name: 'Cinematic Sub Impact',
         category: 'Impact & FX',
         durationMs: 1100,
-        description: 'Deep 48Hz sub-bass punch for dramatic card and device drops.',
+        description: 'Deep 48Hz sub-bass punch for dramatic card drops.',
         generateWavDataUrl: () =>
             getOrGenerate('sfx-sub-boom', () => {
                 const sampleRate = 44100;

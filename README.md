@@ -13,7 +13,6 @@ Raylight Editor empowers motion designers, developers, and product creators to c
 * **Studio Lighting Rigs:** Multi-source lighting setup with key, fill, ambient terms, and custom `directional`, `point`, and `spot` lights with shadow mapping, color temperature, and 7 studio presets (*Studio Neutral*, *Cyberpunk Neon*, *Warm Sunset*, *Moody Rim*, *High Key Commercial*, *Midnight Blue*, *Golden Hour*).
 * **Multi-Track Timeline & Split Clip:** Synchronized timeline with shot sequencing, camera movement blocks, layer transitions, audio waveforms, and instant clip splitting via the Scissors tool or `S` hotkey.
 * **Curated Sound FX Library:** 150+ built-in sound effects across 10 categories (Ambience, Click, Glitch, Impact, Pop, Riser, Slide, Typing, UI, Whoosh) with instant preview and 1-click timeline instantiation.
-* **Production Starter Templates:** 4 complete starter templates with 1-click loading (*iPhone 15 Pro Showcase*, *MacBook Pro Walkthrough*, *Neon Cyber Teaser*, *9:16 Social Hook*).
 * **High-Fidelity Client-Side Export:** Client-side 4K UHD (`3840×2160`), 1080p, and 720p at 24, 30, and 60 fps MP4 video with synchronized WebAudio recording, animated GIF, and PNG sequence rendering.
 * **Precision Dark Studio Design System:** Inter and JetBrains Mono typography with OpenType features (`cv02, cv03, cv04, cv11, tnum, zero`), WCAG AA contrast compliance, and zero sub-10px micro-text.
 
@@ -52,9 +51,8 @@ npm run lint
 ```
 raylight-editor/
 ├── src/
-│   ├── data/                 # Curated sound FX library and starter templates
+│   ├── data/                 # Curated sound FX library
 │   │   ├── curatedSounds.ts   # 150+ categorized audio effects with URLs
-│   │   └── starterTemplates.ts# Production starter project templates
 │   ├── engine/               # Math, animation physics, audio, and export
 │   │   ├── easing.ts          # Cubic bezier and RK4 spring physics solver
 │   │   ├── evaluateLight.ts   # Light evaluation and 3-point calculations
@@ -65,7 +63,7 @@ raylight-editor/
 │   │   ├── types.ts           # TypeScript domain interfaces
 │   │   └── defaults.ts        # Canonical default project and layers
 │   ├── panels/               # Editor chrome and inspector panels
-│   │   ├── LeftPanel/         # Layers tree, asset manager, SFX, and templates
+│   │   ├── LeftPanel/         # Layers tree, asset manager, and SFX
 │   │   ├── Inspector/         # Layer, shot, camera, lighting, and shape inspectors
 │   │   └── Timeline/          # Multi-track timeline, scrubber, and split tool
 │   ├── stage/                # 2D/3D viewport canvas and WebGL renderer

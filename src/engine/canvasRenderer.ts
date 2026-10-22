@@ -12,7 +12,6 @@ import type {
   LightRig,
 } from '../model/types';
 import { resolveShotBackground } from '../model/types';
-import { radToDeg } from '../model/defaults';
 import type {
   EvaluatedProjectFrame,
   EvaluatedLayerWithEffects,
@@ -22,8 +21,6 @@ import type { EvaluatedEffects } from './evaluateEffects';
 import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
 import { getShaderColors } from '../model/backgroundPresets';
 import { resolveKeyIntensity } from './lightMath';
-import { resolveDeviceModelSpec } from '../model/defaults';
-import { computeDeviceGeometry, drawSourceWithFit } from './deviceFitMath';
 
 const MAX_IMAGE_CACHE_SIZE = 100;
 const imageElementCache = new Map<string, HTMLImageElement>();
@@ -84,6 +81,87 @@ export function clearVideoElementCache(): void {
   videoElementCache.clear();
 }
 
+/**
+ * Deterministically seeks a video element to a target timestamp.
+ * Awaits decoded frame presentation via requestVideoFrameCallback when available,
+ * with bounded timeout and thorough listener cleanup.
+ */
+export function seekVideoElement(
+  video: HTMLVideoElement,
+  targetSec: number,
+  timeoutMs = 600
+): Promise<void> {
+  const tolerance = 0.05;
+
+  if (Math.abs(video.currentTime - targetSec) <= tolerance && video.readyState >= 2) {
+    return Promise.resolve();
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let rvfcHandle: number | null = null;
+    let isSettled = false;
+
+    const cleanup = () => {
+      isSettled = true;
+      if (timer !== null) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      if (rvfcHandle !== null && 'cancelVideoFrameCallback' in video) {
+        (video as unknown as { cancelVideoFrameCallback: (h: number) => void }).cancelVideoFrameCallback(rvfcHandle);
+        rvfcHandle = null;
+      }
+      video.removeEventListener('seeked', onSeeked);
+      video.removeEventListener('error', onError);
+    };
+
+    const onFinish = () => {
+      if (isSettled) return;
+      cleanup();
+      resolve();
+    };
+
+    const onError = () => {
+      if (isSettled) return;
+      cleanup();
+      reject(new Error(`Failed to decode video frame at ${targetSec}s.`));
+    };
+
+    const onSeeked = () => {
+      if (isSettled) return;
+      if (typeof (video as unknown as { requestVideoFrameCallback?: unknown }).requestVideoFrameCallback === 'function') {
+        rvfcHandle = (video as unknown as { requestVideoFrameCallback: (cb: () => void) => number }).requestVideoFrameCallback(() => {
+          onFinish();
+        });
+      } else {
+        onFinish();
+      }
+    };
+
+    video.addEventListener('seeked', onSeeked, { once: true });
+    video.addEventListener('error', onError, { once: true });
+
+    timer = setTimeout(() => {
+      if (isSettled) return;
+      cleanup();
+      if (Math.abs(video.currentTime - targetSec) <= tolerance) {
+        resolve();
+      } else {
+        console.warn(`[Raylight] Video seek to ${targetSec}s timed out (current: ${video.currentTime}s)`);
+        resolve(); // Documented fallback to avoid indefinitely stalling export pipeline
+      }
+    }, timeoutMs);
+
+    try {
+      video.currentTime = targetSec;
+    } catch (e) {
+      cleanup();
+      reject(e);
+    }
+  });
+}
+
 export async function syncAndSeekAllProjectVideos(
   project: Project,
   timeMs: number
@@ -98,22 +176,7 @@ export async function syncAndSeekAllProjectVideos(
           const video = getOrCreateVideoElement(asset.dataUrl);
           const targetSec = Math.max(0, (timeMs - layer.inMs) / 1000);
           if (Number.isFinite(targetSec)) {
-            if (Math.abs(video.currentTime - targetSec) > 0.03) {
-              const p = new Promise<void>((resolve) => {
-                let resolved = false;
-                const done = () => {
-                  if (!resolved) {
-                    resolved = true;
-                    video.removeEventListener('seeked', done);
-                    resolve();
-                  }
-                };
-                video.addEventListener('seeked', done, { once: true });
-                setTimeout(done, 80);
-                video.currentTime = targetSec;
-              });
-              seekPromises.push(p);
-            }
+            seekPromises.push(seekVideoElement(video, targetSec));
           }
         }
       }
@@ -123,7 +186,13 @@ export async function syncAndSeekAllProjectVideos(
   await Promise.all(seekPromises);
 }
 
-export async function preloadProjectImages(project: Project): Promise<void> {
+export interface ImagePreloadSummary {
+  loaded: number;
+  failed: number;
+  failedUrls: string[];
+}
+
+export async function preloadProjectImages(project: Project): Promise<ImagePreloadSummary> {
   const urls = new Set<string>();
   for (const a of Object.values(project.assets || {})) {
     if (a?.dataUrl) urls.add(a.dataUrl);
@@ -146,11 +215,16 @@ export async function preloadProjectImages(project: Project): Promise<void> {
       }
     }
   }
+
+  const failedUrls: string[] = [];
+  let loadedCount = 0;
+
   await Promise.all(
     Array.from(urls).map(
       (url) =>
         new Promise<void>((resolve) => {
           if (getOrCreateImageElement(url)) {
+            loadedCount++;
             resolve();
             return;
           }
@@ -162,13 +236,24 @@ export async function preloadProjectImages(project: Project): Promise<void> {
               if (oldestKey) imageElementCache.delete(oldestKey);
             }
             imageElementCache.set(url, img);
+            loadedCount++;
             resolve();
           };
-          img.onerror = () => resolve();
+          img.onerror = () => {
+            failedUrls.push(url);
+            console.warn('[Raylight Image Preload] Could not load image asset:', url.slice(0, 80));
+            resolve();
+          };
           img.src = url;
         })
     )
   );
+
+  return {
+    loaded: loadedCount,
+    failed: failedUrls.length,
+    failedUrls,
+  };
 }
 
 export function hexToRgba(hex: string, alpha: number): string {
@@ -422,7 +507,7 @@ function drawDefaultImagePlaceholder(
   );
 }
 
-function drawLayerOnCanvas(
+async function drawLayerOnCanvas(
   ctx: CanvasRenderingContext2D,
   evalLayer: EvaluatedLayerWithEffects,
   project: Project,
@@ -434,18 +519,10 @@ function drawLayerOnCanvas(
   },
   canvasW: number,
   canvasH: number
-): void {
+): Promise<void> {
   if (!evalLayer.visible || evalLayer.opacity <= 0.001) return;
 
   const { layer } = evalLayer;
-  const light: LightRig = frame.activeShot?.light ||
-    frame.shot?.light || {
-      position: { x: -0.2, y: -0.3, z: 0.8 },
-      intensity: 1,
-      temperature: 5500,
-      ambience: 0.5,
-      sources: [],
-    };
   const eff = frame.effects.state;
 
   const fovRad = (frame.camera.fovDegrees * Math.PI) / 180;
@@ -468,20 +545,12 @@ function drawLayerOnCanvas(
 
   const boxW = Math.max(16, evalLayer.size.width * canvasW);
   const boxH = Math.max(16, evalLayer.size.height * canvasH);
-  // Device bodies keep their model proportions, fitted uniformly into the layer box.
-  const layerDevice =
-    layer.kind === 'image' || layer.kind === 'video' ? (layer as ImageLayer | VideoLayer).device : undefined;
-  const deviceGeom = layerDevice
-    ? computeDeviceGeometry(resolveDeviceModelSpec(layerDevice), boxW, boxH, layerDevice.orientation)
-    : null;
-  const baseW = deviceGeom ? deviceGeom.deviceW : boxW;
-  const baseH = deviceGeom ? deviceGeom.deviceH : boxH;
+  const baseW = boxW;
+  const baseH = boxH;
 
   const rx = evalLayer.rotation.x;
   const ry = evalLayer.rotation.y;
   const rz = evalLayer.rotation.z;
-  const rotXDeg = radToDeg(rx);
-  const rotYDeg = radToDeg(ry);
 
   ctx.save();
   ctx.globalAlpha = evalLayer.opacity;
@@ -532,233 +601,36 @@ function drawLayerOnCanvas(
   const bloomMultiplier = eff.bloom.enabled ? 1 + eff.bloom.intensity * 1.4 : 1;
 
   if (layer.kind === 'image' || layer.kind === 'video') {
-    const imgLayer = layer as ImageLayer | VideoLayer;
-    const device = imgLayer.device;
-    const isSilver = device?.color === 'silver';
-    const sideColor = isSilver ? '#94a3b8' : '#1e293b';
-    const rimColor = isSilver ? '#e2e8f0' : '#334155';
-
-    const radiusPx = deviceGeom
-      ? deviceGeom.chassisCornerRadius
-      : imgLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
-
-    const extrudeSteps = device ? 8 : 4;
-    const stepX = (-rotYDeg / 30) * 1.2;
-    const stepY = (rotXDeg / 30) * 1.2;
-    for (let s = extrudeSteps; s >= 1; s--) {
-      ctx.fillStyle = sideColor;
-      drawRoundedRectPath(
-        ctx,
-        -baseW / 2 + stepX * s,
-        -baseH / 2 + stepY * s,
-        baseW,
-        baseH,
-        radiusPx
-      );
-      ctx.fill();
-    }
-
-    applyLayerShadowOrGlow(
-      ctx,
-      imgLayer.effects,
-      canvasW,
-      canvasH,
-      bloomMultiplier
-    );
-    ctx.fillStyle = '#05070d';
-    drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radiusPx);
-    ctx.fill();
-    clearShadow(ctx);
-
-    if (device) {
-      ctx.strokeStyle = rimColor;
-      ctx.lineWidth = Math.max(2, canvasW * 0.0025);
-      ctx.stroke();
-    }
-
-    // Screen rect from the model spec (centered; browser content sits below its chrome bar).
-    const screenW = deviceGeom ? deviceGeom.screenW : baseW;
-    const screenH = deviceGeom ? deviceGeom.screenH : baseH;
-    const sideBezel = (baseW - screenW) / 2;
-    const screenX = -screenW / 2;
-    const screenY =
-      device?.type === 'browser' ? baseH / 2 - sideBezel - screenH : -screenH / 2;
-    const topChrome = device?.type === 'browser' ? screenY + baseH / 2 : 0;
-    const screenRadius = deviceGeom ? deviceGeom.screenCornerRadius : radiusPx;
-
-    if (device?.type === 'browser') {
-      ctx.fillStyle = isSilver ? '#f1f5f9' : '#0f172a';
-      drawRoundedRectPath(
-        ctx,
-        -baseW / 2,
-        -baseH / 2,
-        baseW,
-        topChrome + radiusPx,
-        radiusPx
-      );
-      ctx.fill();
-      ['#f43f5e', '#fbbf24', '#34d399'].forEach((dotColor, idx) => {
-        ctx.fillStyle = dotColor;
-        ctx.beginPath();
-        ctx.arc(
-          -baseW / 2 + baseW * 0.04 + idx * (baseW * 0.028),
-          -baseH / 2 + topChrome * 0.55,
-          Math.max(3, baseH * 0.012),
-          0,
-          Math.PI * 2
-        );
+    const imageLayer = layer as ImageLayer | VideoLayer;
+    {
+      const radius = imageLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
+      applyLayerShadowOrGlow(ctx, imageLayer.effects, canvasW, canvasH, bloomMultiplier);
+      for (let step = 4; step >= 1; step--) {
+        ctx.fillStyle = '#334155';
+        drawRoundedRectPath(ctx, -baseW / 2 - step * 0.7, -baseH / 2 + step * 0.7, baseW, baseH, radius);
         ctx.fill();
-      });
-    }
-
-    ctx.save();
-    drawRoundedRectPath(
-      ctx,
-      screenX,
-      screenY,
-      screenW,
-      screenH,
-      Math.max(2, screenRadius)
-    );
-    ctx.clip();
-
-    // Device screens use the model default fit unless overridden; plain layers keep 'contain'.
-    const screenFit = device
-      ? device.screenFit ?? resolveDeviceModelSpec(device).defaultFit
-      : 'contain';
-    const asset = project.assets[imgLayer.assetId];
-    const isVideo = layer.kind === 'video' || (asset && asset.mimeType?.startsWith('video/'));
-    const cachedImg = !isVideo && asset?.dataUrl
-      ? getOrCreateImageElement(asset.dataUrl)
-      : undefined;
-    const cachedVideo = isVideo && asset?.dataUrl
-      ? getOrCreateVideoElement(asset.dataUrl)
-      : undefined;
-
-    if (cachedVideo && cachedVideo.videoWidth > 0 && cachedVideo.videoHeight > 0) {
-      drawSourceWithFit(
-        ctx, cachedVideo, cachedVideo.videoWidth, cachedVideo.videoHeight, imgLayer.crop,
-        screenX, screenY, screenW, screenH, screenFit, '#05070d'
-      );
-    } else if (cachedImg && cachedImg.naturalWidth > 0 && cachedImg.naturalHeight > 0) {
-      drawSourceWithFit(
-        ctx, cachedImg, cachedImg.naturalWidth, cachedImg.naturalHeight, imgLayer.crop,
-        screenX, screenY, screenW, screenH, screenFit, '#05070d'
-      );
-    } else if (!cachedVideo) {
-      drawDefaultImagePlaceholder(ctx, screenX, screenY, screenW, screenH, imgLayer.name);
-    }
-
-    if (device?.type === 'iphone') {
-      ctx.fillStyle = '#000000';
-      drawRoundedRectPath(
-        ctx,
-        -baseW * 0.14,
-        screenY + screenH * 0.025,
-        baseW * 0.28,
-        screenH * 0.038,
-        999
-      );
-      ctx.fill();
-      ctx.fillStyle = 'rgba(255,255,255,0.7)';
-      drawRoundedRectPath(
-        ctx,
-        -baseW * 0.18,
-        screenY + screenH * 0.96,
-        baseW * 0.36,
-        3,
-        999
-      );
-      ctx.fill();
-    }
-
-    if (device?.type === 'macbook') {
-      ctx.fillStyle = '#000000';
-      drawRoundedRectPath(
-        ctx,
-        -baseW * 0.08,
-        screenY,
-        baseW * 0.16,
-        screenH * 0.04,
-        4
-      );
-      ctx.fill();
-    }
-
-    const receivesLight = layer.receivesLight ?? true;
-
-    if (receivesLight) {
-      // Normal-based shading: Brightness depends on the angle between surface normal and light
-      const nX = -Math.sin(ry);
-      const nY = Math.sin(rx);
-      const nZ = Math.cos(rx) * Math.cos(ry);
-      const lX = light.position.x;
-      const lY = light.position.y;
-      const lZ = light.position.z;
-      const lLen = Math.hypot(lX, lY, lZ) || 1;
-      const dot = Math.max(0, (nX * lX + nY * lY + nZ * lZ) / lLen);
-      const shadowFactor = (1 - dot) * (1 - (light.ambience ?? 0.45));
-      if (shadowFactor > 0.02) {
-        ctx.fillStyle = `rgba(0, 0, 0, ${(shadowFactor * 0.45).toFixed(3)})`;
-        ctx.fillRect(screenX, screenY, screenW, screenH);
       }
-    }
-
-    const glossAmount = device ? device.gloss : 0;
-    if (glossAmount > 0) {
-      if (light.keyLightEnabled !== false) {
-        const sweepOffset =
-          (rotYDeg - light.position.x * 45) * 0.01 +
-          evalLayer.shimmerProgress * 0.6;
-        const glossGrad = ctx.createLinearGradient(
-          -baseW / 2,
-          -baseH / 2,
-          baseW / 2,
-          baseH / 2
-        );
-        const mid = Math.max(0.15, Math.min(0.85, 0.5 + sweepOffset));
-        glossGrad.addColorStop(Math.max(0, mid - 0.2), 'rgba(255,255,255,0)');
-        glossGrad.addColorStop(
-          mid,
-          kelvinToRgb(light.temperature, 0.22 * glossAmount * resolveKeyIntensity(light)).css
-        );
-        glossGrad.addColorStop(Math.min(1, mid + 0.2), 'rgba(255,255,255,0)');
-        ctx.fillStyle = glossGrad;
-        ctx.fillRect(screenX, screenY, screenW, screenH);
-      }
-
-      // Render specular gloss reflections from all enabled additional light sources
-      const enabledSources = (light.sources || []).filter((s) => s.enabled);
-      for (const src of enabledSources) {
-        const srcSweepOffset =
-          (rotYDeg - (src.position?.x ?? 0) * 45) * 0.01 +
-          evalLayer.shimmerProgress * 0.6;
-        const srcGlossGrad = ctx.createLinearGradient(
-          -baseW / 2,
-          -baseH / 2,
-          baseW / 2,
-          baseH / 2
-        );
-        const srcMid = Math.max(0.15, Math.min(0.85, 0.5 + srcSweepOffset));
-        srcGlossGrad.addColorStop(Math.max(0, srcMid - 0.2), 'rgba(255,255,255,0)');
-        const srcAlpha = 0.18 * glossAmount * (src.intensity ?? 1) * light.intensity;
-        const srcColor = src.temperature
-          ? kelvinToRgb(src.temperature, srcAlpha).css
-          : hexToRgba(src.color || '#ffffff', srcAlpha);
-        srcGlossGrad.addColorStop(srcMid, srcColor);
-        srcGlossGrad.addColorStop(Math.min(1, srcMid + 0.2), 'rgba(255,255,255,0)');
-        ctx.fillStyle = srcGlossGrad;
-        ctx.fillRect(screenX, screenY, screenW, screenH);
-      }
-    }
-    ctx.restore();
-
-    if (device?.type === 'macbook') {
-      const deckW = baseW * 1.12;
-      const deckH = Math.max(8, baseH * 0.045);
-      ctx.fillStyle = isSilver ? '#cbd5e1' : '#334155';
-      drawRoundedRectPath(ctx, -deckW / 2, baseH / 2 - 2, deckW, deckH, 6);
+      ctx.fillStyle = '#05070d';
+      drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
       ctx.fill();
+      clearShadow(ctx);
+      ctx.save();
+      drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
+      ctx.clip();
+      const asset = project.assets[imageLayer.assetId];
+      const isVideo = layer.kind === 'video' || Boolean(asset?.mimeType?.startsWith('video/'));
+      const video = isVideo && asset?.dataUrl ? getOrCreateVideoElement(asset.dataUrl) : undefined;
+      const image = !isVideo && asset?.dataUrl ? getOrCreateImageElement(asset.dataUrl) : undefined;
+      const crop = imageLayer.crop ?? { x: 0, y: 0, width: 1, height: 1 };
+      if (video?.videoWidth && video.videoHeight) {
+        ctx.drawImage(video, crop.x * video.videoWidth, crop.y * video.videoHeight,
+          crop.width * video.videoWidth, crop.height * video.videoHeight, -baseW / 2, -baseH / 2, baseW, baseH);
+      } else if (image?.naturalWidth && image.naturalHeight) {
+        ctx.drawImage(image, crop.x * image.naturalWidth, crop.y * image.naturalHeight,
+          crop.width * image.naturalWidth, crop.height * image.naturalHeight, -baseW / 2, -baseH / 2, baseW, baseH);
+      }
+      else if (!isVideo) drawDefaultImagePlaceholder(ctx, -baseW / 2, -baseH / 2, baseW, baseH, imageLayer.name);
+      ctx.restore();
     }
   } else if (layer.kind === 'shape') {
     const shpLayer = layer as ShapeLayer;
@@ -1137,13 +1009,13 @@ function renderSingleBackground(
   ctx.restore();
 }
 
-export function renderProjectFrameToCanvas(
+export async function renderProjectFrameToCanvas(
   ctx: CanvasRenderingContext2D,
   project: Project,
   frame: EvaluatedProjectFrame,
   canvasW: number,
   canvasH: number
-): void {
+): Promise<void> {
   // Sync any video layers to the exact frame time
   for (const evalLayer of frame.layers) {
     const layer = evalLayer.layer;
@@ -1193,7 +1065,7 @@ export function renderProjectFrameToCanvas(
     ctx.globalAlpha = outgoingOpacity;
     if (outgoingSlideX !== 0) ctx.translate(outgoingSlideX, 0);
     for (const outLayer of outgoing.layers) {
-      drawLayerOnCanvas(ctx, outLayer, project, outgoing, canvasW, canvasH);
+      await drawLayerOnCanvas(ctx, outLayer, project, outgoing, canvasW, canvasH);
     }
     renderSceneLightSources(
       ctx,
@@ -1218,7 +1090,7 @@ export function renderProjectFrameToCanvas(
     ctx.save();
     ctx.translate(eff.ghost.offset * canvasW, -eff.ghost.offset * canvasH * 0.5);
     for (const evalLayer of frame.layers) {
-      drawLayerOnCanvas(
+      await drawLayerOnCanvas(
         ctx,
         {
           ...evalLayer,
@@ -1236,7 +1108,7 @@ export function renderProjectFrameToCanvas(
 
   // 4. Render All 3D Layers (Sorted Back-to-Front)
   for (const evalLayer of frame.layers) {
-    drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
+    await drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
   }
 
   // 4b. Render Scene Light Sources (Fallback Path)
@@ -1301,3 +1173,4 @@ export function renderProjectFrameToCanvas(
 
   ctx.restore();
 }
+

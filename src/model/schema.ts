@@ -1,6 +1,7 @@
 // src/model/schema.ts
 import { z } from 'zod';
 import type { Project } from './types';
+import { SHADER_PRESET_IDS } from './backgroundPresets';
 
 export const Vec2Schema = z.object({
   x: z.number(),
@@ -38,33 +39,7 @@ export const FillSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-export const ShaderPresetSchema = z.enum([
-  'silk',
-  'silkFlow',
-  'meshAurora',
-  'liquidMetal',
-  'sphereGradient',
-  'waterPlane',
-  'stripeMesh',
-  'topography',
-  'hyperspeed',
-  'plasma',
-  'dither',
-  'threads',
-  'chromaticWaves',
-  'undertones',
-  'mosaic',
-  'meshGradient',
-  'warp',
-  'grainGradient',
-  'prism',
-  'halo',
-  'shift',
-  'lineScreen',
-  'dotMatrix',
-  'watercolor',
-  'voxels',
-]);
+export const ShaderPresetSchema = z.enum(SHADER_PRESET_IDS);
 
 export const BackgroundSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -326,46 +301,7 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
       opacity: z.number(),
     })
     .optional(),
-  device: z.lazy(() => DeviceFrameSchema).optional(),
 });
-
-export const DeviceFrameSchema = z.object({
-  type: z.enum(['iphone', 'ipad', 'macbook', 'browser', 'samsung-galaxy', 'display']),
-  color: z.string(),
-  gloss: z.number().min(0).max(1),
-  lidAngle: z.number().optional(),
-  screenGlow: z.number().optional(),
-  glare: z.number().optional(),
-  screenFit: z
-    .preprocess((val) => {
-      if (val === 'fit') return 'contain';
-      if (val === 'fill' || val === 'stretch') return 'cover';
-      return val;
-    }, z.enum(['contain', 'cover']))
-    .optional()
-    .default('contain'),
-  staging: z.enum(['none', 'floating', 'held', 'desk']).optional(),
-  modelSpecId: z.string().optional(),
-  orientation: z.enum(['portrait', 'landscape']).optional(),
-});
-
-export const DeviceModelSpecSchema = z
-  .object({
-    id: z.string(),
-    name: z.string().optional(),
-    kind: z.enum(['gltf', 'procedural']),
-    assetUrl: z.string().optional(),
-    nominalWidth: z.number().min(0.001),
-    nominalHeight: z.number().min(0.001),
-    nominalDepth: z.number().optional(),
-    screenMeshName: z.string().optional(),
-    screenWidth: z.number().min(0.001),
-    screenHeight: z.number().min(0.001),
-    defaultFit: z.enum(['contain', 'cover']),
-    chassisCornerRadius: z.number().optional(),
-    screenCornerRadius: z.number().optional(),
-  })
-  .optional();
 
 export const ShapeMaskSchema = z.object({
   enabled: z.boolean(),

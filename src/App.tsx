@@ -14,7 +14,7 @@ import {
   MAX_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
 } from './store/useSelectionStore';
-import { evaluateProjectAtTime } from './engine/evaluateShot';
+import { evaluateProjectAtTime, isLayerEffectivelyLocked } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
   readImageFileWithThumbnail,
@@ -97,6 +97,8 @@ export default function App() {
     splitAtPlayhead,
     undo,
     redo,
+    isHydrating,
+    setHydrated,
   } = useProjectStore();
 
   const {
@@ -300,57 +302,69 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (isHydrating) return;
     const timeoutId = window.setTimeout(() => saveProjectToBrowser(project), 250);
-    const saveOnPageHide = () => saveProjectToBrowser(project);
+    const saveOnPageHide = () => {
+      if (!isHydrating) {
+        saveProjectToBrowser(project);
+      }
+    };
     window.addEventListener('pagehide', saveOnPageHide);
     return () => {
       window.clearTimeout(timeoutId);
       window.removeEventListener('pagehide', saveOnPageHide);
     };
-  }, [project]);
+  }, [project, isHydrating]);
 
   // Restore heavy assets from IndexedDB on startup if available
   useEffect(() => {
-    void loadProjectFromIndexedDB().then((idbProject) => {
-      if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
-        updateProject(
-          (curr) => {
-            if (idbProject.id !== curr.id) return curr;
+    void loadProjectFromIndexedDB()
+      .then((idbProject) => {
+        if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
+          updateProject(
+            (curr) => {
+              if (idbProject.id !== curr.id) return curr;
 
-            const restoredAssets = { ...curr.assets };
-            let hasNewData = false;
-            for (const [id, asset] of Object.entries(idbProject.assets)) {
-              if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
-                if (!restoredAssets[id]) {
-                  const isReferenced =
-                    (curr.background?.kind === 'image' && curr.background.assetId === id) ||
-                    curr.shots.some(
-                      (s) =>
-                        (s.background?.kind === 'image' && s.background.assetId === id) ||
-                        s.layers.some(
-                          (l) => 'assetId' in l && (l as { assetId?: string }).assetId === id
-                        )
-                    ) ||
-                    (curr.audio?.clips?.some((c) => c.assetId === id) ?? false);
+              const restoredAssets = { ...curr.assets };
+              let hasNewData = false;
+              for (const [id, asset] of Object.entries(idbProject.assets)) {
+                if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
+                  if (!restoredAssets[id]) {
+                    const isReferenced =
+                      (curr.background?.kind === 'image' && curr.background.assetId === id) ||
+                      curr.shots.some(
+                        (s) =>
+                          (s.background?.kind === 'image' && s.background.assetId === id) ||
+                          s.layers.some(
+                            (l) => 'assetId' in l && (l as { assetId?: string }).assetId === id
+                          )
+                      ) ||
+                      (curr.audio?.clips?.some((c) => c.assetId === id) ?? false);
 
-                  if (!isReferenced) continue;
+                    if (!isReferenced) continue;
+                  }
+
+                  restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
+                  hasNewData = true;
                 }
-
-                restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
-                hasNewData = true;
               }
-            }
-            if (!hasNewData) return curr;
-            return {
-              ...curr,
-              assets: restoredAssets,
-            };
-          },
-          { skipHistory: true }
-        );
-      }
-    });
-  }, [updateProject]);
+              if (!hasNewData) return curr;
+              return {
+                ...curr,
+                assets: restoredAssets,
+              };
+            },
+            { skipHistory: true }
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn('[Raylight Storage] Hydration from IndexedDB failed:', err);
+      })
+      .finally(() => {
+        setHydrated(true);
+      });
+  }, [updateProject, setHydrated]);
 
   // Decode imported audio assets and keep WebAudio playback synchronized with the active playhead.
   useEffect(() => {
@@ -475,7 +489,6 @@ export default function App() {
             assetId: assetRecord.id,
             position: { x: 0, y: 0, z: 0 },
             rotation: { x: 0, y: 0, z: 0 },
-            device: undefined,
           });
           updateProject(
             (p) => ({
@@ -791,7 +804,7 @@ export default function App() {
         const dy =
           e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
 
-        if (isAnimateMode && selectedLayer && !selectedLayer.locked) {
+        if (isAnimateMode && selectedLayer && !isLayerEffectivelyLocked(selectedLayer, activeShot.groups)) {
           const blkId = recordAnimatedBlockAtPlayhead(
             activeShot.id,
             selectedLayer.id,
@@ -810,7 +823,7 @@ export default function App() {
         updateShot(activeShot.id, (s) => ({
           ...s,
           layers: s.layers.map((l) =>
-            selectedLayerIds.includes(l.id) && !l.locked
+            selectedLayerIds.includes(l.id) && !isLayerEffectivelyLocked(l, s.groups)
               ? {
                 ...l,
                 position: {
@@ -832,6 +845,7 @@ export default function App() {
     selectedLayerIds,
     activeShot.id,
     activeShot.layers,
+    activeShot.groups,
     isAnimateMode,
     frame.shotLocalTimeMs,
     updateShot,

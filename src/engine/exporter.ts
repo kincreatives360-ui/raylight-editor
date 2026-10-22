@@ -34,6 +34,18 @@ export interface ExportProgress {
     statusText: string;
 }
 
+function nextFrame(): Promise<void> {
+    return new Promise((resolve) => {
+        if (typeof requestAnimationFrame === 'function') {
+            requestAnimationFrame(() => resolve());
+        } else if (typeof window !== 'undefined' && typeof window.requestAnimationFrame === 'function') {
+            window.requestAnimationFrame(() => resolve());
+        } else {
+            setTimeout(resolve, 0);
+        }
+    });
+}
+
 function downloadBlob(blob: Blob, filename: string): void {
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement('a');
@@ -216,7 +228,7 @@ export async function exportCurrentFrameAsPng(
 
     // Evaluate and render the exact requested timeMs frame to canvas
     const evaluated = evaluateProjectAtTime(project, timeMs);
-    renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+    await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
 
     const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const filename = `${cleanName || 'raylight'}-${Math.round(timeMs)}ms.png`;
@@ -229,6 +241,8 @@ export async function exportCurrentFrameAsPng(
 // ============================================================================
 // EXPORT 2: DETERMINISTIC VIDEO (MP4 / WEBM) OR ANIMATED GIF PIPELINE
 // ============================================================================
+type ExportTerminalState = 'running' | 'completed' | 'cancelled' | 'failed';
+
 export async function runVideoExportPipeline(
     project: Project,
     onProgress: (progress: ExportProgress) => void,
@@ -243,6 +257,23 @@ export async function runVideoExportPipeline(
         scope: 'entire',
         ...customSettings,
     };
+
+    const terminalStateRef = { value: 'running' as ExportTerminalState };
+    const getTerminalState = (): ExportTerminalState => terminalStateRef.value;
+
+    const handleAbort = () => {
+        if (terminalStateRef.value === 'running') {
+            terminalStateRef.value = 'cancelled';
+        }
+    };
+
+    if (abortSignal) {
+        if (abortSignal.aborted) {
+            terminalStateRef.value = 'cancelled';
+        } else {
+            abortSignal.addEventListener('abort', handleAbort, { once: true });
+        }
+    }
 
     if (settings.format === 'png') {
         const targetShot =
@@ -263,6 +294,11 @@ export async function runVideoExportPipeline(
         return;
     }
 
+    if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+        terminalStateRef.value = 'cancelled';
+        return;
+    }
+
     onProgress({
         frameIndex: 0,
         totalFrames: 100,
@@ -273,6 +309,11 @@ export async function runVideoExportPipeline(
     await preloadProjectImages(project);
     if (document.fonts?.ready) {
         await document.fonts.ready;
+    }
+
+    if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+        terminalStateRef.value = 'cancelled';
+        return;
     }
 
     const totalProjectMs = project.shots.reduce(
@@ -298,9 +339,10 @@ export async function runVideoExportPipeline(
     // BRANCH A: ANIMATED GIF EXPORT
     // --------------------------------------------------------------------------
     if (settings.format === 'gif') {
-        const gifDims = getExportDimensions(project.aspectRatio, '720p');
-        const gifW = Math.round(gifDims.width * 0.5);
-        const gifH = Math.round(gifDims.height * 0.5);
+        const { width: gifW, height: gifH } = getExportDimensions(
+            project.aspectRatio,
+            settings.resolution
+        );
         const gifFps = 12;
         const totalFrames = Math.max(2, Math.floor((durationMs / 1000) * gifFps));
 
@@ -313,21 +355,37 @@ export async function runVideoExportPipeline(
         const framesData: ImageData[] = [];
 
         for (let f = 0; f < totalFrames; f++) {
-            if (abortSignal?.aborted) return;
+            if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+                terminalStateRef.value = 'cancelled';
+                return;
+            }
             const t = startMs + (f / gifFps) * 1000;
             if (settings.onSeekFrame) {
                 await settings.onSeekFrame(t);
             }
             await syncAndSeekAllProjectVideos(project, t);
-            await new Promise((r) => requestAnimationFrame(r));
+            await nextFrame();
+
+            if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+                terminalStateRef.value = 'cancelled';
+                return;
+            }
+
             const webglCanvas =
                 (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
                 (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
-            if (webglCanvas && webglCanvas.width > 0 && webglCanvas.height > 0) {
+            const isNativeResolution =
+                webglCanvas &&
+                webglCanvas.width >= gifW * 0.75 &&
+                webglCanvas.height >= gifH * 0.75;
+
+            if (isNativeResolution) {
+                ctx.imageSmoothingEnabled = true;
+                ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(webglCanvas, 0, 0, gifW, gifH);
             } else {
                 const evaluated = evaluateProjectAtTime(project, t);
-                renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
+                await renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
             }
             framesData.push(ctx.getImageData(0, 0, gifW, gifH));
 
@@ -341,6 +399,11 @@ export async function runVideoExportPipeline(
             await new Promise((r) => setTimeout(r, 12));
         }
 
+        if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+            terminalStateRef.value = 'cancelled';
+            return;
+        }
+
         onProgress({
             frameIndex: totalFrames,
             totalFrames,
@@ -349,14 +412,24 @@ export async function runVideoExportPipeline(
         });
         await new Promise((r) => setTimeout(r, 20));
 
-        if (abortSignal?.aborted) return;
+        if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+            terminalStateRef.value = 'cancelled';
+            return;
+        }
+
         const gifBlob = buildAnimatedGifBlob(
             framesData,
             gifW,
             gifH,
             Math.round(100 / gifFps)
         );
-        if (abortSignal?.aborted) return;
+
+        if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+            terminalStateRef.value = 'cancelled';
+            return;
+        }
+
+        terminalStateRef.value = 'completed';
         downloadBlob(gifBlob, `${cleanName}.gif`);
 
         onProgress({
@@ -384,27 +457,41 @@ export async function runVideoExportPipeline(
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    // Prefer native H.264/MP4 when supported by browser, with high/main profiles and VP9/VP8 WebM fallbacks
-    const mp4MimeTypes = [
-        'video/mp4;codecs=avc1.4d002a,mp4a.40.2',
-        'video/mp4;codecs=avc1.640033,mp4a.40.2',
-        'video/mp4;codecs=avc1.4d002a',
-        'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
-        'video/mp4;codecs=avc1.42E01E',
-        'video/mp4;codecs=h264',
-        'video/mp4',
-        'video/webm;codecs=vp9,opus',
-        'video/webm;codecs=vp9',
-        'video/webm;codecs=vp8,opus',
-        'video/webm;codecs=vp8',
-        'video/webm',
-    ];
+    // Strict format candidates constrained to requested format
+    const mimeCandidatesByFormat = {
+        mp4: [
+            'video/mp4;codecs=avc1.4d002a,mp4a.40.2',
+            'video/mp4;codecs=avc1.640033,mp4a.40.2',
+            'video/mp4;codecs=avc1.4d002a',
+            'video/mp4;codecs=avc1.42E01E,mp4a.40.2',
+            'video/mp4;codecs=avc1.42E01E',
+            'video/mp4;codecs=h264',
+            'video/mp4',
+        ],
+        webm: [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp9',
+            'video/webm;codecs=vp8,opus',
+            'video/webm;codecs=vp8',
+            'video/webm',
+        ],
+    } as const;
+
+    if (settings.format !== 'mp4' && settings.format !== 'webm') {
+        throw new Error(`Unsupported video export format: ${settings.format}`);
+    }
+
+    const candidates = mimeCandidatesByFormat[settings.format];
     const selectedMime =
-        mp4MimeTypes.find(
-            (m) =>
-                typeof MediaRecorder !== 'undefined' &&
-                MediaRecorder.isTypeSupported(m)
-        ) || '';
+        (typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function'
+            ? candidates.find((m) => MediaRecorder.isTypeSupported(m))
+            : candidates[0]) || '';
+
+    if (!selectedMime && typeof MediaRecorder !== 'undefined' && typeof MediaRecorder.isTypeSupported === 'function') {
+        throw new Error(
+            `The requested ${settings.format.toUpperCase()} export format is not supported by this browser.`
+        );
+    }
 
     const bitrateMultiplier = settings.resolution === '4k' ? 2.5 : 1;
     const bitrate = Math.round(
@@ -474,6 +561,7 @@ export async function runVideoExportPipeline(
         let recordingError: Error | null = null;
         let finalizationResolve: (() => void) | null = null;
         let finalizationReject: ((err: Error) => void) | null = null;
+        let hasStopped = false;
 
         recorder.ondataavailable = (ev) => {
             if (ev.data && ev.data.size > 0) chunks.push(ev.data);
@@ -485,38 +573,52 @@ export async function runVideoExportPipeline(
                     ? (ev as unknown as { error: Error }).error
                     : new Error('The browser failed to record the video export.');
             recordingError = err;
+            terminalStateRef.value = 'failed';
             if (finalizationReject) {
                 finalizationReject(err);
             }
         };
         recorder.onstop = () => {
+            if (hasStopped) return;
+            hasStopped = true;
             stream.getTracks().forEach((track) => track.stop());
+
             if (recordingError) {
+                terminalStateRef.value = 'failed';
                 if (finalizationReject) {
                     finalizationReject(recordingError);
                 }
                 return;
             }
-            if (abortSignal?.aborted) {
+
+            // Cleanup only if cancelled or not completed. Never download for cancelled/failed work.
+            if (getTerminalState() !== 'completed' || abortSignal?.aborted) {
+                terminalStateRef.value = 'cancelled';
                 if (finalizationResolve) {
                     finalizationResolve();
                 }
                 return;
             }
+
             if (chunks.length === 0) {
                 const err = new Error('Video export finished without any recorded data.');
                 recordingError = err;
+                terminalStateRef.value = 'failed';
                 if (finalizationReject) {
                     finalizationReject(err);
                 }
                 return;
             }
+
             try {
-                const actualMime = recorder?.mimeType || selectedMime;
-                const isMp4 = actualMime.includes('mp4');
-                const ext = isMp4 ? 'mp4' : 'webm';
+                const ext = settings.format === 'mp4' ? 'mp4' : 'webm';
+                const actualMime =
+                    recorder?.mimeType ||
+                    selectedMime ||
+                    (settings.format === 'mp4' ? 'video/mp4' : 'video/webm');
+
                 const videoBlob = new Blob(chunks, {
-                    type: actualMime || 'video/webm',
+                    type: actualMime,
                 });
                 downloadBlob(
                     videoBlob,
@@ -528,6 +630,7 @@ export async function runVideoExportPipeline(
             } catch (err) {
                 const error = err instanceof Error ? err : new Error(String(err));
                 recordingError = error;
+                terminalStateRef.value = 'failed';
                 if (finalizationReject) {
                     finalizationReject(error);
                 }
@@ -539,10 +642,12 @@ export async function runVideoExportPipeline(
         let baseAudioTime = 0;
 
         for (let f = 0; f <= totalFrames; f++) {
-            if (abortSignal?.aborted) {
+            if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+                terminalStateRef.value = 'cancelled';
                 return;
             }
             if (recordingError) {
+                terminalStateRef.value = 'failed';
                 throw recordingError;
             }
 
@@ -551,7 +656,12 @@ export async function runVideoExportPipeline(
                 await settings.onSeekFrame(t);
             }
             await syncAndSeekAllProjectVideos(project, t);
-            await new Promise((r) => requestAnimationFrame(r));
+            await nextFrame();
+
+            if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+                terminalStateRef.value = 'cancelled';
+                return;
+            }
 
             const evaluated = evaluateProjectAtTime(project, t);
             const webglCanvas =
@@ -567,7 +677,7 @@ export async function runVideoExportPipeline(
                 ctx.imageSmoothingQuality = 'high';
                 ctx.drawImage(webglCanvas, 0, 0, width, height);
             } else {
-                renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+                await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
             }
 
             const captureTrack = stream.getVideoTracks()[0] as (MediaStreamTrack & { requestFrame?: () => void }) | undefined;
@@ -627,10 +737,22 @@ export async function runVideoExportPipeline(
             }
         }
 
+        if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
+            terminalStateRef.value = 'cancelled';
+            return;
+        }
+
+        // All frames recorded successfully without cancellation
+        terminalStateRef.value = 'completed';
+
         const activeRecorder = recorder;
         await new Promise<void>((resolve, reject) => {
             if (recordingError) {
                 reject(recordingError);
+                return;
+            }
+            if (getTerminalState() === 'cancelled' || abortSignal?.aborted) {
+                resolve();
                 return;
             }
             if (!activeRecorder || activeRecorder.state === 'inactive') {
@@ -645,13 +767,18 @@ export async function runVideoExportPipeline(
             activeRecorder.stop();
         });
 
-        onProgress({
-            frameIndex: totalFrames,
-            totalFrames,
-            percent: 100,
-            statusText: 'Video Export Complete!',
-        });
+        if (getTerminalState() === 'completed' && !abortSignal?.aborted) {
+            onProgress({
+                frameIndex: totalFrames,
+                totalFrames,
+                percent: 100,
+                statusText: 'Video Export Complete!',
+            });
+        }
     } finally {
+        if (abortSignal) {
+            abortSignal.removeEventListener('abort', handleAbort);
+        }
         if (audioContext) {
             audioContext.close().catch(() => {});
         }

@@ -418,7 +418,6 @@ export function parseFigmaSvgToLayers(
                     width: Number((w / boardW).toFixed(4)),
                     height: Number((h / boardH).toFixed(4)),
                 },
-                device: undefined, // Land flat when pasted from Figma
             });
 
             layers.push(imgLayer);
@@ -461,7 +460,6 @@ export function parseFigmaSvgToLayers(
                 position: { x: 0, y: 0, z: Number(zDepthCursor.toFixed(3)) },
                 rotation: { x: 0, y: 0, z: 0 },
                 size: { width: 1, height: 1 },
-                device: undefined,
             });
 
             layers.push(pathLayer);
@@ -493,7 +491,6 @@ export function parseFigmaSvgToLayers(
                 position: { x: 0, y: 0, z: 0.1 },
                 rotation: { x: 0, y: 0, z: 0 },
                 size: { width: 0.55, height: 0.55 },
-                device: undefined,
             })
         );
     }

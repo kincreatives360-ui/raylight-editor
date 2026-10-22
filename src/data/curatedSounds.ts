@@ -7,22 +7,6 @@ export interface CuratedSound {
   durationMs: number;
 }
 
-export const SOUND_CATEGORIES = [
-  'all',
-  'ambience',
-  'click',
-  'glitch',
-  'impact',
-  'pop',
-  'riser',
-  'slide',
-  'typing',
-  'ui',
-  'whoosh',
-] as const;
-
-export type SoundCategory = typeof SOUND_CATEGORIES[number];
-
 export const CURATED_SOUNDS: CuratedSound[] = [
   {
     "slug": "ambience-airy-pad-1",

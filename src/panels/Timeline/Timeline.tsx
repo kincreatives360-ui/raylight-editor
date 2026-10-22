@@ -7,7 +7,6 @@ import { recalculateShotStartTimes, useProjectStore } from '../../store/useProje
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { evaluateEasing } from '../../engine/easing';
-import { createDefaultCameraBlock } from '../../model/defaults';
 import { TimelineTimecode } from './TimelineTimecode';
 import { PlayheadOverlay } from './PlayheadOverlay';
 import { EasingPopover } from './EasingPopover';
@@ -21,7 +20,7 @@ const AudioWaveform: React.FC<{
     const barCount = Math.max(12, Math.min(96, Math.floor(width / 5)));
     const peaks = useMemo(
         () => generateWaveformPeaks(clip, barCount),
-        [clip.id, clip.durationMs, clip.offsetMs, clip.dataUrl, barCount]
+        [clip, barCount]
     );
 
     return (
@@ -70,6 +69,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         updateLayer,
         addShot,
         addLayerToShot,
+        addCameraBlockToShot,
+        toggleProjectAudioMuted,
         splitAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
@@ -1315,21 +1316,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             100,
             Math.min(1000, activeShot.durationMs - startMs)
         );
-        const camId = `cam-blk-${Date.now()}`;
-        updateShot(activeShot.id, (shot) => ({
-            ...shot,
-            cameraBlocks: [
-                ...(shot.cameraBlocks || []),
-                createDefaultCameraBlock(
-                    camId,
-                    startMs,
-                    durationMs,
-                    shot.framings[0]?.id || 'f1',
-                    shot.framings[1]?.id || 'f2'
-                ),
-            ],
-        }));
-        selectCameraBlock(camId);
+        const block = addCameraBlockToShot(activeShot.id, { startMs, durationMs });
+        if (block) selectCameraBlock(block.id);
     };
 
     return (
@@ -1468,14 +1456,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    updateProject((p) => ({
-                                        ...p,
-                                        audio: {
-                                            clips: p.audio?.clips || [],
-                                            muted: !p.audio?.muted,
-                                            masterVolume: p.audio?.masterVolume ?? 1,
-                                        },
-                                    }));
+                                    toggleProjectAudioMuted();
                                 }}
                                 title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                 className="absolute right-2 top-1 text-[10px] text-slate-400 hover:text-white z-10 flex items-center gap-1 cursor-pointer"

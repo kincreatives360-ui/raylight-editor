@@ -23,10 +23,6 @@ import {
     Image as ImageIcon,
     Check,
     Crop,
-    Smartphone,
-    Laptop,
-    Tablet,
-    Monitor,
     Sparkles,
     Activity,
 } from 'lucide-react';
@@ -47,6 +43,61 @@ interface CanvasToolbarProps {
 
 type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | null;
 
+const PointerIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
+    switch (activeTool) {
+        case 'move': return <Move className="w-3.5 h-3.5" />;
+        case 'hand': return <Hand className="w-3.5 h-3.5" />;
+        case 'camera': return <Camera className="w-3.5 h-3.5" />;
+        case 'tilt': return <Rotate3d className="w-3.5 h-3.5" />;
+        default: return <MousePointer className="w-3.5 h-3.5 fill-current" />;
+    }
+};
+
+const ShapeIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
+    switch (activeTool) {
+        case 'ellipse': return <Circle className="w-3.5 h-3.5" />;
+        case 'line': return <Minus className="w-3.5 h-3.5" />;
+        case 'arrow': return <ArrowRight className="w-3.5 h-3.5" />;
+        case 'polygon': return <Pentagon className="w-3.5 h-3.5" />;
+        case 'image': return <ImageIcon className="w-3.5 h-3.5" />;
+        default: return <Square className="w-3.5 h-3.5" />;
+    }
+};
+
+const DropdownMenu: React.FC<{
+    children: React.ReactNode;
+    align?: 'left' | 'right';
+    className?: string;
+}> = ({ children, align = 'left', className = '' }) => (
+    <div
+        className={`absolute bottom-full mb-2 ${align === 'right' ? 'right-0' : 'left-0'} min-w-[10rem] rounded-xl bg-[#1e1e22]/95 border border-white/[0.08] shadow-2xl p-1 text-xs z-50 ${className}`}
+        style={{ backdropFilter: 'blur(20px)' }}
+    >
+        {children}
+    </div>
+);
+
+const MenuItem: React.FC<{
+    icon: React.FC<{ className?: string }>;
+    label: string;
+    shortcut?: string;
+    active?: boolean;
+    accent?: string;
+    onClick: () => void;
+}> = ({ icon: Icon, label, shortcut, active, accent, onClick }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition ${active ? 'bg-[var(--accent-primary,#0088ff)] text-white' : 'text-[#d4d4d8] hover:bg-white/5 hover:text-white'}`}
+    >
+        <div className="flex items-center gap-2">
+            <Icon className={`w-3.5 h-3.5 ${accent ?? 'opacity-80'}`} />
+            <span>{label}</span>
+        </div>
+        {shortcut && <span className="text-[10px] font-mono opacity-60">{shortcut}</span>}
+    </button>
+);
+
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     selectedLayer,
     onOpenSceneEffects: _onOpenSceneEffects,
@@ -65,14 +116,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         toggleAnimateMode,
         setIsCropping,
         setInspectorTab,
-        selectLayer,
     } = useSelectionStore();
 
     const { currentTimeMs } = usePlayheadStore();
-    const { project, updateShot, updateLayer, splitShotAtPlayhead, addLayerToShot } = useProjectStore();
+    const { project, addCameraBlockToShot, updateLayer, splitShotAtPlayhead } = useProjectStore();
 
     const [openMenu, setOpenMenu] = useState<MenuKey>(null);
-    const [componentTab, setComponentTab] = useState<'motion' | 'devices'>('motion');
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -185,23 +234,15 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             }));
             showToast('Applied 3D Parallax Tilt preset');
         } else if (presetName === 'Camera Shake') {
-            updateShot(activeShot.id, (s) => ({
-                ...s,
-                cameraBlocks: [
-                    ...(s.cameraBlocks || []),
-                    {
-                        id: `cam-${crypto.randomUUID()}`,
-                        mode: 'shake',
-                        fromFramingId: 'default',
-                        toFramingId: 'default',
-                        startMs: 0,
-                        durationMs: 1400,
-                        easing: { kind: 'preset', name: 'ease' },
-                        from: { anchorX: 0, anchorY: 0, zoom: 1, roll: 0, orbit: 0, tilt: 0 },
-                        to: { anchorX: 0.04, anchorY: 0.03, zoom: 1.05, roll: 1.5, orbit: 2, tilt: 1 },
-                    },
-                ],
-            }));
+            addCameraBlockToShot(activeShot.id, {
+                label: 'Camera Shake',
+                mode: 'shake',
+                startMs: 0,
+                durationMs: 1400,
+                easing: { kind: 'preset', name: 'ease' },
+                from: { anchorX: 0, anchorY: 0, zoom: 1, roll: 0, orbit: 0, tilt: 0 },
+                to: { anchorX: 0.04, anchorY: 0.03, zoom: 1.05, roll: 1.5, orbit: 2, tilt: 1 },
+            });
             showToast('Applied Camera Shake');
         } else if (presetName === 'Glitch In' && targetLayer) {
             updateLayer(activeShot.id, targetLayer.id, (l) => ({
@@ -294,101 +335,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         },
     ];
 
-    const deviceMockups = [
-        {
-            name: 'iPhone 15 Pro',
-            subtitle: 'Natural Titanium CAD',
-            badge: 'Hardware',
-            icon: Smartphone,
-            color: 'from-blue-600/30 to-indigo-950/60',
-            device: { type: 'iphone' as const, color: 'titanium' as const, gloss: 0.5, glare: 1.0 },
-        },
-        {
-            name: 'iPhone 16 Pro',
-            subtitle: 'Space Black Titanium',
-            badge: 'Hardware',
-            icon: Smartphone,
-            color: 'from-zinc-800/50 to-black',
-            device: { type: 'iphone' as const, color: 'space-black' as const, gloss: 0.6, glare: 1.0 },
-        },
-        {
-            name: 'MacBook Pro 16"',
-            subtitle: 'Space Black Unibody',
-            badge: 'Laptop',
-            icon: Laptop,
-            color: 'from-slate-800/40 to-zinc-950',
-            device: { type: 'macbook' as const, color: 'space-black' as const, gloss: 0.4, lidAngle: 110 },
-        },
-        {
-            name: 'iPad Pro',
-            subtitle: 'Silver Liquid Retina',
-            badge: 'Tablet',
-            icon: Tablet,
-            color: 'from-cyan-900/30 to-blue-950',
-            device: { type: 'ipad' as const, color: 'silver' as const, gloss: 0.4 },
-        },
-        {
-            name: 'Studio Display',
-            subtitle: 'Aluminum 5K Retina',
-            badge: '5K Display',
-            icon: Monitor,
-            color: 'from-neutral-800/40 to-neutral-950',
-            device: { type: 'display' as const, color: 'silver' as const, gloss: 0.3 },
-        },
-    ];
-
-    const handleInsertDevice = (dev: (typeof deviceMockups)[0]) => {
-        if (!activeShot) return;
-        const created = addLayerToShot(activeShot.id, 'image', {
-            name: dev.name,
-            device: dev.device,
-            receivesLight: true,
-            position: { x: 0, y: 0, z: 0 },
-            size:
-                dev.device.type === 'macbook' || dev.device.type === 'display'
-                    ? { width: 0.72, height: 0.48 }
-                    : { width: 0.35, height: 0.7 },
-        });
-        setInspectorTab('layer');
-        selectLayer(created.id);
-        setOpenMenu(null);
-        showToast(`Added ${dev.name} to scene`);
-    };
-
-    /* ── Pointer icon (reflects currently active sub-tool) ── */
-    const PointerIcon = () => {
-        switch (activeTool) {
-            case 'move':
-                return <Move className="w-3.5 h-3.5" />;
-            case 'hand':
-                return <Hand className="w-3.5 h-3.5" />;
-            case 'camera':
-                return <Camera className="w-3.5 h-3.5" />;
-            case 'tilt':
-                return <Rotate3d className="w-3.5 h-3.5" />;
-            default:
-                return <MousePointer className="w-3.5 h-3.5 fill-current" />;
-        }
-    };
-
-    /* ── Shape icon (reflects currently active sub-tool) ── */
-    const ShapeIcon = () => {
-        switch (activeTool) {
-            case 'ellipse':
-                return <Circle className="w-3.5 h-3.5" />;
-            case 'line':
-                return <Minus className="w-3.5 h-3.5" />;
-            case 'arrow':
-                return <ArrowRight className="w-3.5 h-3.5" />;
-            case 'polygon':
-                return <Pentagon className="w-3.5 h-3.5" />;
-            case 'image':
-                return <ImageIcon className="w-3.5 h-3.5" />;
-            default:
-                return <Square className="w-3.5 h-3.5" />;
-        }
-    };
-
     /* ── Shared button style ── */
     const toolBtn = (active: boolean) =>
         `w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none ${
@@ -416,45 +362,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         { id: 'line', label: 'Line', key: 'L', icon: Minus },
         { id: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowRight },
     ];
-
-    /* ── Render a flat dropdown menu ── */
-    const DropdownMenu: React.FC<{
-        children: React.ReactNode;
-        align?: 'left' | 'right';
-        className?: string;
-    }> = ({ children, align = 'left', className = '' }) => (
-        <div
-            className={`absolute bottom-full mb-2 ${align === 'right' ? 'right-0' : 'left-0'} min-w-[10rem] rounded-xl bg-[#1e1e22]/95 border border-white/[0.08] shadow-2xl p-1 text-xs z-50 ${className}`}
-            style={{ backdropFilter: 'blur(20px)' }}
-        >
-            {children}
-        </div>
-    );
-
-    const MenuItem: React.FC<{
-        icon: React.FC<{ className?: string }>;
-        label: string;
-        shortcut?: string;
-        active?: boolean;
-        accent?: string;
-        onClick: () => void;
-    }> = ({ icon: Icon, label, shortcut, active, accent, onClick }) => (
-        <button
-            type="button"
-            onClick={onClick}
-            className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition ${
-                active
-                    ? 'bg-[var(--accent-primary,#0088ff)] text-white'
-                    : 'text-[#d4d4d8] hover:bg-white/5 hover:text-white'
-            }`}
-        >
-            <div className="flex items-center gap-2">
-                <Icon className={`w-3.5 h-3.5 ${accent ?? 'opacity-80'}`} />
-                <span>{label}</span>
-            </div>
-            {shortcut && <span className="text-[10px] font-mono opacity-60">{shortcut}</span>}
-        </button>
-    );
 
     return (
         <div
@@ -506,7 +413,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         title="Select Tool (V)"
                         className={toolBtn(isPointerActive)}
                     >
-                        <PointerIcon />
+                        <PointerIcon activeTool={activeTool} />
                     </button>
                     <button
                         type="button"
@@ -568,7 +475,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         title="Shape Tool (R / O / L)"
                         className={toolBtn(isShapeActive)}
                     >
-                        <ShapeIcon />
+                        <ShapeIcon activeTool={activeTool} />
                     </button>
                     <button
                         type="button"
@@ -703,34 +610,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                     <Shapes className="w-4 h-4 text-[var(--accent-primary,#0088ff)]" />
                                     <span>Library &amp; Presets</span>
                                 </div>
-                                <div className="flex items-center bg-white/[0.06] p-0.5 rounded-lg border border-white/[0.08]">
-                                    <button
-                                        type="button"
-                                        onClick={() => setComponentTab('motion')}
-                                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
-                                            componentTab === 'motion'
-                                                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-xs'
-                                                : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                    >
-                                        Motion
-                                    </button>
-                                    <button
-                                        type="button"
-                                        onClick={() => setComponentTab('devices')}
-                                        className={`px-2 py-0.5 rounded text-[10px] font-medium transition cursor-pointer ${
-                                            componentTab === 'devices'
-                                                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-xs'
-                                                : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                    >
-                                        3D Devices
-                                    </button>
-                                </div>
                             </div>
 
-                            {componentTab === 'motion' ? (
-                                <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
+                            <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
                                     <div className="text-[10px] uppercase font-mono tracking-wider text-[#71717a] px-1 py-0.5">
                                         Active Layer Presets
                                     </div>
@@ -766,41 +648,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                         );
                                     })}
                                 </div>
-                            ) : (
-                                <div className="space-y-1.5 max-h-72 overflow-y-auto pr-0.5">
-                                    <div className="text-[10px] uppercase font-mono tracking-wider text-[#71717a] px-1 py-0.5">
-                                        Insert 3D Hardware CAD
-                                    </div>
-                                    {deviceMockups.map((dev) => {
-                                        const Icon = dev.icon;
-                                        return (
-                                            <button
-                                                key={dev.name}
-                                                type="button"
-                                                onClick={() => handleInsertDevice(dev)}
-                                                className="w-full p-2 rounded-lg flex items-center justify-between text-left cursor-pointer hover:bg-white/[0.07] transition group border border-transparent hover:border-white/[0.06]"
-                                            >
-                                                <div className="flex items-center gap-2.5">
-                                                    <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${dev.color} border border-white/10 flex items-center justify-center shrink-0 shadow-sm`}>
-                                                        <Icon className="w-4 h-4 text-white drop-shadow" />
-                                                    </div>
-                                                    <div>
-                                                        <div className="font-medium text-white text-[11px] group-hover:text-[var(--accent-primary,#0088ff)] transition-colors">
-                                                            {dev.name}
-                                                        </div>
-                                                        <div className="text-[10px] text-[#8e8e93]">
-                                                            {dev.subtitle}
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#a1a1aa] group-hover:text-white group-hover:bg-[var(--accent-primary,#0088ff)] transition">
-                                                    Insert
-                                                </span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            )}
                         </DropdownMenu>
                     )}
                 </div>
@@ -808,7 +655,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 {/* 9 ─ Upgrade CTA */}
                 <button
                     type="button"
-                    onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium mockups')}
+                    onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium assets')}
                     aria-label="Upgrade to Pro"
                     className="ml-1 px-3 py-1 rounded-lg text-[var(--accent-primary,#0088ff)] text-[11px] font-semibold hover:bg-[var(--accent-primary,#0088ff)]/10 transition cursor-pointer"
                 >

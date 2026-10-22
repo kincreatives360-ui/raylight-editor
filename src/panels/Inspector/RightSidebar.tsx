@@ -58,12 +58,12 @@ import type {
     CameraBlock,
     BlendMode,
     Vec3,
-    PresetEasingName,
-    SpringEasingName,
     Background,
 } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { degToRad, radToDeg } from '../../model/defaults';
+import { isLayerEffectivelyLocked } from '../../engine/evaluateShot';
+import { generateId } from '../../model/id';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -71,8 +71,8 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
-import { DeviceFrameSection } from './sections/DeviceFrameSection';
 import { EasingPopover } from '../Timeline/EasingPopover';
+import { easingFromSelection } from '../../model/easingSelection';
 
 const ALL_BLEND_MODES: BlendMode[] = [
     'normal',
@@ -1235,7 +1235,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         updateShot(activeShot.id, (s) => ({
             ...s,
             layers: s.layers.map((l) =>
-                selectedLayerIds.includes(l.id) && !l.locked
+                selectedLayerIds.includes(l.id) && !isLayerEffectivelyLocked(l, s.groups)
                     ? { ...l, position: { ...l.position, [axis]: targetVal } }
                     : l
             ),
@@ -1339,7 +1339,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         }
 
         const newPreset = {
-            id: `${which}-${Date.now()}`,
+            id: generateId(which),
             type: mappedType,
             durationMs,
             delayMs: 0,
@@ -1354,7 +1354,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     return { ...l, entrances: next, entrance: next[0] };
                 }
                 if (l.entrance && l.entrance.type !== 'none') {
-                    const first = { ...l.entrance, id: `ent-${Date.now()}-1` };
+                    const first = { ...l.entrance, id: generateId('ent') };
                     return { ...l, entrances: [first, newPreset], entrance: first };
                 }
                 return { ...l, entrance: newPreset };
@@ -1364,7 +1364,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     return { ...l, exits: next, exit: next[0] };
                 }
                 if (l.exit && l.exit.type !== 'none') {
-                    const first = { ...l.exit, id: `ext-${Date.now()}-1` };
+                    const first = { ...l.exit, id: generateId('ext') };
                     return { ...l, exits: [first, newPreset], exit: first };
                 }
                 return { ...l, exit: newPreset };
@@ -1689,9 +1689,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                             <div className="flex-1 text-[11px] text-[#a1a1aa]">
                                                 <div className="text-white font-medium capitalize">
-                                                    {selectedLayer.device?.type
-                                                        ? `${selectedLayer.device.type} Frame`
-                                                        : 'Bare Screenshot'}
+                                                    {selectedLayer.kind === 'image' ? 'Image layer' : 'Video layer'}
                                                 </div>
                                                 <div className="text-[10px] text-[#a1a1aa] truncate max-w-[140px]">
                                                     {project.assets[selectedLayer.assetId]?.name ||
@@ -1700,13 +1698,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         </div>
                                     </div>
-
-                                    {/* 3D DEVICE FRAME & STAGING SECTIONS (EXACT RAYLIGHT REFERENCE) */}
-                                    <DeviceFrameSection
-                                        layer={selectedLayer}
-                                        activeShotId={activeShot.id}
-                                        updateLayer={updateLayer}
-                                    />
 
                                     {/* Image Border & Stroke */}
                                     <div className="space-y-1.5 pt-1">
@@ -3216,24 +3207,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                         }
                                                         onChange={(e) => {
                                                             const val = e.target.value;
-                                                            const easing: Easing =
-                                                                val === 'bezier'
-                                                                    ? {
-                                                                        kind: 'bezier',
-                                                                        x1: 0.65,
-                                                                        y1: 0,
-                                                                        x2: 0.35,
-                                                                        y2: 1,
-                                                                    }
-                                                                    : val.startsWith('spring:')
-                                                                        ? {
-                                                                            kind: 'spring',
-                                                                            name: val.split(':')[1] as SpringEasingName,
-                                                                        }
-                                                                        : {
-                                                                            kind: 'preset',
-                                                                            name: val.split(':')[1] as PresetEasingName,
-                                                                        };
+                                                            const easing = easingFromSelection(val);
+                                                            if (!easing) return;
                                                             updateLayer(activeShot.id, selectedLayer.id, (l) => ({
                                                                 ...l,
                                                                 entrance: { ...l.entrance, easing },
@@ -3530,24 +3505,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                         }
                                                         onChange={(e) => {
                                                             const val = e.target.value;
-                                                            const easing: Easing =
-                                                                val === 'bezier'
-                                                                    ? {
-                                                                        kind: 'bezier',
-                                                                        x1: 0.65,
-                                                                        y1: 0,
-                                                                        x2: 0.35,
-                                                                        y2: 1,
-                                                                    }
-                                                                    : val.startsWith('spring:')
-                                                                        ? {
-                                                                            kind: 'spring',
-                                                                            name: val.split(':')[1] as SpringEasingName,
-                                                                        }
-                                                                        : {
-                                                                            kind: 'preset',
-                                                                            name: val.split(':')[1] as PresetEasingName,
-                                                                        };
+                                                            const easing = easingFromSelection(val);
+                                                            if (!easing) return;
                                                             updateLayer(activeShot.id, selectedLayer.id, (l) => ({
                                                                 ...l,
                                                                 exit: { ...l.exit, easing },

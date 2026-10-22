@@ -14,10 +14,8 @@ import {
 import type {
     CameraBlock,
     CameraKeyframeEndpoint,
-    Easing,
-    PresetEasingName,
-    SpringEasingName,
 } from '../../../model/types';
+import { easingFromSelection } from '../../../model/easingSelection';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { getArtboardDimensions } from '../../../stage/stageUtils';
@@ -403,24 +401,10 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             }
                             onChange={(e) => {
                                 const val = e.target.value;
-                                const easing: Easing =
-                                    val === 'bezier'
-                                        ? {
-                                            kind: 'bezier',
-                                            x1: 0.16,
-                                            y1: 1,
-                                            x2: 0.3,
-                                            y2: 1,
-                                        }
-                                        : val.startsWith('spring:')
-                                            ? {
-                                                kind: 'spring',
-                                                name: val.split(':')[1] as SpringEasingName,
-                                            }
-                                            : {
-                                                kind: 'preset',
-                                                name: val.split(':')[1] as PresetEasingName,
-                                            };
+                                const easing = easingFromSelection(val, {
+                                    x1: 0.16, y1: 1, x2: 0.3, y2: 1,
+                                });
+                                if (!easing) return;
                                 updateCameraBlock(activeCameraBlock.id, (cb) => ({
                                     ...cb,
                                     easing,

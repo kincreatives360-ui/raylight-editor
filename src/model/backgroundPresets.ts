@@ -1,47 +1,7 @@
 // src/model/backgroundPresets.ts
 // Production Raylight shader presets, knob metadata, and color models
 
-export type ShaderPreset =
-    | 'silk'
-    | 'silkFlow'
-    | 'meshAurora'
-    | 'liquidMetal'
-    | 'sphereGradient'
-    | 'waterPlane'
-    | 'stripeMesh'
-    | 'topography'
-    | 'hyperspeed'
-    | 'plasma'
-    | 'dither'
-    | 'threads'
-    | 'chromaticWaves'
-    | 'undertones'
-    | 'mosaic'
-    | 'meshGradient'
-    | 'warp'
-    | 'grainGradient'
-    | 'prism'
-    | 'halo'
-    | 'shift'
-    | 'lineScreen'
-    | 'dotMatrix'
-    | 'watercolor'
-    | 'voxels';
-
-export interface ShaderKnobConfig {
-    label: string;
-    description: string;
-}
-
-export interface ShaderPresetMeta {
-    label: string;
-    description: string;
-    colorModel: 'accent' | 'palette';
-    usesBase: boolean;
-    knobs: Partial<Record<'waves' | 'focus' | 'glow' | 'shine' | 'angle', ShaderKnobConfig>>;
-}
-
-export const SHADER_PRESETS: ShaderPreset[] = [
+export const SHADER_PRESET_IDS = [
     'silk',
     'silkFlow',
     'meshAurora',
@@ -67,7 +27,24 @@ export const SHADER_PRESETS: ShaderPreset[] = [
     'dotMatrix',
     'watercolor',
     'voxels',
-];
+] as const;
+
+export type ShaderPreset = (typeof SHADER_PRESET_IDS)[number];
+
+export interface ShaderKnobConfig {
+    label: string;
+    description: string;
+}
+
+export interface ShaderPresetMeta {
+    label: string;
+    description: string;
+    colorModel: 'accent' | 'palette';
+    usesBase: boolean;
+    knobs: Partial<Record<'waves' | 'focus' | 'glow' | 'shine' | 'angle', ShaderKnobConfig>>;
+}
+
+export const SHADER_PRESETS: readonly ShaderPreset[] = SHADER_PRESET_IDS;
 
 export const SHADER_PRESET_METADATA: Record<ShaderPreset, ShaderPresetMeta> = {
     silk: {
