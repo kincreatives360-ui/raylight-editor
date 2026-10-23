@@ -1,6 +1,7 @@
 /* eslint-disable react-hooks/immutability */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
+import { BACKGROUND_RENDER_STATE } from './backgroundRenderState';
 import { useThree, useFrame } from '@react-three/fiber';
 import type {
   Project,
@@ -450,7 +451,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
         depthTest={false}
         depthWrite={false}
         toneMapped={false}
-        transparent={opacity < 1 || bg.kind === 'solid' || bg.kind === 'gradient' || (bg.kind === 'image' && !imageTexture)}
+        {...BACKGROUND_RENDER_STATE}
       />
     </mesh>
   );

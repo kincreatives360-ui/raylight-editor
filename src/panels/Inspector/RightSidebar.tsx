@@ -71,6 +71,9 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { DeviceFrameSection } from './sections/DeviceFrameSection';
+import { getDevicePlacementSize, isFixedDeviceFrame, resizeDevicePlacement } from '../../model/deviceFrame';
+import { ASPECT_RATIO_CONFIG, getArtboardDimensions } from '../../stage/stageUtils';
 import { EasingPopover } from '../Timeline/EasingPopover';
 import { easingFromSelection } from '../../model/easingSelection';
 
@@ -1224,6 +1227,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const refStageW = 1920;
     const refStageH = 1080;
+    const aspectSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
+    const deviceProjectAspect = aspectSpec.widthRatio / aspectSpec.heightRatio;
+    const fixedDeviceSettings = selectedLayer?.kind === 'image' && selectedLayer.deviceFrame?.enabled && isFixedDeviceFrame(selectedLayer.deviceFrame)
+        ? selectedLayer.deviceFrame : null;
+    const devicePlacementSize = selectedLayer?.kind === 'image' && fixedDeviceSettings
+        ? getDevicePlacementSize(selectedLayer.size, fixedDeviceSettings, deviceProjectAspect) : null;
+    const deviceArtboard = getArtboardDimensions(project.aspectRatio);
+    const layoutStageW = fixedDeviceSettings ? deviceArtboard.width : refStageW;
+    const layoutStageH = fixedDeviceSettings ? deviceArtboard.height : refStageH;
 
     const isBlankState = isBlankProjectState(project);
     const effectiveMainTab = isBlankState ? 'design' : mainTab;
@@ -1699,6 +1711,18 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                         </div>
                                     </div>
 
+                                    {selectedLayer.kind === 'image' && (
+                                        <DeviceFrameSection
+                                            projectAspect={deviceProjectAspect}
+                                            layer={selectedLayer}
+                                            onChange={(deviceFrame) =>
+                                                updateLayer(activeShot.id, selectedLayer.id, (layer) =>
+                                                    layer.kind === 'image' ? { ...layer, deviceFrame } : layer
+                                                )
+                                            }
+                                        />
+                                    )}
+
                                     {/* Image Border & Stroke */}
                                     <div className="space-y-1.5 pt-1">
                                         <div className="flex items-center justify-between">
@@ -2066,13 +2090,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 <ScrubInput
                                                     label="W"
                                                     value={Math.round(
-                                                        selectedLayer.size.width * refStageW
+                                                        (devicePlacementSize?.width ?? selectedLayer.size.width) * layoutStageW
                                                     )}
                                                     min={40}
                                                     max={4000}
                                                     step={10}
                                                     onChange={(pxW) => {
-                                                        const nextW = Number((pxW / refStageW).toFixed(4));
+                                                        const nextW = Number((pxW / layoutStageW).toFixed(4));
                                                         const ratio =
                                                             selectedLayer.size.height /
                                                             Math.max(0.01, selectedLayer.size.width);
@@ -2080,7 +2104,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: {
+                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'width', nextW, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: nextW,
                                                                         height: aspectLocked
                                                                             ? Number((nextW * ratio).toFixed(4))
@@ -2094,13 +2118,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 <ScrubInput
                                                     label="H"
                                                     value={Math.round(
-                                                        selectedLayer.size.height * refStageH
+                                                        (devicePlacementSize?.height ?? selectedLayer.size.height) * layoutStageH
                                                     )}
                                                     min={40}
                                                     max={4000}
                                                     step={10}
                                                     onChange={(pxH) => {
-                                                        const nextH = Number((pxH / refStageH).toFixed(4));
+                                                        const nextH = Number((pxH / layoutStageH).toFixed(4));
                                                         const ratio =
                                                             selectedLayer.size.width /
                                                             Math.max(0.01, selectedLayer.size.height);
@@ -2108,7 +2132,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: {
+                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'height', nextH, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: aspectLocked
                                                                             ? Number((nextH * ratio).toFixed(4))
                                                                             : l.size.width,
@@ -2121,14 +2145,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 />
                                             </div>
                                             <button
+                                                disabled={Boolean(fixedDeviceSettings)}
                                                 onClick={() => setAspectLocked((v) => !v)}
-                                                className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition ${aspectLocked
+                                                className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition ${aspectLocked || fixedDeviceSettings
                                                     ? 'bg-[#1c1c1f] text-white border border-white/10'
                                                     : 'text-[#a1a1aa] hover:text-white'
                                                     }`}
-                                                title={aspectLocked ? 'Aspect Ratio Locked' : 'Aspect Ratio Unlocked'}
+                                                title={fixedDeviceSettings ? 'Phone proportions are fixed' : aspectLocked ? 'Aspect Ratio Locked' : 'Aspect Ratio Unlocked'}
                                             >
-                                                {aspectLocked ? (
+                                                {aspectLocked || fixedDeviceSettings ? (
                                                     <Lock className="w-3.5 h-3.5" />
                                                 ) : (
                                                     <Unlock className="w-3.5 h-3.5" />

@@ -37,6 +37,42 @@ export interface Size2D {
   height: number;
 }
 
+export type ScreenFit = 'stretch' | 'contain' | 'cover';
+
+export interface DeviceFrameSettings {
+  /** Missing means the original media-shaped chassis. Never auto-upgrade saved frames. */
+  geometryVersion?: 1;
+  deviceId?: string;
+  deviceScale?: number;
+  /** Preserves legacy placement height when replacing a nonuniform transform. */
+  legacyHeightCompensation?: number;
+  enabled: boolean;
+  model: 'iphone-pro' | 'iphone' | 'iphone-classic';
+  frameColor: string;
+  frameRoughness: number;
+  frameMetalness: number;
+  scale: number;
+  bezelWidth: number;
+  thickness: number;
+  cornerRadius: number;
+  screenFit: ScreenFit;
+  screenFillColor: string;
+  glassTint: string;
+  glassOpacity: number;
+  glassRoughness: number;
+  gloss: number;
+  reflection: number;
+  cutoutStyle: 'dynamic-island' | 'notch' | 'punch-hole' | 'none';
+  cutoutWidth: number;
+  cutoutHeight: number;
+  showSideButtons: boolean;
+  showRearCameras: boolean;
+  shadowEnabled: boolean;
+  shadowOpacity: number;
+  shadowBlur: number;
+  shadowOffset: number;
+}
+
 export interface GradientStop {
   at: number;
   color: string;
@@ -253,6 +289,7 @@ export interface ImageLayer extends LayerBase {
   assetId: string;
   size: Size2D;
   cornerRadius: number;
+  deviceFrame?: DeviceFrameSettings;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
 }

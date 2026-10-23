@@ -1,8 +1,10 @@
 // src/stage/webgl/cameraMath.ts
 import * as THREE from 'three';
+import { getPhoneLocalBounds } from './phoneLayout';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
 import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 import type { Framing } from '../../model/types';
+import { getDeviceFrameMetrics, getDeviceFrameScale, resolveDeviceFrameSettings, SCREEN_PLANE_Z } from '../../model/deviceFrame';
 
 export interface DefaultCameraConfig {
     position: { x: number; y: number; z: number };
@@ -137,6 +139,27 @@ export function getLayer3DWorldTransform(
     return { worldX, worldY, worldZ, meshW, meshH };
 }
 
+export function getLayerRenderLayout(
+    evalLayer: EvaluatedLayerWithEffects,
+    aspect: number,
+    cameraZ: number = DEFAULT_CAMERA_Z,
+    focalLength: number = DEFAULT_FOCAL_LENGTH
+) {
+    const transform = getLayer3DWorldTransform(evalLayer, aspect, cameraZ, focalLength);
+    const raw = evalLayer.layer.kind === 'image' ? evalLayer.layer.deviceFrame : undefined;
+    const deviceSettings = raw?.enabled ? resolveDeviceFrameSettings(raw) : null;
+    const frameMetrics = deviceSettings ? getDeviceFrameMetrics(transform.meshW, transform.meshH, deviceSettings) : null;
+    const scale = getDeviceFrameScale(deviceSettings, evalLayer.scale ?? { x: 1, y: 1, z: 1 });
+    return {
+        ...transform,
+        meshW: frameMetrics?.screenWidth ?? transform.meshW,
+        meshH: frameMetrics?.screenHeight ?? transform.meshH,
+        deviceSettings,
+        frameMetrics,
+        scale,
+    };
+}
+
 export function getLayerProjectedCorners(
     evalLayer: EvaluatedLayerWithEffects,
     frameWidth: number,
@@ -144,9 +167,10 @@ export function getLayerProjectedCorners(
     aspect: number,
     cameraPose?: EvaluatedCameraPose,
     refCameraZ: number = DEFAULT_CAMERA_Z,
-    refFocalLength: number = DEFAULT_FOCAL_LENGTH
+    refFocalLength: number = DEFAULT_FOCAL_LENGTH,
+    bounds: 'body' | 'screen' = 'body'
 ) {
-    const { worldX, worldY, worldZ, meshW, meshH } = getLayer3DWorldTransform(
+    const { worldX, worldY, worldZ, meshW, meshH, frameMetrics, deviceSettings, scale } = getLayerRenderLayout(
         evalLayer,
         aspect,
         refCameraZ,
@@ -178,10 +202,10 @@ export function getLayerProjectedCorners(
     vCam.updateMatrixWorld(true);
     vCam.updateProjectionMatrix();
 
-    const sx = evalLayer.scale?.x ?? 1;
-    const sy = evalLayer.scale?.y ?? 1;
-    const hw = (meshW * sx) / 2;
-    const hh = (meshH * sy) / 2;
+    const sx = scale.x;
+    const sy = scale.y;
+    const hw = ((bounds === 'body' ? frameMetrics?.bodyWidth : undefined) ?? meshW) * sx / 2;
+    const hh = ((bounds === 'body' ? frameMetrics?.bodyHeight : undefined) ?? meshH) * sy / 2;
 
     // Match ThreeLayerObject Euler rotation (invert X and Z so screen pitch & roll match 3D)
     const euler = new THREE.Euler(
@@ -192,7 +216,7 @@ export function getLayerProjectedCorners(
     );
     const centerVec = new THREE.Vector3(worldX, worldY, worldZ);
 
-    const projectLocalPoint = (lx: number, ly: number, lz = 0.016) => {
+    const projectLocalPoint = (lx: number, ly: number, lz = SCREEN_PLANE_Z * (scale.z || 1)) => {
         const pt = new THREE.Vector3(lx, ly, lz);
         pt.applyEuler(euler);
         pt.add(centerVec);
@@ -202,6 +226,30 @@ export function getLayerProjectedCorners(
             y: (-pt.y * 0.5 + 0.5) * frameHeight,
         };
     };
+
+    if (bounds === 'body' && frameMetrics && deviceSettings) {
+        const volume = getPhoneLocalBounds(frameMetrics, deviceSettings);
+        const projected = [];
+        for (const x of [volume.min.x, volume.max.x])
+            for (const y of [volume.min.y, volume.max.y])
+                for (const z of [volume.min.z, volume.max.z])
+                    projected.push(projectLocalPoint(x * scale.x, y * scale.y, z * scale.z));
+        const left = Math.min(...projected.map(p => p.x));
+        const right = Math.max(...projected.map(p => p.x));
+        const top = Math.min(...projected.map(p => p.y));
+        const bottom = Math.max(...projected.map(p => p.y));
+        const midX = (left + right) / 2, midY = (top + bottom) / 2;
+        const pNW = { x: left, y: top }, pNE = { x: right, y: top };
+        const pSE = { x: right, y: bottom }, pSW = { x: left, y: bottom };
+        return {
+            pNW, pNE, pSE, pSW,
+            pN: { x: midX, y: top }, pE: { x: right, y: midY },
+            pS: { x: midX, y: bottom }, pW: { x: left, y: midY },
+            pCenter: projectLocalPoint(0, 0),
+            pRot: { x: midX, y: top - Math.max(24, (bottom - top) * 0.11) },
+            corners: convexHull(projected),
+        };
+    }
 
     const pNW = projectLocalPoint(-hw, hh);
     const pN = projectLocalPoint(0, hh);
@@ -229,4 +277,20 @@ export function getLayerProjectedCorners(
         pRot,
         corners: [pNW, pNE, pSE, pSW],
     };
+}
+
+/** Silhouette of the projected bounding volume, including side/rear surfaces. */
+function convexHull(points: { x: number; y: number }[]) {
+    const sorted = [...points].sort((a, b) => a.x - b.x || a.y - b.y);
+    const cross = (a: typeof points[number], b: typeof a, c: typeof a) =>
+        (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+    const half = (input: typeof points) => {
+        const result: typeof points = [];
+        for (const point of input) {
+            while (result.length >= 2 && cross(result[result.length - 2], result[result.length - 1], point) <= 0) result.pop();
+            result.push(point);
+        }
+        return result.slice(0, -1);
+    };
+    return [...half(sorted), ...half([...sorted].reverse())];
 }

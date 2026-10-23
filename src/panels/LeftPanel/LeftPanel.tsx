@@ -26,7 +26,6 @@ import {
     Upload,
 } from 'lucide-react';
 import type { Shot, Layer, Group, AudioClip } from '../../model/types';
-import { isBlankProjectState } from '../../model/types';
 import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -596,7 +595,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     };
 
     const assetList = Object.values(project.assets);
-    const isBlankState = isBlankProjectState(project);
     const hasCameraBlocks = (activeShot.cameraBlocks?.length || 0) > 0;
     const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
 
@@ -927,14 +925,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 </div>
                             );
                         })}
-
-                        {(!isBlankState || audioLabel || (project.audio?.clips.length ?? 0) > 0) && <div
-                            onClick={onSelectAudioClick}
-                            className="h-7 px-3 mt-1 rounded-md flex items-center gap-2 text-[11px] text-[#a1a1aa] hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
-                        >
-                            <Music className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
-                            <span className="truncate">{audioLabel}</span>
-                        </div>}
                     </div>
 
                     {/* =============================================================== */}

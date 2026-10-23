@@ -222,7 +222,6 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             key={evalLayer.id}
                             evalLayer={evalLayer}
                             project={project}
-                            isSelected={selectedLayerIds.includes(evalLayer.id)}
                             onSelect={onSelectLayer}
                         />
                     ))}

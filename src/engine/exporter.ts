@@ -57,6 +57,30 @@ function downloadBlob(blob: Blob, filename: string): void {
     setTimeout(() => URL.revokeObjectURL(url), 3000);
 }
 
+function projectUsesDeviceFrames(project: Project): boolean {
+    return project.shots.some((shot) =>
+        shot.layers.some((layer) => layer.kind === 'image' && layer.deviceFrame?.enabled)
+    );
+}
+
+function getStageWebGLCanvas(): HTMLCanvasElement | null {
+    return (
+        (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
+        (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null)
+    );
+}
+
+function drawStageCanvas(
+    ctx: CanvasRenderingContext2D,
+    canvas: HTMLCanvasElement,
+    width: number,
+    height: number
+): void {
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(canvas, 0, 0, width, height);
+}
+
 // ============================================================================
 // SELF-CONTAINED BINARY GIF89a LZW ENCODER (For Looping Animated GIF Exports)
 // ============================================================================
@@ -228,7 +252,12 @@ export async function exportCurrentFrameAsPng(
 
     // Evaluate and render the exact requested timeMs frame to canvas
     const evaluated = evaluateProjectAtTime(project, timeMs);
-    await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+    const stageCanvas = projectUsesDeviceFrames(project) ? getStageWebGLCanvas() : null;
+    if (stageCanvas && stageCanvas.width > 0 && stageCanvas.height > 0) {
+        drawStageCanvas(ctx, stageCanvas, width, height);
+    } else {
+        await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
+    }
 
     const cleanName = projectName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
     const filename = `${cleanName || 'raylight'}-${Math.round(timeMs)}ms.png`;
@@ -371,18 +400,14 @@ export async function runVideoExportPipeline(
                 return;
             }
 
-            const webglCanvas =
-                (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
-                (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
+            const webglCanvas = getStageWebGLCanvas();
             const isNativeResolution =
                 webglCanvas &&
                 webglCanvas.width >= gifW * 0.75 &&
                 webglCanvas.height >= gifH * 0.75;
 
-            if (isNativeResolution) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(webglCanvas, 0, 0, gifW, gifH);
+            if (webglCanvas && (isNativeResolution || projectUsesDeviceFrames(project))) {
+                drawStageCanvas(ctx, webglCanvas, gifW, gifH);
             } else {
                 const evaluated = evaluateProjectAtTime(project, t);
                 await renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
@@ -664,18 +689,14 @@ export async function runVideoExportPipeline(
             }
 
             const evaluated = evaluateProjectAtTime(project, t);
-            const webglCanvas =
-                (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
-                (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null);
+            const webglCanvas = getStageWebGLCanvas();
             const isNativeResolution =
                 webglCanvas &&
                 webglCanvas.width >= width * 0.75 &&
                 webglCanvas.height >= height * 0.75;
 
-            if (isNativeResolution) {
-                ctx.imageSmoothingEnabled = true;
-                ctx.imageSmoothingQuality = 'high';
-                ctx.drawImage(webglCanvas, 0, 0, width, height);
+            if (webglCanvas && (isNativeResolution || projectUsesDeviceFrames(project))) {
+                drawStageCanvas(ctx, webglCanvas, width, height);
             } else {
                 await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
             }

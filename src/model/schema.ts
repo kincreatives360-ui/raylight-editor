@@ -2,6 +2,7 @@
 import { z } from 'zod';
 import type { Project } from './types';
 import { SHADER_PRESET_IDS } from './backgroundPresets';
+import { resolveDeviceFrameSettings } from './deviceFrame';
 
 export const Vec2Schema = z.object({
   x: z.number(),
@@ -18,6 +19,42 @@ export const Size2DSchema = z.object({
   width: z.number().min(0.01),
   height: z.number().min(0.01),
 });
+
+export const DeviceFrameSettingsSchema = z.preprocess(
+  (input) => input && typeof input === 'object' && !Array.isArray(input)
+    ? resolveDeviceFrameSettings(input)
+    : input,
+  z.object({
+  geometryVersion: z.literal(1).optional(),
+  deviceId: z.string().optional(),
+  deviceScale: z.number().min(0.65).max(2).optional(),
+  legacyHeightCompensation: z.number().positive().optional(),
+  enabled: z.boolean(),
+  model: z.enum(['iphone-pro', 'iphone', 'iphone-classic']),
+  frameColor: z.string(),
+  frameRoughness: z.number().min(0.04).max(1),
+  frameMetalness: z.number().min(0).max(1),
+  scale: z.number().min(0.65).max(2),
+  bezelWidth: z.number().min(0.01).max(0.2),
+  thickness: z.number().min(0.005).max(0.16),
+  cornerRadius: z.number().min(0.04).max(0.24),
+  screenFit: z.enum(['stretch', 'contain', 'cover']),
+  screenFillColor: z.string(),
+  glassTint: z.string(),
+  glassOpacity: z.number().min(0).max(0.45),
+  glassRoughness: z.number().min(0.02).max(1),
+  gloss: z.number().min(0).max(1),
+  reflection: z.number().min(0).max(1),
+  cutoutStyle: z.enum(['dynamic-island', 'notch', 'punch-hole', 'none']),
+  cutoutWidth: z.number().min(0.08).max(0.85),
+  cutoutHeight: z.number().min(0.015).max(0.14),
+  showSideButtons: z.boolean(),
+  showRearCameras: z.boolean(),
+  shadowEnabled: z.boolean(),
+  shadowOpacity: z.number().min(0).max(1),
+  shadowBlur: z.number().min(0).max(1),
+  shadowOffset: z.number().min(0).max(0.5),
+}));
 
 export const GradientStopSchema = z.object({
   at: z.number().min(0).max(1),
@@ -286,6 +323,7 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
   assetId: z.string(),
   size: Size2DSchema,
   cornerRadius: z.number().min(0).max(0.5),
+  deviceFrame: DeviceFrameSettingsSchema.optional(),
   crop: z
     .object({
       x: z.number(),

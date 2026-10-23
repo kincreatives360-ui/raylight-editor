@@ -18,6 +18,7 @@ import {
     evaluateCameraPose,
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
+import { getDevicePlacementSize, isFixedDeviceFrame, resizeDeviceFromHandle } from '../model/deviceFrame';
 
 interface SelectionOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -85,15 +86,21 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
     const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
-    const primaryProj = getLayerProjectedCorners(
-        primaryEval,
-        frameWidth,
-        frameHeight,
-        aspect,
-        cameraPose,
-        refCameraZ,
-        refFocalLength
-    );
+    // The shared layout projects the resolved body; crop handles use the display aperture.
+    const projectCorners = (ev: EvaluatedLayerWithEffects) => {
+        return getLayerProjectedCorners(
+            ev,
+            frameWidth,
+            frameHeight,
+            aspect,
+            cameraPose,
+            refCameraZ,
+            refFocalLength,
+            isCropping ? 'screen' : 'body'
+        );
+    };
+
+    const primaryProj = projectCorners(primaryEval);
 
     const rotXDeg = radToDeg(primaryEval.rotation.x);
     const rotYDeg = radToDeg(primaryEval.rotation.y);
@@ -359,6 +366,19 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 nextPosY = initialPosY - (nextH - initialH) / 2;
             }
 
+            if (layer.kind === 'image' && layer.deviceFrame?.enabled && isFixedDeviceFrame(layer.deviceFrame)) {
+                const initialSize = { width: initialW, height: initialH };
+                const visibleSize = getDevicePlacementSize(initialSize, layer.deviceFrame, aspect, primaryEval.scale);
+                const resized = resizeDeviceFromHandle(initialSize, visibleSize, dir, dxFrac, dyFrac, {
+                    // Body handles now follow screen-space bounds, including mirrored devices.
+                    x: 1, y: 1,
+                });
+                nextW = resized.size.width;
+                nextH = resized.size.height;
+                nextPosX = initialPosX + resized.centerOffset.x;
+                nextPosY = initialPosY + resized.centerOffset.y;
+            }
+
             if (isAnimateMode && layer.kind !== 'text') {
                 const dW = nextW - initialW;
                 const dH = nextH - initialH;
@@ -621,16 +641,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         >
             <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
                 {selectedEvalLayers.slice(1).map((sec) => {
-                    const secProj = getLayerProjectedCorners(
-                        sec,
-                        frameWidth,
-                        frameHeight,
-                        aspect,
-                        cameraPose,
-                        refCameraZ,
-                        refFocalLength
-                    );
-                    const pts = `${secProj.pNW.x},${secProj.pNW.y} ${secProj.pNE.x},${secProj.pNE.y} ${secProj.pSE.x},${secProj.pSE.y} ${secProj.pSW.x},${secProj.pSW.y}`;
+                    const secProj = projectCorners(sec);
+                    const pts = secProj.corners.map((point) => `${point.x},${point.y}`).join(' ');
                     return (
                         <g key={sec.id}>
                             <polygon
@@ -666,7 +678,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         )}
 
                         <polygon
-                            points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
+                            points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
                             fill="var(--accent-primary, #0088ff)"
                             fillOpacity="0.02"
                             stroke={borderColor}

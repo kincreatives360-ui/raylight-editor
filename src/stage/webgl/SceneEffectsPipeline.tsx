@@ -1,9 +1,10 @@
 // src/stage/webgl/SceneEffectsPipeline.tsx
-import React, { useEffect, useMemo, useRef } from 'react';
+import React, { useLayoutEffect, useRef } from 'react';
 import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { renderSceneFrame } from './sceneRenderLoop';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 
@@ -136,7 +137,10 @@ const CinematicEffectsShader = {
                 col.rgb += vec3(grain);
             }
 
-            gl_FragColor = col;
+            // Composer stores premultiplied linear RGB, including transparent edges.
+            gl_FragColor = vec4(col.a > 0.00001 ? col.rgb / col.a : vec3(0.0), col.a);
+            #include <colorspace_fragment>
+            gl_FragColor.rgb *= gl_FragColor.a;
         }
     `,
 };
@@ -145,23 +149,10 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     const { gl, scene, camera, size } = useThree();
     const composerRef = useRef<EffectComposer | null>(null);
     const shaderPassRef = useRef<ShaderPass | null>(null);
-
-    const hasAnyActiveEffect = useMemo(() => {
-        const s = effects?.state;
-        if (!s) return false;
-        return (
-            (s.bloom?.enabled && s.bloom.intensity > 0) ||
-            (s.vignette?.enabled && s.vignette.intensity > 0) ||
-            (s.filmGrain?.enabled && s.filmGrain.intensity > 0) ||
-            (s.chromaticAberration?.enabled && s.chromaticAberration.offset > 0) ||
-            (s.glitch?.enabled && s.glitch.intensity > 0) ||
-            s.colorGrade?.enabled
-        );
-    }, [effects]);
-
     // Initialize or resize EffectComposer
-    useEffect(() => {
+    useLayoutEffect(() => {
         const composer = new EffectComposer(gl);
+        composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(4, gl.capabilities.maxSamples);
         composer.setSize(size.width, size.height);
 
         const renderPass = new RenderPass(scene, camera);
@@ -183,7 +174,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     }, [gl, scene, camera, size.width, size.height]);
 
     // Update uniforms from evaluated effects state
-    useEffect(() => {
+    useLayoutEffect(() => {
         const pass = shaderPassRef.current;
         if (!pass) return;
 
@@ -220,18 +211,11 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         u.uSaturation.value = s.colorGrade?.saturation ?? 1.0;
     }, [effects, size.width, size.height]);
 
-    // Render using composer when effects are enabled, overriding default render
-    useFrame((state, delta) => {
+    // Keep glass blending in the same linear space at every device opacity.
+    useFrame((_state, delta) => {
         const pass = shaderPassRef.current;
-        if (pass) {
-            pass.uniforms.uTime.value += delta;
-        }
-
-        if (hasAnyActiveEffect && composerRef.current) {
-            composerRef.current.render();
-        } else {
-            state.gl.render(state.scene, state.camera);
-        }
+        if (pass) pass.uniforms.uTime.value += delta;
+        renderSceneFrame(gl, scene, camera, composerRef.current);
     }, 1);
 
     return null;
