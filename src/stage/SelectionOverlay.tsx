@@ -580,12 +580,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             }
 
             const nextXDeg = Math.max(
-                -85,
-                Math.min(85, Math.round(initialXDeg + deltaPitch))
+                -360,
+                Math.min(360, Math.round(initialXDeg + deltaPitch))
             );
             const nextYDeg = Math.max(
-                -85,
-                Math.min(85, Math.round(initialYDeg + deltaYaw))
+                -360,
+                Math.min(360, Math.round(initialYDeg + deltaYaw))
             );
 
             updateLayer(

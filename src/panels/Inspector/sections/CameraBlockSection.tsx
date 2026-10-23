@@ -229,8 +229,8 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 <ScrubInput
                                     label="◎"
                                     value={ep.orbit}
-                                    min={-85}
-                                    max={85}
+                                    min={-360}
+                                    max={360}
                                     step={1}
                                     unit="°"
                                     onChange={(orbit) => patchEndpoint({ orbit })}
@@ -238,8 +238,8 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 <ScrubInput
                                     label="∠"
                                     value={ep.tilt}
-                                    min={-85}
-                                    max={85}
+                                    min={-89}
+                                    max={89}
                                     step={1}
                                     unit="°"
                                     onChange={(tilt) => patchEndpoint({ tilt })}

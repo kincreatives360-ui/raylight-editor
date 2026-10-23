@@ -481,8 +481,8 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         <ScrubInput
                             label="X"
                             value={radToDeg(layer.rotation.x)}
-                            min={-85}
-                            max={85}
+                            min={-360}
+                            max={360}
                             step={1}
                             unit="°"
                             onChange={(deg) =>
@@ -495,8 +495,8 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         <ScrubInput
                             label="Y"
                             value={radToDeg(layer.rotation.y)}
-                            min={-85}
-                            max={85}
+                            min={-360}
+                            max={360}
                             step={1}
                             unit="°"
                             onChange={(deg) =>

@@ -2007,8 +2007,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                     <ScrubInput
                                         label="X"
                                         value={radToDeg(selectedLayer.rotation.x)}
-                                        min={-85}
-                                        max={85}
+                                        min={-360}
+                                        max={360}
                                         step={1}
                                         unit="°"
                                         onChange={(deg) =>
@@ -2021,8 +2021,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                     <ScrubInput
                                         label="Y"
                                         value={radToDeg(selectedLayer.rotation.y)}
-                                        min={-85}
-                                        max={85}
+                                        min={-360}
+                                        max={360}
                                         step={1}
                                         unit="°"
                                         onChange={(deg) =>
@@ -2690,8 +2690,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     <ScrubInput
                                                         label="X"
                                                         value={Math.round(radToDeg((blk.amount as Vec3).x || 0))}
-                                                        min={-180}
-                                                        max={180}
+                                                        min={-360}
+                                                        max={360}
                                                         step={1}
                                                         unit="°"
                                                         onChange={(v) => handleUpdateBlock(blk.id, {
@@ -2701,8 +2701,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     <ScrubInput
                                                         label="Y"
                                                         value={Math.round(radToDeg((blk.amount as Vec3).y || 0))}
-                                                        min={-180}
-                                                        max={180}
+                                                        min={-360}
+                                                        max={360}
                                                         step={1}
                                                         unit="°"
                                                         onChange={(v) => handleUpdateBlock(blk.id, {

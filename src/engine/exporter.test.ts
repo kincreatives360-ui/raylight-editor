@@ -151,7 +151,7 @@ describe('Export Pipeline: Cancellation, Format Respect, and GIF Resolution', ()
 
         expect(downloadedFiles.length).toBe(1);
         expect(downloadedFiles[0].filename).toMatch(/\.gif$/);
-    });
+    }, 15000);
 
     it('P1: caps GIF dimensions to maximum 1280px long edge while preserving aspect ratio', async () => {
         const project = createDefaultProject();

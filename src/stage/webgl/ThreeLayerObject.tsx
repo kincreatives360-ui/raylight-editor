@@ -528,7 +528,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             >
                 {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
                 {receivesLight ? (
-                    <meshStandardMaterial map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
+                    <meshStandardMaterial map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 ) : (
                     <meshBasicMaterial map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 )}

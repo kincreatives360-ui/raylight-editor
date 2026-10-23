@@ -66,7 +66,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         const deltaOrbit = dx * 0.75;
         const deltaTilt = -dy * 0.75;
         const nextOrbit = Math.round((dragStartRef.current.startYaw + deltaOrbit + 3600) % 360);
-        const nextTilt = Math.max(-85, Math.min(85, Math.round(dragStartRef.current.startPitch + deltaTilt)));
+        const nextTilt = Math.max(-89, Math.min(89, Math.round(dragStartRef.current.startPitch + deltaTilt)));
         if (onDragOrientation) {
             onDragOrientation(nextOrbit, nextTilt);
         } else {

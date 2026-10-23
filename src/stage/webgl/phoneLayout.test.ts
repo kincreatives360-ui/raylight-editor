@@ -38,6 +38,16 @@ describe('physical device selection bounds', () => {
     expect(Math.abs(crop.pNE.x - crop.pNW.x)).toBeLessThan((projected.pNE.x - projected.pNW.x) * 0.1);
   });
 
+  it.each([Math.PI, -Math.PI, 2 * Math.PI])('projects valid selection bounds for full 3D rotation at yaw %s', yaw => {
+    const project = createDefaultProject();
+    project.shots[0].layers = [createDefaultImageLayer({ deviceFrame: settings, rotation: { x: 0, y: yaw, z: 0 } })];
+    const ev = evaluateProjectAtTime(project, 1500).layers[0];
+    const projected = getLayerProjectedCorners(ev, 1600, 900, 16 / 9);
+    expect(projected.pNE.x - projected.pNW.x).toBeGreaterThan(50);
+    expect(projected.pSE.y - projected.pNE.y).toBeGreaterThan(50);
+    expect(projected.corners.length).toBeGreaterThanOrEqual(4);
+  });
+
   it('includes a thick legacy chassis rear bevel independently of corner radius', () => {
     const legacy = { ...settings, geometryVersion: undefined, showRearCameras: false, showSideButtons: false };
     const thick = { ...metrics, bodyDepth: 0.4, bodyCornerRadius: 0.02 };
