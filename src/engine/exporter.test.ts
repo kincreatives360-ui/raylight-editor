@@ -153,6 +153,26 @@ describe('Export Pipeline: Cancellation, Format Respect, and GIF Resolution', ()
         expect(downloadedFiles[0].filename).toMatch(/\.gif$/);
     });
 
+    it('P1: caps GIF dimensions to maximum 1280px long edge while preserving aspect ratio', async () => {
+        const project = createDefaultProject();
+        project.aspectRatio = '16:9';
+        project.shots = [{ ...project.shots[0], durationMs: 200 }];
+
+        await runVideoExportPipeline(
+            project,
+            () => {},
+            { format: 'gif', resolution: '4k' }
+        );
+
+        expect(downloadedFiles.length).toBe(1);
+        expect(downloadedFiles[0].filename).toMatch(/\.gif$/);
+        const canvasMock = (document.createElement as unknown as { mock: { results: { value: { width: number; height: number } }[] } }).mock.results.find(
+            (r) => r.value?.width !== undefined
+        )?.value;
+        expect(canvasMock?.width).toBe(1280);
+        expect(canvasMock?.height).toBe(720);
+    });
+
     it('P1: respects requested format (webm vs mp4) and rejects unsupported format', async () => {
         // Mock MediaRecorder supporting only WebM
         class MockWebmOnlyRecorder {

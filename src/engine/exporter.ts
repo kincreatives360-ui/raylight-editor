@@ -371,10 +371,15 @@ export async function runVideoExportPipeline(
     // BRANCH A: ANIMATED GIF EXPORT
     // --------------------------------------------------------------------------
     if (settings.format === 'gif') {
-        const { width: gifW, height: gifH } = getExportDimensions(
+        const rawDims = getExportDimensions(
             project.aspectRatio,
             settings.resolution
         );
+        const maxLongEdge = 1280;
+        const longEdge = Math.max(rawDims.width, rawDims.height);
+        const scale = longEdge > maxLongEdge ? maxLongEdge / longEdge : 1;
+        const gifW = scale < 1 ? Math.round((rawDims.width * scale) / 2) * 2 : rawDims.width;
+        const gifH = scale < 1 ? Math.round((rawDims.height * scale) / 2) * 2 : rawDims.height;
         const gifFps = 12;
         const totalFrames = Math.max(2, Math.floor((durationMs / 1000) * gifFps));
 
