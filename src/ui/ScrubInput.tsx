@@ -11,6 +11,7 @@ interface ScrubInputProps {
     decimals?: number;
     unit?: string;
     onChange: (newValue: number) => void;
+    className?: string;
 }
 
 export const ScrubInput: React.FC<ScrubInputProps> = ({
@@ -22,9 +23,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     decimals = 0,
     unit = '',
     onChange,
+    className,
 }) => {
     const { beginDragTransaction, commitDragTransaction } = useProjectStore();
     const [isEditing, setIsEditing] = useState(false);
+    const [isScrubbing, setIsScrubbing] = useState(false);
     const [inputText, setInputText] = useState('');
     const startXRef = useRef<number>(0);
     const startValRef = useRef<number>(value);
@@ -50,6 +53,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         startValRef.current = value;
         movedRef.current = false;
         activePointerIdRef.current = e.pointerId;
+        setIsScrubbing(true);
 
         try {
             e.currentTarget.setPointerCapture(e.pointerId);
@@ -77,6 +81,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         if (activePointerIdRef.current !== e.pointerId) return false;
         activePointerIdRef.current = null;
         movedRef.current = false;
+        setIsScrubbing(false);
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                 e.currentTarget.releasePointerCapture(e.pointerId);
@@ -115,6 +120,14 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     const handleKeyDown = (e: React.KeyboardEvent) => {
         if (isEditing) {
             e.stopPropagation();
+            return;
+        }
+
+        // Escape: blur spinbutton so global shortcuts don't fire
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            (e.currentTarget as HTMLElement).blur();
             return;
         }
 
@@ -175,7 +188,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             }}
             title="Drag left/right to scrub, use arrow keys, or click/press Enter to type exact value"
             style={{ touchAction: 'none' }}
-            className="h-7 px-2.5 rounded-md bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))] focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100"
+            className={`h-7 px-2.5 rounded-md ${
+                isScrubbing
+                    ? 'bg-[#242428] border-[#0088ff] ring-1 ring-[#0088ff]/40 shadow-sm'
+                    : 'bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))]'
+            } focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
         >
             <span className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
                 {label}
@@ -190,10 +207,13 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     onBlur={commitTextInput}
                     onKeyDown={(e) => {
                         e.stopPropagation();
-                        if (e.key === 'Enter') commitTextInput();
-                        if (e.key === 'Escape') {
+                        if (e.key === 'Enter') {
+                            e.preventDefault();
+                            commitTextInput();
+                        } else if (e.key === 'Escape') {
                             e.preventDefault();
                             setIsEditing(false);
+                            containerRef.current?.blur();
                         }
                     }}
                     className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] outline-none tracking-tight caret-[var(--accent-primary,#0088ff)]"

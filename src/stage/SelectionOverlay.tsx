@@ -1,12 +1,13 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Move, RotateCw, Compass, Lock, Crop, Type } from 'lucide-react';
+import { Move, RotateCw, Compass, Lock, Crop, Type, Sparkles } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
-import type {
-    EvaluatedLayerWithEffects,
-    EvaluatedProjectFrame,
+import {
+    isLayerEffectivelyLocked,
+    type EvaluatedLayerWithEffects,
+    type EvaluatedProjectFrame,
 } from '../engine/evaluateShot';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -17,6 +18,7 @@ import {
     evaluateCameraPose,
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
+import { getDevicePlacementSize, isFixedDeviceFrame, resizeDeviceFromHandle } from '../model/deviceFrame';
 
 interface SelectionOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -71,7 +73,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryEval = selectedEvalLayers[0];
     const { layer } = primaryEval;
-    const isLocked = layer.locked;
+    const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
 
     const aspect = frameWidth / Math.max(frameHeight, 1);
     const defaultCamera = project.defaultCamera || {
@@ -84,15 +86,21 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
     const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
-    const primaryProj = getLayerProjectedCorners(
-        primaryEval,
-        frameWidth,
-        frameHeight,
-        aspect,
-        cameraPose,
-        refCameraZ,
-        refFocalLength
-    );
+    // The shared layout projects the resolved body; crop handles use the display aperture.
+    const projectCorners = (ev: EvaluatedLayerWithEffects) => {
+        return getLayerProjectedCorners(
+            ev,
+            frameWidth,
+            frameHeight,
+            aspect,
+            cameraPose,
+            refCameraZ,
+            refFocalLength,
+            isCropping ? 'screen' : 'body'
+        );
+    };
+
+    const primaryProj = projectCorners(primaryEval);
 
     const rotXDeg = radToDeg(primaryEval.rotation.x);
     const rotYDeg = radToDeg(primaryEval.rotation.y);
@@ -209,7 +217,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     ...s,
                     layers: s.layers.map((l) => {
                         const initPos = startPositions[l.id];
-                        if (!initPos || l.locked) return l;
+                        if (!initPos || isLayerEffectivelyLocked(l, s.groups)) return l;
                         return {
                             ...l,
                             position: {
@@ -356,6 +364,19 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             if (dir.includes('n')) {
                 nextH = Math.max(0.02, initialH - dyFrac);
                 nextPosY = initialPosY - (nextH - initialH) / 2;
+            }
+
+            if (layer.kind === 'image' && layer.deviceFrame?.enabled && isFixedDeviceFrame(layer.deviceFrame)) {
+                const initialSize = { width: initialW, height: initialH };
+                const visibleSize = getDevicePlacementSize(initialSize, layer.deviceFrame, aspect, primaryEval.scale);
+                const resized = resizeDeviceFromHandle(initialSize, visibleSize, dir, dxFrac, dyFrac, {
+                    // Body handles now follow screen-space bounds, including mirrored devices.
+                    x: 1, y: 1,
+                });
+                nextW = resized.size.width;
+                nextH = resized.size.height;
+                nextPosX = initialPosX + resized.centerOffset.x;
+                nextPosY = initialPosY + resized.centerOffset.y;
             }
 
             if (isAnimateMode && layer.kind !== 'text') {
@@ -620,16 +641,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         >
             <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
                 {selectedEvalLayers.slice(1).map((sec) => {
-                    const secProj = getLayerProjectedCorners(
-                        sec,
-                        frameWidth,
-                        frameHeight,
-                        aspect,
-                        cameraPose,
-                        refCameraZ,
-                        refFocalLength
-                    );
-                    const pts = `${secProj.pNW.x},${secProj.pNW.y} ${secProj.pNE.x},${secProj.pNE.y} ${secProj.pSE.x},${secProj.pSE.y} ${secProj.pSW.x},${secProj.pSW.y}`;
+                    const secProj = projectCorners(sec);
+                    const pts = secProj.corners.map((point) => `${point.x},${point.y}`).join(' ');
                     return (
                         <g key={sec.id}>
                             <polygon
@@ -665,7 +678,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         )}
 
                         <polygon
-                            points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
+                            points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
                             fill="var(--accent-primary, #0088ff)"
                             fillOpacity="0.02"
                             stroke={borderColor}
@@ -708,24 +721,47 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             {/* 8 RESIZE / CROP HANDLES */}
             {!isLocked &&
                 !isEditingInlineText &&
-                handleItems.map((h) => (
-                    <div
-                        key={h.dir}
-                        onMouseDown={(e) => handleStartResize(e, h.dir)}
-                        style={{
-                            left: `${h.pos.x}px`,
-                            top: `${h.pos.y}px`,
-                            transform: 'translate(-50%, -50%)',
-                            cursor: h.cursor,
-                        }}
-                        className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
-                                ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
-                                : isAnimateMode
-                                    ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
-                                    : 'bg-white border-[var(--accent-primary,#0088ff)]'
-                            } hover:scale-125 transition-transform duration-100 ease-out`}
-                    />
-                ))}
+                handleItems.map((h) =>
+                    h.dir === 'ne' ? (
+                        <div
+                            key={h.dir}
+                            onMouseDown={(e) => handleStartResize(e, h.dir)}
+                            style={{
+                                left: `${h.pos.x}px`,
+                                top: `${h.pos.y}px`,
+                                transform: 'translate(-50%, -50%)',
+                                cursor: h.cursor,
+                            }}
+                            title={isCropping ? "Crop handle" : "Scale handle"}
+                            className={`w-5 h-5 rounded-full ${
+                                isCropping
+                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
+                                    : isAnimateMode
+                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
+                                        : 'bg-[#0088ff] border-white'
+                            } border-2 shadow-xl flex items-center justify-center absolute pointer-events-auto hover:scale-125 transition-transform duration-100 ease-out z-20`}
+                        >
+                            <Sparkles className="w-2.5 h-2.5 text-white" />
+                        </div>
+                    ) : (
+                        <div
+                            key={h.dir}
+                            onMouseDown={(e) => handleStartResize(e, h.dir)}
+                            style={{
+                                left: `${h.pos.x}px`,
+                                top: `${h.pos.y}px`,
+                                transform: 'translate(-50%, -50%)',
+                                cursor: h.cursor,
+                            }}
+                            className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
+                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
+                                    : isAnimateMode
+                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
+                                        : 'bg-white border-[var(--accent-primary,#0088ff)]'
+                                } hover:scale-125 transition-transform duration-100 ease-out`}
+                        />
+                    )
+                )}
 
             {/* INLINE TEXT EDITOR OR CENTER PILLS */}
             <div
@@ -805,12 +841,41 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 )}
             </div>
 
+            {/* FLOATING CROP PILL BUTTON DIRECTLY BENEATH SELECTED ELEMENT */}
+            {(layer.kind === 'image' || layer.kind === 'video') && !isLocked && !isEditingInlineText && (
+                <div
+                    style={{
+                        left: `${primaryProj.pS.x}px`,
+                        top: `${primaryProj.pS.y + 12}px`,
+                        transform: 'translate(-50%, 0)',
+                    }}
+                    className="absolute pointer-events-auto z-40"
+                >
+                    <button
+                        type="button"
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            useSelectionStore.getState().setIsCropping(!isCropping);
+                        }}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium shadow-xl cursor-pointer transition border ${
+                            isCropping
+                                ? 'bg-[#0088ff] text-white border-white'
+                                : 'bg-[#18181b]/95 hover:bg-[#27272a] text-white border-white/15'
+                        }`}
+                        title="Crop image or video"
+                    >
+                        <Crop className="w-3 h-3" />
+                        <span>{isCropping ? 'Done' : 'Crop'}</span>
+                    </button>
+                </div>
+            )}
+
             {/* BOTTOM HUD COORDINATE PILL */}
             {!isEditingInlineText && (
                 <div
                     style={{
                         left: `${primaryProj.pS.x}px`,
-                        top: `${primaryProj.pS.y + 12}px`,
+                        top: `${primaryProj.pS.y + ((layer.kind === 'image' || layer.kind === 'video') && !isLocked ? 44 : 12)}px`,
                         transform: 'translate(-50%, 0)',
                     }}
                     className="absolute whitespace-nowrap px-2 py-0.5 rounded-full bg-[var(--bg-surface,#161619)]/90 border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[10px] font-mono tabular-nums text-[var(--text-muted,#a1a1aa)] shadow-xl pointer-events-none flex items-center gap-1.5"

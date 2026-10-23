@@ -1,6 +1,14 @@
-import { ColorField } from './ColorPicker';
-// src/panels/Inspector/RightSidebar.tsx
-import React, { useState, useRef } from 'react';
+import { ColorField, ColorPicker } from './ColorPicker';
+import {
+    SHADER_PRESETS,
+    SHADER_PRESET_METADATA,
+    DEFAULT_SHADER_CONFIGS,
+    isPaletteShader,
+    type ShaderPreset,
+} from '../../model/backgroundPresets';
+import { saveImageAsset } from './imageAssetHelper';
+import { RAYLIGHT_COLOR_PALETTE } from '../../model/types';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     AlignLeft,
     AlignCenterHorizontal,
@@ -25,17 +33,23 @@ import {
     SlidersHorizontal,
     Upload,
     Sparkles,
+    CircleDot,
+    Move,
+    Layers,
+    Scan,
     Image as ImageIcon,
     Square,
     Film,
     Trash2,
-    Laptop,
     PanelRightClose,
+    Compass,
+    RotateCw,
+    Maximize2,
+    Spline,
 } from 'lucide-react';
 import type {
     Shot,
     Layer,
-    DeviceFrame as DeviceFrameType,
     TransitionType,
     AnimationBlock,
     AnimationBlockProperty,
@@ -44,24 +58,24 @@ import type {
     CameraBlock,
     BlendMode,
     Vec3,
-    PresetEasingName,
-    SpringEasingName,
+    Background,
 } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { degToRad, radToDeg } from '../../model/defaults';
+import { isLayerEffectivelyLocked } from '../../engine/evaluateShot';
+import { generateId } from '../../model/id';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
-import { ASPECT_RATIO_CONFIG } from '../../stage/stageUtils';
 import { ScrubInput } from '../../ui/ScrubInput';
-import { SceneEffectsSection } from './sections/SceneEffectsSection';
-import { BackgroundSection } from './sections/BackgroundSection';
-import { SceneTransitionSection } from './sections/SceneTransitionSection';
-import { CameraSection } from './sections/CameraSection';
-import { LightingSection } from './sections/LightingSection';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { DeviceFrameSection } from './sections/DeviceFrameSection';
+import { getDevicePlacementSize, isFixedDeviceFrame, resizeDevicePlacement } from '../../model/deviceFrame';
+import { ASPECT_RATIO_CONFIG, getArtboardDimensions } from '../../stage/stageUtils';
+import { EasingPopover } from '../Timeline/EasingPopover';
+import { easingFromSelection } from '../../model/easingSelection';
 
 const ALL_BLEND_MODES: BlendMode[] = [
     'normal',
@@ -73,12 +87,1100 @@ const ALL_BLEND_MODES: BlendMode[] = [
     'difference',
 ];
 
+
+
+const DEFAULT_AVATAR_PLACEHOLDER =
+    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' clip-rule='evenodd' /%3E%3C/svg%3E";
+
+interface ShaderPreviewCanvasProps {
+    preset: ShaderPreset;
+    color1: string;
+    color2: string;
+    color3: string;
+    colors?: string[];
+    speed?: number;
+    waves?: number;
+    focus?: number;
+    glow?: number;
+    shine?: number;
+}
+
+const EMPTY_SHADER_COLORS: string[] = [];
+
+const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
+    preset,
+    color1,
+    color2,
+    color3,
+    colors = EMPTY_SHADER_COLORS,
+    speed = 1,
+    waves = 1,
+    focus = 1,
+    glow = 1,
+    shine = 1,
+}) => {
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+
+    useEffect(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        let animId: number;
+        let time = 0;
+        let last = performance.now();
+
+        const render = (now: number) => {
+            const dt = (now - last) / 1000;
+            last = now;
+            time += Math.min(dt, 0.1) * (speed || 1);
+
+            const w = canvas.clientWidth || 280;
+            const h = canvas.clientHeight || 80;
+            if (canvas.width !== w || canvas.height !== h) {
+                canvas.width = w;
+                canvas.height = h;
+            }
+
+            ctx.clearRect(0, 0, w, h);
+
+            const c1 = color1 || '#3b82f6';
+            const c2 = color2 || '#1e293b';
+            const c3 = color3 || '#a855f7';
+            const cList = colors.length > 0 ? colors : [c1, c2, c3];
+
+            switch (preset) {
+                case 'liquidMetal': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c2);
+                    grad.addColorStop(0.5, c1);
+                    grad.addColorStop(1, '#05070d');
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let i = 0; i < 4; i++) {
+                        const phase = time * 1.5 + i * 1.2;
+                        const yMid = (h * 0.25) + (i * h * 0.22) + Math.sin(phase) * 8;
+                        const waveGrad = ctx.createLinearGradient(0, yMid - 15, w, yMid + 15);
+                        waveGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                        waveGrad.addColorStop(0.35, c1);
+                        waveGrad.addColorStop(0.5, '#ffffff');
+                        waveGrad.addColorStop(0.7, c3);
+                        waveGrad.addColorStop(1, 'rgba(0,0,0,0)');
+
+                        ctx.beginPath();
+                        ctx.moveTo(0, yMid);
+                        for (let x = 0; x <= w; x += 10) {
+                            const y = yMid + Math.sin(x * 0.025 * waves + phase) * (10 + i * 2)
+                                          + Math.cos(x * 0.04 - phase * 0.8) * 5;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.lineTo(0, h);
+                        ctx.closePath();
+                        ctx.fillStyle = waveGrad;
+                        ctx.globalAlpha = 0.55 * glow;
+                        ctx.fill();
+                    }
+
+                    const glintX = ((time * 60) % (w + 100)) - 50;
+                    const glintGrad = ctx.createLinearGradient(glintX - 30, 0, glintX + 30, h);
+                    glintGrad.addColorStop(0, 'rgba(255,255,255,0)');
+                    glintGrad.addColorStop(0.5, `rgba(255,255,255,${0.45 * shine})`);
+                    glintGrad.addColorStop(1, 'rgba(255,255,255,0)');
+                    ctx.fillStyle = glintGrad;
+                    ctx.globalAlpha = 1;
+                    ctx.fillRect(0, 0, w, h);
+                    break;
+                }
+
+                case 'waterPlane': {
+                    const baseGrad = ctx.createLinearGradient(0, 0, 0, h);
+                    baseGrad.addColorStop(0, c1);
+                    baseGrad.addColorStop(1, c2);
+                    ctx.fillStyle = baseGrad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.2;
+                    ctx.strokeStyle = c3;
+                    ctx.globalAlpha = 0.45 * glow;
+                    for (let x = 0; x < w; x += 18) {
+                        ctx.beginPath();
+                        for (let y = 0; y <= h; y += 6) {
+                            const dx = Math.sin(y * 0.06 + time * 1.8) * 8 * waves
+                                     + Math.cos(x * 0.05 + time) * 4;
+                            if (y === 0) ctx.moveTo(x + dx, y);
+                            else ctx.lineTo(x + dx, y);
+                        }
+                        ctx.stroke();
+                    }
+                    for (let y = 0; y < h; y += 14) {
+                        ctx.beginPath();
+                        for (let x = 0; x <= w; x += 8) {
+                            const dy = Math.cos(x * 0.06 - time * 1.5) * 6 * waves
+                                     + Math.sin(y * 0.05 + time * 0.7) * 4;
+                            if (x === 0) ctx.moveTo(x, y + dy);
+                            else ctx.lineTo(x, y + dy);
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'meshAurora': {
+                    ctx.fillStyle = c2 || '#050814';
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let k = 0; k < 3; k++) {
+                        const phase = time * 1.2 + k * 1.8;
+                        const rGrad = ctx.createLinearGradient(0, 0, 0, h);
+                        rGrad.addColorStop(0, 'rgba(0,0,0,0)');
+                        rGrad.addColorStop(0.3, k === 0 ? c1 : k === 1 ? c3 : '#60a5fa');
+                        rGrad.addColorStop(0.8, c2);
+                        rGrad.addColorStop(1, '#000000');
+
+                        ctx.beginPath();
+                        ctx.moveTo(0, h);
+                        for (let x = 0; x <= w; x += 6) {
+                            const yTop = (h * 0.15) + Math.sin(x * 0.02 * waves + phase) * 14
+                                         + Math.cos(x * 0.045 - phase * 0.7) * 8;
+                            ctx.lineTo(x, yTop);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.closePath();
+                        ctx.fillStyle = rGrad;
+                        ctx.globalAlpha = 0.6 * glow;
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'sphereGradient': {
+                    ctx.fillStyle = c2 || '#090d16';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5 + Math.sin(time * 0.8) * 20;
+                    const cy = h * 0.5 + Math.cos(time * 0.6) * 6;
+                    const r = (h * 0.38) * (1 + Math.sin(time * 1.5) * 0.08);
+
+                    const corona = ctx.createRadialGradient(cx, cy, r * 0.2, cx, cy, r * 2.2);
+                    corona.addColorStop(0, c3);
+                    corona.addColorStop(0.4, c1);
+                    corona.addColorStop(1, 'rgba(0,0,0,0)');
+                    ctx.fillStyle = corona;
+                    ctx.globalAlpha = 0.5 * glow;
+                    ctx.fillRect(0, 0, w, h);
+
+                    const orb = ctx.createRadialGradient(cx - r * 0.3, cy - r * 0.3, r * 0.05, cx, cy, r);
+                    orb.addColorStop(0, '#ffffff');
+                    orb.addColorStop(0.3, c1);
+                    orb.addColorStop(0.8, c3);
+                    orb.addColorStop(1, c2);
+                    ctx.beginPath();
+                    ctx.arc(cx, cy, r, 0, Math.PI * 2);
+                    ctx.fillStyle = orb;
+                    ctx.globalAlpha = 0.95;
+                    ctx.fill();
+                    break;
+                }
+
+                case 'topography': {
+                    ctx.fillStyle = '#050709';
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.3;
+                    for (let c = 0; c < 7; c++) {
+                        const yBase = (c / 6) * h;
+                        const phase = time * 0.8 + c * 0.6;
+                        ctx.strokeStyle = c % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = 0.7 * glow;
+                        ctx.beginPath();
+                        for (let x = 0; x <= w; x += 6) {
+                            const y = yBase + Math.sin(x * 0.03 * waves + phase) * 9
+                                          + Math.cos(x * 0.06 - phase * 0.5) * 4;
+                            if (x === 0) ctx.moveTo(x, y);
+                            else ctx.lineTo(x, y);
+                        }
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'hyperspeed': {
+                    ctx.fillStyle = '#030712';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5;
+                    const cy = h * 0.5;
+                    ctx.lineWidth = 1.5;
+
+                    for (let i = 0; i < 28; i++) {
+                        const angle = (i / 28) * Math.PI * 2 + 0.1;
+                        const distPhase = ((time * 1.5 + (i * 0.23)) % 1);
+                        const r1 = distPhase * (w * 0.1);
+                        const r2 = r1 + distPhase * (w * 0.35);
+
+                        const x1 = cx + Math.cos(angle) * r1;
+                        const y1 = cy + Math.sin(angle) * r1 * 0.6;
+                        const x2 = cx + Math.cos(angle) * r2;
+                        const y2 = cy + Math.sin(angle) * r2 * 0.6;
+
+                        ctx.strokeStyle = i % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = distPhase * 0.85 * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(x1, y1);
+                        ctx.lineTo(x2, y2);
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'plasma': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c2);
+                    grad.addColorStop(0.5, c1);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let j = 0; j < 3; j++) {
+                        const px = w * 0.5 + Math.sin(time * 1.2 + j * 2.1) * (w * 0.3);
+                        const py = h * 0.5 + Math.cos(time * 0.9 + j * 1.7) * (h * 0.3);
+                        const rad = ctx.createRadialGradient(px, py, 4, px, py, h * 0.6);
+                        rad.addColorStop(0, j === 0 ? '#ffffff' : c1);
+                        rad.addColorStop(0.5, c3);
+                        rad.addColorStop(1, 'rgba(0,0,0,0)');
+                        ctx.fillStyle = rad;
+                        ctx.globalAlpha = 0.5 * glow;
+                        ctx.fillRect(0, 0, w, h);
+                    }
+                    break;
+                }
+
+                case 'dither': {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c1);
+                    grad.addColorStop(0.5, c2);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.fillStyle = '#ffffff';
+                    ctx.globalAlpha = 0.18 * shine;
+                    const shift = Math.floor(time * 4) % 4;
+                    for (let x = 0; x < w; x += 4) {
+                        for (let y = 0; y < h; y += 4) {
+                            if ((x + y + shift) % 8 === 0) {
+                                ctx.fillRect(x, y, 2, 2);
+                            }
+                        }
+                    }
+                    break;
+                }
+
+                case 'threads': {
+                    ctx.fillStyle = '#050811';
+                    ctx.fillRect(0, 0, w, h);
+
+                    ctx.lineWidth = 1.4;
+                    for (let t = 0; t < 6; t++) {
+                        const phase = time * 1.4 + t * 1.1;
+                        ctx.strokeStyle = t % 2 === 0 ? c1 : c3;
+                        ctx.globalAlpha = 0.8 * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(0, (t / 5) * h);
+                        ctx.bezierCurveTo(
+                            w * 0.33, (h * 0.8) * Math.sin(phase),
+                            w * 0.66, h - (h * 0.8) * Math.cos(phase),
+                            w, ((5 - t) / 5) * h
+                        );
+                        ctx.stroke();
+                    }
+                    break;
+                }
+
+                case 'chromaticWaves': {
+                    ctx.fillStyle = c2 || '#0b0f19';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const offsets = [
+                        { color: c1, dx: Math.sin(time * 1.6) * 6, alpha: 0.65 },
+                        { color: c3, dx: -Math.cos(time * 1.4) * 6, alpha: 0.65 },
+                        { color: '#ffffff', dx: 0, alpha: 0.3 },
+                    ];
+
+                    for (const o of offsets) {
+                        ctx.fillStyle = o.color;
+                        ctx.globalAlpha = o.alpha * glow;
+                        ctx.beginPath();
+                        ctx.moveTo(0, h);
+                        for (let x = 0; x <= w; x += 8) {
+                            const y = h * 0.5 + Math.sin((x + o.dx) * 0.03 * waves + time * 1.8) * 16;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.closePath();
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'prism': {
+                    ctx.fillStyle = c2 || '#07090e';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const sx = 0;
+                    const sy = 0;
+                    const fanColors = cList.length >= 3 ? cList : ['#ef4444', '#f59e0b', '#10b981', '#3b82f6', '#8b5cf6'];
+                    for (let f = 0; f < fanColors.length; f++) {
+                        const angle = 0.2 + (f / fanColors.length) * 0.9 + Math.sin(time * 0.8) * 0.05;
+                        ctx.beginPath();
+                        ctx.moveTo(sx, sy);
+                        ctx.lineTo(w, Math.tan(angle) * w);
+                        ctx.lineTo(w, Math.tan(angle + 0.15) * w);
+                        ctx.closePath();
+                        ctx.fillStyle = fanColors[f];
+                        ctx.globalAlpha = 0.45 * glow;
+                        ctx.fill();
+                    }
+                    break;
+                }
+
+                case 'halo': {
+                    ctx.fillStyle = c2 || '#090a0f';
+                    ctx.fillRect(0, 0, w, h);
+
+                    const cx = w * 0.5 + Math.sin(time) * 10;
+                    const cy = h * 0.55;
+                    const rx = w * 0.4;
+                    const ry = h * 0.32;
+
+                    ctx.lineWidth = 3.5 * shine;
+                    ctx.strokeStyle = c1;
+                    ctx.globalAlpha = 0.85 * glow;
+                    ctx.beginPath();
+                    ctx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+                    ctx.stroke();
+
+                    ctx.lineWidth = 1.5;
+                    ctx.strokeStyle = c3;
+                    ctx.stroke();
+                    break;
+                }
+
+                default: {
+                    const grad = ctx.createLinearGradient(0, 0, w, h);
+                    grad.addColorStop(0, c1);
+                    grad.addColorStop(0.5, c2);
+                    grad.addColorStop(1, c3);
+                    ctx.fillStyle = grad;
+                    ctx.fillRect(0, 0, w, h);
+
+                    for (let s = 0; s < 2; s++) {
+                        const phase = time * 1.2 + s * Math.PI;
+                        ctx.beginPath();
+                        ctx.moveTo(0, h * 0.5);
+                        for (let x = 0; x <= w; x += 10) {
+                            const y = h * 0.5 + Math.sin(x * 0.02 * waves + phase) * 14;
+                            ctx.lineTo(x, y);
+                        }
+                        ctx.lineTo(w, h);
+                        ctx.lineTo(0, h);
+                        ctx.closePath();
+                        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+                        ctx.globalAlpha = 0.5 * shine;
+                        ctx.fill();
+                    }
+                    break;
+                }
+            }
+
+            ctx.globalAlpha = 1;
+            animId = requestAnimationFrame(render);
+        };
+
+        animId = requestAnimationFrame(render);
+        return () => cancelAnimationFrame(animId);
+    }, [preset, color1, color2, color3, colors, speed, waves, focus, glow, shine]);
+
+    return (
+        <div className="w-full h-full relative overflow-hidden transition-transform duration-500 group-hover:scale-105">
+            <canvas ref={canvasRef} className="w-full h-full block" />
+            <div className="absolute inset-0 bg-black/15 pointer-events-none" />
+        </div>
+    );
+};
+
+interface ProjectSettingsPanelProps {
+    onSwapImageClick?: () => void;
+    onOpenShortcuts?: () => void;
+}
+
+const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
+    onSwapImageClick: _onSwapImageClick,
+    onOpenShortcuts: _onOpenShortcuts,
+}) => {
+    const { project, updateProject } = useProjectStore();
+    const [presetMenuOpen, setPresetMenuOpen] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+
+    const bg = project.background;
+    const bgMode: 'color' | 'image' | 'shader' =
+        bg.kind === 'shader' ? 'shader' : bg.kind === 'image' ? 'image' : 'color';
+
+    // Synchronize project background changes to all shots that inherit project background
+    const setProjectBackground = (newBg: Background) => {
+        updateProject((p) => ({
+            ...p,
+            background: newBg,
+        }));
+    };
+
+    const handleModeChange = (mode: 'color' | 'image' | 'shader') => {
+        if (mode === bgMode) return;
+        if (mode === 'shader') {
+            const currentPreset: ShaderPreset = bg.kind === 'shader' ? bg.preset : 'silkFlow';
+            const cfg = DEFAULT_SHADER_CONFIGS[currentPreset] || DEFAULT_SHADER_CONFIGS.silkFlow;
+            let c1 = cfg.colors?.[0] || cfg.color || '#4f46e5';
+            let c2 = cfg.colors?.[1] || cfg.backgroundColor || '#ec4899';
+            let c3 = cfg.colors?.[2] || '#06b6d4';
+
+            if (bg.kind === 'solid') {
+                c1 = bg.color;
+            } else if (bg.kind === 'gradient' && bg.stops.length >= 2) {
+                c1 = bg.stops[0].color;
+                c2 = bg.stops[1].color;
+                if (bg.stops[2]) c3 = bg.stops[2].color;
+            }
+
+            setProjectBackground({
+                kind: 'shader',
+                preset: currentPreset,
+                color: c1,
+                colors: [c1, c2, c3],
+                color1: c1,
+                color2: c2,
+                color3: c3,
+                backgroundColor: c2,
+                speed: cfg.speed ?? 0.8,
+                waves: cfg.waves ?? 1.2,
+                noiseScale: cfg.waves ?? 1.2,
+                focus: cfg.focus ?? 1,
+                glow: cfg.glow ?? 0.85,
+                shine: cfg.shine ?? 0.6,
+                angle: cfg.angle ?? 28,
+            });
+        } else if (mode === 'image') {
+            const prevImageBg = bg.kind === 'image' ? bg : undefined;
+            const existingAsset = Object.values(project.assets || {}).find((a) => a.mimeType?.startsWith('image/'));
+            const letterboxColor = prevImageBg?.color || (bg.kind === 'shader' ? (bg.backgroundColor || '#000000') : '#000000');
+            setProjectBackground({
+                kind: 'image',
+                src: prevImageBg?.src || existingAsset?.dataUrl,
+                assetId: prevImageBg?.assetId || existingAsset?.id,
+                color: letterboxColor,
+                fit: prevImageBg?.fit || 'cover',
+                opacity: prevImageBg?.opacity ?? 1,
+                dim: prevImageBg?.dim ?? 0,
+                blur: prevImageBg?.blur ?? 0,
+            });
+        } else {
+            // mode === 'color' - Default to solid color, never reset existing color or force gradient
+            if (bg.kind === 'solid' || bg.kind === 'gradient') return;
+            let baseColor = '#0c0e17';
+            if (bg.kind === 'shader') {
+                baseColor = bg.color1 || bg.colors?.[0] || bg.color || '#0c0e17';
+            } else if (bg.kind === 'image' && bg.color) {
+                baseColor = bg.color;
+            }
+            setProjectBackground({
+                kind: 'solid',
+                color: baseColor,
+            });
+        }
+    };
+
+    const shaderBg = bg.kind === 'shader' ? bg : null;
+    const currentPreset = shaderBg?.preset || 'silkFlow';
+    const currentMeta = SHADER_PRESET_METADATA[currentPreset];
+    const isPalette = isPaletteShader(currentPreset);
+
+    const shaderColor1 = shaderBg?.color1 || shaderBg?.colors?.[0] || shaderBg?.color || '#4f46e5';
+    const shaderColor2 = shaderBg?.color2 || shaderBg?.colors?.[1] || shaderBg?.backgroundColor || '#ec4899';
+    const shaderColor3 = shaderBg?.color3 || shaderBg?.colors?.[2] || '#06b6d4';
+
+    const updateShaderKnob = (
+        knob: 'speed' | 'waves' | 'noiseScale' | 'focus' | 'glow' | 'shine',
+        val: number
+    ) => {
+        if (!shaderBg) return;
+        setProjectBackground({
+            ...shaderBg,
+            [knob]: val,
+            ...(knob === 'waves' ? { noiseScale: val } : {}),
+        });
+    };
+
+    const updateShaderColors = (c1?: string, c2?: string, c3?: string) => {
+        if (!shaderBg) return;
+        const col1 = c1 ?? shaderColor1;
+        const col2 = c2 ?? shaderColor2;
+        const col3 = c3 ?? shaderColor3;
+        setProjectBackground({
+            ...shaderBg,
+            color: col1,
+            backgroundColor: col2,
+            color1: col1,
+            color2: col2,
+            color3: col3,
+            colors: [col1, col2, col3],
+        });
+    };
+
+    const selectShaderPreset = (p: ShaderPreset) => {
+        const cfg = DEFAULT_SHADER_CONFIGS[p] || DEFAULT_SHADER_CONFIGS.silk;
+        const pColors = cfg.colors?.length ? [...cfg.colors] : [cfg.color, cfg.backgroundColor || '#05050a'];
+        const c1 = pColors[0] || cfg.color || '#4f46e5';
+        const c2 = pColors[1] || cfg.backgroundColor || '#ec4899';
+        const c3 = pColors[2] || (pColors.length > 2 ? pColors[2] : '#06b6d4');
+
+        setProjectBackground({
+            kind: 'shader',
+            preset: p,
+            color: cfg.color || c1,
+            backgroundColor: cfg.backgroundColor || c2,
+            color1: c1,
+            color2: c2,
+            color3: c3,
+            colors: pColors,
+            speed: cfg.speed ?? 1,
+            waves: cfg.waves ?? 1,
+            noiseScale: cfg.waves ?? 1,
+            focus: cfg.focus ?? 1,
+            glow: cfg.glow ?? 1,
+            shine: cfg.shine ?? 1,
+            angle: cfg.angle ?? 28,
+        });
+        setPresetMenuOpen(false);
+    };
+
+    const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        saveImageAsset({
+            file,
+            updateProject,
+            onSave: (assetId, dataUrl) => {
+                setProjectBackground({
+                    kind: 'image',
+                    assetId,
+                    src: dataUrl,
+                    color: bg.kind === 'image' ? bg.color || '#000000' : '#000000',
+                    fit: bg.kind === 'image' ? bg.fit || 'cover' : 'cover',
+                    dim: bg.kind === 'image' ? bg.dim ?? 0 : 0,
+                    blur: bg.kind === 'image' ? bg.blur ?? 0 : 0,
+                    opacity: 1,
+                });
+            },
+        });
+        if (e.target) e.target.value = '';
+    };
+
+    return (
+        <div className="flex-1 overflow-y-auto px-4 py-3.5 flex flex-col justify-between select-none">
+            <div className="space-y-4">
+                {/* Title */}
+                <h2 className="text-[13px] font-semibold text-white tracking-wide">Project</h2>
+
+                {/* Name */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Name</label>
+                    <input
+                        type="text"
+                        value={project.name}
+                        onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
+                        placeholder="Untitled project"
+                        className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
+                    />
+                </div>
+
+                {/* Aspect Ratio */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Aspect Ratio</label>
+                    <div className="relative">
+                        <select
+                            value={project.aspectRatio}
+                            onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
+                            className="w-full h-8 px-3 pr-8 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none appearance-none cursor-pointer focus:border-white/20 transition"
+                        >
+                            <option value="16:9">Landscape 16:9</option>
+                            <option value="9:16">Portrait 9:16</option>
+                            <option value="1:1">Square 1:1</option>
+                            <option value="4:3">Standard 4:3</option>
+                            <option value="3:2">Photo 3:2</option>
+                            <option value="21:9">Cinema 21:9</option>
+                            <option value="4:5">Social 4:5</option>
+                        </select>
+                        <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                    </div>
+                </div>
+
+                {/* Lens */}
+                <div className="space-y-1.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Lens</label>
+                    <ScrubInput
+                        label={<span className="text-[#71717a] font-medium mr-1.5">F</span>}
+                        value={project.defaultCamera?.focalLength ?? 50}
+                        min={14}
+                        max={200}
+                        step={1}
+                        unit=" mm"
+                        onChange={(val) => {
+                            updateProject((p) => ({
+                                ...p,
+                                defaultCamera: {
+                                    position: p.defaultCamera?.position ?? { x: 0, y: 0, z: 2.65 },
+                                    rotation: p.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                                    focalLength: Math.max(14, Math.min(200, val)),
+                                },
+                            }));
+                        }}
+                        className="h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[12px] text-white hover:border-white/20 transition cursor-ew-resize"
+                    />
+                </div>
+
+                {/* Background Section */}
+                <div className="space-y-2.5">
+                    <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>
+                    {/* 3-segmented button */}
+                    <div className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5">
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('color')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'color'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Color
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('image')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'image'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Image
+                        </button>
+                        <button
+                            type="button"
+                            onClick={() => handleModeChange('shader')}
+                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                                bgMode === 'shader'
+                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
+                                    : 'text-[#8e8e93] hover:text-white'
+                            }`}
+                        >
+                            Shader
+                        </button>
+                    </div>
+
+                    {/* Mode == 'color' */}
+                    {bgMode === 'color' && (
+                        <div className="space-y-2.5 pt-0.5">
+                            <label className="text-[11px] text-[#8e8e93] block font-normal">Color & Gradient</label>
+                            <ColorPicker
+                                color={bg.kind === 'solid' ? bg.color : (bg.kind === 'gradient' ? bg.stops[0]?.color || '#090a12' : '#000000')}
+                                gradientValue={bg.kind === 'gradient' ? {
+                                    angle: bg.angle || 135,
+                                    gradientType: (bg.gradientType === 'angular' ? 'linear' : bg.gradientType) || 'linear',
+                                    stops: bg.stops,
+                                } : undefined}
+                                showGradientMode={true}
+                                onChange={(c) => {
+                                    setProjectBackground({ kind: 'solid', color: c });
+                                }}
+                                onGradientChange={(g) => {
+                                    setProjectBackground({
+                                        kind: 'gradient',
+                                        angle: g.angle,
+                                        gradientType: g.gradientType || 'linear',
+                                        stops: g.stops,
+                                    });
+                                }}
+                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2.5 text-[12px] text-white cursor-pointer transition"
+                            />
+
+                            {/* Quick swatches */}
+                            <div className="flex items-center gap-1.5 pt-1">
+                                {RAYLIGHT_COLOR_PALETTE.map((swatch) => (
+                                    <button
+                                        key={swatch}
+                                        type="button"
+                                        onClick={() => setProjectBackground({ kind: 'solid', color: swatch })}
+                                        className="w-5 h-5 rounded-full border border-white/20 hover:scale-110 transition cursor-pointer shrink-0"
+                                        style={{ backgroundColor: swatch }}
+                                        title={swatch}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Mode == 'image' */}
+                    {bgMode === 'image' && (
+                        <div className="space-y-3 pt-0.5">
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={handleFileInput}
+                            />
+
+                            {/* Image Header & Preview Card */}
+                            <div className="space-y-1.5">
+                                <label className="text-[11px] text-[#8e8e93] block font-normal">Image</label>
+                                {bg.kind === 'image' && (bg.src || (bg.assetId && project.assets[bg.assetId]?.dataUrl)) ? (
+                                    <div
+                                        className="relative group rounded-xl overflow-hidden border border-white/[0.08] bg-[#141416] aspect-[16/9] max-h-36 cursor-pointer shadow-inner"
+                                        onClick={() => fileInputRef.current?.click()}
+                                    >
+                                        <img
+                                            src={bg.src || (bg.assetId ? project.assets[bg.assetId]?.dataUrl : '')}
+                                            alt="Background preview"
+                                            className="w-full h-full object-cover"
+                                        />
+                                        <div className="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-2 backdrop-blur-[2px]">
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    fileInputRef.current?.click();
+                                                }}
+                                                className="px-2.5 py-1 rounded-md bg-white/20 hover:bg-white/30 text-[11px] font-medium text-white shadow-xs transition"
+                                            >
+                                                Replace
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setProjectBackground({
+                                                        kind: 'image',
+                                                        src: undefined,
+                                                        assetId: undefined,
+                                                        color: bg.color || '#000000',
+                                                        fit: bg.fit || 'cover',
+                                                        dim: bg.dim ?? 0,
+                                                        blur: bg.blur ?? 0,
+                                                        opacity: 1,
+                                                    });
+                                                }}
+                                                className="p-1 rounded-md bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 transition"
+                                                title="Remove image"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="space-y-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="w-full py-6 px-3 rounded-xl border border-dashed border-white/15 hover:border-white/30 bg-[#141416]/50 hover:bg-[#141416] flex flex-col items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa] hover:text-white cursor-pointer transition group"
+                                        >
+                                            <Upload className="w-4 h-4 text-[#8e8e93] group-hover:text-white transition" />
+                                            <span className="font-medium">Upload Image</span>
+                                            <span className="text-[10px] text-[#71717a]">PNG, JPG, WebP</span>
+                                        </button>
+                                        {Object.values(project.assets || {}).filter((a) => a.mimeType?.startsWith('image/')).length > 0 && (
+                                            <div className="space-y-1.5 pt-1">
+                                                <span className="text-[10px] text-[#71717a] block">From Project Assets:</span>
+                                                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
+                                                    {Object.values(project.assets || {})
+                                                        .filter((a) => a.mimeType?.startsWith('image/'))
+                                                        .map((asset) => (
+                                                            <button
+                                                                key={asset.id}
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    setProjectBackground({
+                                                                        kind: 'image',
+                                                                        assetId: asset.id,
+                                                                        src: asset.dataUrl,
+                                                                        color: bg.kind === 'image' ? bg.color || '#000000' : '#000000',
+                                                                        fit: bg.kind === 'image' ? bg.fit || 'cover' : 'cover',
+                                                                        dim: bg.kind === 'image' ? bg.dim ?? 0 : 0,
+                                                                        blur: bg.kind === 'image' ? bg.blur ?? 0 : 0,
+                                                                        opacity: 1,
+                                                                    });
+                                                                }}
+                                                                className="w-10 h-10 rounded-lg border border-white/15 hover:border-[#0088ff] overflow-hidden shrink-0 transition relative group cursor-pointer"
+                                                                title={asset.name}
+                                                            >
+                                                                <img
+                                                                    src={asset.thumbUrl || asset.dataUrl}
+                                                                    alt={asset.name}
+                                                                    className="w-full h-full object-cover"
+                                                                />
+                                                            </button>
+                                                        ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {bg.kind === 'image' && (
+                                <>
+                                    {/* Fit: Fill (cover) / Fit (contain) */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Fit</label>
+                                        <div className="relative">
+                                            <select
+                                                value={(bg.fit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
+                                                onChange={(e) => setProjectBackground({ ...bg, fit: e.target.value as 'cover' | 'contain' })}
+                                                className="w-full h-8 pl-3 pr-8 rounded-lg bg-[#141416] border border-white/[0.08] hover:border-white/20 text-[11px] text-white appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] transition"
+                                            >
+                                                <option value="cover">Fill</option>
+                                                <option value="contain">Fit</option>
+                                            </select>
+                                            <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                        </div>
+                                    </div>
+
+                                    {/* Dim & Blur */}
+                                    <div className="grid grid-cols-2 gap-2">
+                                        <ScrubInput
+                                            label="Dim"
+                                            value={Math.round((bg.dim ?? 0) * 100)}
+                                            min={0}
+                                            max={100}
+                                            step={5}
+                                            unit="%"
+                                            onChange={(v) => setProjectBackground({ ...bg, dim: v / 100 })}
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        />
+                                        <ScrubInput
+                                            label="Blur"
+                                            value={Math.round(bg.blur ?? 0)}
+                                            min={0}
+                                            max={100}
+                                            step={1}
+                                            unit="%"
+                                            onChange={(v) => setProjectBackground({ ...bg, blur: v })}
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        />
+                                    </div>
+
+                                    {/* Backdrop Color */}
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Backdrop</label>
+                                        <ColorPicker
+                                            color={bg.color || '#000000'}
+                                            showGradientMode={false}
+                                            onChange={(c) => setProjectBackground({ ...bg, color: c })}
+                                        />
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Mode == 'shader' */}
+                    {bgMode === 'shader' && shaderBg && (
+                        <div className="space-y-3 pt-0.5">
+                            {/* Preset Visual Card */}
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between text-[11px]">
+                                    <span className="text-[#8e8e93] font-normal">Preset</span>
+                                    <span className="text-[#0088ff] font-medium">{currentMeta?.label || currentPreset}</span>
+                                </div>
+                                <div
+                                    onClick={() => setPresetMenuOpen((v) => !v)}
+                                    className="h-20 rounded-xl border border-white/10 hover:border-white/25 overflow-hidden relative cursor-pointer group bg-[#060a14] transition shadow-inner"
+                                >
+                                    {/* Dynamic Shader Swatch Representation */}
+                                    <ShaderPreviewCanvas
+                                        preset={currentPreset}
+                                        color1={shaderColor1}
+                                        color2={shaderColor2}
+                                        color3={shaderColor3}
+                                        colors={shaderBg?.colors}
+                                        speed={shaderBg?.speed ?? 1}
+                                        waves={shaderBg?.waves ?? 1}
+                                        focus={shaderBg?.focus ?? 1}
+                                        glow={shaderBg?.glow ?? 1}
+                                        shine={shaderBg?.shine ?? 1}
+                                    />
+                                    <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white shadow-sm flex items-center gap-1.5">
+                                        <span>{currentMeta?.label || currentPreset}</span>
+                                        <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
+                                    </div>
+                                </div>
+
+                                {/* Preset Selector Dropdown Grid */}
+                                {presetMenuOpen && (
+                                    <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-[#18181b] border border-white/15 mt-1 max-h-56 overflow-y-auto shadow-2xl z-30">
+                                        {SHADER_PRESETS.map((p) => {
+                                            const meta = SHADER_PRESET_METADATA[p];
+                                            const cfg = DEFAULT_SHADER_CONFIGS[p];
+                                            const isSelected = currentPreset === p;
+                                            const pColors = cfg?.colors?.length ? cfg.colors : [cfg?.color || '#3b82f6', cfg?.backgroundColor || '#05050a'];
+                                            return (
+                                                <button
+                                                    key={p}
+                                                    type="button"
+                                                    onClick={() => selectShaderPreset(p)}
+                                                    className={`p-2 rounded-lg text-left transition cursor-pointer border flex flex-col gap-1 ${
+                                                        isSelected
+                                                            ? 'bg-[#0088ff]/15 border-[#0088ff] text-white shadow-xs'
+                                                            : 'bg-white/[0.03] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.08] hover:border-white/15'
+                                                    }`}
+                                                >
+                                                    <div className="flex items-center gap-1.5">
+                                                        <div
+                                                            className="w-3 h-3 rounded-full shrink-0 border border-white/20 shadow-xs"
+                                                            style={{
+                                                                background: `linear-gradient(135deg, ${pColors[0]} 0%, ${pColors[1] || pColors[0]} 100%)`,
+                                                            }}
+                                                        />
+                                                        <span className="text-[11px] font-medium truncate flex-1">{meta?.label || p}</span>
+                                                    </div>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Shader Colors matching Raylight: Color & Accent */}
+                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Color</label>
+                                    <ColorPicker
+                                        label="Color"
+                                        color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
+                                        showGradientMode={false}
+                                        onChange={(c) => updateShaderColors(c, undefined, undefined)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Accent</label>
+                                    <ColorPicker
+                                        label="Accent"
+                                        color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
+                                        showGradientMode={false}
+                                        onChange={(c) => updateShaderColors(undefined, c, undefined)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                    />
+                                </div>
+
+                                {isPalette && (
+                                    <div className="space-y-1.5">
+                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Color 3</label>
+                                        <ColorPicker
+                                            label="Color 3"
+                                            color={shaderColor3.startsWith('#') ? shaderColor3 : `#${shaderColor3}`}
+                                            showGradientMode={false}
+                                            onChange={(c) => updateShaderColors(undefined, undefined, c)}
+                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Shader Parameters Grid */}
+                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+
+                                {/* Row 1: Speed & Waves */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ScrubInput
+                                        label="Speed"
+                                        value={shaderBg.speed ?? 1}
+                                        min={0}
+                                        max={5}
+                                        step={0.1}
+                                        decimals={1}
+                                        unit=" x"
+                                        onChange={(v) => updateShaderKnob('speed', v)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.waves?.label || 'Waves'}
+                                        value={Math.round((shaderBg.waves ?? 1) * 100)}
+                                        min={10}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('waves', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+
+                                {/* Row 2: Focus & Glow */}
+                                <div className="grid grid-cols-2 gap-2">
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.focus?.label || 'Focus'}
+                                        value={Math.round((shaderBg.focus ?? 1) * 100)}
+                                        min={10}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('focus', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.glow?.label || 'Glow'}
+                                        value={Math.round((shaderBg.glow ?? 1) * 100)}
+                                        min={0}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('glow', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+
+                                {/* Row 3: Shine */}
+                                <div>
+                                    <ScrubInput
+                                        label={currentMeta?.knobs?.shine?.label || 'Shine'}
+                                        value={Math.round((shaderBg.shine ?? 1) * 100)}
+                                        min={0}
+                                        max={300}
+                                        step={5}
+                                        unit=" %"
+                                        onChange={(v) => updateShaderKnob('shine', v / 100)}
+                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        </div>
+    );
+};
+
 interface RightSidebarProps {
     activeShot: Shot;
     selectedLayer: Layer | undefined;
     selectedLayerIds: string[];
     onSwapImageClick: () => void;
     onOpenExportModal: () => void;
+    onOpenShortcuts?: () => void;
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
@@ -87,10 +1189,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     selectedLayerIds,
     onSwapImageClick,
     onOpenExportModal,
+    onOpenShortcuts,
 }) => {
     const {
         project,
-        updateProject,
         updateShot,
         updateLayer,
         deleteLayerFromShot,
@@ -98,10 +1200,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const {
         selectedBlockId,
         selectedCameraBlockId,
-        selectShot,
+        setTimelineView,
         setTimelineLayerExpanded,
         selectBlock,
         selectCameraBlock,
+        selectPreset,
         clearLayerSelection,
         toggleRightSidebar,
         rightSidebarWidth,
@@ -110,22 +1213,32 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
     const [aspectLocked, setAspectLocked] = useState(true);
     const [addAnimMenuOpen, setAddAnimMenuOpen] = useState(false);
-    const [swapMenuOpen, setSwapMenuOpen] = useState(false);
-    const [projectPopoverOpen, setProjectPopoverOpen] = useState(false);
+    const [inMenuOpen, setInMenuOpen] = useState(false);
+    const [outMenuOpen, setOutMenuOpen] = useState(false);
     const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
+    const [easingPopoverConfig, setEasingPopoverConfig] = useState<{
+        easing: Easing;
+        onChange: (easing: Easing) => void;
+        anchorRect?: DOMRect | null;
+    } | null>(null);
 
     const fontInputRef = useRef<HTMLInputElement>(null);
 
     const refStageW = 1920;
     const refStageH = 1080;
+    const aspectSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
+    const deviceProjectAspect = aspectSpec.widthRatio / aspectSpec.heightRatio;
+    const fixedDeviceSettings = selectedLayer?.kind === 'image' && selectedLayer.deviceFrame?.enabled && isFixedDeviceFrame(selectedLayer.deviceFrame)
+        ? selectedLayer.deviceFrame : null;
+    const devicePlacementSize = selectedLayer?.kind === 'image' && fixedDeviceSettings
+        ? getDevicePlacementSize(selectedLayer.size, fixedDeviceSettings, deviceProjectAspect) : null;
+    const deviceArtboard = getArtboardDimensions(project.aspectRatio);
+    const layoutStageW = fixedDeviceSettings ? deviceArtboard.width : refStageW;
+    const layoutStageH = fixedDeviceSettings ? deviceArtboard.height : refStageH;
 
-    const sortedLayers = [...activeShot.layers].sort((a, b) => a.order - b.order);
     const isBlankState = isBlankProjectState(project);
     const effectiveMainTab = isBlankState ? 'design' : mainTab;
-
-    const isBottomLayerSelected =
-        Boolean(selectedLayer) && sortedLayers[0]?.id === selectedLayer?.id;
 
     const activeCameraBlock: CameraBlock | undefined =
         activeShot.cameraBlocks?.find((cb) => cb.id === selectedCameraBlockId);
@@ -134,39 +1247,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         updateShot(activeShot.id, (s) => ({
             ...s,
             layers: s.layers.map((l) =>
-                selectedLayerIds.includes(l.id) && !l.locked
+                selectedLayerIds.includes(l.id) && !isLayerEffectivelyLocked(l, s.groups)
                     ? { ...l, position: { ...l.position, [axis]: targetVal } }
                     : l
             ),
         }));
-    };
-
-    const handleSetDeviceType = (type: 'none' | DeviceFrameType['type']) => {
-        if (!selectedLayer || (selectedLayer.kind !== 'image' && selectedLayer.kind !== 'video')) return;
-        updateLayer(activeShot.id, selectedLayer.id, (l) => {
-            if (l.kind !== 'image' && l.kind !== 'video') return l;
-            if (type === 'none') return { ...l, device: undefined };
-            const defaultSize =
-                type === 'iphone' || type === 'samsung-galaxy'
-                    ? { width: 0.28, height: 0.58 }
-                    : type === 'ipad'
-                        ? { width: 0.48, height: 0.56 }
-                        : type === 'display'
-                            ? { width: 0.72, height: 0.48 }
-                            : { width: 0.64, height: 0.56 };
-            return {
-                ...l,
-                size: defaultSize,
-                device: {
-                    type,
-                    color: l.device?.color || 'silver',
-                    gloss: l.device?.gloss ?? 0.78,
-                    glare: l.device?.glare ?? 0.35,
-                    lidAngle: l.device?.lidAngle ?? 100,
-                    screenGlow: l.device?.screenGlow ?? 0.4,
-                },
-            };
-        });
     };
 
     const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -230,9 +1315,76 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             ...l,
             blocks: [...l.blocks, newBlock],
         }));
+        setTimelineView('scene');
         setTimelineLayerExpanded(selectedLayer.id, true);
         selectBlock(id, selectedLayer.id);
         setAddAnimMenuOpen(false);
+    };
+
+    const handleAddPreset = (
+        which: 'in' | 'out',
+        presetType: 'fade' | 'slide' | 'float' | 'wipe'
+    ) => {
+        if (!selectedLayer) return;
+        setTimelineView('scene');
+        setTimelineLayerExpanded(selectedLayer.id, true);
+        selectPreset(which === 'in' ? 'entrance' : 'exit', selectedLayer.id);
+
+        let mappedType: TransitionType = 'fade';
+        let distance = 0;
+        let durationMs = 500;
+        if (presetType === 'fade') {
+            mappedType = 'fade';
+            durationMs = 500;
+        } else if (presetType === 'slide') {
+            mappedType = which === 'in' ? 'slide-up' : 'slide-down';
+            distance = 0.25;
+            durationMs = 500;
+        } else if (presetType === 'float') {
+            mappedType = 'float-out';
+            distance = 0.15;
+            durationMs = 650;
+        } else if (presetType === 'wipe') {
+            mappedType = 'mask-sweep';
+            distance = 0.5;
+            durationMs = 500;
+        }
+
+        const newPreset = {
+            id: generateId(which),
+            type: mappedType,
+            durationMs,
+            delayMs: 0,
+            distance,
+            easing: { kind: 'preset' as const, name: 'ease-in-out' as const },
+        };
+
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            if (which === 'in') {
+                if (l.entrances && l.entrances.length > 0) {
+                    const next = [...l.entrances, newPreset];
+                    return { ...l, entrances: next, entrance: next[0] };
+                }
+                if (l.entrance && l.entrance.type !== 'none') {
+                    const first = { ...l.entrance, id: generateId('ent') };
+                    return { ...l, entrances: [first, newPreset], entrance: first };
+                }
+                return { ...l, entrance: newPreset };
+            } else {
+                if (l.exits && l.exits.length > 0) {
+                    const next = [...l.exits, newPreset];
+                    return { ...l, exits: next, exit: next[0] };
+                }
+                if (l.exit && l.exit.type !== 'none') {
+                    const first = { ...l.exit, id: generateId('ext') };
+                    return { ...l, exits: [first, newPreset], exit: first };
+                }
+                return { ...l, exit: newPreset };
+            }
+        });
+
+        if (which === 'in') setInMenuOpen(false);
+        else setOutMenuOpen(false);
     };
 
     const handleUpdateBlock = (
@@ -263,7 +1415,44 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         clearLayerSelection();
     };
 
+    const handleSetBlockDirection = (blk: AnimationBlock, sign: 1 | -1) => {
+        if (!selectedLayer) return;
+        if (typeof blk.amount === 'object') {
+            const vec = blk.amount as Vec3;
+            if (blk.property === 'tilt') {
+                const curY = Math.abs(vec.y || degToRad(8));
+                handleUpdateBlock(blk.id, { amount: { ...vec, y: sign * curY } });
+            } else if (blk.property === 'rotation') {
+                const curZ = Math.abs(vec.z || degToRad(15));
+                handleUpdateBlock(blk.id, { amount: { ...vec, z: sign * curZ } });
+            } else {
+                const curX = Math.abs(vec.x || 0.35);
+                handleUpdateBlock(blk.id, { amount: { ...vec, x: sign * curX } });
+            }
+        } else if (typeof blk.amount === 'number') {
+            const curVal = Math.abs(blk.amount || 1);
+            handleUpdateBlock(blk.id, { amount: sign * curVal });
+        }
+    };
 
+    const getEasingDisplayLabel = (easing: Easing) => {
+        if (easing.kind === 'preset') {
+            if (easing.name === 'ease-in-out') return 'Ease in and out';
+            if (easing.name === 'ease-in') return 'Ease in';
+            if (easing.name === 'ease-out') return 'Ease out';
+            if (easing.name === 'linear') return 'Linear';
+            if (easing.name === 'ease-out-back') return 'Back';
+            if (easing.name === 'ease-out-expo') return 'Expo';
+            return easing.name.replace(/-/g, ' ');
+        }
+        if (easing.kind === 'spring') {
+            return `Spring: ${easing.name}`;
+        }
+        if (easing.kind === 'bezier') {
+            return 'Custom Bezier';
+        }
+        return 'Ease in and out';
+    };
 
     return (
         <aside
@@ -280,37 +1469,42 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
             {/* 1. TOP HEADER BAR */}
             <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
-                <div className="flex items-center gap-1.5">
+                <div className="flex items-center">
                     <button
                         type="button"
                         onClick={toggleRightSidebar}
                         aria-label="Collapse Inspector sidebar ( ] )"
                         title="Collapse Inspector sidebar ( ] )"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition opacity-0 hover:opacity-100"
                     >
                         <PanelRightClose className="w-3.5 h-3.5" />
                     </button>
-                    <span className="text-[11px] font-semibold text-white">Inspector</span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-3">
+                    {/* User Profile Avatar with Teal Ring */}
+                    <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm cursor-pointer hover:opacity-90 transition">
+                        <img
+                            src={DEFAULT_AVATAR_PLACEHOLDER}
+                            alt="User Profile"
+                            className="w-full h-full object-cover"
+                        />
+                    </div>
+
                     <button
-                        onClick={() => setProjectPopoverOpen((v) => !v)}
+                        onClick={() => clearLayerSelection()}
                         title="Project Settings"
-                        className={`p-1.5 rounded-lg hover:bg-white/5 cursor-pointer transition ${projectPopoverOpen
-                            ? 'text-[#0088ff] bg-white/5'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
+                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
-                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                        <SlidersHorizontal className="w-4 h-4" />
                     </button>
 
                     <button
                         onClick={onOpenExportModal}
                         title="Export MP4 Video or GIF"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
-                        <Upload className="w-3.5 h-3.5" />
+                        <Upload className="w-4 h-4" />
                     </button>
 
                     <button
@@ -319,162 +1513,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             setTimeout(() => setShareToast(false), 2000);
                             onOpenExportModal();
                         }}
-                        className="px-3 py-1 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold text-[11px] cursor-pointer transition shadow-sm"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
                     >
                         {shareToast ? 'Copied!' : 'Share'}
                     </button>
                 </div>
             </div>
-
-            {/* PROJECT SETTINGS POPOVER */}
-            {projectPopoverOpen && (
-                <div className="mx-3 mt-2 mb-2 p-3 rounded-xl bg-[#16161a] border border-white/10 space-y-2.5 shadow-2xl z-30">
-                    <div className="flex items-center justify-between text-[11px] font-semibold text-white">
-                        <span>Project</span>
-                        <button
-                            onClick={() => setProjectPopoverOpen(false)}
-                            className="text-[#a1a1aa] hover:text-white cursor-pointer"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-
-                    {/* Name */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Name</span>
-                        <input
-                            type="text"
-                            value={project.name}
-                            onChange={(e) =>
-                                updateProject((p) => ({ ...p, name: e.target.value }))
-                            }
-                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none"
-                        />
-                    </div>
-
-                    {/* Aspect Ratio */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
-                        <select
-                            value={project.aspectRatio}
-                            onChange={(e) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    aspectRatio: e.target.value as AspectRatio,
-                                }))
-                            }
-                            className="w-full h-7 bg-[#1c1c1f] border border-white/10 rounded-lg px-2 text-[11px] text-white outline-none cursor-pointer"
-                        >
-                            {(Object.keys(ASPECT_RATIO_CONFIG) as AspectRatio[]).map((r) => (
-                                <option key={r} value={r}>
-                                    {r === '16:9'
-                                        ? 'Landscape 16:9'
-                                        : r === '9:16'
-                                            ? 'Portrait 9:16'
-                                            : r}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    {/* Lens (focal length) */}
-                    <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[10px] text-[#a1a1aa]">Lens</span>
-                            <span className="text-[10px] font-mono text-[#38bdf8]">
-                                {project.defaultCamera?.focalLength ?? 50}mm
-                            </span>
-                        </div>
-                        <ScrubInput
-                            label="F"
-                            value={project.defaultCamera?.focalLength ?? 50}
-                            min={14}
-                            max={200}
-                            step={1}
-                            unit="mm"
-                            onChange={(mm) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    defaultCamera: {
-                                        position: p.defaultCamera?.position ?? {
-                                            x: 0,
-                                            y: 0,
-                                            z: 2.65,
-                                        },
-                                        rotation: p.defaultCamera?.rotation ?? {
-                                            x: 0,
-                                            y: 0,
-                                            z: 0,
-                                        },
-                                        focalLength: Math.max(14, Math.min(200, mm)),
-                                    },
-                                }))
-                            }
-                        />
-                        <div className="grid grid-cols-4 gap-1 pt-0.5">
-                            {[
-                                { mm: 24, label: '24mm' },
-                                { mm: 35, label: '35mm' },
-                                { mm: 50, label: '50mm' },
-                                { mm: 85, label: '85mm' },
-                            ].map((preset) => (
-                                <button
-                                    key={preset.mm}
-                                    type="button"
-                                    onClick={() =>
-                                        updateProject((p) => ({
-                                            ...p,
-                                            defaultCamera: {
-                                                position: p.defaultCamera?.position ?? {
-                                                    x: 0,
-                                                    y: 0,
-                                                    z: 2.65,
-                                                },
-                                                rotation: p.defaultCamera?.rotation ?? {
-                                                    x: 0,
-                                                    y: 0,
-                                                    z: 0,
-                                                },
-                                                focalLength: preset.mm,
-                                            },
-                                        }))
-                                    }
-                                    className={`py-1 rounded text-[10px] font-mono cursor-pointer transition ${
-                                        (project.defaultCamera?.focalLength ?? 50) === preset.mm
-                                            ? 'bg-[#0088ff] text-white font-semibold'
-                                            : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white hover:bg-white/10'
-                                    }`}
-                                >
-                                    {preset.label}
-                                </button>
-                            ))}
-                        </div>
-                    </div>
-
-                    {/* Unified Project Background Section */}
-                    <div className="rounded-lg border border-white/[0.06] overflow-hidden bg-black/20">
-                        <BackgroundSection scope="project" activeShot={activeShot} />
-                    </div>
-
-                    {/* FPS */}
-                    <div className="space-y-1">
-                        <span className="text-[10px] text-[#a1a1aa]">Frame Rate</span>
-                        <select
-                            value={project.fps}
-                            onChange={(e) =>
-                                updateProject((p) => ({
-                                    ...p,
-                                    fps: Number(e.target.value) as 30 | 60,
-                                }))
-                            }
-                            className="w-full bg-[#1c1c1f] border border-white/10 rounded-lg px-2 py-1 text-[11px] text-white outline-none cursor-pointer"
-                        >
-                            <option value={60}>60 FPS (Silky Smooth)</option>
-                            <option value={30}>30 FPS (Standard)</option>
-                        </select>
-                    </div>
-                </div>
-            )}
 
             {/* =================================================================== */}
             {/* CAMERA BLOCK INSPECTOR (When Camera Move is Selected)               */}
@@ -485,130 +1529,119 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     activeCameraBlock={activeCameraBlock}
                     onDone={() => selectCameraBlock(null)}
                 />
-            ) : (
+            ) : selectedLayer ? (
                 <>
-                    {/* 2. SUB-HEADER: Context navigation */}
-                    {selectedLayer ? (
-                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
-                            <div className="flex items-center gap-1.5">
-                                <button
-                                    onClick={() => setMainTab('design')}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                        }`}
-                                >
-                                    Design
-                                </button>
-                                <button
-                                    onClick={() => setMainTab('animate')}
-                                    className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
-                                        ? 'bg-[#1f1f23] text-white'
-                                        : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                        }`}
-                                >
-                                    Animate
-                                </button>
-                            </div>
-
+                    {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
+                    <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between shrink-0">
+                        <div className="flex items-center gap-1.5">
                             <button
-                                onClick={() => {
-                                    clearLayerSelection();
-                                    selectShot(activeShot.id);
-                                }}
-                                title="Click to view Shot settings"
-                                className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
+                                onClick={() => setMainTab('design')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
+                                    }`}
                             >
-                                <Film className="w-3 h-3 text-[#0088ff]" />
-                                <span>{activeShot.name || 'Shot'}</span>
+                                Design
+                            </button>
+                            <button
+                                onClick={() => setMainTab('animate')}
+                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
+                                    ? 'bg-[#1f1f23] text-white'
+                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
+                                    }`}
+                            >
+                                Animate
                             </button>
                         </div>
-                    ) : (
-                        <div className="h-9 border-b border-white/[0.07] px-3.5 flex items-center justify-between bg-[#121215] shrink-0">
-                            <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
-                                <Film className="w-3.5 h-3.5 text-[#0088ff]" />
-                                <span className="truncate">{activeShot.name || 'Shot Settings'}</span>
-                            </span>
-                            <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                {(activeShot.durationMs / 1000).toFixed(2)}s
-                            </span>
-                        </div>
-                    )}
+
+                        <button
+                            onClick={() => {
+                                clearLayerSelection();
+                            }}
+                            title="Click to view Project settings"
+                            className="px-2 py-0.5 rounded bg-white/[0.05] hover:bg-white/[0.1] text-[10px] text-[#a1a1aa] hover:text-white flex items-center gap-1 cursor-pointer transition"
+                        >
+                            <Film className="w-3 h-3 text-[#0088ff]" />
+                            <span>{activeShot.name || 'Shot'}</span>
+                        </button>
+                    </div>
 
                     {/* =============================================================== */}
                     {/* TAB 1: DESIGN (WHEN A LAYER IS SELECTED)                        */}
                     {/* =============================================================== */}
                     {effectiveMainTab === 'design' && selectedLayer && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            {/* LAYER HEADER: Name, Lock, Hide, Delete */}
-                            <div className="p-3.5 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <div className="flex items-center gap-1.5">
-                                        <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[10px] font-semibold uppercase tracking-wider text-[#0088ff]">
-                                            {selectedLayer.kind}
-                                        </span>
-                                        <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                            #{selectedLayer.order}
-                                        </span>
+                            {/* LAYER HEADER: Name, Lock, Hide, Delete (Non-shape layers) */}
+                            {selectedLayer.kind !== 'shape' && (
+                                <div className="p-3.5 space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-1.5">
+                                            <span className="px-1.5 py-0.5 rounded bg-white/[0.07] text-[10px] font-semibold uppercase tracking-wider text-[#0088ff]">
+                                                {selectedLayer.kind}
+                                            </span>
+                                            <span className="text-[10px] text-[#a1a1aa] font-mono">
+                                                #{selectedLayer.order}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center gap-1">
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                        ...l,
+                                                        hidden: !l.hidden,
+                                                    }))
+                                                }
+                                                title={selectedLayer.hidden ? 'Show Layer' : 'Hide Layer'}
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
+                                            >
+                                                {selectedLayer.hidden ? (
+                                                    <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                                ) : (
+                                                    <Eye className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                        ...l,
+                                                        locked: !l.locked,
+                                                    }))
+                                                }
+                                                title={selectedLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
+                                            >
+                                                {selectedLayer.locked ? (
+                                                    <Lock className="w-3.5 h-3.5 text-amber-400" />
+                                                ) : (
+                                                    <Unlock className="w-3.5 h-3.5" />
+                                                )}
+                                            </button>
+                                            <button
+                                                type="button"
+                                                onClick={handleDeleteSelectedLayer}
+                                                title="Delete Layer"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
                                     </div>
-                                    <div className="flex items-center gap-1">
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                    ...l,
-                                                    hidden: !l.hidden,
-                                                }))
-                                            }
-                                            title={selectedLayer.hidden ? 'Show Layer' : 'Hide Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
-                                        >
-                                            {selectedLayer.hidden ? (
-                                                <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                            ) : (
-                                                <Eye className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={() =>
-                                                updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                    ...l,
-                                                    locked: !l.locked,
-                                                }))
-                                            }
-                                            title={selectedLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white"
-                                        >
-                                            {selectedLayer.locked ? (
-                                                <Lock className="w-3.5 h-3.5 text-amber-400" />
-                                            ) : (
-                                                <Unlock className="w-3.5 h-3.5" />
-                                            )}
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleDeleteSelectedLayer}
-                                            title="Delete Layer"
-                                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400"
-                                        >
-                                            <Trash2 className="w-3.5 h-3.5" />
-                                        </button>
-                                    </div>
+                                    <input
+                                        type="text"
+                                        value={selectedLayer.name}
+                                        onChange={(e) =>
+                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                ...l,
+                                                name: e.target.value,
+                                            }))
+                                        }
+                                        className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white font-medium outline-none focus:border-[#0088ff]"
+                                        placeholder="Layer name"
+                                    />
                                 </div>
-                                <input
-                                    type="text"
-                                    value={selectedLayer.name}
-                                    onChange={(e) =>
-                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                            ...l,
-                                            name: e.target.value,
-                                        }))
-                                    }
-                                    className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white font-medium outline-none focus:border-[#0088ff]"
-                                    placeholder="Layer name"
-                                />
-                            </div>
+                            )}
 
                             {/* 1. LAYER KIND SPECIFIC SECTIONS */}
 
@@ -627,204 +1660,67 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 <ShapeSection
                                     activeShotId={activeShot.id}
                                     layer={selectedLayer}
+                                    onAddAnimationBlock={handleAddAnimationBlock}
                                 />
                             )}
 
-                            {/* IMAGE / VIDEO LAYER: Source, Device Frame & Crop */}
+                            {/* IMAGE / VIDEO LAYER: Source & Crop Header */}
                             {(selectedLayer.kind === 'image' || selectedLayer.kind === 'video') && (
-                                <div className="p-3.5 space-y-3 relative">
-                                    <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
-                                        <span>Image &amp; Frame</span>
-                                        <div className="flex items-center gap-1">
+                                <>
+                                    <div className="p-3.5 space-y-3 relative">
+                                        <div className="text-[11px] font-medium text-[#e4e4e7] flex items-center justify-between">
+                                            <span>Media Source</span>
                                             <button
                                                 onClick={onSwapImageClick}
-                                                className="h-6 px-2 rounded-l-md bg-[#1c1c1f] hover:bg-[#252529] text-[10px] text-[#e4e4e7] flex items-center gap-1 cursor-pointer transition"
+                                                className="h-6 px-2 rounded-md bg-[#1c1c1f] hover:bg-[#252529] text-[10px] text-[#e4e4e7] flex items-center gap-1 cursor-pointer transition"
                                             >
                                                 <ImageIcon className="w-3 h-3 text-[#0088ff]" />
                                                 <span>Swap</span>
                                             </button>
-                                            <button
-                                                onClick={() => setSwapMenuOpen((v) => !v)}
-                                                className="h-6 px-1 rounded-r-md bg-[#1c1c1f] hover:bg-[#252529] text-[#a1a1aa] cursor-pointer transition border-l border-black/40"
-                                            >
-                                                <ChevronDown className="w-3 h-3" />
-                                            </button>
                                         </div>
-                                    </div>
 
-                                    <div className="flex items-center gap-2.5">
-                                        <div className="w-10 h-12 rounded-lg bg-[#18181b] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                                            {project.assets[selectedLayer.assetId]?.dataUrl ? (
-                                                project.assets[selectedLayer.assetId].mimeType?.startsWith('video/') ? (
-                                                    <video
-                                                        src={project.assets[selectedLayer.assetId].dataUrl}
-                                                        className="w-full h-full object-cover"
-                                                        muted
-                                                    />
+                                        <div className="flex items-center gap-2.5">
+                                            <div className="w-10 h-12 rounded-lg bg-[#18181b] border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                                {project.assets[selectedLayer.assetId]?.dataUrl ? (
+                                                    project.assets[selectedLayer.assetId].mimeType?.startsWith('video/') ? (
+                                                        <video
+                                                            src={project.assets[selectedLayer.assetId].dataUrl}
+                                                            className="w-full h-full object-cover"
+                                                            muted
+                                                        />
+                                                    ) : (
+                                                        <img
+                                                            src={project.assets[selectedLayer.assetId].dataUrl}
+                                                            alt={selectedLayer.name}
+                                                            className="w-full h-full object-cover"
+                                                        />
+                                                    )
                                                 ) : (
-                                                    <img
-                                                        src={project.assets[selectedLayer.assetId].dataUrl}
-                                                        alt={selectedLayer.name}
-                                                        className="w-full h-full object-cover"
-                                                    />
-                                                )
-                                            ) : (
-                                                <ImageIcon className="w-4 h-4 text-[#0088ff]" />
-                                            )}
-                                        </div>
-                                        <div className="flex-1 text-[11px] text-[#a1a1aa]">
-                                            <div className="text-white font-medium capitalize">
-                                                {selectedLayer.device?.type
-                                                    ? `${selectedLayer.device.type} Frame`
-                                                    : 'Bare Screenshot'}
+                                                    <ImageIcon className="w-4 h-4 text-[#0088ff]" />
+                                                )}
                                             </div>
-                                            <div className="text-[10px] text-[#a1a1aa]">
-                                                {project.assets[selectedLayer.assetId]?.name ||
-                                                    'Active asset'}
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {swapMenuOpen && (
-                                        <div className="p-1 rounded-xl bg-[#18181b] border border-white/10 space-y-0.5 text-[11px] shadow-2xl z-20">
-                                            {(
-                                                [
-                                                    'none',
-                                                    'iphone',
-                                                    'ipad',
-                                                    'macbook',
-                                                    'samsung-galaxy',
-                                                    'display',
-                                                    'browser',
-                                                ] as const
-                                            ).map((dev) => (
-                                                <button
-                                                    key={dev}
-                                                    onClick={() => {
-                                                        handleSetDeviceType(dev);
-                                                        setSwapMenuOpen(false);
-                                                    }}
-                                                    className={`w-full px-2 py-1.5 rounded-lg text-left capitalize cursor-pointer transition ${(!selectedLayer.device && dev === 'none') ||
-                                                        selectedLayer.device?.type === dev
-                                                        ? 'bg-[#0088ff] text-white font-medium'
-                                                        : 'text-[#d4d4d8] hover:bg-white/5'
-                                                        }`}
-                                                >
-                                                    {dev === 'none'
-                                                        ? 'Bare Screenshot'
-                                                        : dev === 'samsung-galaxy'
-                                                            ? 'Samsung Galaxy Ultra'
-                                                            : dev === 'display'
-                                                                ? 'Pro Display XDR'
-                                                                : `${dev} 3D Frame`}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
-
-                                    {/* 3D Device Frame Settings */}
-                                    {selectedLayer.device && (
-                                        <div className="p-2.5 rounded-xl bg-[#161619] border border-white/[0.06] space-y-2 pt-2">
-                                            <div className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                                                <span className="flex items-center gap-1 text-[#e4e4e7]">
-                                                    <Laptop className="w-3 h-3 text-[#0088ff]" />
-                                                    Frame Details
-                                                </span>
-                                                <div className="flex items-center gap-1 bg-[#1c1c1f] p-0.5 rounded flex-wrap justify-end">
-                                                    {(['silver', 'black', 'space-black', 'titanium', 'midnight'] as const).map((clr) => (
-                                                        <button
-                                                            key={clr}
-                                                            type="button"
-                                                            onClick={() =>
-                                                                updateLayer(
-                                                                    activeShot.id,
-                                                                    selectedLayer.id,
-                                                                    (l) =>
-                                                                        (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                            ? {
-                                                                                ...l,
-                                                                                device: { ...l.device, color: clr },
-                                                                            }
-                                                                            : l
-                                                                )
-                                                            }
-                                                            className={`px-2 py-0.5 rounded text-[10px] capitalize cursor-pointer transition ${selectedLayer.device?.color === clr
-                                                                ? 'bg-[#2a2a30] text-white font-medium'
-                                                                : 'text-[#a1a1aa] hover:text-white'
-                                                                }`}
-                                                        >
-                                                            {clr.replace('-', ' ')}
-                                                        </button>
-                                                    ))}
+                                            <div className="flex-1 text-[11px] text-[#a1a1aa]">
+                                                <div className="text-white font-medium capitalize">
+                                                    {selectedLayer.kind === 'image' ? 'Image layer' : 'Video layer'}
+                                                </div>
+                                                <div className="text-[10px] text-[#a1a1aa] truncate max-w-[140px]">
+                                                    {project.assets[selectedLayer.assetId]?.name ||
+                                                        'Active asset'}
                                                 </div>
                                             </div>
-
-                                            <div className="grid grid-cols-3 gap-1">
-                                                <ScrubInput
-                                                    label="Gloss"
-                                                    value={selectedLayer.device.gloss}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(gloss) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, gloss } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Glare"
-                                                    value={selectedLayer.device.glare ?? 0.35}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(glare) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, glare } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Glow"
-                                                    value={selectedLayer.device.screenGlow ?? 0.4}
-                                                    min={0}
-                                                    max={1}
-                                                    step={0.02}
-                                                    decimals={2}
-                                                    onChange={(screenGlow) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, screenGlow } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                            </div>
-
-                                            {selectedLayer.device.type === 'macbook' && (
-                                                <ScrubInput
-                                                    label="Lid"
-                                                    value={selectedLayer.device.lidAngle ?? 100}
-                                                    min={35}
-                                                    max={125}
-                                                    step={1}
-                                                    unit="°"
-                                                    onChange={(lidAngle) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) =>
-                                                            (l.kind === 'image' || l.kind === 'video') && l.device
-                                                                ? { ...l, device: { ...l.device, lidAngle } }
-                                                                : l
-                                                        )
-                                                    }
-                                                />
-                                            )}
                                         </div>
+                                    </div>
+
+                                    {selectedLayer.kind === 'image' && (
+                                        <DeviceFrameSection
+                                            projectAspect={deviceProjectAspect}
+                                            layer={selectedLayer}
+                                            onChange={(deviceFrame) =>
+                                                updateLayer(activeShot.id, selectedLayer.id, (layer) =>
+                                                    layer.kind === 'image' ? { ...layer, deviceFrame } : layer
+                                                )
+                                            }
+                                        />
                                     )}
 
                                     {/* Image Border & Stroke */}
@@ -896,11 +1792,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         )}
                                     </div>
-                                </div>
+                                </>
                             )}
 
-                            {/* POSITION */}
-                            <div className="p-3.5 space-y-3">
+                            {/* GENERAL INSPECTOR SECTIONS (FOR NON-SHAPE LAYERS) */}
+                            {selectedLayer.kind !== 'shape' && (
+                                <>
+                                    {/* POSITION */}
+                                    <div className="p-3.5 space-y-3">
                                 <div className="text-[11px] font-medium text-[#e4e4e7]">
                                     Position
                                 </div>
@@ -1191,13 +2090,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 <ScrubInput
                                                     label="W"
                                                     value={Math.round(
-                                                        selectedLayer.size.width * refStageW
+                                                        (devicePlacementSize?.width ?? selectedLayer.size.width) * layoutStageW
                                                     )}
                                                     min={40}
                                                     max={4000}
                                                     step={10}
                                                     onChange={(pxW) => {
-                                                        const nextW = Number((pxW / refStageW).toFixed(4));
+                                                        const nextW = Number((pxW / layoutStageW).toFixed(4));
                                                         const ratio =
                                                             selectedLayer.size.height /
                                                             Math.max(0.01, selectedLayer.size.width);
@@ -1205,7 +2104,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: {
+                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'width', nextW, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: nextW,
                                                                         height: aspectLocked
                                                                             ? Number((nextW * ratio).toFixed(4))
@@ -1219,13 +2118,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 <ScrubInput
                                                     label="H"
                                                     value={Math.round(
-                                                        selectedLayer.size.height * refStageH
+                                                        (devicePlacementSize?.height ?? selectedLayer.size.height) * layoutStageH
                                                     )}
                                                     min={40}
                                                     max={4000}
                                                     step={10}
                                                     onChange={(pxH) => {
-                                                        const nextH = Number((pxH / refStageH).toFixed(4));
+                                                        const nextH = Number((pxH / layoutStageH).toFixed(4));
                                                         const ratio =
                                                             selectedLayer.size.width /
                                                             Math.max(0.01, selectedLayer.size.height);
@@ -1233,7 +2132,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: {
+                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'height', nextH, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: aspectLocked
                                                                             ? Number((nextH * ratio).toFixed(4))
                                                                             : l.size.width,
@@ -1246,14 +2145,15 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 />
                                             </div>
                                             <button
+                                                disabled={Boolean(fixedDeviceSettings)}
                                                 onClick={() => setAspectLocked((v) => !v)}
-                                                className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition ${aspectLocked
+                                                className={`w-7 h-7 rounded-lg flex items-center justify-center cursor-pointer transition ${aspectLocked || fixedDeviceSettings
                                                     ? 'bg-[#1c1c1f] text-white border border-white/10'
                                                     : 'text-[#a1a1aa] hover:text-white'
                                                     }`}
-                                                title={aspectLocked ? 'Aspect Ratio Locked' : 'Aspect Ratio Unlocked'}
+                                                title={fixedDeviceSettings ? 'Phone proportions are fixed' : aspectLocked ? 'Aspect Ratio Locked' : 'Aspect Ratio Unlocked'}
                                             >
-                                                {aspectLocked ? (
+                                                {aspectLocked || fixedDeviceSettings ? (
                                                     <Lock className="w-3.5 h-3.5" />
                                                 ) : (
                                                     <Unlock className="w-3.5 h-3.5" />
@@ -1667,327 +2567,346 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                     </select>
                                 </div>
                             </div>
-
-                            {/* SCENE BACKGROUND & EFFECTS (WHEN BOTTOM LAYER IS SELECTED) */}
-                            {isBottomLayerSelected && (
-                                <div className="divide-y divide-white/[0.06] bg-black/20">
-                                    <div className="p-3 bg-white/[0.02]">
-                                        <span className="text-[10px] font-medium text-[#a1a1aa] uppercase tracking-wider block">
-                                            Stage Background &amp; Effects
-                                        </span>
-                                    </div>
-                                    <BackgroundSection activeShot={activeShot} />
-                                    <SceneEffectsSection activeShot={activeShot} />
-                                </div>
-                            )}
-                        </div>
+                        </>
                     )}
-
-                    {/* =============================================================== */}
-                    {/* TAB 1: DESIGN (WHEN NO LAYER IS SELECTED — UNIFIED SHOT/PROJECT INSPECTOR) */}
-                    {/* =============================================================== */}
-                    {effectiveMainTab === 'design' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06] text-xs select-none bg-[#111114]">
-                            {/* 1. PROJECT & SHOT IDENTITY */}
-                            <div className="p-3.5 space-y-3">
-                                <div className="flex items-center justify-between">
-                                    <span className="flex items-center gap-1.5 text-[11px] font-medium text-[#e4e4e7]">
-                                        <Film className="w-3.5 h-3.5 text-[#0088ff]" />
-                                        Shot &amp; Project Settings
-                                    </span>
-                                    <span className="text-[10px] text-[#a1a1aa] font-mono">
-                                        {(activeShot.durationMs / 1000).toFixed(2)}s
-                                    </span>
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2">
-                                    <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#a1a1aa]">Project Name</span>
-                                        <input
-                                            type="text"
-                                            value={project.name}
-                                            onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
-                                            className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                        />
-                                    </label>
-                                    <label className="block space-y-1">
-                                        <span className="block text-[10px] text-[#a1a1aa]">Aspect Ratio</span>
-                                        <select
-                                            value={project.aspectRatio}
-                                            onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
-                                            className="w-full h-7 px-2 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                        >
-                                            <option value="16:9">16:9 Landscape</option>
-                                            <option value="4:3">4:3 Standard</option>
-                                            <option value="3:2">3:2 Photo</option>
-                                            <option value="21:9">21:9 Cinema</option>
-                                            <option value="1:1">1:1 Square</option>
-                                            <option value="9:16">9:16 Vertical</option>
-                                            <option value="3:4">3:4 Portrait</option>
-                                            <option value="2:3">2:3 Portrait</option>
-                                            <option value="4:5">4:5 Social</option>
-                                        </select>
-                                    </label>
-                                </div>
-
-                                <label className="block space-y-1">
-                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Name</span>
-                                    <input
-                                        type="text"
-                                        value={activeShot.name}
-                                        onChange={(e) =>
-                                            updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))
-                                        }
-                                        className="w-full h-7 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/[0.06] text-[11px] text-white outline-none focus:border-[#0088ff]"
-                                    />
-                                </label>
-
-                                <div className="space-y-1">
-                                    <span className="block text-[10px] text-[#a1a1aa]">Shot Duration</span>
-                                    <ScrubInput
-                                        label="Duration"
-                                        value={activeShot.durationMs}
-                                        min={300}
-                                        max={60000}
-                                        step={100}
-                                        decimals={0}
-                                        unit="ms"
-                                        onChange={(durationMs) =>
-                                            updateShot(activeShot.id, (s) => ({ ...s, durationMs }))
-                                        }
-                                    />
-                                </div>
-                            </div>
-
-                            {/* 2. STAGE / SHOT BACKGROUND */}
-                            <BackgroundSection scope="shot" activeShot={activeShot} />
-
-                            {/* 3. CAMERA RIG & FRAMING */}
-                            <CameraSection activeShot={activeShot} />
-
-                            {/* 4. SCENE LIGHTING & MULTI-LIGHT SOURCES */}
-                            <LightingSection activeShot={activeShot} />
-
-                            {/* 5. SCENE EFFECTS */}
-                            <SceneEffectsSection activeShot={activeShot} />
-
-                            {/* 6. SHOT-TO-SHOT TRANSITION */}
-                            <SceneTransitionSection activeShot={activeShot} />
-                        </div>
-                    )}
+                    </div>
+                )}
 
                     {/* =============================================================== */}
                     {/* TAB 2: ANIMATE (WHEN A LAYER IS SELECTED)                       */}
                     {/* =============================================================== */}
-                    {effectiveMainTab === 'animate' && selectedLayer && (
+                    {effectiveMainTab === 'animate' && (
                         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
                             <div className="p-3.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Keyframe Blocks
+                                        Animations{selectedLayer.blocks.length > 0 ? ` (${selectedLayer.blocks.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() => setAddAnimMenuOpen((v) => !v)}
-                                        className="px-2 py-1 rounded-md bg-[#0088ff]/15 hover:bg-[#0088ff]/25 text-[#0088ff] hover:text-white flex items-center gap-1 text-[10px] font-medium cursor-pointer transition"
+                                        onClick={() => {
+                                            setAddAnimMenuOpen((v) => !v);
+                                            setInMenuOpen(false);
+                                            setOutMenuOpen(false);
+                                        }}
+                                        title="Add Animation Block"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
-                                        <Plus className="w-3 h-3" />
-                                        <span>Add</span>
+                                        <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
                                 {addAnimMenuOpen && (
-                                    <div className="mt-2 p-1 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl space-y-0.5 text-[11px] z-20">
-                                        {(
-                                            [
-                                                { id: 'position', label: 'Position & Depth (X, Y, Z)' },
-                                                { id: 'tilt', label: '3D Tilt (Pitch & Yaw)' },
-                                                { id: 'rotation', label: '2D Roll Rotation' },
-                                                { id: 'scale', label: 'Scale Multiplier' },
-                                                { id: 'size', label: 'Width & Height Size' },
-                                                { id: 'opacity', label: 'Opacity Fade' },
-                                                { id: 'cornerRadius', label: 'Corner Radius' },
-                                                { id: 'layerBlur', label: 'Layer Blur' },
-                                                { id: 'shimmer', label: 'Light Shimmer Sweep' },
-                                                { id: 'maskSweep', label: 'Mask Reveal Sweep' },
-                                            ] as { id: AnimationBlockProperty; label: string }[]
-                                        ).map((item) => (
-                                            <button
-                                                key={item.id}
-                                                onClick={() => handleAddAnimationBlock(item.id)}
-                                                className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white cursor-pointer transition"
-                                            >
-                                                + {item.label}
-                                            </button>
-                                        ))}
+                                    <div className="absolute right-3.5 top-9 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Properties
+                                        </div>
+                                        {[
+                                            { id: 'position', label: 'Position', icon: Move, color: 'text-indigo-400' },
+                                            { id: 'tilt', label: '3D Tilt', icon: Compass, color: 'text-sky-400' },
+                                            { id: 'rotation', label: 'Rotation', icon: RotateCw, color: 'text-teal-400' },
+                                            { id: 'scale', label: 'Scale', icon: Maximize2, color: 'text-purple-400' },
+                                            { id: 'opacity', label: 'Opacity', icon: CircleDot, color: 'text-blue-400' },
+                                            { id: 'size', label: 'Size (W & H)', icon: Square, color: 'text-amber-400' },
+                                            { id: 'layerBlur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
+                                            { id: 'maskSweep', label: 'Mask Sweep', icon: Scan, color: 'text-emerald-400' },
+                                        ].map((item) => {
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                    className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                >
+                                                    <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                    <span>{item.label}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
                             </div>
 
                             {/* ANIMATION BLOCKS LIST */}
                             {selectedLayer.blocks.map((blk) => {
-                                const isVec = typeof blk.amount === 'object';
-                                const isAngle =
-                                    blk.property === 'tilt' || blk.property === 'rotation';
-                                const isSize = blk.property === 'size';
-                                const scaleFactor = isAngle ? 1 : refStageW;
                                 const isSelectedBlock = selectedBlockId === blk.id;
+
+                                // Determine icon
+                                const getBlockIcon = (prop: AnimationBlockProperty) => {
+                                    switch (prop) {
+                                        case 'tilt': return <Compass className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'position': return <Move className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'rotation': return <RotateCw className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'scale': return <Maximize2 className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'opacity': return <Eye className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'size': return <Square className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'layerBlur': return <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        case 'maskSweep': return <Scan className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                        default: return <CircleDot className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                    }
+                                };
+
+                                // Direction sign check
+                                const isNegDirection = typeof blk.amount === 'object'
+                                    ? (blk.property === 'tilt' ? ((blk.amount as Vec3).y || 0) < 0 : (blk.property === 'rotation' ? ((blk.amount as Vec3).z || 0) < 0 : ((blk.amount as Vec3).x || 0) < 0))
+                                    : (Number(blk.amount) < 0);
 
                                 return (
                                     <div
                                         key={blk.id}
                                         onClick={() => selectBlock(blk.id, selectedLayer.id)}
-                                        className={`p-3.5 space-y-3 transition cursor-pointer ${isSelectedBlock
+                                        className={`p-3.5 space-y-3 transition cursor-pointer border-b border-white/[0.06] ${isSelectedBlock
                                             ? 'bg-[#0088ff]/5 border-l-2 border-l-[#0088ff]'
                                             : 'hover:bg-white/[0.01]'
                                             }`}
                                     >
+                                        {/* Card Header: Icon + Title + Delete */}
                                         <div className="flex items-center justify-between">
-                                            <span className="text-[11px] font-medium text-[#e4e4e7] capitalize flex items-center gap-1.5">
-                                                <span className={`w-1.5 h-1.5 rounded-full ${isSelectedBlock ? 'bg-[#0088ff]' : 'bg-[#a1a1aa]'}`} />
-                                                {blk.label || `${blk.property} animation`}
+                                            <span className="text-[12px] font-medium text-white capitalize flex items-center gap-2">
+                                                {getBlockIcon(blk.property)}
+                                                <span>{blk.label || (blk.property === 'tilt' ? 'Tilt' : blk.property === 'maskSweep' ? 'Mask Sweep' : blk.property)}</span>
                                             </span>
                                             <button
+                                                type="button"
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     handleDeleteBlock(blk.id);
                                                 }}
-                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
+                                                className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer transition"
                                                 title="Delete Animation Block"
                                             >
                                                 <X className="w-3.5 h-3.5" />
                                             </button>
                                         </div>
 
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#a1a1aa] block capitalize">
-                                                Delta Amount
-                                            </span>
-                                            {isVec ? (
-                                                <div className={`grid gap-1.5 ${isSize ? 'grid-cols-2' : 'grid-cols-3'}`}>
+                                        {/* Property-Specific Inputs */}
+                                        {blk.property === 'tilt' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Tilt</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
                                                     <ScrubInput
-                                                        label={isSize ? 'ΔW' : 'X'}
-                                                        value={
-                                                            isAngle
-                                                                ? radToDeg((blk.amount as Vec3).x)
-                                                                : Math.round((blk.amount as Vec3).x * scaleFactor)
-                                                        }
-                                                        min={-3000}
-                                                        max={3000}
-                                                        step={isAngle ? 1 : 10}
-                                                        unit={isAngle ? '°' : isSize ? 'px' : ''}
-                                                        onChange={(v) =>
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: isAngle
-                                                                        ? degToRad(v)
-                                                                        : Number((v / scaleFactor).toFixed(4)),
-                                                                },
-                                                            })
-                                                        }
+                                                        label="X"
+                                                        value={Math.round(radToDeg((blk.amount as Vec3).x || 0))}
+                                                        min={-180}
+                                                        max={180}
+                                                        step={1}
+                                                        unit="°"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: degToRad(v) }
+                                                        })}
                                                     />
                                                     <ScrubInput
-                                                        label={isSize ? 'ΔH' : 'Y'}
-                                                        value={
-                                                            isAngle
-                                                                ? radToDeg((blk.amount as Vec3).y)
-                                                                : Math.round((blk.amount as Vec3).y * refStageH)
-                                                        }
-                                                        min={-3000}
-                                                        max={3000}
-                                                        step={isAngle ? 1 : 10}
-                                                        unit={isAngle ? '°' : isSize ? 'px' : ''}
-                                                        onChange={(v) =>
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    y: isAngle
-                                                                        ? degToRad(v)
-                                                                        : Number((v / refStageH).toFixed(4)),
-                                                                },
-                                                            })
-                                                        }
+                                                        label="Y"
+                                                        value={Math.round(radToDeg((blk.amount as Vec3).y || 0))}
+                                                        min={-180}
+                                                        max={180}
+                                                        step={1}
+                                                        unit="°"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: degToRad(v) }
+                                                        })}
                                                     />
-                                                    {!isSize && (
-                                                        <ScrubInput
-                                                            label="Z"
-                                                            value={
-                                                                isAngle
-                                                                    ? radToDeg((blk.amount as Vec3).z)
-                                                                    : Math.round((blk.amount as Vec3).z * 500)
-                                                            }
-                                                            min={-1500}
-                                                            max={1500}
-                                                            step={isAngle ? 1 : 10}
-                                                            unit={isAngle ? '°' : ''}
-                                                            onChange={(v) =>
-                                                                handleUpdateBlock(blk.id, {
-                                                                    amount: {
-                                                                        ...(blk.amount as Vec3),
-                                                                        z: isAngle
-                                                                            ? degToRad(v)
-                                                                            : Number((v / 500).toFixed(4)),
-                                                                    },
-                                                                })
-                                                            }
-                                                        />
-                                                    )}
                                                 </div>
-                                            ) : (
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'position' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-2.5">
+                                                <div className="space-y-1.5">
+                                                    <div className="flex items-center justify-between">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Position</label>
+                                                        <Crosshair className="w-3 h-3 text-[#71717a]" />
+                                                    </div>
+                                                    <div className="grid grid-cols-2 gap-1.5">
+                                                        <ScrubInput
+                                                            label="X"
+                                                            value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                            min={-3000}
+                                                            max={3000}
+                                                            step={10}
+                                                            onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                            })}
+                                                        />
+                                                        <ScrubInput
+                                                            label="Y"
+                                                            value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                            min={-3000}
+                                                            max={3000}
+                                                            step={10}
+                                                            onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                            })}
+                                                        />
+                                                    </div>
+                                                </div>
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Depth</label>
+                                                    <ScrubInput
+                                                        label="Z"
+                                                        value={Math.round((blk.amount as Vec3).z * 500)}
+                                                        min={-1500}
+                                                        max={1500}
+                                                        step={10}
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), z: Number((v / 500).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'rotation' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Rotation</label>
+                                                <ScrubInput
+                                                    label="Roll"
+                                                    value={Math.round(radToDeg((blk.amount as Vec3).z || 0))}
+                                                    min={-360}
+                                                    max={360}
+                                                    step={1}
+                                                    unit="°"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, {
+                                                        amount: { ...(blk.amount as Vec3), z: degToRad(v) }
+                                                    })}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'scale' && typeof blk.amount === 'number' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
                                                 <ScrubInput
                                                     label="Δ"
-                                                    value={blk.amount as number}
-                                                    min={blk.property === 'opacity' ? -1 : -2}
-                                                    max={blk.property === 'opacity' ? 1 : 30}
-                                                    step={0.05}
-                                                    decimals={2}
-                                                    onChange={(amount) =>
-                                                        handleUpdateBlock(blk.id, { amount })
-                                                    }
+                                                    value={Math.round(Number(blk.amount || 1) * 100)}
+                                                    min={10}
+                                                    max={500}
+                                                    step={5}
+                                                    unit="%"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
                                                 />
-                                            )}
-                                        </div>
+                                            </div>
+                                        )}
 
-                                        {/* DIRECTION BUTTONS (ONLY FOR POSITION) */}
-                                        {isVec && blk.property === 'position' && (
+                                        {blk.property === 'scale' && typeof blk.amount === 'object' && (
                                             <div className="space-y-1.5">
-                                                <span className="text-[10px] text-[#a1a1aa] block">
-                                                    Direction
-                                                </span>
-                                                <div className="grid grid-cols-2 gap-1 bg-[#161619] p-0.5 rounded-lg border border-white/[0.05]">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="X"
+                                                        value={Math.round(((blk.amount as Vec3).x || 1) * 100)}
+                                                        min={10}
+                                                        max={500}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: v / 100 }
+                                                        })}
+                                                    />
+                                                    <ScrubInput
+                                                        label="Y"
+                                                        value={Math.round(((blk.amount as Vec3).y || 1) * 100)}
+                                                        min={10}
+                                                        max={500}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: v / 100 }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'opacity' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Opacity</label>
+                                                <ScrubInput
+                                                    label="Δ"
+                                                    value={Math.round(Number(blk.amount || 1) * 100)}
+                                                    min={-100}
+                                                    max={100}
+                                                    step={5}
+                                                    unit="%"
+                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'size' && typeof blk.amount === 'object' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Size</label>
+                                                <div className="grid grid-cols-2 gap-1.5">
+                                                    <ScrubInput
+                                                        label="ΔW"
+                                                        value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                        min={-2000}
+                                                        max={2000}
+                                                        step={10}
+                                                        unit="px"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                    <ScrubInput
+                                                        label="ΔH"
+                                                        value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                        min={-2000}
+                                                        max={2000}
+                                                        step={10}
+                                                        unit="px"
+                                                        onChange={(v) => handleUpdateBlock(blk.id, {
+                                                            amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                        })}
+                                                    />
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {blk.property === 'layerBlur' && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Blur</label>
+                                                <ScrubInput
+                                                    label="Radius"
+                                                    value={Math.round(Number(blk.amount || 0) * 100)}
+                                                    min={0}
+                                                    max={100}
+                                                    step={1}
+                                                    unit="%"
+                                                    onChange={(amount) => handleUpdateBlock(blk.id, { amount: amount / 100 })}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {/* DIRECTION BUTTONS (Segmented ← / →) */}
+                                        {['position', 'tilt', 'rotation', 'scale', 'maskSweep'].includes(blk.property) && (
+                                            <div className="space-y-1.5">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Direction</label>
+                                                <div className="grid grid-cols-2 gap-1 bg-[#141416] p-0.5 rounded-lg border border-white/[0.06]">
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: -Math.abs((blk.amount as Vec3).x || 0.35),
-                                                                },
-                                                            });
+                                                            handleSetBlockDirection(blk, -1);
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x <= 0
-                                                            ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#a1a1aa] hover:text-white'
+                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${isNegDirection
+                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
-                                                        title="Left Direction"
+                                                        title="Left / In to rest"
                                                     >
                                                         <ArrowLeft className="w-3.5 h-3.5" />
                                                     </button>
                                                     <button
+                                                        type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
-                                                            handleUpdateBlock(blk.id, {
-                                                                amount: {
-                                                                    ...(blk.amount as Vec3),
-                                                                    x: Math.abs((blk.amount as Vec3).x || 0.35),
-                                                                },
-                                                            });
+                                                            handleSetBlockDirection(blk, 1);
                                                         }}
-                                                        className={`h-6 rounded-md flex items-center justify-center cursor-pointer transition ${(blk.amount as Vec3).x > 0
-                                                            ? 'bg-[#27272c] text-white'
-                                                            : 'text-[#a1a1aa] hover:text-white'
+                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${!isNegDirection
+                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                            : 'text-[#71717a] hover:text-white'
                                                             }`}
-                                                        title="Right Direction"
+                                                        title="Right / Out from rest"
                                                     >
                                                         <ArrowRight className="w-3.5 h-3.5" />
                                                     </button>
@@ -1995,8 +2914,51 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         )}
 
-                                        {/* Timing (Start & Length) + Easing */}
-                                        <div className="grid grid-cols-2 gap-1.5">
+                                        {/* Easing (Dropdown + Sliders Bezier Popover Button) */}
+                                        <div className="space-y-1.5">
+                                            <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
+                                            <div className="flex items-center gap-1.5">
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEasingPopoverConfig({
+                                                            easing: blk.easing,
+                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                        });
+                                                    }}
+                                                    className="flex-1 h-8 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 px-2.5 flex items-center justify-between text-[11px] text-white transition cursor-pointer"
+                                                >
+                                                    <span className="flex items-center gap-2 truncate">
+                                                        <Spline className="w-3 h-3 text-[#0088ff] shrink-0" />
+                                                        <span className="capitalize">{getEasingDisplayLabel(blk.easing)}</span>
+                                                    </span>
+                                                    <ChevronDown className="w-3.5 h-3.5 text-[#71717a] shrink-0" />
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEasingPopoverConfig({
+                                                            easing: blk.easing,
+                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                        });
+                                                    }}
+                                                    title="Open interactive 2D Bezier curve editor"
+                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${blk.easing.kind === 'bezier'
+                                                        ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                        : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.08] hover:text-white hover:border-white/20'
+                                                        }`}
+                                                >
+                                                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Timing (Start & Duration) */}
+                                        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
                                             <ScrubInput
                                                 label="🕒"
                                                 value={blk.startMs}
@@ -2004,9 +2966,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 max={Math.max(0, activeShot.durationMs - 80)}
                                                 step={20}
                                                 unit=" ms"
-                                                onChange={(startMs) =>
-                                                    handleUpdateBlock(blk.id, { startMs })
-                                                }
+                                                onChange={(startMs) => handleUpdateBlock(blk.id, { startMs })}
+                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
                                             />
                                             <ScrubInput
                                                 label="⏱"
@@ -2015,120 +2976,73 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 max={activeShot.durationMs}
                                                 step={20}
                                                 unit=" ms"
-                                                onChange={(durationMs) =>
-                                                    handleUpdateBlock(blk.id, { durationMs })
-                                                }
+                                                onChange={(durationMs) => handleUpdateBlock(blk.id, { durationMs })}
+                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
                                             />
-                                        </div>
-
-                                        <div className="space-y-1.5">
-                                            <span className="text-[10px] text-[#a1a1aa] block">
-                                                Easing
-                                            </span>
-                                            <select
-                                                value={
-                                                    blk.easing.kind === 'bezier'
-                                                        ? 'bezier'
-                                                        : `${blk.easing.kind}:${blk.easing.name}`
-                                                }
-                                                onChange={(e) => {
-                                                    const val = e.target.value;
-                                                    const easing: Easing =
-                                                        val === 'bezier'
-                                                            ? {
-                                                                kind: 'bezier',
-                                                                x1: 0.16,
-                                                                y1: 1,
-                                                                x2: 0.3,
-                                                                y2: 1,
-                                                            }
-                                                            : val.startsWith('spring:')
-                                                                ? {
-                                                                    kind: 'spring',
-                                                                    name: val.split(':')[1] as SpringEasingName,
-                                                                }
-                                                                : {
-                                                                    kind: 'preset',
-                                                                    name: val.split(':')[1] as PresetEasingName,
-                                                                };
-                                                    handleUpdateBlock(blk.id, { easing });
-                                                }}
-                                                className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
-                                            >
-                                                <option value="preset:ease-in-out">
-                                                    Ease in and out
-                                                </option>
-                                                <option value="preset:ease-out">Ease out</option>
-                                                <option value="preset:ease-out-expo">
-                                                    Ease out expo
-                                                </option>
-                                                <option value="preset:ease-out-back">
-                                                    Ease out back
-                                                </option>
-                                                <option value="spring:gentle">Spring: Gentle</option>
-                                                <option value="spring:quick">Spring: Quick</option>
-                                                <option value="spring:bouncy">Spring: Bouncy</option>
-                                                <option value="preset:linear">Linear</option>
-                                            </select>
                                         </div>
                                     </div>
                                 );
                             })}
 
                             {/* IN SECTION (Entrance Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5">
+                            <div className="p-3.5 space-y-2.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        In (Entrance){(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
+                                        In{(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                if (l.entrances && l.entrances.length > 0) {
-                                                    const nextEnt = {
-                                                        id: `ent-${Date.now()}`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 650,
-                                                        delayMs: 0,
-                                                        distance: 0.18,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    const next = [...l.entrances, nextEnt];
-                                                    return { ...l, entrances: next, entrance: next[0] };
-                                                }
-                                                if (l.entrance && l.entrance.type !== 'none') {
-                                                    const first = { ...l.entrance, id: `ent-${Date.now()}-1` };
-                                                    const second = {
-                                                        id: `ent-${Date.now()}-2`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 650,
-                                                        delayMs: 0,
-                                                        distance: 0.18,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    return { ...l, entrances: [first, second], entrance: first };
-                                                }
-                                                return {
-                                                    ...l,
-                                                    entrance: {
-                                                        ...l.entrance,
-                                                        type: 'fade',
-                                                        durationMs: l.entrance.durationMs || 650,
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        title="Add / Stack Entrance"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        onClick={() => {
+                                            setInMenuOpen((v) => !v);
+                                            setOutMenuOpen(false);
+                                            setAddAnimMenuOpen(false);
+                                        }}
+                                        title="Add In Preset"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
+                                {inMenuOpen && (
+                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Presets
+                                        </div>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'fade')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
+                                            <span>Fade</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'slide')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span>Slide</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'float')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Float</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('in', 'wipe')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Wipe</span>
+                                        </button>
+                                    </div>
+                                )}
+
                                 {selectedLayer.entrances && selectedLayer.entrances.length > 0 ? (
                                     <div className="space-y-2.5">
                                         {selectedLayer.entrances.map((ent, idx) => (
-                                            <div key={ent.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                            <div key={ent.id || `ent-${ent.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
                                                 <div className="flex items-center gap-1.5">
                                                     <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                         <Sparkles className="w-3 h-3 text-[#0088ff]" />
@@ -2205,9 +3119,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    selectedLayer.entrance.type !== 'none' && (
-                                        <div className="space-y-2">
+                                ) : selectedLayer.entrance.type !== 'none' ? (
+                                    <div className="space-y-2">
                                             <div className="flex items-center gap-1.5">
                                                 <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                     <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
@@ -2303,65 +3216,130 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     }
                                                 />
                                             </div>
+
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] text-[#a1a1aa] block">
+                                                    Easing
+                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <select
+                                                        value={
+                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                                ? 'bezier'
+                                                                : selectedLayer.entrance.easing
+                                                                    ? `${selectedLayer.entrance.easing.kind}:${selectedLayer.entrance.easing.name}`
+                                                                    : 'preset:ease-out'
+                                                        }
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const easing = easingFromSelection(val);
+                                                            if (!easing) return;
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                entrance: { ...l.entrance, easing },
+                                                            }));
+                                                        }}
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="preset:ease-in-out">Ease in and out</option>
+                                                        <option value="preset:ease-in">Ease in</option>
+                                                        <option value="preset:ease-out">Ease out</option>
+                                                        <option value="preset:ease-out-expo">Ease out expo</option>
+                                                        <option value="preset:ease-out-back">Ease out back</option>
+                                                        <option value="preset:linear">Linear</option>
+                                                        <option value="spring:gentle">Spring: Gentle</option>
+                                                        <option value="spring:quick">Spring: Quick</option>
+                                                        <option value="spring:bouncy">Spring: Bouncy</option>
+                                                        <option value="bezier">Custom bezier</option>
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEasingPopoverConfig({
+                                                                easing: selectedLayer.entrance.easing || { kind: 'preset', name: 'ease-out' },
+                                                                onChange: (easing) =>
+                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                        ...l,
+                                                                        entrance: { ...l.entrance, easing },
+                                                                    })),
+                                                                anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                            });
+                                                        }}
+                                                        title="Open interactive Bezier curve editor"
+                                                        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
+                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                                ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                        }`}
+                                                    >
+                                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
+                                            </div>
                                         </div>
-                                    )
-                                )}
-                            </div>
+                                    ) : null}
+                                </div>
 
                             {/* OUT SECTION (Exit Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5">
+                            <div className="p-3.5 space-y-2.5 relative">
                                 <div className="flex items-center justify-between">
                                     <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Out (Exit){(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
+                                        Out{(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
                                     </span>
                                     <button
-                                        onClick={() =>
-                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                if (l.exits && l.exits.length > 0) {
-                                                    const nextExt = {
-                                                        id: `ext-${Date.now()}`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 550,
-                                                        delayMs: 0,
-                                                        distance: 0.16,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    const next = [...l.exits, nextExt];
-                                                    return { ...l, exits: next, exit: next[0] };
-                                                }
-                                                if (l.exit && l.exit.type !== 'none') {
-                                                    const first = { ...l.exit, id: `ext-${Date.now()}-1` };
-                                                    const second = {
-                                                        id: `ext-${Date.now()}-2`,
-                                                        type: 'scale-out' as TransitionType,
-                                                        durationMs: 550,
-                                                        delayMs: 0,
-                                                        distance: 0.16,
-                                                        easing: { kind: 'preset' as const, name: 'ease-out' as const },
-                                                    };
-                                                    return { ...l, exits: [first, second], exit: first };
-                                                }
-                                                return {
-                                                    ...l,
-                                                    exit: {
-                                                        ...l.exit,
-                                                        type: 'fade',
-                                                        durationMs: l.exit.durationMs || 550,
-                                                    },
-                                                };
-                                            })
-                                        }
-                                        title="Add / Stack Exit"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        onClick={() => {
+                                            setOutMenuOpen((v) => !v);
+                                            setInMenuOpen(false);
+                                            setAddAnimMenuOpen(false);
+                                        }}
+                                        title="Add Out Preset"
+                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                                     >
                                         <Plus className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
 
+                                {outMenuOpen && (
+                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                            Presets
+                                        </div>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'fade')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
+                                            <span>Fade</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'slide')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
+                                            <span>Slide</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'float')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
+                                            <span>Float</span>
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddPreset('out', 'wipe')}
+                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                        >
+                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
+                                            <span>Wipe</span>
+                                        </button>
+                                    </div>
+                                )}
+
                                 {selectedLayer.exits && selectedLayer.exits.length > 0 ? (
                                     <div className="space-y-2.5">
                                         {selectedLayer.exits.map((ext, idx) => (
-                                            <div key={ext.id || idx} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
+                                            <div key={ext.id || `ext-${ext.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
                                                 <div className="flex items-center gap-1.5">
                                                     <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                         <Sparkles className="w-3 h-3 text-rose-400" />
@@ -2438,9 +3416,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             </div>
                                         ))}
                                     </div>
-                                ) : (
-                                    selectedLayer.exit.type !== 'none' && (
-                                        <div className="space-y-2">
+                                ) : selectedLayer.exit.type !== 'none' ? (
+                                    <div className="space-y-2">
                                             <div className="flex items-center gap-1.5">
                                                 <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
                                                     <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
@@ -2537,121 +3514,114 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     }
                                                 />
                                             </div>
-                                        </div>
-                                    )
-                                )}
-                            </div>
-                        </div>
-                    )}
 
-                    {/* =============================================================== */}
-                    {/* TAB 2: ANIMATE (WHEN NO LAYER IS SELECTED — SCENE CAMERA)       */}
-                    {/* =============================================================== */}
-                    {effectiveMainTab === 'animate' && !selectedLayer && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            <div className="p-3.5 space-y-2.5">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Scene Camera
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            const camId = `cam-blk-${Date.now()}`;
-                                            updateShot(activeShot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: [
-                                                    ...(s.cameraBlocks || []),
-                                                    {
-                                                        id: camId,
-                                                        label: 'Camera Move',
-                                                        startMs: 0,
-                                                        durationMs: s.durationMs,
-                                                        fromFramingId: s.framings[0]?.id || 'f1',
-                                                        toFramingId: s.framings[1]?.id || 'f2',
-                                                        mode: 'dolly',
-                                                        easing: { kind: 'preset', name: 'linear' },
-                                                        from: {
-                                                            anchorX: 0,
-                                                            anchorY: 0,
-                                                            zoom: 1,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        to: {
-                                                            anchorX: -0.05,
-                                                            anchorY: 0.02,
-                                                            zoom: 1.15,
-                                                            roll: 0,
-                                                            orbit: 0,
-                                                            tilt: 0,
-                                                        },
-                                                        shake: { from: 0, to: 0 },
-                                                    },
-                                                ],
-                                            }));
-                                            selectCameraBlock(camId);
-                                        }}
-                                        className="px-2.5 py-1 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white text-[10px] font-semibold cursor-pointer transition"
-                                    >
-                                        + Add Camera Move
-                                    </button>
-                                </div>
-
-                                {/* List existing camera moves */}
-                                {activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0 && (
-                                    <div className="space-y-1.5 pt-1">
-                                        {activeShot.cameraBlocks.map((cb, idx) => (
-                                            <div
-                                                key={cb.id}
-                                                onClick={() => selectCameraBlock(cb.id)}
-                                                className={`p-2.5 rounded-lg bg-[#161619] border transition flex items-center justify-between cursor-pointer ${selectedCameraBlockId === cb.id
-                                                    ? 'border-[#0088ff]/60 bg-[#0088ff]/10'
-                                                    : 'border-white/[0.06] hover:border-white/20'
-                                                    }`}
-                                            >
-                                                <div className="flex items-center gap-2">
-                                                    <Film className="w-3.5 h-3.5 text-emerald-400" />
-                                                    <div>
-                                                        <div className="text-[11px] font-medium text-white">
-                                                            {cb.label || `Camera Move #${idx + 1}`}
-                                                        </div>
-                                                        <div className="text-[10px] text-[#a1a1aa] font-mono tabular-nums tracking-tight">
-                                                            {cb.startMs}ms – {cb.startMs + cb.durationMs}ms ({cb.mode})
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                                <button
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
-                                                        }));
-                                                        if (selectedCameraBlockId === cb.id) {
-                                                            selectCameraBlock(null);
+                                            <div className="space-y-1.5">
+                                                <span className="text-[10px] text-[#a1a1aa] block">
+                                                    Easing
+                                                </span>
+                                                <div className="flex items-center gap-1.5">
+                                                    <select
+                                                        value={
+                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                                ? 'bezier'
+                                                                : selectedLayer.exit.easing
+                                                                    ? `${selectedLayer.exit.easing.kind}:${selectedLayer.exit.easing.name}`
+                                                                    : 'preset:ease-out'
                                                         }
-                                                    }}
-                                                    className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                                                    title="Delete Move"
-                                                >
-                                                    <X className="w-3 h-3" />
-                                                </button>
+                                                        onChange={(e) => {
+                                                            const val = e.target.value;
+                                                            const easing = easingFromSelection(val);
+                                                            if (!easing) return;
+                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                ...l,
+                                                                exit: { ...l.exit, easing },
+                                                            }));
+                                                        }}
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                    >
+                                                        <option value="preset:ease-in-out">Ease in and out</option>
+                                                        <option value="preset:ease-in">Ease in</option>
+                                                        <option value="preset:ease-out">Ease out</option>
+                                                        <option value="preset:ease-out-expo">Ease out expo</option>
+                                                        <option value="preset:ease-out-back">Ease out back</option>
+                                                        <option value="preset:linear">Linear</option>
+                                                        <option value="spring:gentle">Spring: Gentle</option>
+                                                        <option value="spring:quick">Spring: Quick</option>
+                                                        <option value="spring:bouncy">Spring: Bouncy</option>
+                                                        <option value="bezier">Custom bezier</option>
+                                                    </select>
+                                                    <button
+                                                        type="button"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            setEasingPopoverConfig({
+                                                                easing: selectedLayer.exit.easing || { kind: 'preset', name: 'ease-out' },
+                                                                onChange: (easing) =>
+                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
+                                                                        ...l,
+                                                                        exit: { ...l.exit, easing },
+                                                                    })),
+                                                                anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                            });
+                                                        }}
+                                                        title="Open interactive Bezier curve editor"
+                                                        className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
+                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                                ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                        }`}
+                                                    >
+                                                        <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                )}
-
-                                <p className="text-[10px] text-[#a1a1aa] leading-relaxed">
-                                    Add a Camera Move to unlock From / To keyframes, Zoom, Orbit,
-                                    Dolly/Warp modes, and Handheld Shake.
-                                </p>
-                            </div>
-
-                            <SceneTransitionSection activeShot={activeShot} />
+                                        </div>
+                                    ) : null}
+                                </div>
                         </div>
                     )}
                 </>
+            ) : (
+                <ProjectSettingsPanel
+                    onSwapImageClick={onSwapImageClick}
+                    onOpenShortcuts={onOpenShortcuts}
+                />
+            )}
+
+            {/* Persistent Inspector Footer: Ask Raylight & Help */}
+            <div className="p-3 border-t border-white/[0.06] flex items-center justify-end gap-2 shrink-0 bg-[#0b0b0d]">
+                <button
+                    type="button"
+                    onClick={onOpenShortcuts}
+                    title="Ask Raylight AI Assistant & Shortcuts"
+                    className="h-7 px-3 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                >
+                    <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />
+                    <span>Ask Raylight</span>
+                </button>
+                <button
+                    type="button"
+                    onClick={onOpenShortcuts}
+                    title="Help & Shortcuts (?)"
+                    className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-[#a1a1aa] hover:text-white flex items-center justify-center text-[11px] font-medium shadow-sm transition cursor-pointer"
+                >
+                    ?
+                </button>
+            </div>
+
+            {/* Floating Visual Bezier Curve Popover */}
+            {easingPopoverConfig && (
+                <EasingPopover
+                    easing={easingPopoverConfig.easing}
+                    onChange={(nextEasing) => {
+                        easingPopoverConfig.onChange(nextEasing);
+                        setEasingPopoverConfig((prev) =>
+                            prev ? { ...prev, easing: nextEasing } : null
+                        );
+                    }}
+                    onClose={() => setEasingPopoverConfig(null)}
+                    anchorRect={easingPopoverConfig.anchorRect}
+                />
             )}
         </aside>
     );

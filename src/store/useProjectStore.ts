@@ -12,6 +12,9 @@ import type {
     TextLayer,
     AssetRecord,
     AudioClip,
+    CameraBlock,
+    CameraKeyframeEndpoint,
+    Easing,
 } from '../model/types';
 import {
     DEFAULT_PROJECT,
@@ -21,11 +24,26 @@ import {
     createDefaultShapeLayer,
     createDefaultTextLayer,
     createDefaultShot,
+    createDefaultCameraBlock,
 } from '../model/defaults';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { loadProjectFromBrowser } from '../storage/projectIO';
+import { useSelectionStore } from './useSelectionStore';
+import { generateId } from '../model/id';
 
 const MAX_HISTORY_STEPS = 50;
+
+export interface AddCameraBlockOptions {
+    label?: string;
+    startMs?: number;
+    durationMs?: number;
+    mode?: CameraBlock['mode'];
+    fromFramingId?: string;
+    toFramingId?: string;
+    from?: CameraKeyframeEndpoint;
+    to?: CameraKeyframeEndpoint;
+    easing?: Easing;
+}
 
 export function recalculateShotStartTimes(shots: Shot[]): Shot[] {
     let runningMs = 0;
@@ -53,22 +71,52 @@ function trimBlocksForFirstHalf<T extends { startMs: number; durationMs: number 
         }));
 }
 
-function shiftBlocksForSecondHalf<T extends { startMs: number; durationMs: number }>(
+function shiftBlocksForSecondHalf<T extends { id?: string; startMs: number; durationMs: number }>(
     blocks: T[] | undefined,
-    splitMs: number
+    splitMs: number,
+    prefix = 'blk'
 ): T[] {
     if (!blocks) return [];
     return blocks
         .filter((b) => b.startMs + b.durationMs > splitMs)
         .map((b) => {
+            const wasSplit = b.startMs < splitMs;
             const newStart = Math.max(0, b.startMs - splitMs);
             const remaining = b.startMs + b.durationMs - splitMs;
             return {
                 ...b,
+                id: wasSplit ? generateId(prefix) : (b.id ?? generateId(prefix)),
                 startMs: newStart,
                 durationMs: Math.min(b.durationMs, remaining),
             };
         });
+}
+
+export function pruneEmptyGroups(groups: Group[], remainingLayers: Layer[]): Group[] {
+    const layerGroupIds = new Set(remainingLayers.map((l) => l.groupId).filter(Boolean));
+    let currentGroups = [...groups];
+    let changed = true;
+
+    while (changed) {
+        changed = false;
+        const nextGroups = currentGroups.filter((g) => {
+            if (layerGroupIds.has(g.id)) return true;
+            return currentGroups.some((other) => other.parentGroupId === g.id && other.id !== g.id);
+        });
+
+        if (nextGroups.length !== currentGroups.length) {
+            currentGroups = nextGroups;
+            changed = true;
+        }
+    }
+
+    const finalGroupIds = new Set(currentGroups.map((g) => g.id));
+    return currentGroups.map((g) => {
+        if (g.parentGroupId && !finalGroupIds.has(g.parentGroupId)) {
+            return { ...g, parentGroupId: undefined };
+        }
+        return g;
+    });
 }
 
 export type RestackMode = 'forward' | 'backward' | 'front' | 'back';
@@ -79,6 +127,9 @@ interface ProjectStore {
     future: Project[];
     dragSnapshot: Project | null;
     validation: ValidationResult;
+    isHydrating: boolean;
+    hydrationRevision: number;
+    setHydrated: (status: boolean) => void;
 
     updateProject: (
         updater: (project: Project) => Project,
@@ -103,6 +154,11 @@ interface ProjectStore {
             Partial<ShapeLayer> &
             Partial<TextLayer>
     ) => Layer;
+    addCameraBlockToShot: (
+        shotId: string,
+        options?: AddCameraBlockOptions
+    ) => CameraBlock | null;
+    toggleProjectAudioMuted: () => void;
     addMultipleLayersToShot: (
         shotId: string,
         newLayers: Layer[],
@@ -173,6 +229,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     future: [],
     dragSnapshot: null,
     validation: validateProject(initialProject),
+    isHydrating: true,
+    hydrationRevision: 0,
+    setHydrated: (status) => set({ isHydrating: !status }),
 
     updateProject: (updater, options) =>
         set((state) => {
@@ -180,6 +239,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 ...updater(state.project),
                 updatedAt: new Date().toISOString(),
             };
+            const nextRevision = state.hydrationRevision + 1;
             // Pointer-move updates inside a drag are transient. Validate the committed
             // project once at pointer-up instead of reparsing the full asset graph per frame.
             const validation = state.dragSnapshot === null
@@ -187,7 +247,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 : state.validation;
 
             if (options?.skipHistory || state.dragSnapshot !== null) {
-                return { project: updated, validation };
+                return { project: updated, validation, hydrationRevision: nextRevision };
             }
 
             return {
@@ -195,6 +255,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
                 future: [],
                 validation,
+                hydrationRevision: nextRevision,
             };
         }),
 
@@ -267,6 +328,43 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         return newLayer;
     },
 
+    addCameraBlockToShot: (shotId, options = {}) => {
+        const shot = get().project.shots.find((candidate) => candidate.id === shotId);
+        if (!shot) return null;
+
+        const id = generateId('cam-blk');
+        const block: CameraBlock = {
+            ...createDefaultCameraBlock(
+                id,
+                options.startMs ?? 0,
+                options.durationMs ?? shot.durationMs,
+                options.fromFramingId ?? shot.framings[0]?.id ?? 'f1',
+                options.toFramingId ?? shot.framings[1]?.id ?? 'f2',
+                options.label ?? 'Camera Move'
+            ),
+            ...(options.mode ? { mode: options.mode } : {}),
+            ...(options.from ? { from: options.from } : {}),
+            ...(options.to ? { to: options.to } : {}),
+            ...(options.easing ? { easing: options.easing } : {}),
+        };
+
+        get().updateShot(shotId, (currentShot) => ({
+            ...currentShot,
+            cameraBlocks: [...(currentShot.cameraBlocks || []), block],
+        }));
+        return block;
+    },
+
+    toggleProjectAudioMuted: () => {
+        get().updateProject((project) => ({
+            ...project,
+            audio: {
+                ...(project.audio ?? { clips: [], masterVolume: 1 }),
+                muted: !project.audio?.muted,
+            },
+        }));
+    },
+
     addMultipleLayersToShot: (shotId, newLayers, newAssets = {}) => {
         if (newLayers.length === 0) return [];
         get().updateProject((proj) => ({
@@ -293,39 +391,67 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     },
 
     deleteLayerFromShot: (shotId, layerId) => {
-        get().updateShot(shotId, (shot) => ({
-            ...shot,
-            layers: shot.layers
+        get().updateShot(shotId, (shot) => {
+            const nextLayers = shot.layers
                 .filter((l) => l.id !== layerId)
                 .sort((a, b) => a.order - b.order)
                 .map((l, idx) => ({
                     ...l,
                     order: idx,
                     maskLayerId: l.maskLayerId === layerId ? undefined : l.maskLayerId,
-                })),
-            groups: (shot.groups || []).filter((g) =>
-                shot.layers.some((l) => l.groupId === g.id && l.id !== layerId)
-            ),
-        }));
+                }));
+            return {
+                ...shot,
+                layers: nextLayers,
+                groups: pruneEmptyGroups(shot.groups || [], nextLayers),
+            };
+        });
+        try {
+            const sel = useSelectionStore.getState();
+            if (sel.selectedLayerIds.includes(layerId)) {
+                const remaining = sel.selectedLayerIds.filter((id) => id !== layerId);
+                if (remaining.length > 0) {
+                    sel.setSelectedLayerIds(remaining);
+                } else {
+                    sel.clearLayerSelection();
+                }
+            }
+        } catch {
+            // Ignore in headless tests
+        }
     },
 
     deleteMultipleLayersFromShot: (shotId, layerIds) => {
         if (!layerIds || layerIds.length === 0) return;
         const idSet = new Set(layerIds);
-        get().updateShot(shotId, (shot) => ({
-            ...shot,
-            layers: shot.layers
+        get().updateShot(shotId, (shot) => {
+            const nextLayers = shot.layers
                 .filter((l) => !idSet.has(l.id))
                 .sort((a, b) => a.order - b.order)
                 .map((l, idx) => ({
                     ...l,
                     order: idx,
                     maskLayerId: l.maskLayerId && idSet.has(l.maskLayerId) ? undefined : l.maskLayerId,
-                })),
-            groups: (shot.groups || []).filter((g) =>
-                shot.layers.some((l) => l.groupId === g.id && !idSet.has(l.id))
-            ),
-        }));
+                }));
+            return {
+                ...shot,
+                layers: nextLayers,
+                groups: pruneEmptyGroups(shot.groups || [], nextLayers),
+            };
+        });
+        try {
+            const sel = useSelectionStore.getState();
+            const remaining = sel.selectedLayerIds.filter((id) => !idSet.has(id));
+            if (remaining.length !== sel.selectedLayerIds.length) {
+                if (remaining.length > 0) {
+                    sel.setSelectedLayerIds(remaining);
+                } else {
+                    sel.clearLayerSelection();
+                }
+            }
+        } catch {
+            // Ignore in headless tests
+        }
     },
 
     duplicateLayerInShot: (shotId, layerId) => {
@@ -334,11 +460,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const original = shot?.layers.find((l) => l.id === layerId);
         if (!shot || !original) return null;
 
-        const copyId = `layer-${original.kind}-${Date.now()}-${Math.random()
-            .toString(36)
-            .slice(2, 5)}`;
+        const copyId = generateId(`layer-${original.kind}`);
 
-        const cloned: Layer = JSON.parse(JSON.stringify(original));
+        const cloned: Layer = structuredClone(original);
         cloned.id = copyId;
         cloned.name = `${original.name} Copy`;
         cloned.order = shot.layers.length;
@@ -347,9 +471,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             x: Number((original.position.x + 0.03).toFixed(4)),
             y: Number((original.position.y + 0.03).toFixed(4)),
         };
-        cloned.blocks = cloned.blocks.map((b, i) => ({
+        cloned.blocks = cloned.blocks.map((b) => ({
             ...b,
-            id: `blk-${Date.now()}-${i}`,
+            id: generateId('blk'),
         }));
 
         get().updateShot(shotId, (s) => ({
@@ -483,7 +607,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
         const durationMs = Math.min(800, safeEndMs);
         const startMs = Math.max(0, safeEndMs - durationMs);
-        const newBlockId = `blk-rec-${Date.now()}`;
+        const newBlockId = generateId('blk-rec');
 
         get().updateLayer(
             shotId,
@@ -519,7 +643,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const parentGroupId = firstLayer?.groupId;
 
         const newGroup: Group = {
-            id: `grp-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
+            id: generateId('grp'),
             name: name || `Group ${shot.groups.length + 1}`,
             parentGroupId,
             collapsed: false,
@@ -561,27 +685,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     updateGroupInShot: (shotId, groupId, updater) => {
         get().updateShot(shotId, (shot) => {
-            const updatedGroups = shot.groups.map((g) =>
+            const updatedGroups = (shot.groups || []).map((g) =>
                 g.id === groupId ? updater(g) : g
             );
-            const targetGroup = updatedGroups.find((g) => g.id === groupId);
-
-            const nextLayers = targetGroup
-                ? shot.layers.map((l) =>
-                    l.groupId === groupId
-                        ? {
-                            ...l,
-                            hidden: targetGroup.hidden,
-                            locked: targetGroup.locked,
-                        }
-                        : l
-                )
-                : shot.layers;
-
             return {
                 ...shot,
                 groups: updatedGroups,
-                layers: nextLayers,
             };
         });
     },
@@ -591,7 +700,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const state = get();
         const count = state.project.shots.length;
         const newShot = createDefaultShot({
-            id: `shot-${Date.now()}`,
+            id: generateId('shot'),
             name: `Shot ${count + 1}`,
             durationMs: 3500,
             lane: count % 8,
@@ -617,12 +726,32 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const original = state.project.shots.find((s) => s.id === shotId);
         if (!original) return null;
 
-        const cloned: Shot = JSON.parse(JSON.stringify(original));
-        cloned.id = `shot-${Date.now()}`;
+        const cloned: Shot = structuredClone(original);
+        cloned.id = generateId('shot');
         cloned.name = `${original.name} (Copy)`;
-        cloned.layers = cloned.layers.map((l, idx) => ({
+        cloned.layers = cloned.layers.map((l) => ({
             ...l,
-            id: `layer-${l.kind}-${Date.now()}-${idx}`,
+            id: generateId(`layer-${l.kind}`),
+            blocks: (l.blocks || []).map((b) => ({
+                ...b,
+                id: generateId('blk'),
+            })),
+        }));
+        cloned.cameraBlocks = (cloned.cameraBlocks || []).map((b) => ({
+            ...b,
+            id: generateId('cam-blk'),
+        }));
+        cloned.lightBlocks = (cloned.lightBlocks || []).map((b) => ({
+            ...b,
+            id: generateId('light-blk'),
+        }));
+        cloned.effectBlocks = (cloned.effectBlocks || []).map((b) => ({
+            ...b,
+            id: generateId('effect-blk'),
+        }));
+        cloned.focusBlocks = (cloned.focusBlocks || []).map((b) => ({
+            ...b,
+            id: generateId('focus-blk'),
         }));
 
         get().updateProject((proj) => {
@@ -642,9 +771,18 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         get().updateProject((proj) => {
             if (proj.shots.length <= 1) return proj;
             const filtered = proj.shots.filter((s) => s.id !== shotId);
+            const remainingShots = recalculateShotStartTimes(filtered);
+            try {
+                const sel = useSelectionStore.getState();
+                if (sel.selectedShotId === shotId && remainingShots.length > 0) {
+                    sel.selectShot(remainingShots[0].id);
+                }
+            } catch {
+                // Ignore in headless tests
+            }
             return {
                 ...proj,
-                shots: recalculateShotStartTimes(filtered),
+                shots: remainingShots,
             };
         });
     },
@@ -662,21 +800,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         const firstDuration = localSplitMs;
         const secondDuration = target.durationMs - localSplitMs;
 
-        const secondShot: Shot = JSON.parse(JSON.stringify(target));
-        secondShot.id = `shot-${Date.now()}`;
+        const secondShot: Shot = structuredClone(target);
+        secondShot.id = generateId('shot');
         secondShot.name = `${target.name} (Part 2)`;
         secondShot.startMs = target.startMs + firstDuration;
         secondShot.durationMs = secondDuration;
-        secondShot.layers = secondShot.layers.map((l, idx) => ({
+        // Split shots are contiguous continuations: incoming transition must be a seamless cut
+        secondShot.transition = {
+            type: 'cut',
+            durationMs: 0,
+            easing: { kind: 'preset', name: 'linear' },
+        };
+        secondShot.layers = secondShot.layers.map((l) => ({
             ...l,
-            id: `layer-${l.kind}-${Date.now()}-${idx}`,
+            id: generateId(`layer-${l.kind}`),
             inMs: Math.max(0, l.inMs - firstDuration),
             outMs: Math.max(100, Math.min(secondDuration, l.outMs - firstDuration)),
-            blocks: shiftBlocksForSecondHalf(l.blocks, firstDuration),
+            blocks: shiftBlocksForSecondHalf(l.blocks, firstDuration, 'blk'),
         }));
-        secondShot.cameraBlocks = shiftBlocksForSecondHalf(target.cameraBlocks, firstDuration);
-        secondShot.lightBlocks = shiftBlocksForSecondHalf(target.lightBlocks, firstDuration);
-        secondShot.effectBlocks = shiftBlocksForSecondHalf(target.effectBlocks, firstDuration);
+        secondShot.cameraBlocks = shiftBlocksForSecondHalf(target.cameraBlocks, firstDuration, 'cam-blk');
+        secondShot.lightBlocks = shiftBlocksForSecondHalf(target.lightBlocks, firstDuration, 'light-blk');
+        secondShot.effectBlocks = shiftBlocksForSecondHalf(target.effectBlocks, firstDuration, 'effect-blk');
+        secondShot.focusBlocks = shiftBlocksForSecondHalf(target.focusBlocks, firstDuration, 'focus-blk');
 
         get().updateProject((proj) => {
             const idx = proj.shots.findIndex((s) => s.id === shotId);
@@ -691,6 +836,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 cameraBlocks: trimBlocksForFirstHalf(target.cameraBlocks, firstDuration),
                 lightBlocks: trimBlocksForFirstHalf(target.lightBlocks, firstDuration),
                 effectBlocks: trimBlocksForFirstHalf(target.effectBlocks, firstDuration),
+                focusBlocks: trimBlocksForFirstHalf(target.focusBlocks, firstDuration),
             };
             const nextShots = [...proj.shots];
             nextShots.splice(idx, 1, updatedFirst, secondShot);
@@ -716,7 +862,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
         const secondClip: AudioClip = {
             ...target,
-            id: `audio-clip-${Date.now()}`,
+            id: generateId('audio-clip'),
             name: `${target.name} (Part 2)`,
             startMs: globalTimeMs,
             durationMs: secondDuration,
@@ -860,6 +1006,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
                 future: [],
                 validation: result,
+                isHydrating: false,
+                hydrationRevision: state.hydrationRevision + 1,
             }));
         } else {
             set({ validation: result });
@@ -867,3 +1015,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         return result;
     },
 }));
+
+if (typeof window !== 'undefined' && import.meta.env.DEV) {
+    (window as unknown as { useProjectStore: typeof useProjectStore }).useProjectStore = useProjectStore;
+}

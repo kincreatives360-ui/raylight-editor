@@ -181,4 +181,31 @@ describe('evaluateShotCameraAtTime', () => {
     expect(Number.isFinite(result.fovDegrees)).toBe(true);
     expect(Number.isFinite(result.focalLength)).toBe(true);
   });
+
+  it('7. Smoothly interpolates targetZ across framing depth changes', () => {
+    const shot = createDefaultShot({
+      framings: [
+        { id: 'f-shallow', name: 'Shallow', target: { x: 0, y: 0, z: -10 }, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+        { id: 'f-deep', name: 'Deep', target: { x: 0, y: 0, z: 50 }, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+      ],
+      cameraBlocks: [
+        {
+          id: 'cam-depth',
+          label: 'Z Transition',
+          mode: 'dolly',
+          fromFramingId: 'f-shallow',
+          toFramingId: 'f-deep',
+          startMs: 0,
+          durationMs: 1000,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      ],
+    });
+
+    const mid = evaluateShotCameraAtTime(shot, 500);
+    expect(mid.target.z).toBeCloseTo(20, 2);
+
+    const end = evaluateShotCameraAtTime(shot, 1000);
+    expect(end.target.z).toBeCloseTo(50, 2);
+  });
 });

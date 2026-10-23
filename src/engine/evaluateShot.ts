@@ -1,5 +1,4 @@
-// src/engine/evaluateShot.ts
-import type { Project, Shot, LightRig, SceneEffects } from '../model/types';
+import type { Project, Shot, LightRig, SceneEffects, Group } from '../model/types';
 import { createDefaultShot } from '../model/defaults';
 import { evaluateEasing } from './easing';
 import { evaluateLightBlocks } from './evaluateLight';
@@ -38,6 +37,48 @@ function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
 
+export function isLayerEffectivelyHidden(
+    layer: { hidden?: boolean; groupId?: string },
+    groups?: Group[] | Map<string, Group>
+): boolean {
+    if (layer.hidden) return true;
+    if (!layer.groupId || !groups) return false;
+    const groupById = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
+    let currentId: string | undefined = layer.groupId;
+    const visited = new Set<string>();
+
+    while (currentId) {
+        if (visited.has(currentId)) break;
+        visited.add(currentId);
+        const group = groupById.get(currentId);
+        if (!group) break;
+        if (group.hidden) return true;
+        currentId = group.parentGroupId;
+    }
+    return false;
+}
+
+export function isLayerEffectivelyLocked(
+    layer: { locked?: boolean; groupId?: string },
+    groups?: Group[] | Map<string, Group>
+): boolean {
+    if (layer.locked) return true;
+    if (!layer.groupId || !groups) return false;
+    const groupById = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
+    let currentId: string | undefined = layer.groupId;
+    const visited = new Set<string>();
+
+    while (currentId) {
+        if (visited.has(currentId)) break;
+        visited.add(currentId);
+        const group = groupById.get(currentId);
+        if (!group) break;
+        if (group.locked) return true;
+        currentId = group.parentGroupId;
+    }
+    return false;
+}
+
 export function evaluateProjectAtTime(
     project: Project,
     globalTimeMs: number
@@ -46,22 +87,40 @@ export function evaluateProjectAtTime(
     const frameNumber = Math.floor((clampedGlobalMs / 1000) * project.fps);
 
     const shots = project.shots || [];
-    let shotIndex = shots.findIndex(
-        (s) =>
-            clampedGlobalMs >= s.startMs &&
-            clampedGlobalMs <= s.startMs + s.durationMs
-    );
+    let shotIndex = -1;
+
+    for (let i = 0; i < shots.length; i++) {
+        const s = shots[i];
+        const isLastShot = i === shots.length - 1;
+        // Consistent half-open interval [startMs, startMs + durationMs) for non-terminal shots,
+        // and closed [startMs, startMs + durationMs] for the final project endpoint.
+        const containsTime = isLastShot
+            ? clampedGlobalMs >= s.startMs && clampedGlobalMs <= s.startMs + s.durationMs
+            : clampedGlobalMs >= s.startMs && clampedGlobalMs < s.startMs + s.durationMs;
+
+        if (containsTime) {
+            shotIndex = i;
+            break;
+        }
+    }
 
     if (shotIndex === -1) {
-        let latestIdx = -1;
-        for (let i = 0; i < shots.length; i++) {
-            if (shots[i].startMs <= clampedGlobalMs) {
-                if (latestIdx === -1 || shots[i].startMs >= shots[latestIdx].startMs) {
+        if (shots.length === 0) {
+            shotIndex = 0;
+        } else if (
+            clampedGlobalMs >=
+            shots[shots.length - 1].startMs + shots[shots.length - 1].durationMs
+        ) {
+            shotIndex = shots.length - 1;
+        } else {
+            let latestIdx = 0;
+            for (let i = 0; i < shots.length; i++) {
+                if (shots[i].startMs <= clampedGlobalMs) {
                     latestIdx = i;
                 }
             }
+            shotIndex = latestIdx;
         }
-        shotIndex = latestIdx !== -1 ? latestIdx : 0;
     }
 
     const baseShot = shots[shotIndex] || shots[0] || createDefaultShot();
@@ -167,30 +226,12 @@ export function evaluateProjectAtTime(
     // 5. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
     const groupById = new Map((activeShot.groups || []).map((g) => [g.id, g]));
 
-    const isLayerGroupHidden = (groupId?: string): boolean => {
-        if (!groupId) return false;
-        let currentId: string | undefined = groupId;
-        const visited = new Set<string>();
-
-        while (currentId) {
-            if (visited.has(currentId)) break;
-            visited.add(currentId);
-            const group = groupById.get(currentId);
-            if (!group) break;
-            if (group.hidden) return true;
-            currentId = group.parentGroupId;
-        }
-        return false;
-    };
-
     const sortedLayers = [...(activeShot.layers || [])].sort((a, b) => a.order - b.order);
 
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
-        const isGroupHidden = isLayerGroupHidden(layer.groupId);
-        const effectiveLayer = layer;
-
+        const isHidden = isLayerEffectivelyHidden(layer, groupById);
         const evalLayer = evaluateLayerAtTime(
-            isGroupHidden ? { ...effectiveLayer, hidden: true } : effectiveLayer,
+            isHidden ? { ...layer, hidden: true } : layer,
             shotLocalTimeMs
         );
 

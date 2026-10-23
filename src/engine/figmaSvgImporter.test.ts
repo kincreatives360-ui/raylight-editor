@@ -275,4 +275,18 @@ describe('parseFigmaSvgToLayers', () => {
     expect(Number.isFinite(rect.size.width)).toBe(true);
     expect(Number.isFinite(rect.size.height)).toBe(true);
   });
+
+  it('10. Preserves both shapes and paths in mixed SVGs without dropping vectors', () => {
+    const mixedSvg = `
+      <svg width="1000" height="500">
+        <rect x="50" y="50" width="200" height="100" fill="#22c55e" />
+        <path d="M300 100 L350 200 L400 100 Z" fill="#3b82f6" />
+      </svg>
+    `;
+
+    const res = parseFigmaSvgToLayers(mixedSvg, 3000, 0);
+    expect(res.layers.length).toBe(2);
+    expect(res.layers.some((l) => l.kind === 'shape')).toBe(true);
+    expect(res.layers.some((l) => l.kind === 'image')).toBe(true);
+  });
 });

@@ -1,15 +1,52 @@
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, Scissors } from 'lucide-react';
-import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip } from '../../model/types';
+import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip, Easing } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { evaluateEasing } from '../../engine/easing';
-import { createDefaultCameraBlock } from '../../model/defaults';
 import { TimelineTimecode } from './TimelineTimecode';
 import { PlayheadOverlay } from './PlayheadOverlay';
+import { EasingPopover } from './EasingPopover';
+import { generateWaveformPeaks } from '../../engine/audioEngine';
+
+const AudioWaveform: React.FC<{
+    clip: AudioClip;
+    width: number;
+    muted?: boolean;
+}> = React.memo(({ clip, width, muted }) => {
+    const barCount = Math.max(12, Math.min(96, Math.floor(width / 5)));
+    const peaks = useMemo(
+        () => generateWaveformPeaks(clip, barCount),
+        [clip, barCount]
+    );
+
+    return (
+        <svg
+            className="absolute inset-0 w-full h-full pointer-events-none opacity-40 overflow-hidden"
+            preserveAspectRatio="none"
+            viewBox={`0 0 ${barCount * 4} 24`}
+        >
+            {peaks.map((p, idx) => {
+                const barHeight = Math.max(2, p * 20);
+                const y = (24 - barHeight) / 2;
+                return (
+                    <rect
+                        key={idx}
+                        x={idx * 4 + 1}
+                        y={y}
+                        width={2.2}
+                        height={barHeight}
+                        rx={1}
+                        fill={muted ? '#94a3b8' : '#38bdf8'}
+                    />
+                );
+            })}
+        </svg>
+    );
+});
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -32,6 +69,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         updateLayer,
         addShot,
         addLayerToShot,
+        addCameraBlockToShot,
+        toggleProjectAudioMuted,
         splitAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
@@ -54,6 +93,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectedCameraBlockId,
         selectedLightBlockId,
         selectedPresetType,
+        inspectorTab,
+        clearLayerSelection,
         timelineView,
         timelineZoom,
         timelineHeightPx,
@@ -120,11 +161,26 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         dragging: boolean;
     } | null>(null);
     const suppressShotClickRef = useRef<string | null>(null);
+    const suppressPillClickRef = useRef<string | null>(null);
     const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
     const isDraggingPlayheadRef = useRef(false);
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
+    const [easingPopoverTarget, setEasingPopoverTarget] = useState<{
+        easing: Easing;
+        onChange: (easing: Easing) => void;
+        anchorRect?: DOMRect | null;
+    } | null>(null);
+    const [ghostDragPreview, setGhostDragPreview] = useState<{
+        id: string;
+        type: 'block' | 'entrance' | 'exit' | 'layer';
+        startMs: number;
+        durationMs: number;
+        label?: string;
+        trimEdge?: 'left' | 'right';
+        snapped?: boolean;
+    } | null>(null);
     const rafIdRef = useRef<number | null>(null);
     const latestHoverClientXRef = useRef<number | null>(null);
 
@@ -179,9 +235,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     );
 
     const rulerStepMs = useMemo(() => {
-        if (pxPerSecond >= 220) return 500;
-        if (pxPerSecond >= 90) return 1000;
-        if (pxPerSecond >= 45) return 2000;
+        if (pxPerSecond >= 240) return 1000;
+        if (pxPerSecond >= 80) return 2000;
+        if (pxPerSecond >= 40) return 4000;
         return 5000;
     }, [pxPerSecond]);
 
@@ -287,6 +343,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         if (
             target.closest('button, input, [role="button"], [data-timeline-item], [data-cam-pill], [data-light-pill], [data-preset-pill]')
         ) return;
+        clearLayerSelection();
         const targetTime = hoverTimeMs !== null ? hoverTimeMs : timeAtClientX(event.clientX);
         setCurrentTimeMs(targetTime);
     };
@@ -326,7 +383,63 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         window.addEventListener('pointercancel', onEnd);
     };
 
-    // 1. Drag / Trim Main Layer Bar (Hardened with Pointer Events & >3px deadzone)
+    // Magnetic Snapping calculation (12px visual threshold converted into milliseconds)
+    const snapThresholdMs = Math.max(15, Math.round(12 / pxPerMs));
+
+    const getSnapTargets = (shot: Shot, excludeId?: string): number[] => {
+        const targets = new Set<number>();
+        targets.add(0);
+        targets.add(shot.durationMs);
+
+        const playheadTimeMs = usePlayheadStore.getState().currentTimeMs;
+        const playheadLocalMs = playheadTimeMs - shot.startMs;
+        if (playheadLocalMs >= 0 && playheadLocalMs <= shot.durationMs) {
+            targets.add(playheadLocalMs);
+        }
+
+        for (const l of shot.layers) {
+            if (l.id !== excludeId) {
+                targets.add(l.inMs);
+                targets.add(l.outMs);
+            }
+            if (l.entrance.type !== 'none' && `${l.id}-entrance` !== excludeId && l.id !== excludeId) {
+                const entStart = l.inMs + (l.entrance.delayMs || 0);
+                const entDur = Math.max(80, l.entrance.durationMs || 500);
+                targets.add(entStart);
+                targets.add(entStart + entDur);
+            }
+            if (l.exit.type !== 'none' && `${l.id}-exit` !== excludeId && l.id !== excludeId) {
+                const extDur = Math.max(80, l.exit.durationMs || 500);
+                const extEnd = l.outMs - (l.exit.delayMs || 0);
+                targets.add(Math.max(l.inMs, extEnd - extDur));
+                targets.add(extEnd);
+            }
+            for (const b of l.blocks) {
+                if (b.id !== excludeId) {
+                    targets.add(b.startMs);
+                    targets.add(b.startMs + b.durationMs);
+                }
+            }
+        }
+        return Array.from(targets);
+    };
+
+    const snapTime = (val: number, targets: number[], threshold: number): { time: number; snapped: boolean } => {
+        let closest = val;
+        let minDiff = threshold;
+        let snapped = false;
+        for (const t of targets) {
+            const diff = Math.abs(val - t);
+            if (diff < minDiff) {
+                minDiff = diff;
+                closest = t;
+                snapped = true;
+            }
+        }
+        return { time: closest, snapped };
+    };
+
+    // 1. Drag / Trim Main Layer Bar (Hardened with Pointer Events & >3px deadzone + Magnetic Snapping)
     const startLayerBarDrag = (
         e: React.PointerEvent,
         shot: Shot,
@@ -342,6 +455,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         const origIn = layer.inMs;
         const origOut = layer.outMs;
         const pointerId = e.pointerId;
+        const snapTargets = getSnapTargets(shot, layer.id);
         let hasMoved = false;
 
         try {
@@ -364,16 +478,55 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             let nextOut = origOut;
 
             if (mode === 'in') {
-                nextIn = Math.max(0, Math.min(origOut - 100, origIn + deltaMs));
+                const snap = snapTime(origIn + deltaMs, snapTargets, snapThresholdMs);
+                nextIn = Math.max(0, Math.min(origOut - 100, snap.time));
+                setGhostDragPreview({
+                    id: layer.id,
+                    type: 'layer',
+                    startMs: nextIn,
+                    durationMs: nextOut - nextIn,
+                    label: layer.name,
+                    trimEdge: 'left',
+                    snapped: snap.snapped,
+                });
             } else if (mode === 'out') {
+                const snap = snapTime(origOut + deltaMs, snapTargets, snapThresholdMs);
                 nextOut = Math.max(
                     origIn + 100,
-                    Math.min(shot.durationMs, origOut + deltaMs)
+                    Math.min(shot.durationMs, snap.time)
                 );
+                setGhostDragPreview({
+                    id: layer.id,
+                    type: 'layer',
+                    startMs: nextIn,
+                    durationMs: nextOut - nextIn,
+                    label: layer.name,
+                    trimEdge: 'right',
+                    snapped: snap.snapped,
+                });
             } else {
                 const dur = origOut - origIn;
-                nextIn = Math.max(0, Math.min(shot.durationMs - dur, origIn + deltaMs));
+                const snapStart = snapTime(origIn + deltaMs, snapTargets, snapThresholdMs);
+                const snapEnd = snapTime(origOut + deltaMs, snapTargets, snapThresholdMs);
+                let snapped = false;
+                let targetIn = origIn + deltaMs;
+                if (snapStart.snapped) {
+                    targetIn = snapStart.time;
+                    snapped = true;
+                } else if (snapEnd.snapped) {
+                    targetIn = snapEnd.time - dur;
+                    snapped = true;
+                }
+                nextIn = Math.max(0, Math.min(shot.durationMs - dur, targetIn));
                 nextOut = nextIn + dur;
+                setGhostDragPreview({
+                    id: layer.id,
+                    type: 'layer',
+                    startMs: nextIn,
+                    durationMs: dur,
+                    label: layer.name,
+                    snapped,
+                });
             }
 
             updateLayer(
@@ -386,6 +539,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -400,7 +554,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         window.addEventListener('pointercancel', onEnd);
     };
 
-    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills! (Hardened)
+    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills! (Hardened + Magnetic Snapping)
     const startPresetDrag = (
         e: React.PointerEvent,
         shot: Shot,
@@ -419,6 +573,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         const origDur = Math.max(100, preset.durationMs || 500);
         const layerSpan = Math.max(200, layer.outMs - layer.inMs);
         const pointerId = e.pointerId;
+        const snapTargets = getSnapTargets(shot, `${layer.id}-${which}`);
         let hasMoved = false;
 
         try {
@@ -441,22 +596,66 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             if (which === 'entrance') {
                 let nextDelay = origDelay;
                 let nextDur = origDur;
+                const origGlobalStart = layer.inMs + origDelay;
+
                 if (mode === 'move') {
+                    const snapStart = snapTime(origGlobalStart + deltaMs, snapTargets, snapThresholdMs);
+                    const snapEnd = snapTime(origGlobalStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                    let targetGlobal = origGlobalStart + deltaMs;
+                    let snapped = false;
+                    if (snapStart.snapped) {
+                        targetGlobal = snapStart.time;
+                        snapped = true;
+                    } else if (snapEnd.snapped) {
+                        targetGlobal = snapEnd.time - origDur;
+                        snapped = true;
+                    }
+                    const targetDelay = targetGlobal - layer.inMs;
                     nextDelay = Math.max(
                         0,
-                        Math.min(layerSpan - origDur, origDelay + deltaMs)
+                        Math.min(layerSpan - origDur, targetDelay)
                     );
+                    setGhostDragPreview({
+                        id: `${layer.id}-entrance`,
+                        type: 'entrance',
+                        startMs: layer.inMs + nextDelay,
+                        durationMs: nextDur,
+                        label: `In: ${layer.entrance.type}`,
+                        snapped,
+                    });
                 } else if (mode === 'left') {
+                    const snap = snapTime(origGlobalStart + deltaMs, snapTargets, snapThresholdMs);
+                    const targetDelay = snap.time - layer.inMs;
                     nextDelay = Math.max(
                         0,
-                        Math.min(origDelay + origDur - 80, origDelay + deltaMs)
+                        Math.min(origDelay + origDur - 80, targetDelay)
                     );
                     nextDur = origDelay + origDur - nextDelay;
+                    setGhostDragPreview({
+                        id: `${layer.id}-entrance`,
+                        type: 'entrance',
+                        startMs: layer.inMs + nextDelay,
+                        durationMs: nextDur,
+                        label: `In: ${layer.entrance.type}`,
+                        trimEdge: 'left',
+                        snapped: snap.snapped,
+                    });
                 } else if (mode === 'right') {
+                    const snap = snapTime(origGlobalStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                    const targetDur = snap.time - origGlobalStart;
                     nextDur = Math.max(
                         80,
-                        Math.min(layerSpan - origDelay, origDur + deltaMs)
+                        Math.min(layerSpan - origDelay, targetDur)
                     );
+                    setGhostDragPreview({
+                        id: `${layer.id}-entrance`,
+                        type: 'entrance',
+                        startMs: layer.inMs + nextDelay,
+                        durationMs: nextDur,
+                        label: `In: ${layer.entrance.type}`,
+                        trimEdge: 'right',
+                        snapped: snap.snapped,
+                    });
                 }
                 updateLayer(
                     shot.id,
@@ -474,22 +673,66 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             } else {
                 let nextDelay = origDelay;
                 let nextDur = origDur;
+                const origGlobalEnd = layer.outMs - origDelay;
+
                 if (mode === 'move') {
+                    const snapStart = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
+                    const snapEnd = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
+                    let targetGlobalEnd = origGlobalEnd + deltaMs;
+                    let snapped = false;
+                    if (snapEnd.snapped) {
+                        targetGlobalEnd = snapEnd.time;
+                        snapped = true;
+                    } else if (snapStart.snapped) {
+                        targetGlobalEnd = snapStart.time + origDur;
+                        snapped = true;
+                    }
+                    const targetDelay = layer.outMs - targetGlobalEnd;
                     nextDelay = Math.max(
                         0,
-                        Math.min(layerSpan - origDur, origDelay - deltaMs)
+                        Math.min(layerSpan - origDur, targetDelay)
                     );
+                    setGhostDragPreview({
+                        id: `${layer.id}-exit`,
+                        type: 'exit',
+                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
+                        durationMs: nextDur,
+                        label: `Out: ${layer.exit.type}`,
+                        snapped,
+                    });
                 } else if (mode === 'left') {
+                    const snap = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
+                    const targetDur = origGlobalEnd - snap.time;
                     nextDur = Math.max(
                         80,
-                        Math.min(layerSpan - origDelay, origDur - deltaMs)
+                        Math.min(layerSpan - origDelay, targetDur)
                     );
+                    setGhostDragPreview({
+                        id: `${layer.id}-exit`,
+                        type: 'exit',
+                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
+                        durationMs: nextDur,
+                        label: `Out: ${layer.exit.type}`,
+                        trimEdge: 'left',
+                        snapped: snap.snapped,
+                    });
                 } else if (mode === 'right') {
+                    const snap = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
+                    const targetDelay = layer.outMs - snap.time;
                     nextDelay = Math.max(
                         0,
-                        Math.min(origDelay + origDur - 80, origDelay - deltaMs)
+                        Math.min(origDelay + origDur - 80, targetDelay)
                     );
                     nextDur = origDelay + origDur - nextDelay;
+                    setGhostDragPreview({
+                        id: `${layer.id}-exit`,
+                        type: 'exit',
+                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
+                        durationMs: nextDur,
+                        label: `Out: ${layer.exit.type}`,
+                        trimEdge: 'right',
+                        snapped: snap.snapped,
+                    });
                 }
                 updateLayer(
                     shot.id,
@@ -509,9 +752,16 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
             if (hasMoved) {
+                suppressPillClickRef.current = `${layer.id}-${which}`;
                 commitDragTransaction();
                 setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressPillClickRef.current === `${layer.id}-${which}`) {
+                        suppressPillClickRef.current = null;
+                    }
+                }, 0);
             }
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
@@ -523,7 +773,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         window.addEventListener('pointercancel', onEnd);
     };
 
-    // 3. Drag / Trim Animation Block (Hardened)
+    // 3. Drag / Trim Animation Block (Hardened + Magnetic Snapping)
     const startBlockDrag = (
         e: React.PointerEvent,
         shot: Shot,
@@ -539,6 +789,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         const origStart = block.startMs;
         const origDur = block.durationMs;
         const pointerId = e.pointerId;
+        const snapTargets = getSnapTargets(shot, block.id);
         let hasMoved = false;
 
         try {
@@ -561,21 +812,58 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             let nextDur = origDur;
 
             if (mode === 'left') {
+                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
                 nextStart = Math.max(
                     0,
-                    Math.min(origStart + origDur - 80, origStart + deltaMs)
+                    Math.min(origStart + origDur - 80, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                setGhostDragPreview({
+                    id: block.id,
+                    type: 'block',
+                    startMs: nextStart,
+                    durationMs: nextDur,
+                    label: block.label || block.property,
+                    trimEdge: 'left',
+                    snapped: snap.snapped,
+                });
             } else if (mode === 'right') {
-                nextDur = Math.max(
-                    80,
-                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
-                );
+                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                const nextEnd = Math.max(origStart + 80, Math.min(shot.durationMs, snap.time));
+                nextDur = nextEnd - origStart;
+                setGhostDragPreview({
+                    id: block.id,
+                    type: 'block',
+                    startMs: origStart,
+                    durationMs: nextDur,
+                    label: block.label || block.property,
+                    trimEdge: 'right',
+                    snapped: snap.snapped,
+                });
             } else {
+                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
+                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                let snapped = false;
+                let targetStart = origStart + deltaMs;
+                if (snapStart.snapped) {
+                    targetStart = snapStart.time;
+                    snapped = true;
+                } else if (snapEnd.snapped) {
+                    targetStart = snapEnd.time - origDur;
+                    snapped = true;
+                }
                 nextStart = Math.max(
                     0,
-                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
+                    Math.min(shot.durationMs - origDur, targetStart)
                 );
+                setGhostDragPreview({
+                    id: block.id,
+                    type: 'block',
+                    startMs: nextStart,
+                    durationMs: nextDur,
+                    label: block.label || block.property,
+                    snapped,
+                });
             }
 
             updateLayer(
@@ -595,9 +883,16 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
             if (hasMoved) {
+                suppressPillClickRef.current = block.id;
                 commitDragTransaction();
                 setDragging(false);
+                window.setTimeout(() => {
+                    if (suppressPillClickRef.current === block.id) {
+                        suppressPillClickRef.current = null;
+                    }
+                }, 0);
             }
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
@@ -1021,21 +1316,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             100,
             Math.min(1000, activeShot.durationMs - startMs)
         );
-        const camId = `cam-blk-${Date.now()}`;
-        updateShot(activeShot.id, (shot) => ({
-            ...shot,
-            cameraBlocks: [
-                ...(shot.cameraBlocks || []),
-                createDefaultCameraBlock(
-                    camId,
-                    startMs,
-                    durationMs,
-                    shot.framings[0]?.id || 'f1',
-                    shot.framings[1]?.id || 'f2'
-                ),
-            ],
-        }));
-        selectCameraBlock(camId);
+        const block = addCameraBlockToShot(activeShot.id, { startMs, durationMs });
+        if (block) selectCameraBlock(block.id);
     };
 
     return (
@@ -1082,9 +1364,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="relative w-24 h-1.5 rounded-full bg-[#27272a] flex items-center">
+                    <div className="relative w-28 h-1.5 rounded-full bg-[#27272a] flex items-center group/zoom">
                         <div
-                            className="h-full rounded-full bg-[#0088ff]"
+                            className="h-full rounded-full bg-[#0088ff] transition-[width] duration-75"
                             style={{
                                 width: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
                             }}
@@ -1097,10 +1379,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             step={0.05}
                             value={timelineZoom}
                             onChange={(e) => setTimelineZoom(Number(e.target.value))}
-                            className="absolute inset-0 w-full opacity-0 cursor-pointer"
+                            className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
                         />
                         <div
-                            className="w-3.5 h-3.5 rounded-full bg-white shadow pointer-events-none absolute -ml-1.5"
+                            className="w-3 h-3 rounded-full bg-white shadow-md pointer-events-none absolute -ml-1.5 transition-transform group-hover/zoom:scale-110"
                             style={{
                                 left: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
                             }}
@@ -1154,10 +1436,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 style={{ left: `${m.timeMs * pxPerMs}px` }}
                             >
                                 {m.isHalf ? (
-                                    <span className="text-[#52525b] text-base leading-none">&middot;</span>
+                                    <span className="w-1 h-1 rounded-full bg-[#52525b]/70 mt-1.5" />
                                 ) : (
-                                    <span className="text-[10px] font-mono text-[#a1a1aa] font-medium">
-                                        {Math.round(m.timeMs / 1000)}s
+                                    <span className="text-[10px] font-mono text-[#a1a1aa] font-medium tracking-tight">
+                                        {m.timeMs === 0 ? '0.00' : `${Math.round(m.timeMs / 1000)}s`}
                                     </span>
                                 )}
                             </div>
@@ -1174,14 +1456,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    updateProject((p) => ({
-                                        ...p,
-                                        audio: {
-                                            clips: p.audio?.clips || [],
-                                            muted: !p.audio?.muted,
-                                            masterVolume: p.audio?.masterVolume ?? 1,
-                                        },
-                                    }));
+                                    toggleProjectAudioMuted();
                                 }}
                                 title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                 className="absolute right-2 top-1 text-[10px] text-slate-400 hover:text-white z-10 flex items-center gap-1 cursor-pointer"
@@ -1213,18 +1488,27 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 setCurrentTimeMs(visibleStart);
                                             }}
                                             style={{ left: `${left}px`, width: `${width}px` }}
-                                            className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none ${
+                                            className={`group/audioclip absolute top-1 bottom-1 rounded-md border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none overflow-hidden ${
                                                 clip.muted || project.audio?.muted
-                                                    ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
-                                                    : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
+                                                    ? 'border-slate-600/50 bg-slate-800/80 text-slate-300'
+                                                    : 'border-sky-500/50 bg-sky-950/80 text-sky-100 hover:border-sky-400'
                                             }`}
                                         >
+                                            {/* Procedural SVG Waveform */}
+                                            <AudioWaveform clip={clip} width={width} muted={clip.muted || project.audio?.muted} />
+
                                             <span
                                                 onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
                                                 title="Trim audio start"
-                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-l"
+                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-l z-10 transition-colors"
                                             />
-                                            <span className="truncate pointer-events-none pl-1">{clip.name}</span>
+                                            <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
+                                                <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
+                                                <span className="truncate drop-shadow-sm">{clip.name}</span>
+                                                <span className="text-[9px] font-mono text-sky-300/70 hidden sm:inline">
+                                                    {(clip.durationMs / 1000).toFixed(1)}s
+                                                </span>
+                                            </div>
                                             <button
                                                 type="button"
                                                 onPointerDown={(e) => e.stopPropagation()}
@@ -1233,14 +1517,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     deleteAudioClip(clip.id);
                                                 }}
                                                 title="Delete audio clip"
-                                                className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-10 shrink-0"
+                                                className="w-4 h-4 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-20 shrink-0"
                                             >
                                                 &times;
                                             </button>
                                             <span
                                                 onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
                                                 title="Trim audio end"
-                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-r"
+                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-r z-10 transition-colors"
                                             />
                                         </div>
                                     );
@@ -1257,18 +1541,27 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             setCurrentTimeMs(Math.max(0, clipStart));
                                         }}
                                         style={{ left: `${left}px`, width: `${width}px` }}
-                                        className={`group/audioclip absolute top-1 bottom-1 rounded border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none ${
+                                        className={`group/audioclip absolute top-1 bottom-1 rounded-md border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none overflow-hidden ${
                                             clip.muted || project.audio?.muted
-                                                ? 'border-slate-500/50 bg-slate-700/70 text-slate-200'
-                                                : 'border-sky-500/60 bg-sky-900/70 text-sky-100 hover:bg-sky-800/80'
+                                                ? 'border-slate-600/50 bg-slate-800/80 text-slate-300'
+                                                : 'border-sky-500/50 bg-sky-950/80 text-sky-100 hover:border-sky-400'
                                         }`}
                                     >
+                                        {/* Procedural SVG Waveform */}
+                                        <AudioWaveform clip={clip} width={width} muted={clip.muted || project.audio?.muted} />
+
                                         <span
                                             onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
                                             title="Trim audio start"
-                                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-l"
+                                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-l z-10 transition-colors"
                                         />
-                                        <span className="truncate pointer-events-none pl-1">{clip.name}</span>
+                                        <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
+                                            <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
+                                            <span className="truncate drop-shadow-sm">{clip.name}</span>
+                                            <span className="text-[9px] font-mono text-sky-300/70 hidden sm:inline">
+                                                {(clip.durationMs / 1000).toFixed(1)}s
+                                            </span>
+                                        </div>
                                         <button
                                             type="button"
                                             onPointerDown={(e) => e.stopPropagation()}
@@ -1277,14 +1570,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 deleteAudioClip(clip.id);
                                             }}
                                             title="Delete audio clip"
-                                            className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-10 shrink-0"
+                                            className="w-4 h-4 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-20 shrink-0"
                                         >
                                             &times;
                                         </button>
                                         <span
                                             onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
                                             title="Trim audio end"
-                                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/20 hover:bg-sky-300 rounded-r"
+                                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-r z-10 transition-colors"
                                         />
                                     </div>
                                 );
@@ -1298,7 +1591,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         <div className="space-y-2 pt-2">
                             <div className="h-8 relative flex items-center gap-1">
                                 {project.shots.map((shot, shotIndex) => {
-                                    const isSelected = shot.id === activeShot?.id;
+                                    const isSelected = inspectorTab === 'shot' && shot.id === activeShot?.id;
                                     const width = Math.max(16, shot.durationMs * pxPerMs - 2);
                                     return (
                                         <div
@@ -1327,7 +1620,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             style={{ width: `${width}px` }}
                                             className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
                                                     ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-[0_0_12px_rgba(129,118,217,0.22)]'
-                                                    : 'border-[#0284c7]/80 bg-gradient-to-b from-[#062c52]/75 to-[#031529]/85 text-sky-200/80 hover:border-[#38bdf8]'
+                                                    : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
                                                 }`}
                                         >
                                             <span className="truncate">{shot.name}</span>
@@ -1511,9 +1804,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 .sort((a, b) => b.order - a.order)
                                 .map((layer) => {
                                     const isSelected = selectedLayerIds.includes(layer.id);
-                                    const isExpanded = expandedTimelineLayerIds.includes(
-                                        layer.id
-                                    );
+                                    const hasAnimations =
+                                        layer.blocks.length > 0 ||
+                                        layer.entrance.type !== 'none' ||
+                                        layer.exit.type !== 'none';
+                                    const isExpanded =
+                                        expandedTimelineLayerIds.includes(layer.id) ||
+                                        (isSelected && hasAnimations);
 
                                     const left = layer.inMs * pxPerMs;
                                     const width = Math.max(
@@ -1546,7 +1843,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
                                                     style={{ left: `${left}px`, width: `${width}px` }}
-                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle}`}
+                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle} ${
+                                                        ghostDragPreview?.id === layer.id ? 'opacity-40' : ''
+                                                    }`}
                                                 >
                                                     <span className="absolute inset-0 flex items-center justify-center px-3 text-[10px] font-medium text-white/80 truncate pointer-events-none">
                                                         {layer.name}
@@ -1566,6 +1865,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-r-lg"
                                                     />
                                                 </div>
+
+                                                {/* Dashed Ghost Outline during Layer Drag */}
+                                                {ghostDragPreview && ghostDragPreview.id === layer.id && (
+                                                    <div
+                                                        style={{
+                                                            left: `${ghostDragPreview.startMs * pxPerMs}px`,
+                                                            width: `${Math.max(32, ghostDragPreview.durationMs * pxPerMs)}px`,
+                                                        }}
+                                                        className="absolute top-0.5 bottom-0.5 rounded-lg border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/20 pointer-events-none z-20 shadow-[0_0_12px_rgba(56,189,248,0.35)] flex items-center justify-center animate-in fade-in duration-75"
+                                                    >
+                                                        <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                            {ghostDragPreview.snapped && <span>🧲</span>}
+                                                            <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
+                                                            <span className="text-white/40">·</span>
+                                                            <span className="text-white/70">{(ghostDragPreview.startMs / 1000).toFixed(2)}s</span>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* Expanded Sub-rows (h-6 = 24px each, aligned 1-to-1 with LeftPanel!) */}
@@ -1620,6 +1937,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         {layer.entrance.type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="in"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === `${layer.id}-entrance`) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
+                                                                    selectPreset('entrance', layer.id);
+                                                                    setEasingPopoverTarget({
+                                                                        easing: layer.entrance.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        onChange: (easing) => {
+                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                ...l,
+                                                                                entrance: { ...l.entrance, easing },
+                                                                            }));
+                                                                        },
+                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                    });
+                                                                }}
                                                                 onPointerDown={(e) =>
                                                                     startPresetDrag(
                                                                         e,
@@ -1637,7 +1972,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                         selectedPresetType === 'entrance'
                                                                         ? 'border-purple-300 bg-purple-700 text-white shadow'
                                                                         : 'border-[#8b5cf6] bg-[#341a63]/90 text-purple-200 hover:border-purple-400'
-                                                                    }`}
+                                                                    } ${ghostDragPreview?.id === `${layer.id}-entrance` ? 'opacity-40' : ''}`}
                                                             >
                                                                 <span className="truncate pointer-events-none">
                                                                     In: {layer.entrance.type}
@@ -1675,6 +2010,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         {layer.exit.type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="out"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === `${layer.id}-exit`) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
+                                                                    selectPreset('exit', layer.id);
+                                                                    setEasingPopoverTarget({
+                                                                        easing: layer.exit.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        onChange: (easing) => {
+                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                ...l,
+                                                                                exit: { ...l.exit, easing },
+                                                                            }));
+                                                                        },
+                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                    });
+                                                                }}
                                                                 onPointerDown={(e) =>
                                                                     startPresetDrag(
                                                                         e,
@@ -1691,7 +2044,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                 className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
                                                                         ? 'border-pink-300 bg-pink-700 text-white shadow'
                                                                         : 'border-[#ec4899] bg-[#591636]/90 text-pink-200 hover:border-pink-400'
-                                                                    }`}
+                                                                    } ${ghostDragPreview?.id === `${layer.id}-exit` ? 'opacity-40' : ''}`}
                                                             >
                                                                 <span className="truncate pointer-events-none">
                                                                     Out: {layer.exit.type}
@@ -1724,6 +2077,22 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                 />
                                                             </div>
                                                         )}
+
+                                                        {/* Dashed Ghost Outline during Preset Drag */}
+                                                        {ghostDragPreview && (ghostDragPreview.id === `${layer.id}-entrance` || ghostDragPreview.id === `${layer.id}-exit`) && (
+                                                            <div
+                                                                style={{
+                                                                    left: `${ghostDragPreview.startMs * pxPerMs}px`,
+                                                                    width: `${Math.max(28, ghostDragPreview.durationMs * pxPerMs)}px`,
+                                                                }}
+                                                                className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-[0_0_10px_rgba(56,189,248,0.4)] flex items-center justify-center animate-in fade-in duration-75"
+                                                            >
+                                                                <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                                    {ghostDragPreview.snapped && <span>🧲</span>}
+                                                                    <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                                     </div>
 
                                                     {/* ♦ Property Block Sub-rows (h-6 = 24px each) */}
@@ -1733,6 +2102,26 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             className="h-6 relative flex items-center"
                                                         >
                                                             <div
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    if (suppressPillClickRef.current === blk.id) {
+                                                                        suppressPillClickRef.current = null;
+                                                                        return;
+                                                                    }
+                                                                    selectBlock(blk.id, layer.id);
+                                                                    setEasingPopoverTarget({
+                                                                        easing: blk.easing,
+                                                                        onChange: (easing) => {
+                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                ...l,
+                                                                                blocks: l.blocks.map((b) =>
+                                                                                    b.id === blk.id ? { ...b, easing } : b
+                                                                                ),
+                                                                            }));
+                                                                        },
+                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                    });
+                                                                }}
                                                                 onPointerDown={(e) =>
                                                                     startBlockDrag(
                                                                         e,
@@ -1750,9 +2139,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     )}px`,
                                                                 }}
                                                                 className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition relative ${selectedBlockId === blk.id
-                                                                        ? 'border-[#c084fc] bg-[#581c87] text-white'
+                                                                        ? 'border-[#c084fc] bg-[#581c87] text-white shadow'
                                                                         : 'border-[#7c3aed] bg-[#2a1452]/90 text-purple-200 hover:border-[#a855f7]'
-                                                                    }`}
+                                                                    } ${ghostDragPreview?.id === blk.id ? 'opacity-40' : ''}`}
                                                             >
                                                                 <svg
                                                                     aria-hidden="true"
@@ -1801,6 +2190,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
                                                                 />
                                                             </div>
+
+                                                            {/* Dashed Ghost Outline during Block Drag */}
+                                                            {ghostDragPreview && ghostDragPreview.id === blk.id && (
+                                                                <div
+                                                                    style={{
+                                                                        left: `${ghostDragPreview.startMs * pxPerMs}px`,
+                                                                        width: `${Math.max(36, ghostDragPreview.durationMs * pxPerMs)}px`,
+                                                                    }}
+                                                                    className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-[0_0_10px_rgba(56,189,248,0.4)] flex items-center justify-center animate-in fade-in duration-75"
+                                                                >
+                                                                    <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                                        {ghostDragPreview.snapped && <span>🧲</span>}
+                                                                        <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
+                                                                        <span className="text-white/40">·</span>
+                                                                        <span className="text-white/70">{(ghostDragPreview.startMs / 1000).toFixed(2)}s</span>
+                                                                    </div>
+                                                                </div>
+                                                            )}
                                                         </div>
                                                     ))}
                                                 </div>
@@ -1859,6 +2266,20 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         activeShotStartMs={activeShot?.startMs ?? 0}
                         scrollContainerRef={trackRef}
                     />
+                    {/* Floating Visual Bezier Curve Popover */}
+                    {easingPopoverTarget && (
+                        <EasingPopover
+                            easing={easingPopoverTarget.easing}
+                            onChange={(nextEasing) => {
+                                easingPopoverTarget.onChange(nextEasing);
+                                setEasingPopoverTarget((prev) =>
+                                    prev ? { ...prev, easing: nextEasing } : null
+                                );
+                            }}
+                            onClose={() => setEasingPopoverTarget(null)}
+                            anchorRect={easingPopoverTarget.anchorRect}
+                        />
+                    )}
                 </div>
             </div>
         </section>

@@ -131,7 +131,10 @@ const StageComponent: React.FC<StageProps> = ({
         const handleDismiss = () => setContextMenu(null);
         window.addEventListener('click', handleDismiss);
         const handleKey = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') setContextMenu(null);
+            if (e.key === 'Escape' && !e.defaultPrevented) {
+                e.preventDefault();
+                setContextMenu(null);
+            }
         };
         window.addEventListener('keydown', handleKey);
         return () => {
@@ -524,6 +527,13 @@ const StageComponent: React.FC<StageProps> = ({
     // WORKSPACE MOUSE DOWN: Camera Orbit/Pan/Dolly, Hand Pan, Drawing, or Deselect
     // ============================================================================
     const handleWorkspaceMouseDown = (e: React.MouseEvent) => {
+        if (
+            useSelectionStore.getState().isTransformDragging ||
+            useProjectStore.getState().dragSnapshot !== null
+        ) {
+            return;
+        }
+
         // 0. Dedicated Camera Navigation Tool (C) OR Alt + Drag in Select Tool
         // Left-drag: Orbit | Middle-drag (or Shift+Left-drag): Pan | Right-drag: Dolly
         const isCameraAction = activeTool === 'camera' || (e.altKey && !isSpaceHeld);
@@ -849,6 +859,12 @@ const StageComponent: React.FC<StageProps> = ({
                     const h = bottom - top;
 
                     if (w < 8 && h < 8) {
+                        if (
+                            useSelectionStore.getState().isTransformDragging ||
+                            useProjectStore.getState().dragSnapshot !== null
+                        ) {
+                            return;
+                        }
                         if (!isMulti) clearLayerSelection();
                         return;
                     }
@@ -891,6 +907,12 @@ const StageComponent: React.FC<StageProps> = ({
                             setSelectedLayerIds(hitLayerIds);
                         }
                     } else if (!isMulti) {
+                        if (
+                            useSelectionStore.getState().isTransformDragging ||
+                            useProjectStore.getState().dragSnapshot !== null
+                        ) {
+                            return;
+                        }
                         clearLayerSelection();
                     }
                 };
@@ -902,6 +924,12 @@ const StageComponent: React.FC<StageProps> = ({
         }
 
         // 4. Clicking empty workspace deselects layers
+        if (
+            useSelectionStore.getState().isTransformDragging ||
+            useProjectStore.getState().dragSnapshot !== null
+        ) {
+            return;
+        }
         clearLayerSelection();
     };
 
@@ -983,7 +1011,6 @@ const StageComponent: React.FC<StageProps> = ({
                 position: { x: dropX, y: dropY, z: 0 },
                 size,
                 rotation: { x: 0, y: 0, z: 0 },
-                device: undefined,
             });
             selectLayer(newLayer.id, false);
             return;
@@ -1032,7 +1059,6 @@ const StageComponent: React.FC<StageProps> = ({
                         position: { x: dropX, y: dropY, z: 0 },
                         size,
                         rotation: { x: 0, y: 0, z: 0 },
-                        device: undefined,
                     });
                     selectLayer(newLayer.id, false);
                 } catch (err) {
@@ -1094,7 +1120,7 @@ const StageComponent: React.FC<StageProps> = ({
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
-            className={`flex-1 bg-[var(--bg-canvas,#07080d)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
+            className={`flex-1 bg-[var(--canvas-workspace,#080a10)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
                     : activeTool === 'camera'
                         ? 'cursor-move active:cursor-grabbing'
@@ -1154,7 +1180,15 @@ const StageComponent: React.FC<StageProps> = ({
                             frame={effectiveViewportFrame}
                             selectedLayerIds={selectedLayerIds}
                             onSelectLayer={handleSelectLayerWithDeepSelect}
-                            onPointerMissed={() => clearLayerSelection()}
+                            onPointerMissed={() => {
+                                if (
+                                    useSelectionStore.getState().isTransformDragging ||
+                                    useProjectStore.getState().dragSnapshot !== null
+                                ) {
+                                    return;
+                                }
+                                clearLayerSelection();
+                            }}
                             cameraRef={cameraRef}
                         />
                     </div>
@@ -1197,7 +1231,7 @@ const StageComponent: React.FC<StageProps> = ({
 
                     {/* Drag & Drop Target Glow Overlay */}
                     {isDraggingOver && (
-                        <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse">
+                        <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse motion-reduce:animate-none">
                             <div className="w-12 h-12 rounded-full bg-[var(--accent-primary,#0088ff)]/20 border border-[var(--accent-primary,#0088ff)]/40 flex items-center justify-center text-[var(--accent-primary,#0088ff)]">
                                 <UploadCloud className="w-6 h-6" />
                             </div>
@@ -1360,7 +1394,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse pointer-events-none z-30">
+                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse motion-reduce:animate-none pointer-events-none z-30">
                     <span className="w-2 h-2 rounded-full bg-white" />
                     <span>REC (⇧A)</span>
                 </div>

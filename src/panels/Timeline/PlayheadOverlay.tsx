@@ -19,16 +19,16 @@ export const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
 
     // Keep layout props in refs so transient callback always has freshest zoom/view values
     const pxPerMsRef = useRef(pxPerMs);
-    pxPerMsRef.current = pxPerMs;
-
     const timelineViewRef = useRef(timelineView);
-    timelineViewRef.current = timelineView;
-
     const activeShotStartMsRef = useRef(activeShotStartMs);
-    activeShotStartMsRef.current = activeShotStartMs;
-
     const scrollContainerRefRef = useRef(scrollContainerRef);
-    scrollContainerRefRef.current = scrollContainerRef;
+
+    useEffect(() => {
+        pxPerMsRef.current = pxPerMs;
+        timelineViewRef.current = timelineView;
+        activeShotStartMsRef.current = activeShotStartMs;
+        scrollContainerRefRef.current = scrollContainerRef;
+    });
 
     useEffect(() => {
         const updatePlayhead = (currentTimeMs: number, isPlaying: boolean) => {
@@ -101,18 +101,18 @@ export const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
                 transform: `translate3d(${initialPx}px, 0, 0) translateX(-50%)`,
             }}
         >
-            {/* 1px vertical line in bright blue (~#0A84FF) spanning through full track area with bottom fade */}
+            {/* 1px vertical line in accent blue spanning through full track area with bottom fade */}
             <div
                 className="absolute inset-y-0 w-px"
                 style={{
-                    background: 'linear-gradient(to bottom, #0A84FF 0%, #0A84FF 82%, rgba(10, 132, 255, 0) 100%)',
+                    background: 'linear-gradient(to bottom, #0088ff 0%, #0088ff 85%, rgba(0, 136, 255, 0) 100%)',
                 }}
             />
 
-            {/* Rounded pill label sitting on the ruler at the top */}
+            {/* Rounded blue pill label sitting on the ruler at the top */}
             <div
                 ref={labelRef}
-                className="relative px-1.5 py-0.5 rounded-full bg-[#0A84FF] text-white text-[9.5px] font-mono font-bold shadow-md whitespace-nowrap leading-none select-none mt-1 z-10"
+                className="relative px-2 py-0.5 rounded-full bg-[#0088ff] text-white text-[10px] font-mono font-semibold tracking-tight shadow-lg shadow-sky-500/30 whitespace-nowrap leading-none select-none mt-1 z-10 border border-sky-300/40"
             >
                 {(initialDisplayTimeMs / 1000).toFixed(2)}
             </div>

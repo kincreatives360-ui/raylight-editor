@@ -1,20 +1,35 @@
 // src/model/backgroundPresets.ts
 // Production Raylight shader presets, knob metadata, and color models
 
-export type ShaderPreset =
-    | 'silk'
-    | 'undertones'
-    | 'mosaic'
-    | 'meshGradient'
-    | 'warp'
-    | 'grainGradient'
-    | 'prism'
-    | 'halo'
-    | 'shift'
-    | 'lineScreen'
-    | 'dotMatrix'
-    | 'watercolor'
-    | 'voxels';
+export const SHADER_PRESET_IDS = [
+    'silk',
+    'silkFlow',
+    'meshAurora',
+    'liquidMetal',
+    'sphereGradient',
+    'waterPlane',
+    'stripeMesh',
+    'topography',
+    'hyperspeed',
+    'plasma',
+    'dither',
+    'threads',
+    'chromaticWaves',
+    'undertones',
+    'mosaic',
+    'meshGradient',
+    'warp',
+    'grainGradient',
+    'prism',
+    'halo',
+    'shift',
+    'lineScreen',
+    'dotMatrix',
+    'watercolor',
+    'voxels',
+] as const;
+
+export type ShaderPreset = (typeof SHADER_PRESET_IDS)[number];
 
 export interface ShaderKnobConfig {
     label: string;
@@ -29,21 +44,7 @@ export interface ShaderPresetMeta {
     knobs: Partial<Record<'waves' | 'focus' | 'glow' | 'shine' | 'angle', ShaderKnobConfig>>;
 }
 
-export const SHADER_PRESETS: ShaderPreset[] = [
-    'silk',
-    'undertones',
-    'mosaic',
-    'meshGradient',
-    'warp',
-    'grainGradient',
-    'prism',
-    'halo',
-    'shift',
-    'lineScreen',
-    'dotMatrix',
-    'watercolor',
-    'voxels',
-];
+export const SHADER_PRESETS: readonly ShaderPreset[] = SHADER_PRESET_IDS;
 
 export const SHADER_PRESET_METADATA: Record<ShaderPreset, ShaderPresetMeta> = {
     silk: {
@@ -56,6 +57,150 @@ export const SHADER_PRESET_METADATA: Record<ShaderPreset, ShaderPresetMeta> = {
             focus: { label: 'Focus', description: 'crease relief, crisp vs soft' },
             glow: { label: 'Glow', description: 'exposure of the lit folds' },
             shine: { label: 'Shine', description: 'glint strength along the creases' },
+        },
+    },
+    silkFlow: {
+        label: 'Silk Flow',
+        description: 'fluid fabric folds with multi-octave simplex distortion and chromatic sheen',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Waves', description: 'ripple and frequency' },
+            focus: { label: 'Scale', description: 'noise pattern scale' },
+            glow: { label: 'Glow', description: 'ambient exposure' },
+            shine: { label: 'Sheen', description: 'chromatic highlight strength' },
+        },
+    },
+    meshAurora: {
+        label: 'Mesh Aurora',
+        description: 'curved chromatic mesh waves reminiscent of polar night auroras',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Curvature', description: 'wave amplitude and swirl' },
+            focus: { label: 'Diffusion', description: 'softness of color mesh' },
+            glow: { label: 'Luminance', description: 'auroral core glow' },
+            shine: { label: 'Banding', description: 'spectral dispersion' },
+        },
+    },
+    liquidMetal: {
+        label: 'Liquid Metal',
+        description: 'chrome-like fluid reflections with iridescent specularity',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Viscosity', description: 'liquid ripple density' },
+            focus: { label: 'Depth', description: 'bump map height and relief' },
+            glow: { label: 'Reflection', description: 'ambient environment lighting' },
+            shine: { label: 'Specular', description: 'chrome highlight tightness' },
+        },
+    },
+    sphereGradient: {
+        label: 'Celestial Sphere',
+        description: '3D turbulent celestial sphere gradient with orbiting shading (ShaderGradient)',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Turbulence', description: '3D noise distortion on sphere' },
+            focus: { label: 'Radius', description: 'sphere scale and perspective' },
+            glow: { label: 'Exposure', description: 'rim light and surface illumination' },
+            shine: { label: 'Specular', description: 'glossy core highlight' },
+        },
+    },
+    waterPlane: {
+        label: 'Water Plane',
+        description: 'flowing physical water caustics and refractive ripples (ShaderGradient)',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Ripples', description: 'wave frequency and density' },
+            focus: { label: 'Depth', description: 'caustic light focus and refraction' },
+            glow: { label: 'Clarity', description: 'water transparency and ambient tone' },
+            shine: { label: 'Crests', description: 'sun glint on water wave crests' },
+        },
+    },
+    stripeMesh: {
+        label: 'Stripe Mesh',
+        description: 'authentic Stripe gradient mesh with 4-point dynamic cubic warp (Whatamesh)',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Warp', description: 'mesh deformation and swirl' },
+            focus: { label: 'Diffusion', description: 'color blend spread' },
+            glow: { label: 'Luminance', description: 'saturation and exposure' },
+            shine: { label: 'Grain', description: 'organic paper dither grain' },
+        },
+    },
+    topography: {
+        label: 'Topography',
+        description: '3D undulating elevation contour lines and topographic map (React Bits)',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Elevation', description: 'terrain height and frequency' },
+            focus: { label: 'Contour Lines', description: 'iso-line spacing and thickness' },
+            glow: { label: 'Glow', description: 'contour line neon radiance' },
+            shine: { label: 'Detail', description: 'secondary fractal terrain ripples' },
+        },
+    },
+    hyperspeed: {
+        label: 'Hyperspeed',
+        description: 'star-warp highway with accelerating neon light trails to horizon (React Bits)',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Speed', description: 'warp velocity and streak length' },
+            focus: { label: 'Density', description: 'light streak count' },
+            glow: { label: 'Bloom', description: 'headlight and taillight exposure' },
+            shine: { label: 'Perspective', description: 'vanishing point depth' },
+        },
+    },
+    plasma: {
+        label: 'Plasma',
+        description: 'swirling satin plasma filaments and electric vortex folds (React Bits)',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Turbulence', description: 'plasma ribbon swirl density' },
+            focus: { label: 'Filaments', description: 'fold crispness and sharpness' },
+            glow: { label: 'Energy', description: 'core electrical brightness' },
+            shine: { label: 'Sheen', description: 'chromatic dispersion sheen' },
+        },
+    },
+    dither: {
+        label: 'Dither',
+        description: 'retro 8x8 Bayer ordered dithering across gradient color stops (React Bits)',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Pixel Size', description: 'dither matrix scale' },
+            focus: { label: 'Cross-hatch', description: 'dither pattern threshold' },
+            glow: { label: 'Luminance', description: 'overall exposure' },
+            shine: { label: 'Contrast', description: 'contrast between dither steps' },
+        },
+    },
+    threads: {
+        label: 'Threads',
+        description: 'delicate sinusoidal silk threads and flowing ribbons (React Bits)',
+        colorModel: 'palette',
+        usesBase: true,
+        knobs: {
+            waves: { label: 'Strands', description: 'thread count and wave frequency' },
+            focus: { label: 'Wave Height', description: 'sinusoidal ribbon amplitude' },
+            glow: { label: 'Radiance', description: 'thread core luminescence' },
+            shine: { label: 'Finesse', description: 'delicate strand anti-aliasing' },
+        },
+    },
+    chromaticWaves: {
+        label: 'Chromatic Waves',
+        description: 'flowing sinusoidal fluid gradient with chromatic color separation (dage)',
+        colorModel: 'palette',
+        usesBase: false,
+        knobs: {
+            waves: { label: 'Frequency', description: 'harmonic wave count' },
+            focus: { label: 'Dispersion', description: 'chromatic RGB fringe separation' },
+            glow: { label: 'Exposure', description: 'overall wave brightness' },
+            shine: { label: 'Smoothness', description: 'inter-wave color blend' },
         },
     },
     undertones: {
@@ -229,6 +374,138 @@ export const DEFAULT_SHADER_CONFIGS: Record<
         shine: 1,
         angle: 28,
     },
+    silkFlow: {
+        color: '#4F46E5',
+        backgroundColor: '#05050A',
+        colors: ['#4F46E5', '#EC4899', '#06B6D4'],
+        speed: 0.8,
+        waves: 1.2,
+        focus: 1.0,
+        glow: 0.85,
+        shine: 0.6,
+        angle: 30,
+    },
+    meshAurora: {
+        color: '#10B981',
+        backgroundColor: '#050814',
+        colors: ['#0F172A', '#10B981', '#6366F1', '#EC4899'],
+        speed: 0.6,
+        waves: 1.0,
+        focus: 1.1,
+        glow: 1.0,
+        shine: 0.5,
+        angle: 45,
+    },
+    liquidMetal: {
+        color: '#94A3B8',
+        backgroundColor: '#0A0E17',
+        colors: ['#1E293B', '#94A3B8', '#38BDF8', '#F8FAFC'],
+        speed: 0.7,
+        waves: 1.4,
+        focus: 1.2,
+        glow: 0.9,
+        shine: 0.95,
+        angle: 25,
+    },
+    sphereGradient: {
+        color: '#6366F1',
+        backgroundColor: '#090D16',
+        colors: ['#090D16', '#6366F1', '#EC4899', '#38BDF8'],
+        speed: 0.7,
+        waves: 1.1,
+        focus: 1.0,
+        glow: 0.9,
+        shine: 0.75,
+        angle: 35,
+    },
+    waterPlane: {
+        color: '#0EA5E9',
+        backgroundColor: '#031726',
+        colors: ['#031726', '#0284C7', '#38BDF8', '#E0F2FE'],
+        speed: 0.8,
+        waves: 1.5,
+        focus: 1.2,
+        glow: 0.85,
+        shine: 0.9,
+        angle: 45,
+    },
+    stripeMesh: {
+        color: '#FF6B6B',
+        backgroundColor: '#1A1A2E',
+        colors: ['#FF6B6B', '#4ECDC4', '#FFE66D', '#1A1A2E'],
+        speed: 0.6,
+        waves: 1.2,
+        focus: 1.0,
+        glow: 0.95,
+        shine: 0.35,
+        angle: 45,
+    },
+    topography: {
+        color: '#10B981',
+        backgroundColor: '#06140E',
+        colors: ['#06140E', '#059669', '#10B981', '#34D399'],
+        speed: 0.5,
+        waves: 1.3,
+        focus: 1.2,
+        glow: 1.1,
+        shine: 0.6,
+        angle: 30,
+    },
+    hyperspeed: {
+        color: '#00F0FF',
+        backgroundColor: '#020208',
+        colors: ['#020208', '#00F0FF', '#7000FF', '#FF007A'],
+        speed: 1.2,
+        waves: 1.4,
+        focus: 1.1,
+        glow: 1.2,
+        shine: 1.0,
+        angle: 0,
+    },
+    plasma: {
+        color: '#A855F7',
+        backgroundColor: '#0A0614',
+        colors: ['#0A0614', '#A855F7', '#EC4899', '#F97316'],
+        speed: 0.75,
+        waves: 1.3,
+        focus: 1.1,
+        glow: 1.0,
+        shine: 0.7,
+        angle: 40,
+    },
+    dither: {
+        color: '#3B82F6',
+        backgroundColor: '#050B14',
+        colors: ['#050B14', '#1D4ED8', '#60A5FA', '#E2E8F0'],
+        speed: 0.6,
+        waves: 1.0,
+        focus: 1.0,
+        glow: 0.9,
+        shine: 0.8,
+        angle: 45,
+    },
+    threads: {
+        color: '#F43F5E',
+        backgroundColor: '#0F0407',
+        colors: ['#0F0407', '#E11D48', '#FB7185', '#FECDD3'],
+        speed: 0.65,
+        waves: 1.2,
+        focus: 1.3,
+        glow: 0.95,
+        shine: 0.7,
+        angle: 25,
+    },
+    chromaticWaves: {
+        color: '#38BDF8',
+        backgroundColor: '#040814',
+        colors: ['#040814', '#0284C7', '#38BDF8', '#C084FC'],
+        speed: 0.8,
+        waves: 1.2,
+        focus: 1.0,
+        glow: 0.9,
+        shine: 0.85,
+        angle: 35,
+    },
     undertones: {
         color: '#4A7DFF',
         backgroundColor: '#050506',
@@ -369,9 +646,28 @@ export const isPaletteShader = (preset: ShaderPreset): boolean =>
 export const shaderUsesBase = (preset: ShaderPreset): boolean =>
     SHADER_PRESET_METADATA[preset]?.usesBase ?? true;
 
-export const getShaderColors = (preset: ShaderPreset, colors?: string[], color?: string, bg?: string): string[] => {
+export const getShaderColors = (
+    preset: ShaderPreset,
+    colors?: string[],
+    color?: string,
+    bg?: string,
+    color1?: string,
+    color2?: string,
+    color3?: string
+): string[] => {
+    const def = DEFAULT_SHADER_CONFIGS[preset] || DEFAULT_SHADER_CONFIGS.silk;
+    if (color1 || color2 || color3) {
+        return [
+            color1 || colors?.[0] || color || def.colors?.[0] || def.color,
+            color2 || colors?.[1] || def.colors?.[1] || def.color,
+            color3 || colors?.[2] || def.colors?.[2] || def.backgroundColor,
+        ];
+    }
     if (isPaletteShader(preset) && colors && colors.length > 0) {
         return colors.slice(0, 5);
     }
-    return [color || DEFAULT_SHADER_CONFIGS[preset].color, bg || DEFAULT_SHADER_CONFIGS[preset].backgroundColor];
+    if (def.colors && def.colors.length > 0 && (!colors || colors.length === 0)) {
+        return def.colors.slice(0, 5);
+    }
+    return [color || def.color, bg || def.backgroundColor];
 };

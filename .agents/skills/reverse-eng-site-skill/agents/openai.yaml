@@ -1,0 +1,4 @@
+interface:
+  display_name: "Reverse Engineer Site APIs"
+  short_description: "Turn browser traffic into reusable API clients"
+  default_prompt: "Use $reverse-eng-site-skill to discover and validate this website internal API."

@@ -37,6 +37,42 @@ export interface Size2D {
   height: number;
 }
 
+export type ScreenFit = 'stretch' | 'contain' | 'cover';
+
+export interface DeviceFrameSettings {
+  /** Missing means the original media-shaped chassis. Never auto-upgrade saved frames. */
+  geometryVersion?: 1;
+  deviceId?: string;
+  deviceScale?: number;
+  /** Preserves legacy placement height when replacing a nonuniform transform. */
+  legacyHeightCompensation?: number;
+  enabled: boolean;
+  model: 'iphone-pro' | 'iphone' | 'iphone-classic';
+  frameColor: string;
+  frameRoughness: number;
+  frameMetalness: number;
+  scale: number;
+  bezelWidth: number;
+  thickness: number;
+  cornerRadius: number;
+  screenFit: ScreenFit;
+  screenFillColor: string;
+  glassTint: string;
+  glassOpacity: number;
+  glassRoughness: number;
+  gloss: number;
+  reflection: number;
+  cutoutStyle: 'dynamic-island' | 'notch' | 'punch-hole' | 'none';
+  cutoutWidth: number;
+  cutoutHeight: number;
+  showSideButtons: boolean;
+  showRearCameras: boolean;
+  shadowEnabled: boolean;
+  shadowOpacity: number;
+  shadowBlur: number;
+  shadowOffset: number;
+}
+
 export interface GradientStop {
   at: number;
   color: string;
@@ -103,6 +139,11 @@ export type Background =
     glow: number;
     shine: number;
     angle: number;
+    noiseScale?: number;
+    color1?: string;
+    color2?: string;
+    color3?: string;
+    color4?: string;
   }
   | {
     kind: 'image';
@@ -190,20 +231,26 @@ export interface GlowEffect {
   radius: number;
 }
 
+export interface LiquidGlassEffect {
+  enabled: boolean;
+  refraction?: number;
+  roughness?: number;
+  tint?: string;
+}
+
+export interface WarpEffect {
+  enabled: boolean;
+  amount?: number;
+  frequency?: number;
+}
+
 export interface LayerEffects {
   dropShadow?: DropShadowEffect;
   glow?: GlowEffect;
   layerBlur?: number;
   backdropBlur?: number;
-}
-
-export interface DeviceFrame {
-  type: 'iphone' | 'ipad' | 'macbook' | 'browser' | 'samsung-galaxy' | 'display';
-  color: 'silver' | 'black' | 'space-black' | 'titanium' | 'midnight';
-  gloss: number;
-  lidAngle?: number;
-  screenGlow?: number;
-  glare?: number;
+  liquidGlass?: LiquidGlassEffect;
+  warp?: WarpEffect;
 }
 
 export interface LayerBase {
@@ -228,7 +275,7 @@ export interface LayerBase {
   effects: LayerEffects;
   /** Optional alpha-mask source layer ID. */
   maskLayerId?: string;
-  /** When true, layer surface reacts to 3D scene lighting. Default false for text, true for images/video/devices. */
+  /** When true, layer surface reacts to 3D scene lighting. Default false for text and true for images/video. */
   receivesLight?: boolean;
   /** Optional 3D surface material response */
   material?: {
@@ -242,9 +289,19 @@ export interface ImageLayer extends LayerBase {
   assetId: string;
   size: Size2D;
   cornerRadius: number;
+  deviceFrame?: DeviceFrameSettings;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
-  device?: DeviceFrame;
+}
+
+export interface ShapeMask {
+  enabled: boolean;
+  shape: 'rectangle' | 'circle' | 'path';
+  feather: number;
+  opacity: number;
+  grow: number;
+  invert: boolean;
+  show: boolean;
 }
 
 export interface ShapeLayer extends LayerBase {
@@ -256,7 +313,15 @@ export interface ShapeLayer extends LayerBase {
   size: Size2D;
   cornerRadius: number;
   fill: Fill;
-  stroke?: { color: string; width: number; opacity: number };
+  stroke?: {
+    color: string;
+    width: number;
+    opacity: number;
+    align?: 'inside' | 'center' | 'outside';
+    style?: 'solid' | 'dashed' | 'dotted';
+  };
+  depth?: number;
+  mask?: ShapeMask;
 }
 
 export interface TextLayer extends LayerBase {
@@ -281,7 +346,6 @@ export interface VideoLayer extends LayerBase {
   cornerRadius: number;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
-  device?: DeviceFrame;
 }
 
 export type Layer = ImageLayer | VideoLayer | ShapeLayer | TextLayer;
@@ -321,7 +385,7 @@ export interface CameraBlock {
   durationMs: number;
   fromFramingId: string;
   toFramingId: string;
-  mode: 'dolly' | 'zoom' | 'dollyzoom'; // 'dollyzoom' = 'Warp' in Raylight UI
+  mode: 'dolly' | 'zoom' | 'dollyzoom' | 'shake'; // 'dollyzoom' = 'Warp' in Raylight UI
   easing: Easing;
   from?: CameraKeyframeEndpoint;
   to?: CameraKeyframeEndpoint;
@@ -613,3 +677,4 @@ export function resolveShotBackground(project: Project, shot?: Shot): Background
   }
   return shot.background ?? project?.background ?? { kind: 'solid', color: '#0c0e17' };
 }
+

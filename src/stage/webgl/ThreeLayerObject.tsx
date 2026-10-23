@@ -1,5 +1,9 @@
 import React, { useMemo, useState, useEffect } from 'react';
 import * as THREE from 'three';
+import { useThree } from '@react-three/fiber';
+import { DeviceOpacityGroup } from './DeviceOpacityGroup';
+import { drawMediaFrame, getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';
+import { applyTextureMask, drawMediaShimmer } from './mediaDecorations';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
 import type {
     Project,
@@ -8,14 +12,15 @@ import type {
     ImageLayer,
     VideoLayer,
 } from '../../model/types';
-import { getLayer3DWorldTransform } from './cameraMath';
+import { getLayerRenderLayout } from './cameraMath';
 import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
+import { SCREEN_PLANE_Z } from '../../model/deviceFrame';
+import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
     project: Project;
-    isSelected: boolean;
     onSelect: (layerId: string, multiSelect?: boolean) => void;
 }
 
@@ -52,7 +57,7 @@ function createRoundedRectShape(
 
 /**
  * Creates a ShapeGeometry whose UV coordinates are normalized to [0..1]
- * so CanvasTextures map cleanly across rounded screens and iPhones!
+ * so CanvasTextures map cleanly across rounded media layers.
  */
 function createNormalizedRoundedGeometry(
     width: number,
@@ -130,10 +135,10 @@ function drawStudioPlaceholder(
 export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     evalLayer,
     project,
-    isSelected,
     onSelect,
 }) => {
     const { layer } = evalLayer;
+    const invalidate = useThree(state => state.invalidate);
 
     const aspect =
         project.aspectRatio === '16:9'
@@ -157,15 +162,16 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const cameraZ = project.defaultCamera?.position?.z ?? 2.65;
     const focalLength = project.defaultCamera?.focalLength ?? 50;
 
-    const { worldX, worldY, worldZ, meshW, meshH } = getLayer3DWorldTransform(
+    const { worldX, worldY, worldZ, meshW, meshH, deviceSettings: deviceFrameSettings, frameMetrics: deviceFrameMetrics, scale } = getLayerRenderLayout(
         evalLayer,
         aspect,
         cameraZ,
         focalLength
     );
 
+    const screenFit = deviceFrameSettings?.screenFit ?? 'stretch';
+    const screenFill = deviceFrameSettings?.screenFillColor;
     const rot = evalLayer.rotation;
-    const scale = evalLayer.scale ?? { x: 1, y: 1, z: 1 };
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
 
@@ -180,17 +186,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Selective playhead subscription: Only video layers re-render on RAF ticks; static layers stay idle
     const currentTimeMs = usePlayheadStore((s) => (isVideoAsset ? s.currentTimeMs : 0));
-
-    const device =
-        (layer.kind === 'image' || layer.kind === 'video')
-            ? (layer as ImageLayer | VideoLayer).device
-            : undefined;
-    const isPhone = device?.type === 'iphone';
-    const isIpad = device?.type === 'ipad';
-    const isMacbook = device?.type === 'macbook';
-    const isBrowser = device?.type === 'browser';
-    const isSamsung = device?.type === 'samsung-galaxy';
-    const isDisplay = device?.type === 'display';
 
     const [loadedImageState, setLoadedImageState] = useState<{
         url: string;
@@ -248,16 +243,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
-        const layerAspect = Math.max(0.2, Math.min(5, meshW / Math.max(0.01, meshH)));
-        const baseLong = 1024;
-        const canvasW =
-            layerAspect >= 1
-                ? baseLong
-                : Math.max(256, Math.round(baseLong * layerAspect));
-        const canvasH =
-            layerAspect >= 1
-                ? Math.max(256, Math.round(baseLong / layerAspect))
-                : baseLong;
+        const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
 
         const canvas = document.createElement('canvas');
         canvas.width = canvasW;
@@ -267,136 +253,16 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         if (layer.kind === 'image' || layer.kind === 'video') {
             const imgL = layer as ImageLayer | VideoLayer;
-            const topBarH = isBrowser ? Math.round(canvasH * 0.07) : 0;
-
-            if (isBrowser) {
-                ctx.fillStyle = device?.color === 'silver' ? '#e2e8f0' : '#0f172a';
-                ctx.fillRect(0, 0, canvasW, topBarH);
-                ['#f43f5e', '#fbbf24', '#34d399'].forEach((dot, idx) => {
-                    ctx.fillStyle = dot;
-                    ctx.beginPath();
-                    ctx.arc(
-                        canvasW * 0.035 + idx * (canvasW * 0.025),
-                        topBarH * 0.5,
-                        Math.max(4, topBarH * 0.18),
-                        0,
-                        Math.PI * 2
-                    );
-                    ctx.fill();
-                });
-            }
-
+            const options = { crop: imgL.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx };
             if (isVideoAsset && videoElement) {
-                ctx.save();
-                if (totalBlurPx > 0) {
-                    ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
-                }
-                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-                const vw = videoElement.videoWidth || 1920;
-                const vh = videoElement.videoHeight || 1080;
-                const sx = crop.x * vw;
-                const sy = crop.y * vh;
-                const sw = Math.max(1, crop.width * vw);
-                const sh = Math.max(1, crop.height * vh);
-
-                ctx.drawImage(
-                    videoElement,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    0,
-                    topBarH,
-                    canvasW,
-                    canvasH - topBarH
-                );
-                ctx.restore();
+                drawMediaFrame(ctx, videoElement, videoElement.readyState >= 2 ? videoElement.videoWidth : 0, videoElement.videoHeight, canvasW, canvasH, options);
             } else if (loadedImg) {
-                ctx.save();
-                if (totalBlurPx > 0) {
-                    ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
-                }
-                const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-                const sx = crop.x * loadedImg.naturalWidth;
-                const sy = crop.y * loadedImg.naturalHeight;
-                const sw = Math.max(1, crop.width * loadedImg.naturalWidth);
-                const sh = Math.max(1, crop.height * loadedImg.naturalHeight);
-
-                ctx.drawImage(
-                    loadedImg,
-                    sx,
-                    sy,
-                    sw,
-                    sh,
-                    0,
-                    topBarH,
-                    canvasW,
-                    canvasH - topBarH
-                );
-                ctx.restore();
+                drawMediaFrame(ctx, loadedImg, loadedImg.naturalWidth, loadedImg.naturalHeight, canvasW, canvasH, options);
             } else {
-                drawStudioPlaceholder(
-                    ctx,
-                    canvasW,
-                    canvasH,
-                    imgL.name,
-                    totalBlurPx
-                );
+                drawStudioPlaceholder(ctx, canvasW, canvasH, imgL.name, totalBlurPx);
             }
 
-            // Draw Dynamic Island / Camera punch hole for phones
-            if (isPhone) {
-                const pillW = canvasW * 0.28;
-                const pillH = canvasH * 0.038;
-                const pillX = (canvasW - pillW) / 2;
-                const pillY = canvasH * 0.024;
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.roundRect(pillX, pillY, pillW, pillH, pillH / 2);
-                ctx.fill();
-                ctx.fillStyle = '#0f172a';
-                ctx.beginPath();
-                ctx.arc(pillX + pillW * 0.78, pillY + pillH * 0.5, pillH * 0.26, 0, Math.PI * 2);
-                ctx.fill();
-            } else if (isSamsung) {
-                const holeR = Math.max(5, canvasW * 0.018);
-                const holeX = canvasW * 0.5;
-                const holeY = canvasH * 0.035;
-                ctx.fillStyle = '#000000';
-                ctx.beginPath();
-                ctx.arc(holeX, holeY, holeR, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.fillStyle = '#0f172a';
-                ctx.beginPath();
-                ctx.arc(holeX, holeY, holeR * 0.5, 0, Math.PI * 2);
-                ctx.fill();
-            }
-
-            // Screen Glare & Specular Reflection
-            if (device?.glare && device.glare > 0) {
-                const glareVal = Math.min(1, Math.max(0, device.glare));
-                const glareGrad = ctx.createLinearGradient(0, topBarH, canvasW * 1.25, canvasH);
-                glareGrad.addColorStop(0, `rgba(255,255,255,${0.28 * glareVal})`);
-                glareGrad.addColorStop(0.35, `rgba(255,255,255,${0.09 * glareVal})`);
-                glareGrad.addColorStop(0.55, 'rgba(255,255,255,0)');
-                ctx.fillStyle = glareGrad;
-                ctx.fillRect(0, topBarH, canvasW, canvasH - topBarH);
-            }
-
-            if (evalLayer.shimmerProgress > 0 && evalLayer.shimmerProgress < 1) {
-                const shimX = evalLayer.shimmerProgress * canvasW;
-                const shimGrad = ctx.createLinearGradient(
-                    shimX - canvasW * 0.25,
-                    0,
-                    shimX + canvasW * 0.25,
-                    canvasH
-                );
-                shimGrad.addColorStop(0, 'rgba(255,255,255,0)');
-                shimGrad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
-                shimGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                ctx.fillStyle = shimGrad;
-                ctx.fillRect(0, 0, canvasW, canvasH);
-            }
+            drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
         } else if (layer.kind === 'text') {
             const textL = layer as TextLayer;
             ctx.clearRect(0, 0, canvasW, canvasH);
@@ -563,38 +429,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             ctx.restore();
         }
 
-        // Alpha-mask compositing: shape layers can mask any image, text, or shape layer.
-        // The mask is evaluated in the target layer's local UV space so it stays attached
-        // while the target moves/animates. Only visible shape geometry is used as alpha.
-        if (layer.maskLayerId) {
-            const mask = project.shots.flatMap((shot) => shot.layers).find((candidate) => candidate.id === layer.maskLayerId);
-            if (mask?.kind === 'shape') {
-                const maskCtx = canvas.getContext('2d');
-                if (maskCtx) {
-                    maskCtx.save();
-                    maskCtx.globalCompositeOperation = 'destination-in';
-                    maskCtx.globalAlpha = 1;
-                    maskCtx.fillStyle = '#fff';
-                    maskCtx.strokeStyle = '#fff';
-                    maskCtx.lineWidth = Math.max(6, canvasH * 0.18);
-                    maskCtx.beginPath();
-                    if (mask.shape === 'ellipse') {
-                        maskCtx.ellipse(canvasW / 2, canvasH / 2, canvasW / 2, canvasH / 2, 0, 0, Math.PI * 2);
-                    } else if (mask.shape === 'line' || mask.shape === 'arrow') {
-                        maskCtx.moveTo(0, canvasH / 2); maskCtx.lineTo(canvasW, canvasH / 2);
-                        if (mask.shape === 'arrow') { maskCtx.moveTo(canvasW, canvasH / 2); maskCtx.lineTo(canvasW * 0.82, canvasH * 0.32); maskCtx.moveTo(canvasW, canvasH / 2); maskCtx.lineTo(canvasW * 0.82, canvasH * 0.68); }
-                    } else if (mask.shape === 'polygon') {
-                        const points = mask.points?.length ? mask.points : [{x:0.5,y:0},{x:1,y:0.5},{x:0.5,y:1},{x:0,y:0.5}];
-                        points.forEach((pt, i) => { const x = pt.x * canvasW; const y = pt.y * canvasH; if (i === 0) maskCtx.moveTo(x,y); else maskCtx.lineTo(x,y); }); maskCtx.closePath();
-                    } else {
-                        const r = Math.max(0, (mask.cornerRadius || 0) * Math.min(canvasW, canvasH) * 0.5);
-                        maskCtx.roundRect(0, 0, canvasW, canvasH, r);
-                    }
-                    if (mask.shape === 'line' || mask.shape === 'arrow') maskCtx.stroke(); else maskCtx.fill();
-                    maskCtx.restore();
-                }
-            }
-        }
+        applyTextureMask(ctx, canvasW, canvasH, layer, project);
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
@@ -611,74 +446,54 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         totalBlurPx,
         meshW,
         meshH,
-        isBrowser,
-        isPhone,
-        isSamsung,
-        device,
         evalLayer.shimmerProgress,
         evalLayer.textContentOverride,
         evalLayer.size.height,
+        screenFit,
+        screenFill,
     ]);
 
-    // Live frame redraw for video layers as currentTimeMs updates
-    useEffect(() => {
-        if (!isVideoAsset || !videoElement || !texture) return;
-        const image = texture.image as HTMLCanvasElement | undefined;
-        if (!image) return;
-        const ctx = image.getContext('2d');
-        if (!ctx) return;
-        const topBarH = isBrowser ? Math.round(image.height * 0.07) : 0;
-        const imgL = layer as ImageLayer | VideoLayer;
-        const crop = imgL.crop || { x: 0, y: 0, width: 1, height: 1 };
-        const vw = videoElement.videoWidth || 1920;
-        const vh = videoElement.videoHeight || 1080;
-        const sx = crop.x * vw;
-        const sy = crop.y * vh;
-        const sw = Math.max(1, crop.width * vw);
-        const sh = Math.max(1, crop.height * vh);
-
-        ctx.save();
-        if (totalBlurPx > 0) {
-            ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
-        }
-        ctx.drawImage(
-            videoElement,
-            sx,
-            sy,
-            sw,
-            sh,
-            0,
-            topBarH,
-            image.width,
-            image.height - topBarH
-        );
-        ctx.restore();
-        // eslint-disable-next-line react-hooks/immutability
-        texture.needsUpdate = true;
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, isBrowser, layer, totalBlurPx]);
-
-    // Dispose texture on replace/unmount to prevent GPU memory leaks
+    // Dispose previous texture whenever a new one is generated or component unmounts
     useEffect(() => {
         return () => {
-            texture?.dispose();
+            if (texture) {
+                texture.dispose();
+            }
         };
     }, [texture]);
 
+    // Seek completion and decoded-frame events use exactly the same mapping as static media.
+    useEffect(() => {
+        if (!isVideoAsset || !videoElement || !texture) return;
+        const canvas = texture.image as HTMLCanvasElement;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const redraw = () => {
+            if (videoElement.readyState < 2) return;
+            const media = layer as ImageLayer | VideoLayer;
+            drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvas.width, canvas.height, {
+                crop: media.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx,
+            });
+            drawMediaShimmer(ctx, canvas.width, canvas.height, evalLayer.shimmerProgress);
+            applyTextureMask(ctx, canvas.width, canvas.height, layer, project);
+            markTextureUpdated(texture);
+            invalidate();
+        };
+        redraw();
+        const events = ['loadeddata', 'seeked', 'timeupdate'] as const;
+        for (const event of events) videoElement.addEventListener(event, redraw);
+        return () => { for (const event of events) videoElement.removeEventListener(event, redraw); };
+    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, evalLayer.shimmerProgress, invalidate]);
+
     const cornerRadiusWorld = useMemo(() => {
-        if (isPhone) return Math.min(meshW, meshH) * 0.14;
-        if (isIpad) return Math.min(meshW, meshH) * 0.07;
-        if (isMacbook || isBrowser) return Math.min(meshW, meshH) * 0.045;
+        if (deviceFrameMetrics) return deviceFrameMetrics.cornerRadius;
         if (layer.kind !== 'text') {
             return (layer.cornerRadius ?? 0.03) * Math.min(meshW, meshH) * 0.5;
         }
         return 0.005;
-    }, [isPhone, isIpad, isMacbook, isBrowser, layer, meshW, meshH]);
+    }, [layer, meshW, meshH, deviceFrameMetrics]);
 
-    const roundedShape = useMemo(
-        () => createRoundedRectShape(meshW, meshH, cornerRadiusWorld),
-        [meshW, meshH, cornerRadiusWorld]
-    );
-
+    // Rounded geometry is used for ordinary image and video layer corners.
     const normalizedScreenGeometry = useMemo(
         () => createNormalizedRoundedGeometry(meshW, meshH, cornerRadiusWorld),
         [meshW, meshH, cornerRadiusWorld]
@@ -686,184 +501,54 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     useEffect(() => {
         return () => {
-            normalizedScreenGeometry.dispose();
+            normalizedScreenGeometry?.dispose();
         };
     }, [normalizedScreenGeometry]);
 
-    const phoneExtrudeSettings = useMemo(
-        () => ({
-            depth: 0.045,
-            bevelEnabled: true,
-            bevelSegments: 5,
-            steps: 1,
-            bevelSize: 0.014,
-            bevelThickness: 0.014,
-        }),
-        []
-    );
+    const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
+    if (!surface.visible) return null;
+    const renderOpacity = surface.surfaceOpacity;
+    const receivesLight = surface.receivesLight;
 
-    if (!isSelected && (!evalLayer.visible || opacity <= 0.001)) return null;
+    const surfaceRoughness = layer.material?.roughness ?? 0.24;
+    const surfaceMetalness = layer.material?.metalness ?? 0.06;
 
-    const renderOpacity = isSelected ? Math.max(0.65, opacity) : opacity;
-    const chassisRoughness = Math.min(0.9, 0.22 + totalBlurPx * 0.02);
-
-    // Layer opt-in: text defaults to unlit (receivesLight = false) for sharp readability; images/video/devices/shapes default to lit
-    const receivesLight = layer.receivesLight !== undefined
-        ? layer.receivesLight
-        : layer.kind !== 'text';
-
-    // Surface material response:
-    // Device screen gets glass finish (low roughness, subtle specular reflection for blooming highlights)
-    const isDeviceScreen = isPhone || isIpad || isMacbook || isSamsung || isDisplay;
-    const defaultRoughness = isDeviceScreen
-        ? 0.08
-        : (layer.kind === 'image' || layer.kind === 'video' ? 0.24 : 0.45);
-    const defaultMetalness = isDeviceScreen
-        ? 0.12
-        : (layer.kind === 'image' || layer.kind === 'video' ? 0.06 : 0.02);
-
-    const surfaceRoughness = layer.material?.roughness ?? defaultRoughness;
-    const surfaceMetalness = layer.material?.metalness ?? defaultMetalness;
-
-    const getChassisHexColor = (color?: string) => {
-        switch (color) {
-            case 'silver': return '#e2e8f0';
-            case 'black': return '#18181c';
-            case 'space-black': return '#121316';
-            case 'titanium': return '#484745';
-            case 'midnight': return '#161c28';
-            default: return '#18181c';
-        }
-    };
-    const chassisHex = getChassisHexColor(device?.color);
-
-    return (
-        <group
-            position={[worldX, worldY, worldZ]}
-            rotation={[-rot.x, rot.y, -rot.z]}
-            scale={[scale.x, scale.y, scale.z || 1]}
-            onPointerDown={(e) => {
-                e.stopPropagation();
-            }}
-            onClick={(e) => {
-                e.stopPropagation();
-                onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey);
-            }}
-        >
-            {/* 1. 3D IPHONE / IPAD / SAMSUNG GALAXY CHASSIS */}
-            {(isPhone || isIpad || isSamsung) && (
-                <group position={[0, 0, -0.035]}>
-                    <mesh castShadow receiveShadow>
-                        <extrudeGeometry args={[roundedShape, phoneExtrudeSettings]} />
-                        <meshStandardMaterial
-                            color={chassisHex}
-                            metalness={0.94}
-                            roughness={chassisRoughness}
-                            envMapIntensity={1.4}
-                        />
-                    </mesh>
-                </group>
-            )}
-
-            {/* 2. 3D MACBOOK CHASSIS */}
-            {isMacbook && (
-                <group position={[0, -meshH * 0.48, -0.02]}>
-                    <mesh
-                        position={[0, 0, meshH * 0.4]}
-                        rotation={[-Math.PI / 2, 0, 0]}
-                        castShadow
-                        receiveShadow
-                    >
-                        <boxGeometry args={[meshW * 1.08, meshH * 0.85, 0.022]} />
-                        <meshStandardMaterial
-                            color={chassisHex}
-                            metalness={0.9}
-                            roughness={0.28}
-                            envMapIntensity={1.2}
-                        />
-                    </mesh>
-                </group>
-            )}
-
-            {/* 3. 3D PRO / STUDIO DISPLAY CHASSIS & STAND */}
-            {isDisplay && (
-                <group position={[0, 0, -0.02]}>
-                    {/* Bezel frame around display */}
-                    <mesh castShadow receiveShadow>
-                        <boxGeometry args={[meshW * 1.04, meshH * 1.04, 0.02]} />
-                        <meshStandardMaterial
-                            color={chassisHex}
-                            metalness={0.92}
-                            roughness={0.24}
-                            envMapIntensity={1.3}
-                        />
-                    </mesh>
-                    {/* Stand column */}
-                    <mesh position={[0, -meshH * 0.45, -0.06]} rotation={[0.08, 0, 0]} castShadow>
-                        <boxGeometry args={[meshW * 0.12, meshH * 0.48, 0.025]} />
-                        <meshStandardMaterial
-                            color={device?.color === 'silver' ? '#e2e8f0' : '#27272a'}
-                            metalness={0.95}
-                            roughness={0.2}
-                        />
-                    </mesh>
-                    {/* Stand base plate foot */}
-                    <mesh position={[0, -meshH * 0.68, 0.04]} rotation={[-Math.PI / 2, 0, 0]} castShadow receiveShadow>
-                        <boxGeometry args={[meshW * 0.36, meshH * 0.28, 0.015]} />
-                        <meshStandardMaterial
-                            color={device?.color === 'silver' ? '#e2e8f0' : '#27272a'}
-                            metalness={0.95}
-                            roughness={0.2}
-                        />
-                    </mesh>
-                </group>
-            )}
-
-            {/* 3. SCREEN / LAYER SURFACE WITH NORMALIZED ROUNDED UVs */}
+    const contents = <>
             <mesh
-                position={[0, 0, 0.016]}
-                geometry={
-                    (layer.kind === 'image' || layer.kind === 'video') ? normalizedScreenGeometry : undefined
-                }
+                // One shared screen plane: the artwork sits at SCREEN_PLANE_Z
+                // with or without a frame, so toggling the frame never shifts
+                // it. PhoneDeviceFrame stages the rim just in front of this
+                // plane and the solid backer just behind, so the bezel
+                // occludes the screen edge at every tilt instead of the
+                // artwork floating over the chassis.
+                position={[0, 0, SCREEN_PLANE_Z]}
+                geometry={(layer.kind === 'image' || layer.kind === 'video') ? normalizedScreenGeometry ?? undefined : undefined}
                 castShadow={receivesLight && (layer.kind === 'image' || layer.kind === 'video')}
                 receiveShadow={receivesLight}
             >
                 {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
                 {receivesLight ? (
-                    <meshStandardMaterial
-                        map={texture || undefined}
-                        color="#ffffff"
-                        transparent={true}
-                        opacity={renderOpacity}
-                        roughness={surfaceRoughness}
-                        metalness={surfaceMetalness}
-                        side={THREE.DoubleSide}
-                        depthWrite={layer.kind === 'image' || layer.kind === 'video'}
-                        depthTest={true}
-                    />
+                    <meshStandardMaterial map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 ) : (
-                    <meshBasicMaterial
-                        map={texture || undefined}
-                        color="#ffffff"
-                        transparent={true}
-                        opacity={renderOpacity}
-                        side={THREE.DoubleSide}
-                        depthWrite={layer.kind === 'image' || layer.kind === 'video'}
-                        depthTest={true}
-                    />
+                    <meshBasicMaterial map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 )}
             </mesh>
-
-            {/* 4. DYNAMIC ISLAND NOTCH (iPhone only) */}
-            {isPhone && (
-                <mesh
-                    position={[0, meshH * 0.42, 0.019]}
-                    rotation={[0, 0, Math.PI / 2]}
-                >
-                    <capsuleGeometry args={[meshW * 0.026, meshW * 0.15, 8, 16]} />
-                    <meshBasicMaterial color="#000000" />
-                </mesh>
+            {deviceFrameSettings && deviceFrameMetrics && (
+                <PhoneDeviceFrame
+                    metrics={deviceFrameMetrics}
+                    settings={deviceFrameSettings}
+                />
             )}
+    </>;
+
+    return (
+        <group position={[worldX, worldY, worldZ]} rotation={[-rot.x, rot.y, -rot.z]} scale={[scale.x, scale.y, scale.z || 1]}
+            onPointerDown={e => { e.stopPropagation(); }}
+            onClick={e => { e.stopPropagation(); onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey); }}
+        >
+            {deviceFrameSettings ? <DeviceOpacityGroup opacity={surface.assemblyOpacity}>{contents}</DeviceOpacityGroup> : contents}
         </group>
     );
 };
+
+function markTextureUpdated(texture: THREE.Texture) { texture.needsUpdate = true; }

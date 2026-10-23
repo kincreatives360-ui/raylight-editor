@@ -79,6 +79,14 @@ function parseNumericAttr(
     return Number.isFinite(parsed) ? parsed : fallback;
 }
 
+function escapeSvgAttr(val: string): string {
+    return val
+        .replace(/&/g, '&amp;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+}
+
 // Parses a Figma "Copy as SVG" string into separate editable Text, Shape, and Image layers
 export function parseFigmaSvgToLayers(
     svgText: string,
@@ -148,6 +156,10 @@ export function parseFigmaSvgToLayers(
     // Walk direct & nested children of the SVG
     const candidates = Array.from(
         svgEl.querySelectorAll('rect, circle, ellipse, line, text, image, path')
+    );
+
+    const hasNonPathElements = candidates.some(
+        (c) => !c.closest('defs, clipPath, mask, pattern') && c.tagName.toLowerCase() !== 'path'
     );
 
     for (const el of candidates) {
@@ -406,10 +418,51 @@ export function parseFigmaSvgToLayers(
                     width: Number((w / boardW).toFixed(4)),
                     height: Number((h / boardH).toFixed(4)),
                 },
-                device: undefined, // Land flat when pasted from Figma
             });
 
             layers.push(imgLayer);
+            zDepthCursor += 0.04;
+        }
+
+        // 6. <path> -> Vector ImageLayer
+        else if (tag === 'path') {
+            if (!hasNonPathElements) continue;
+            const d = el.getAttribute('d');
+            if (!d) continue;
+
+            const pathFill = el.getAttribute('fill') || '#ffffff';
+            const pathStroke = el.getAttribute('stroke');
+            const pathStrokeWidth = parseNumericAttr(el, 'stroke-width', 0);
+            const pathOpacity = parseNumericAttr(el, 'opacity', 1);
+
+            const escapedD = escapeSvgAttr(d);
+            const escapedFill = escapeSvgAttr(pathFill);
+            const strokeAttr = pathStroke ? ` stroke="${escapeSvgAttr(pathStroke)}" stroke-width="${pathStrokeWidth}"` : '';
+            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}"><path d="${escapedD}" fill="${escapedFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
+            const encoded = `data:image/svg+xml;utf8,${encodeURIComponent(pathSvg)}`;
+            const assetId = `asset-figma-path-${Date.now()}-${orderCounter}`;
+
+            assets[assetId] = {
+                id: assetId,
+                name: rawName || 'Figma Vector Path',
+                mimeType: 'image/svg+xml',
+                dataUrl: encoded,
+                thumbUrl: encoded,
+                width: boardW,
+                height: boardH,
+            };
+
+            const pathLayer: ImageLayer = createDefaultImageLayer({
+                name: rawName || 'Figma Vector Path',
+                assetId,
+                order: orderCounter++,
+                outMs: shotDurationMs,
+                position: { x: 0, y: 0, z: Number(zDepthCursor.toFixed(3)) },
+                rotation: { x: 0, y: 0, z: 0 },
+                size: { width: 1, height: 1 },
+            });
+
+            layers.push(pathLayer);
             zDepthCursor += 0.04;
         }
     }
@@ -438,7 +491,6 @@ export function parseFigmaSvgToLayers(
                 position: { x: 0, y: 0, z: 0.1 },
                 rotation: { x: 0, y: 0, z: 0 },
                 size: { width: 0.55, height: 0.55 },
-                device: undefined,
             })
         );
     }

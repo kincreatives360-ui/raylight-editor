@@ -24,23 +24,20 @@ import {
     Play,
     Pause,
     Upload,
-    LayoutTemplate,
-    Sparkles,
-    Check,
-    Smartphone,
-    Laptop,
-    Tv,
-    Flame,
 } from 'lucide-react';
 import type { Shot, Layer, Group, AudioClip } from '../../model/types';
-import { isBlankProjectState } from '../../model/types';
+import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 import { CURATED_SOUNDS } from '../../data/curatedSounds';
-import { STARTER_TEMPLATES, type StarterTemplate } from '../../data/starterTemplates';
-import { createDefaultCameraBlock } from '../../model/defaults';
+import { getSoundCategoryLabels, normalizeSoundCategory } from '../../data/soundCategories';
+import {
+    SHADER_PRESETS,
+    SHADER_PRESET_METADATA,
+    DEFAULT_SHADER_CONFIGS,
+} from '../../model/backgroundPresets';
 
 interface LeftPanelProps {
     activeShot: Shot;
@@ -61,13 +58,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         updateShot,
         updateLayer,
         addLayerToShot,
+        addCameraBlockToShot,
+        toggleProjectAudioMuted,
         deleteLayerFromShot,
         moveLayerToOrderAndGroup,
         updateGroupInShot,
         addShot,
         duplicateShot,
         deleteShot,
-        loadProjectJson,
     } = useProjectStore();
 
     const {
@@ -86,6 +84,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         selectBlock,
         selectCameraBlock,
         selectPreset,
+        clearLayerSelection,
+        inspectorTab,
         setInspectorTab,
         setTimelineView,
         setTimelineScrollTop,
@@ -96,43 +96,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
     const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
-    const [activeTab, setActiveTab] = useState<'file' | 'assets' | 'audio' | 'templates'>('file');
-    const [selectedTemplateCategory, setSelectedTemplateCategory] = useState<string>('All');
-    const [loadedTemplateId, setLoadedTemplateId] = useState<string | null>(null);
+    const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
+    const [assetCategory, setAssetCategory] = useState<'uploads' | 'shaders' | 'sfx'>('uploads');
     const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
     const [soundSearchQuery, setSoundSearchQuery] = useState<string>('');
     const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
     const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-
-    const filteredTemplates = useMemo(() => {
-        return STARTER_TEMPLATES.filter((tpl) => {
-            if (selectedTemplateCategory !== 'All' && tpl.category !== selectedTemplateCategory) {
-                return false;
-            }
-            return true;
-        });
-    }, [selectedTemplateCategory]);
-
-    const handleLoadTemplate = (tpl: StarterTemplate) => {
-        const hasExistingContent = project.shots.length > 1 || (project.shots[0]?.layers && project.shots[0].layers.length > 0);
-        if (hasExistingContent) {
-            const confirmMsg = `Load "${tpl.name}"? This will replace your current workspace.`;
-            if (typeof window !== 'undefined' && !window.confirm(confirmMsg)) {
-                return;
-            }
-        }
-        const newProject = tpl.getProject();
-        const result = loadProjectJson(newProject);
-        if (result.success) {
-            if (newProject.shots.length > 0) {
-                selectShot(newProject.shots[0].id);
-            }
-            setSelectedLayerIds([]);
-            setCurrentTimeMs(0);
-            setLoadedTemplateId(tpl.id);
-            setTimeout(() => setLoadedTemplateId(null), 2500);
-        }
-    };
 
     useEffect(() => {
         return () => {
@@ -178,47 +147,41 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         });
     };
 
-    const filteredCuratedSounds = useMemo(() => {
-        const list: {
-            id: string;
-            name: string;
-            category: string;
-            durationMs: number;
-            description: string;
-            getUrl: () => string;
-        }[] = [
-            ...CURATED_SOUNDS.map((s) => ({
-                id: s.slug,
-                name: s.name,
-                category: s.category.charAt(0).toUpperCase() + s.category.slice(1),
-                durationMs: s.durationMs,
-                description: `${s.category} sound effect`,
-                getUrl: () => s.src,
-            })),
-            ...BUILTIN_SOUND_PACKS.map((s) => ({
-                id: s.id,
-                name: s.name,
-                category: s.category,
-                durationMs: s.durationMs,
-                description: s.description,
-                getUrl: () => s.generateWavDataUrl(),
-            })),
-        ];
+    const soundItems = useMemo(() => [
+        ...CURATED_SOUNDS.map((sound) => ({
+            id: sound.slug,
+            name: sound.name,
+            category: normalizeSoundCategory(sound.category),
+            durationMs: sound.durationMs,
+            description: `${sound.category} sound effect`,
+            getUrl: () => sound.src,
+        })),
+        ...BUILTIN_SOUND_PACKS.map((sound) => ({
+            id: sound.id,
+            name: sound.name,
+            category: normalizeSoundCategory(sound.category),
+            durationMs: sound.durationMs,
+            description: sound.description,
+            getUrl: () => sound.generateWavDataUrl(),
+        })),
+    ], []);
 
+    const soundCategories = useMemo(
+        () => getSoundCategoryLabels(soundItems.map((sound) => sound.category)),
+        [soundItems]
+    );
+
+    const filteredCuratedSounds = useMemo(() => {
         const q = soundSearchQuery.trim().toLowerCase();
-        return list.filter((item) => {
-            const matchesCategory =
-                selectedSfxCategory === 'All' ||
-                item.category.toLowerCase() === selectedSfxCategory.toLowerCase();
-            if (!matchesCategory) return false;
+        return soundItems.filter((item) => {
+            if (selectedSfxCategory !== 'All' && item.category !== selectedSfxCategory) {
+                return false;
+            }
             if (!q) return true;
-            return (
-                item.name.toLowerCase().includes(q) ||
-                item.category.toLowerCase().includes(q) ||
-                item.description.toLowerCase().includes(q)
-            );
+            return [item.name, item.category, item.description]
+                .some((field) => field.toLowerCase().includes(q));
         });
-    }, [soundSearchQuery, selectedSfxCategory]);
+    }, [soundItems, soundSearchQuery, selectedSfxCategory]);
 
     const [searchOpen, setSearchOpen] = useState(false);
     const [searchQuery, setSearchQuery] = useState('');
@@ -470,7 +433,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     } ${isSelected || isInsideSelectedContainer
                         ? 'bg-[#09355c] text-white font-medium'
                         : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
-                    } ${layer.hidden ? 'opacity-40' : ''}`}
+                    } ${isLayerEffectivelyHidden(layer, shot.groups) ? 'opacity-40' : ''}`}
             >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     {renderLayerIcon(layer, isSelected)}
@@ -481,8 +444,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             onChange={(e) => setEditingText(e.target.value)}
                             onBlur={() => commitLayerRename(shot.id, layer.id)}
                             onKeyDown={(e) => {
+                                e.stopPropagation();
                                 if (e.key === 'Enter') commitLayerRename(shot.id, layer.id);
-                                if (e.key === 'Escape') setEditingId(null);
+                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                             }}
                             onClick={(e) => e.stopPropagation()}
                             className="w-full bg-black/90 border border-[#0088ff] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -600,8 +564,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 onChange={(e) => setEditingText(e.target.value)}
                                 onBlur={() => commitGroupRename(shot.id, group.id)}
                                 onKeyDown={(e) => {
+                                    e.stopPropagation();
                                     if (e.key === 'Enter') commitGroupRename(shot.id, group.id);
-                                    if (e.key === 'Escape') setEditingId(null);
+                                    if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                                 }}
                                 onClick={(e) => e.stopPropagation()}
                                 className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -630,7 +595,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     };
 
     const assetList = Object.values(project.assets);
-    const isBlankState = isBlankProjectState(project);
     const hasCameraBlocks = (activeShot.cameraBlocks?.length || 0) > 0;
     const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
 
@@ -726,21 +690,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         </button>
                         <button
                             onClick={() => {
-                                const camId = `cam-blk-${Date.now()}`;
-                                updateShot(activeShot.id, (s) => ({
-                                    ...s,
-                                    cameraBlocks: [
-                                        ...(s.cameraBlocks || []),
-                                        createDefaultCameraBlock(
-                                            camId,
-                                            0,
-                                            s.durationMs,
-                                            s.framings[0]?.id || 'f1',
-                                            s.framings[1]?.id || 'f2'
-                                        ),
-                                    ],
-                                }));
-                                selectCameraBlock(camId);
+                                const block = addCameraBlockToShot(activeShot.id);
+                                if (!block) return;
+                                selectCameraBlock(block.id);
                                 setTimelineView('scene');
                                 setAddMenuOpen(false);
                             }}
@@ -752,15 +704,15 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 )}
             </div>
 
-            {/* 2. SUB-HEADER: [File] | Assets + Search Icon */}
+            {/* 2. SUB-HEADER: Clean [File] | [Assets] + Search Icon */}
             <div className="h-9 border-y border-white/[0.07] px-3 flex items-center justify-between shrink-0" role="tablist" aria-label="Left panel views">
-                <div className="flex items-center gap-1">
+                <div className="flex items-center gap-1.5">
                     <button
                         role="tab"
                         aria-selected={activeTab === 'file'}
                         onClick={() => setActiveTab('file')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'file'
-                            ? 'bg-[#1f1f23] text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'file'
+                            ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
@@ -770,36 +722,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         role="tab"
                         aria-selected={activeTab === 'assets'}
                         onClick={() => setActiveTab('assets')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${activeTab === 'assets'
-                            ? 'bg-[#1f1f23] text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'assets'
+                            ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
                     >
                         Assets
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={activeTab === 'audio'}
-                        onClick={() => setActiveTab('audio')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'audio'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
-                    >
-                        <Music className="w-3 h-3 text-[#38bdf8]" />
-                        <span>SFX</span>
-                    </button>
-                    <button
-                        role="tab"
-                        aria-selected={activeTab === 'templates'}
-                        onClick={() => setActiveTab('templates')}
-                        className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer flex items-center gap-1.5 ${activeTab === 'templates'
-                            ? 'bg-[#1f1f23] text-white'
-                            : 'text-[#a1a1aa] hover:text-white'
-                            }`}
-                    >
-                        <LayoutTemplate className="w-3 h-3 text-[#f59e0b]" />
-                        <span>Templates</span>
                     </button>
                 </div>
 
@@ -847,9 +775,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
             {/* =================================================================== */}
             {activeTab === 'file' && (
                 <div className="flex-1 flex flex-col min-h-0">
-                    <div className="flex-1 overflow-y-auto p-2 space-y-1" role="tree" aria-label="Project layer hierarchy">
+                    <div
+                        className="flex-1 overflow-y-auto p-2 space-y-1"
+                        role="tree"
+                        aria-label="Project layer hierarchy"
+                        onClick={(e) => {
+                            if (e.target === e.currentTarget) {
+                                clearLayerSelection();
+                            }
+                        }}
+                    >
                         {project.shots.map((shot) => {
-                            const isShotActive = shot.id === activeShot.id;
+                            const isShotSelected = shot.id === activeShot.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
 
@@ -860,19 +797,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             const rootGroups = shot.groups.filter((g) => !g.parentGroupId);
                             const ungroupedLayers = layersTopDown.filter((l) => !l.groupId);
 
-                            const hasGroupSelected = rootGroups.some((g) => {
-                                const gl = layersTopDown.filter((l) => l.groupId === g.id);
-                                return (
-                                    gl.length > 0 &&
-                                    gl.every((l) => selectedLayerIds.includes(l.id))
-                                );
-                            });
-
                             return (
                                 <div
                                     key={shot.id}
                                     className={
-                                        isShotActive && !hasGroupSelected
+                                        isShotSelected
                                             ? 'rounded-lg overflow-hidden my-1'
                                             : 'my-0.5'
                                     }
@@ -884,7 +813,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             setCurrentTimeMs(shot.startMs + 100);
                                         }}
                                         onDoubleClick={() => startRename(shot.id, shot.name)}
-                                        className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition ${isShotActive && !hasGroupSelected
+                                        className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition rounded-lg ${isShotSelected
                                             ? 'bg-[#0088ff] text-white font-semibold'
                                             : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                             }`}
@@ -907,9 +836,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 )}
                                             </button>
                                             <Hash
-                                                className={`w-3.5 h-3.5 shrink-0 ${isShotActive && !hasGroupSelected
+                                                className={`w-3.5 h-3.5 shrink-0 ${isShotSelected
                                                     ? 'text-white'
-                                                    : 'text-[#0088ff]'
+                                                    : 'text-[#38bdf8]'
                                                     }`}
                                             />
                                             {isEditingShot ? (
@@ -919,8 +848,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     onChange={(e) => setEditingText(e.target.value)}
                                                     onBlur={() => commitShotRename(shot.id)}
                                                     onKeyDown={(e) => {
+                                                        e.stopPropagation();
                                                         if (e.key === 'Enter') commitShotRename(shot.id);
-                                                        if (e.key === 'Escape') setEditingId(null);
+                                                        if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
                                                     }}
                                                     onClick={(e) => e.stopPropagation()}
                                                     className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
@@ -995,14 +925,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 </div>
                             );
                         })}
-
-                        {(!isBlankState || audioLabel || (project.audio?.clips.length ?? 0) > 0) && <div
-                            onClick={onSelectAudioClick}
-                            className="h-7 px-3 mt-1 rounded-md flex items-center gap-2 text-[11px] text-[#a1a1aa] hover:text-white hover:bg-white/[0.04] cursor-pointer transition"
-                        >
-                            <Music className="w-3.5 h-3.5 text-[#f97316] shrink-0" />
-                            <span className="truncate">{audioLabel}</span>
-                        </div>}
                     </div>
 
                     {/* =============================================================== */}
@@ -1039,14 +961,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             type="button"
                                             onClick={(e) => {
                                                 e.stopPropagation();
-                                                updateProject((p) => ({
-                                                    ...p,
-                                                    audio: {
-                                                        clips: p.audio?.clips || [],
-                                                        muted: !p.audio?.muted,
-                                                        masterVolume: p.audio?.masterVolume ?? 1,
-                                                    },
-                                                }));
+                                                toggleProjectAudioMuted();
                                             }}
                                             title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                             className="p-1 hover:text-white cursor-pointer"
@@ -1079,21 +994,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         if (activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0) {
                                             selectCameraBlock(activeShot.cameraBlocks[0].id);
                                         } else {
-                                            const camId = `cam-blk-${Date.now()}`;
-                                            updateShot(activeShot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: [
-                                                    ...(s.cameraBlocks || []),
-                                                    createDefaultCameraBlock(
-                                                        camId,
-                                                        0,
-                                                        s.durationMs,
-                                                        s.framings[0]?.id || 'f1',
-                                                        s.framings[1]?.id || 'f2'
-                                                    ),
-                                                ],
-                                            }));
-                                            selectCameraBlock(camId);
+                                            const block = addCameraBlockToShot(activeShot.id);
+                                            if (block) selectCameraBlock(block.id);
                                         }
                                     }}
                                     style={{ order: 30 }}
@@ -1122,13 +1024,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     .sort((a, b) => b.order - a.order)
                                     .map((layer) => {
                                         const isSelected = selectedLayerIds.includes(layer.id);
-                                        const isExpanded = expandedTimelineLayerIds.includes(
-                                            layer.id
-                                        );
                                         const hasAnimItems =
                                             layer.entrance.type !== 'none' ||
                                             layer.exit.type !== 'none' ||
                                             layer.blocks.length > 0;
+                                        const isExpanded =
+                                            expandedTimelineLayerIds.includes(layer.id) ||
+                                            (isSelected && hasAnimItems);
 
                                         return (
                                             <div key={`mirror-${layer.id}`} style={{ order: 10 }} className="space-y-0.5">
@@ -1229,319 +1131,338 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 </div>
             )}
 
-            {/* ASSETS TAB */}
+            {/* =================================================================== */}
+            {/* ASSETS TAB: UNIFIED STUDIO ASSET LIBRARY                            */}
+            {/* =================================================================== */}
             {activeTab === 'assets' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    <button
-                        onClick={onUploadClick}
-                        className="w-full py-1.5 px-3 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Upload Media</span>
-                    </button>
-
-                    <div className="flex-1 overflow-y-auto space-y-2">
-                        {assetList.map((asset) => (
-                            <div
-                                key={asset.id}
-                                draggable
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData(
-                                        'application/x-raylight-asset-id',
-                                        asset.id
-                                    );
-                                    e.dataTransfer.effectAllowed = 'copy';
-                                }}
-                                onClick={() => {
-                                    const created = addLayerToShot(activeShot.id, 'image', {
-                                        assetId: asset.id,
-                                        name: asset.name,
-                                        rotation: { x: 0, y: 0, z: 0 },
-                                        device: undefined,
-                                    });
-                                    setInspectorTab('layer');
-                                    selectLayer(created.id);
-                                }}
-                                className="p-2 rounded-lg bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition"
-                            >
-                                <div className="w-10 h-8 rounded bg-black border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
-                                    {asset.thumbUrl || asset.dataUrl ? (
-                                        <img
-                                            src={asset.thumbUrl || asset.dataUrl}
-                                            alt={asset.name}
-                                            className="w-full h-full object-cover"
-                                        />
-                                    ) : (
-                                        <ImageIcon className="w-4 h-4 text-[#0088ff]" />
-                                    )}
-                                </div>
-                                <div className="min-w-0 flex-1">
-                                    <div className="text-[11px] font-medium text-white truncate">
-                                        {asset.name}
-                                    </div>
-                                    <div className="text-[10px] font-mono text-[#a1a1aa]">
-                                        {asset.width}&times;{asset.height}
-                                    </div>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                </div>
-            )}
-
-            {/* AUDIO & SFX TAB */}
-            {activeTab === 'audio' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    <button
-                        type="button"
-                        onClick={onSelectAudioClick}
-                        className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-lg shadow-[#0088ff]/20"
-                    >
-                        <Upload className="w-3.5 h-3.5" />
-                        <span>Upload Audio Track</span>
-                    </button>
-
-                    {audioLabel && (
-                        <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
-                            <div className="flex items-center gap-2 min-w-0">
-                                <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                                <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
-                            </div>
-                            <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
-                        </div>
-                    )}
-
-                    {/* Sound Search Bar */}
-                    <div className="relative">
-                        <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                        <input
-                            type="text"
-                            placeholder="Search 150+ sound effects..."
-                            value={soundSearchQuery}
-                            onChange={(e) => setSoundSearchQuery(e.target.value)}
-                            className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
-                        />
-                        {soundSearchQuery && (
+                <div className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
+                    {/* Subcategory Navigation Pills */}
+                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] no-scrollbar shrink-0 border-b border-white/[0.06]">
+                        {([
+                            { id: 'uploads', label: 'Uploads' },
+                            { id: 'shaders', label: 'Shaders' },
+                            { id: 'sfx', label: 'Sound FX' },
+                        ] as const).map((cat) => (
                             <button
+                                key={cat.id}
                                 type="button"
-                                onClick={() => setSoundSearchQuery('')}
-                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
+                                onClick={() => setAssetCategory(cat.id)}
+                                className={`px-2.5 py-1 rounded-lg shrink-0 font-medium transition cursor-pointer ${
+                                    assetCategory === cat.id
+                                        ? 'bg-[#0088ff] text-white shadow-xs'
+                                        : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                }`}
                             >
-                                <X className="w-3 h-3" />
-                            </button>
-                        )}
-                    </div>
-
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar">
-                        {['All', 'Ambience', 'Click', 'Glitch', 'Impact', 'Pop', 'Riser', 'Slide', 'Typing', 'UI', 'Whoosh'].map((cat) => (
-                            <button
-                                key={cat}
-                                type="button"
-                                onClick={() => setSelectedSfxCategory(cat)}
-                                className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedSfxCategory === cat
-                                    ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
-                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
-                                    }`}
-                            >
-                                {cat}
+                                {cat.label}
                             </button>
                         ))}
                     </div>
 
-                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center">
-                        <span>Curated Sound FX Library</span>
-                        <span>{filteredCuratedSounds.length} sounds</span>
-                    </div>
+                    {/* SUBCATEGORY 1: UPLOADS */}
+                    {assetCategory === 'uploads' && (
+                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+                            <button
+                                onClick={onUploadClick}
+                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                            >
+                                <Plus className="w-4 h-4" />
+                                <span>Upload Media</span>
+                            </button>
 
-                    {/* SFX List */}
-                    <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
-                        {filteredCuratedSounds.map((sound) => {
-                            const isPlaying = playingSfxId === sound.id;
-                            const durationFormatted = sound.durationMs >= 1000
-                                ? `${(sound.durationMs / 1000).toFixed(1)}s`
-                                : `${sound.durationMs}ms`;
-
-                            return (
-                                <div
-                                    key={sound.id}
-                                    className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
-                                >
-                                    <div className="min-w-0 flex-1">
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-xs font-semibold text-white truncate">
-                                                {sound.name}
-                                            </span>
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
-                                                {durationFormatted}
-                                            </span>
-                                        </div>
-                                        <div className="flex items-center gap-1.5 mt-0.5">
-                                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
-                                                {sound.category}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    <div className="flex items-center gap-1 shrink-0">
-                                        <button
-                                            type="button"
-                                            onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
-                                            title={isPlaying ? "Pause Preview" : "Preview Sound"}
-                                            aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
-                                            className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
-                                                ? 'bg-[#0088ff] text-white border-[#38bdf8]'
-                                                : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
-                                                }`}
-                                        >
-                                            {isPlaying ? (
-                                                <Pause className="w-3.5 h-3.5 fill-current" />
+                            <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                                {assetList.map((asset) => (
+                                    <div
+                                        key={asset.id}
+                                        draggable
+                                        onDragStart={(e) => {
+                                            e.dataTransfer.setData(
+                                                'application/x-raylight-asset-id',
+                                                asset.id
+                                            );
+                                            e.dataTransfer.effectAllowed = 'copy';
+                                        }}
+                                        onClick={() => {
+                                            const created = addLayerToShot(activeShot.id, 'image', {
+                                                assetId: asset.id,
+                                                name: asset.name,
+                                                rotation: { x: 0, y: 0, z: 0 },
+                                            });
+                                            setInspectorTab('layer');
+                                            selectLayer(created.id);
+                                        }}
+                                        className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition group"
+                                    >
+                                        <div className="w-10 h-8 rounded-lg bg-black border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
+                                            {asset.thumbUrl || asset.dataUrl ? (
+                                                <img
+                                                    src={asset.thumbUrl || asset.dataUrl}
+                                                    alt={asset.name}
+                                                    className="w-full h-full object-cover"
+                                                />
                                             ) : (
-                                                <Play className="w-3.5 h-3.5 fill-current" />
+                                                <ImageIcon className="w-4 h-4 text-[#0088ff]" />
                                             )}
-                                        </button>
-
+                                        </div>
+                                        <div className="min-w-0 flex-1">
+                                            <div className="text-[11px] font-medium text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                                {asset.name}
+                                            </div>
+                                            <div className="text-[10px] font-mono text-[#a1a1aa]">
+                                                {asset.width}&times;{asset.height}
+                                            </div>
+                                        </div>
                                         <button
                                             type="button"
-                                            onClick={() => {
-                                                const clip: AudioClip = {
-                                                    id: `sfx-${sound.id}-${Date.now()}`,
-                                                    name: sound.name,
-                                                    dataUrl: sound.getUrl(),
-                                                    startMs: usePlayheadStore.getState().currentTimeMs,
-                                                    durationMs: sound.durationMs,
-                                                    offsetMs: 0,
-                                                    volume: 1,
-                                                    muted: false,
-                                                };
-                                                updateProject((p) => ({
-                                                    ...p,
-                                                    audio: {
-                                                        clips: [...(p.audio?.clips || []), clip],
-                                                        muted: p.audio?.muted || false,
-                                                        masterVolume: p.audio?.masterVolume ?? 1,
+                                            title="Set as Canvas Background"
+                                            onClick={(e) => {
+                                                e.stopPropagation();
+                                                updateProject((proj) => ({
+                                                    ...proj,
+                                                    background: {
+                                                        kind: 'image',
+                                                        assetId: asset.id,
+                                                        src: asset.dataUrl,
+                                                        color: '#000000',
+                                                        fit: 'cover',
+                                                        dim: 0,
+                                                        blur: 0,
+                                                        opacity: 1,
                                                     },
                                                 }));
                                             }}
-                                            title="Add to Timeline at Playhead"
-                                            aria-label={`Add ${sound.name} to Timeline at playhead`}
-                                            className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
+                                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-[#0088ff] text-[#c4c4cc] hover:text-white text-[10px] font-medium transition cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 shadow-xs"
                                         >
-                                            <Plus className="w-3.5 h-3.5" />
+                                            Set Bg
                                         </button>
                                     </div>
-                                </div>
-                            );
-                        })}
-                        {filteredCuratedSounds.length === 0 && (
-                            <div className="py-8 text-center text-xs text-[#71717a]">
-                                No sound effects match &quot;{soundSearchQuery}&quot;
+                                ))}
+                                {assetList.length === 0 && (
+                                    <div className="py-10 text-center text-xs text-[#71717a] border border-dashed border-white/10 rounded-xl p-4">
+                                        No uploaded media yet.<br />Click Upload Media to add photos or videos.
+                                    </div>
+                                )}
                             </div>
-                        )}
-                    </div>
-                </div>
-            )}
+                        </div>
+                    )}
 
-            {/* TEMPLATES TAB */}
-            {activeTab === 'templates' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-3">
-                    {/* Category Filter Pills */}
-                    <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
-                        {['All', 'Device Showcase', 'Product Walkthrough', 'Cinematic Studio', 'Social & Vertical'].map((cat) => (
-                            <button
-                                key={cat}
-                                type="button"
-                                onClick={() => setSelectedTemplateCategory(cat)}
-                                className={`px-2.5 py-1 rounded-full shrink-0 font-medium transition cursor-pointer ${selectedTemplateCategory === cat
-                                    ? 'bg-[#f59e0b]/20 text-[#fbbf24] border border-[#f59e0b]/40'
-                                    : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
-                                    }`}
-                            >
-                                {cat}
-                            </button>
-                        ))}
-                    </div>
 
-                    <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center shrink-0">
-                        <span>Curated Starters</span>
-                        <span>{filteredTemplates.length} templates</span>
-                    </div>
 
-                    {/* Template Cards List */}
-                    <div className="flex-1 overflow-y-auto space-y-3 pr-0.5">
-                        {filteredTemplates.map((tpl) => {
-                            const isLoaded = loadedTemplateId === tpl.id;
-                            const IconComponent = tpl.id.includes('iphone')
-                                ? Smartphone
-                                : tpl.id.includes('macbook')
-                                    ? Laptop
-                                    : tpl.id.includes('neon')
-                                        ? Flame
-                                        : Tv;
+                    {/* SUBCATEGORY 3: SHADERS */}
+                    {assetCategory === 'shaders' && (
+                        <div className="flex-1 overflow-y-auto space-y-2 pr-0.5">
+                            <div className="text-[10px] text-[#71717a] px-0.5 flex justify-between items-center">
+                                <span>Animated Shader Presets</span>
+                                <span>{SHADER_PRESETS.length} presets</span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                {SHADER_PRESETS.map((p) => {
+                                    const meta = SHADER_PRESET_METADATA[p];
+                                    const cfg = DEFAULT_SHADER_CONFIGS[p];
+                                    const pColors = cfg?.colors?.length ? cfg.colors : [cfg?.color || '#3b82f6', cfg?.backgroundColor || '#05050a'];
+                                    const c1 = pColors[0];
+                                    const c2 = pColors[1] || pColors[0];
 
-                            return (
-                                <div
-                                    key={tpl.id}
-                                    className="p-3 rounded-xl bg-[#161619] hover:bg-[#1a1a1e] border border-white/[0.08] hover:border-white/20 transition flex flex-col gap-2.5 group shadow-sm"
-                                >
-                                    {/* Visual Banner Preview */}
-                                    <div className={`h-20 rounded-lg bg-gradient-to-br ${tpl.thumbnailColor} border border-white/10 flex items-center justify-between px-3 relative overflow-hidden`}>
-                                        <div className="flex items-center gap-2 z-10">
-                                            <div className="w-8 h-8 rounded-lg bg-black/40 backdrop-blur-md border border-white/10 flex items-center justify-center text-white">
-                                                <IconComponent className="w-4 h-4 text-amber-400" />
-                                            </div>
+                                    return (
+                                        <button
+                                            key={p}
+                                            type="button"
+                                            onClick={() => {
+                                                updateProject((proj) => ({
+                                                    ...proj,
+                                                    background: {
+                                                        kind: 'shader',
+                                                        preset: p,
+                                                        color: c1,
+                                                        backgroundColor: c2,
+                                                        color1: c1,
+                                                        color2: c2,
+                                                        color3: pColors[2] || '#06b6d4',
+                                                        colors: pColors,
+                                                        speed: cfg?.speed ?? 1,
+                                                        waves: cfg?.waves ?? 1,
+                                                        noiseScale: cfg?.waves ?? 1,
+                                                        focus: cfg?.focus ?? 1,
+                                                        glow: cfg?.glow ?? 1,
+                                                        shine: cfg?.shine ?? 1,
+                                                        angle: cfg?.angle ?? 28,
+                                                    },
+                                                }));
+                                            }}
+                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.08] hover:border-[#0088ff] text-left transition cursor-pointer flex flex-col gap-1.5 group shadow-xs"
+                                        >
+                                            <div
+                                                className="w-full h-12 rounded-lg border border-white/10 relative overflow-hidden group-hover:scale-105 transition-transform"
+                                                style={{
+                                                    background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
+                                                }}
+                                            />
                                             <div>
-                                                <span className="text-[10px] px-1.5 py-0.5 rounded bg-black/50 text-[#d4d4d8] font-mono uppercase tracking-wider backdrop-blur-sm border border-white/10">
-                                                    {tpl.badge}
-                                                </span>
+                                                <div className="text-[11px] font-semibold text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                                    {meta?.label || p}
+                                                </div>
+                                                <div className="text-[10px] text-[#71717a] truncate">
+                                                    Procedural GLSL
+                                                </div>
                                             </div>
-                                        </div>
-                                        <div className="z-10 flex items-center gap-1">
-                                            <span className="text-[10px] px-2 py-0.5 rounded-full bg-white/10 text-white font-mono backdrop-blur-sm">
-                                                {tpl.aspectRatio}
-                                            </span>
-                                        </div>
-                                        {/* Subtle ambient glow decoration */}
-                                        <div className="absolute -right-4 -bottom-4 w-24 h-24 rounded-full bg-white/5 blur-xl pointer-events-none" />
-                                    </div>
+                                        </button>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    )}
 
-                                    {/* Details */}
-                                    <div>
-                                        <h4 className="text-xs font-semibold text-white tracking-tight group-hover:text-amber-400 transition-colors">
-                                            {tpl.name}
-                                        </h4>
-                                        <p className="text-[11px] text-[#a1a1aa] mt-1 line-clamp-2 leading-relaxed">
-                                            {tpl.description}
-                                        </p>
-                                    </div>
+                    {/* SUBCATEGORY 4: SOUND FX */}
+                    {assetCategory === 'sfx' && (
+                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+                            <button
+                                type="button"
+                                onClick={onSelectAudioClick}
+                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                            >
+                                <Upload className="w-3.5 h-3.5" />
+                                <span>Upload Audio Track</span>
+                            </button>
 
-                                    {/* Action Button */}
+                            {audioLabel && (
+                                <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
+                                    <div className="flex items-center gap-2 min-w-0">
+                                        <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                                        <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
+                                    </div>
+                                    <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
+                                </div>
+                            )}
+
+                            {/* Sound Search Bar */}
+                            <div className="relative">
+                                <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                <input
+                                    type="text"
+                                    placeholder="Search 150+ sound effects..."
+                                    value={soundSearchQuery}
+                                    onChange={(e) => setSoundSearchQuery(e.target.value)}
+                                    className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
+                                />
+                                {soundSearchQuery && (
                                     <button
                                         type="button"
-                                        onClick={() => handleLoadTemplate(tpl)}
-                                        className={`w-full py-1.5 px-3 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition shadow-sm ${isLoaded
-                                            ? 'bg-emerald-600 text-white border border-emerald-500'
-                                            : 'bg-[#f59e0b] hover:bg-[#d97706] text-black hover:text-black font-medium'
-                                            }`}
+                                        onClick={() => setSoundSearchQuery('')}
+                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
                                     >
-                                        {isLoaded ? (
-                                            <>
-                                                <Check className="w-3.5 h-3.5 text-white stroke-[2.5]" />
-                                                <span>Template Loaded!</span>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Sparkles className="w-3.5 h-3.5 fill-current" />
-                                                <span>Use Template</span>
-                                            </>
-                                        )}
+                                        <X className="w-3 h-3" />
                                     </button>
-                                </div>
-                            );
-                        })}
-                    </div>
+                                )}
+                            </div>
+
+                            {/* Category Filter Pills */}
+                            <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
+                                {soundCategories.map((cat) => (
+                                    <button
+                                        key={cat}
+                                        type="button"
+                                        onClick={() => setSelectedSfxCategory(cat)}
+                                        className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${
+                                            selectedSfxCategory === cat
+                                                ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
+                                                : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                        }`}
+                                    >
+                                        {cat}
+                                    </button>
+                                ))}
+                            </div>
+
+                            {/* SFX List */}
+                            <div className="flex-1 overflow-y-auto space-y-1.5 pr-0.5">
+                                {filteredCuratedSounds.map((sound) => {
+                                    const isPlaying = playingSfxId === sound.id;
+                                    const durationFormatted = sound.durationMs >= 1000
+                                        ? `${(sound.durationMs / 1000).toFixed(1)}s`
+                                        : `${sound.durationMs}ms`;
+
+                                    return (
+                                        <div
+                                            key={sound.id}
+                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                        >
+                                            <div className="min-w-0 flex-1">
+                                                <div className="flex items-center gap-1.5">
+                                                    <span className="text-xs font-semibold text-white truncate">
+                                                        {sound.name}
+                                                    </span>
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
+                                                        {durationFormatted}
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 mt-0.5">
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
+                                                        {sound.category}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-1 shrink-0">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
+                                                    title={isPlaying ? "Pause Preview" : "Preview Sound"}
+                                                    aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
+                                                    className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
+                                                        ? 'bg-[#0088ff] text-white border-[#38bdf8]'
+                                                        : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
+                                                        }`}
+                                                >
+                                                    {isPlaying ? (
+                                                        <Pause className="w-3.5 h-3.5 fill-current" />
+                                                    ) : (
+                                                        <Play className="w-3.5 h-3.5 fill-current" />
+                                                    )}
+                                                </button>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const clip: AudioClip = {
+                                                            id: `sfx-${sound.id}-${Date.now()}`,
+                                                            name: sound.name,
+                                                            dataUrl: sound.getUrl(),
+                                                            startMs: usePlayheadStore.getState().currentTimeMs,
+                                                            durationMs: sound.durationMs,
+                                                            offsetMs: 0,
+                                                            volume: 1,
+                                                            muted: false,
+                                                        };
+                                                        updateProject((p) => ({
+                                                            ...p,
+                                                            audio: {
+                                                                clips: [...(p.audio?.clips || []), clip],
+                                                                muted: p.audio?.muted || false,
+                                                                masterVolume: p.audio?.masterVolume ?? 1,
+                                                            },
+                                                        }));
+                                                    }}
+                                                    title="Add to Timeline at Playhead"
+                                                    aria-label={`Add ${sound.name} to Timeline at playhead`}
+                                                    className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
+                                                >
+                                                    <Plus className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                                {filteredCuratedSounds.length === 0 && (
+                                    <div className="py-8 text-center text-xs text-[#71717a]">
+                                        No sound effects match &quot;{soundSearchQuery}&quot;
+                                    </div>
+                                )}
+                            </div>
+                        </div>
+                    )}
+
                 </div>
             )}
         </aside>
     );
 });
+

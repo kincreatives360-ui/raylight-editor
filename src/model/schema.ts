@@ -1,6 +1,8 @@
 // src/model/schema.ts
 import { z } from 'zod';
 import type { Project } from './types';
+import { SHADER_PRESET_IDS } from './backgroundPresets';
+import { resolveDeviceFrameSettings } from './deviceFrame';
 
 export const Vec2Schema = z.object({
   x: z.number(),
@@ -17,6 +19,42 @@ export const Size2DSchema = z.object({
   width: z.number().min(0.01),
   height: z.number().min(0.01),
 });
+
+export const DeviceFrameSettingsSchema = z.preprocess(
+  (input) => input && typeof input === 'object' && !Array.isArray(input)
+    ? resolveDeviceFrameSettings(input)
+    : input,
+  z.object({
+  geometryVersion: z.literal(1).optional(),
+  deviceId: z.string().optional(),
+  deviceScale: z.number().min(0.65).max(2).optional(),
+  legacyHeightCompensation: z.number().positive().optional(),
+  enabled: z.boolean(),
+  model: z.enum(['iphone-pro', 'iphone', 'iphone-classic']),
+  frameColor: z.string(),
+  frameRoughness: z.number().min(0.04).max(1),
+  frameMetalness: z.number().min(0).max(1),
+  scale: z.number().min(0.65).max(2),
+  bezelWidth: z.number().min(0.01).max(0.2),
+  thickness: z.number().min(0.005).max(0.16),
+  cornerRadius: z.number().min(0.04).max(0.24),
+  screenFit: z.enum(['stretch', 'contain', 'cover']),
+  screenFillColor: z.string(),
+  glassTint: z.string(),
+  glassOpacity: z.number().min(0).max(0.45),
+  glassRoughness: z.number().min(0.02).max(1),
+  gloss: z.number().min(0).max(1),
+  reflection: z.number().min(0).max(1),
+  cutoutStyle: z.enum(['dynamic-island', 'notch', 'punch-hole', 'none']),
+  cutoutWidth: z.number().min(0.08).max(0.85),
+  cutoutHeight: z.number().min(0.015).max(0.14),
+  showSideButtons: z.boolean(),
+  showRearCameras: z.boolean(),
+  shadowEnabled: z.boolean(),
+  shadowOpacity: z.number().min(0).max(1),
+  shadowBlur: z.number().min(0).max(1),
+  shadowOffset: z.number().min(0).max(0.5),
+}));
 
 export const GradientStopSchema = z.object({
   at: z.number().min(0).max(1),
@@ -38,21 +76,7 @@ export const FillSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-export const ShaderPresetSchema = z.enum([
-  'silk',
-  'undertones',
-  'mosaic',
-  'meshGradient',
-  'warp',
-  'grainGradient',
-  'prism',
-  'halo',
-  'shift',
-  'lineScreen',
-  'dotMatrix',
-  'watercolor',
-  'voxels',
-]);
+export const ShaderPresetSchema = z.enum(SHADER_PRESET_IDS);
 
 export const BackgroundSchema = z.discriminatedUnion('kind', [
   z.object({
@@ -91,6 +115,11 @@ export const BackgroundSchema = z.discriminatedUnion('kind', [
     glow: z.number().min(0).max(2).default(1),
     shine: z.number().min(0).max(2).default(1),
     angle: z.number().min(-90).max(90).default(28),
+    noiseScale: z.number().optional(),
+    color1: z.string().optional(),
+    color2: z.string().optional(),
+    color3: z.string().optional(),
+    color4: z.string().optional(),
   }),
   z.object({
     kind: z.literal('image'),
@@ -234,6 +263,21 @@ export const LayerEffectsSchema = z.object({
     .optional(),
   layerBlur: z.number().min(0).optional(),
   backdropBlur: z.number().min(0).optional(),
+  liquidGlass: z
+    .object({
+      enabled: z.boolean(),
+      refraction: z.number().optional(),
+      roughness: z.number().optional(),
+      tint: z.string().optional(),
+    })
+    .optional(),
+  warp: z
+    .object({
+      enabled: z.boolean(),
+      amount: z.number().optional(),
+      frequency: z.number().optional(),
+    })
+    .optional(),
 });
 
 export const BlendModeSchema = z.enum([
@@ -279,6 +323,7 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
   assetId: z.string(),
   size: Size2DSchema,
   cornerRadius: z.number().min(0).max(0.5),
+  deviceFrame: DeviceFrameSettingsSchema.optional(),
   crop: z
     .object({
       x: z.number(),
@@ -294,16 +339,16 @@ export const ImageLayerSchema = LayerBaseSchema.extend({
       opacity: z.number(),
     })
     .optional(),
-  device: z
-    .object({
-      type: z.enum(['iphone', 'ipad', 'macbook', 'browser', 'samsung-galaxy', 'display']),
-      color: z.enum(['silver', 'black', 'space-black', 'titanium', 'midnight']),
-      gloss: z.number().min(0).max(1),
-      lidAngle: z.number().optional(),
-      screenGlow: z.number().optional(),
-      glare: z.number().optional(),
-    })
-    .optional(),
+});
+
+export const ShapeMaskSchema = z.object({
+  enabled: z.boolean(),
+  shape: z.enum(['rectangle', 'circle', 'path']),
+  feather: z.number().min(0),
+  opacity: z.number().min(0).max(1),
+  grow: z.number(),
+  invert: z.boolean(),
+  show: z.boolean(),
 });
 
 export const ShapeLayerSchema = LayerBaseSchema.extend({
@@ -311,15 +356,19 @@ export const ShapeLayerSchema = LayerBaseSchema.extend({
   shape: z.enum(['rectangle', 'ellipse', 'line', 'arrow', 'polygon']),
   points: z.array(z.object({ x: z.number().min(0).max(1), y: z.number().min(0).max(1) })).optional(),
   size: Size2DSchema,
-  cornerRadius: z.number().min(0).max(0.5),
+  cornerRadius: z.number().min(0).max(1),
   fill: FillSchema,
   stroke: z
     .object({
       color: z.string(),
       width: z.number(),
       opacity: z.number(),
+      align: z.enum(['inside', 'center', 'outside']).optional(),
+      style: z.enum(['solid', 'dashed', 'dotted']).optional(),
     })
     .optional(),
+  depth: z.number().optional(),
+  mask: ShapeMaskSchema.optional(),
 });
 
 export const TextLayerSchema = LayerBaseSchema.extend({
@@ -383,7 +432,7 @@ export const CameraBlockSchema = z.object({
   durationMs: z.number().min(50),
   fromFramingId: z.string(),
   toFramingId: z.string(),
-  mode: z.enum(['dolly', 'zoom', 'dollyzoom']),
+  mode: z.enum(['dolly', 'zoom', 'dollyzoom', 'shake']),
   easing: EasingSchema,
   from: CameraKeyframeEndpointSchema.optional(),
   to: CameraKeyframeEndpointSchema.optional(),
@@ -638,7 +687,8 @@ export type ValidationResult =
 
 function migrateLegacyProject(raw: unknown): unknown {
   if (!raw || typeof raw !== 'object') return raw;
-  const project = JSON.parse(JSON.stringify(raw));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const project = structuredClone(raw) as Record<string, any>;
 
   if (project.assets && typeof project.assets === 'object') {
     for (const asset of Object.values(project.assets)) {

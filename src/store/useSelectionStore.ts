@@ -44,6 +44,8 @@ interface SelectionStore {
     activeTool: CanvasTool;
     isAnimateMode: boolean;
     isCropping: boolean;
+    isTransformDragging: boolean;
+    setIsTransformDragging: (dragging: boolean) => void;
 
     canvasZoom: number;
     canvasPan: { x: number; y: number };
@@ -129,7 +131,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedCameraBlockId: null,
     selectedLightBlockId: null,
     selectedPresetType: null,
-    inspectorTab: 'layer',
+    inspectorTab: 'project',
 
     timelineView: 'video',
     timelineZoom: 1,
@@ -140,6 +142,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     activeTool: 'select',
     isAnimateMode: false,
     isCropping: false,
+    isTransformDragging: false,
+    setIsTransformDragging: (dragging) => set({ isTransformDragging: dragging }),
 
     canvasZoom: 1,
     canvasPan: { x: 0, y: 0 },

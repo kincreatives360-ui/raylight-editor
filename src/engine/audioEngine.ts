@@ -96,6 +96,9 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
 
   try {
     const response = await fetch(dataUrl);
+    if (!response.ok) {
+      throw new Error(`Failed to fetch audio (${response.status} ${response.statusText})`);
+    }
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     audioBufferCache.set(dataUrl, audioBuffer);

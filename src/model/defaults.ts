@@ -13,6 +13,7 @@ import type {
   ProjectAudio,
   CameraBlock,
 } from './types';
+import { generateId } from './id';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -54,7 +55,7 @@ export function createDefaultCameraBlock(
 }
 
 export function createDefaultEffects(): SceneEffects {
-  return JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS));
+  return structuredClone(DEFAULT_SCENE_EFFECTS);
 }
 
 export function createDefaultAudio(): ProjectAudio {
@@ -170,7 +171,7 @@ export function createDefaultVideoLayer(
   overrides: Partial<VideoLayer> = {}
 ): VideoLayer {
   return {
-    id: `layer-vid-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateId('layer-vid'),
     kind: 'video',
     name: 'Video Layer',
     order: 0,
@@ -186,7 +187,6 @@ export function createDefaultVideoLayer(
     assetId: '',
     size: { width: 0.34, height: 0.68 },
     cornerRadius: 0.04,
-    device: undefined,
     entrance: { ...DEFAULT_TRANSITION_IN },
     exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
@@ -216,7 +216,7 @@ export function createDefaultImageLayer(
   overrides: Partial<ImageLayer> = {}
 ): ImageLayer {
   return {
-    id: `layer-img-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateId('layer-img'),
     kind: 'image',
     name: 'Image Layer',
     order: 0,
@@ -232,7 +232,6 @@ export function createDefaultImageLayer(
     assetId: '',
     size: { width: 0.34, height: 0.68 },
     cornerRadius: 0.04,
-    device: undefined,
     entrance: { ...DEFAULT_TRANSITION_IN },
     exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
@@ -262,7 +261,7 @@ export function createDefaultShapeLayer(
   overrides: Partial<ShapeLayer> = {}
 ): ShapeLayer {
   return {
-    id: `layer-shp-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateId('layer-shp'),
     kind: 'shape',
     name: 'Rectangle',
     order: 1,
@@ -306,7 +305,7 @@ export function createDefaultTextLayer(
   overrides: Partial<TextLayer> = {}
 ): TextLayer {
   return {
-    id: `layer-txt-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    id: generateId('layer-txt'),
     kind: 'text',
     name: 'Headline Text',
     order: 2,
@@ -349,18 +348,12 @@ export function createDefaultTextLayer(
 }
 
 export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
-  const f1Id = `framing-1-${Date.now()}`;
-  const f2Id = `framing-2-${Date.now()}`;
+  const f1Id = generateId('framing-1');
+  const f2Id = generateId('framing-2');
 
   const starterLayers = [
-    createDefaultImageLayer({
-      id: `layer-img-${Date.now()}`,
-      name: 'App Showcase Device',
-      position: { x: 0, y: -0.02, z: 0 },
-      device: { type: 'iphone', color: 'black', gloss: 0.6 },
-    }),
     createDefaultTextLayer({
-      id: `layer-txt-${Date.now()}`,
+      id: generateId('layer-txt'),
       name: 'Headline',
       position: { x: 0, y: 0.38, z: 0.15 },
       content: 'RAYLIGHT STUDIO',
@@ -368,7 +361,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
   ];
 
   return {
-    id: `shot-${Date.now()}`,
+    id: generateId('shot'),
     name: 'Shot 1',
     startMs: 0,
     durationMs: 4000,
@@ -394,7 +387,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     lightBlocks: [],
     effectBlocks: [],
     light: { ...DEFAULT_LIGHT_RIG },
-    effects: JSON.parse(JSON.stringify(DEFAULT_SCENE_EFFECTS)),
+    effects: structuredClone(DEFAULT_SCENE_EFFECTS),
     effectsOrder: [...DEFAULT_EFFECTS_ORDER],
     transition: {
       type: 'crossfade',
@@ -407,7 +400,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
 
 export function createDefaultProject(overrides: Partial<Project> = {}): Project {
   return {
-    id: `project-${Date.now()}`,
+    id: generateId('project'),
     name: 'Untitled project',
     version: CURRENT_SCHEMA_VERSION,
     schemaVersion: CURRENT_SCHEMA_VERSION,
@@ -416,12 +409,8 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
     aspectRatio: '16:9',
     fps: 60,
     background: {
-      kind: 'gradient',
-      angle: 135,
-      stops: [
-        { at: 0, color: '#0c0e17' },
-        { at: 1, color: '#161928' },
-      ],
+      kind: 'solid',
+      color: '#0c0e17',
     },
     assets: {},
     audio: createDefaultAudio(),
@@ -438,4 +427,5 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
   };
 }
 
-export const DEFAULT_PROJECT: Project = createDefaultProject();
+export const DEFAULT_PROJECT: Project = createDefaultProject();
+

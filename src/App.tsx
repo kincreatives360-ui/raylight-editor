@@ -1,6 +1,6 @@
 // src/App.tsx
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Download, X, Sparkles, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { Download, X, Sparkles, PanelLeftOpen, PanelRightOpen, Check, Loader2 } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -14,7 +14,7 @@ import {
   MAX_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
 } from './store/useSelectionStore';
-import { evaluateProjectAtTime } from './engine/evaluateShot';
+import { evaluateProjectAtTime, isLayerEffectivelyLocked } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
   readImageFileWithThumbnail,
@@ -29,8 +29,6 @@ import type {
   ExportSettings,
   ExportFormat,
   ExportResolution,
-  ExportQuality,
-  ExportScope,
 } from './engine/exporter';
 import { isMediaRecorderMp4Supported } from './engine/exportCapabilities';
 import { estimateExportMetrics } from './engine/exportMetrics';
@@ -99,6 +97,8 @@ export default function App() {
     splitAtPlayhead,
     undo,
     redo,
+    isHydrating,
+    setHydrated,
   } = useProjectStore();
 
   const {
@@ -208,6 +208,8 @@ export default function App() {
   }, []);
 
   const handleOpenExportModal = useCallback(() => {
+    setExportProgressText('');
+    setExportError('');
     setExportModalOpen(true);
   }, []);
 
@@ -300,57 +302,69 @@ export default function App() {
   );
 
   useEffect(() => {
+    if (isHydrating) return;
     const timeoutId = window.setTimeout(() => saveProjectToBrowser(project), 250);
-    const saveOnPageHide = () => saveProjectToBrowser(project);
+    const saveOnPageHide = () => {
+      if (!isHydrating) {
+        saveProjectToBrowser(project);
+      }
+    };
     window.addEventListener('pagehide', saveOnPageHide);
     return () => {
       window.clearTimeout(timeoutId);
       window.removeEventListener('pagehide', saveOnPageHide);
     };
-  }, [project]);
+  }, [project, isHydrating]);
 
   // Restore heavy assets from IndexedDB on startup if available
   useEffect(() => {
-    void loadProjectFromIndexedDB().then((idbProject) => {
-      if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
-        updateProject(
-          (curr) => {
-            if (idbProject.id !== curr.id) return curr;
+    void loadProjectFromIndexedDB()
+      .then((idbProject) => {
+        if (idbProject && idbProject.assets && Object.keys(idbProject.assets).length > 0) {
+          updateProject(
+            (curr) => {
+              if (idbProject.id !== curr.id) return curr;
 
-            const restoredAssets = { ...curr.assets };
-            let hasNewData = false;
-            for (const [id, asset] of Object.entries(idbProject.assets)) {
-              if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
-                if (!restoredAssets[id]) {
-                  const isReferenced =
-                    (curr.background?.kind === 'image' && curr.background.assetId === id) ||
-                    curr.shots.some(
-                      (s) =>
-                        (s.background?.kind === 'image' && s.background.assetId === id) ||
-                        s.layers.some(
-                          (l) => 'assetId' in l && (l as { assetId?: string }).assetId === id
-                        )
-                    ) ||
-                    (curr.audio?.clips?.some((c) => c.assetId === id) ?? false);
+              const restoredAssets = { ...curr.assets };
+              let hasNewData = false;
+              for (const [id, asset] of Object.entries(idbProject.assets)) {
+                if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
+                  if (!restoredAssets[id]) {
+                    const isReferenced =
+                      (curr.background?.kind === 'image' && curr.background.assetId === id) ||
+                      curr.shots.some(
+                        (s) =>
+                          (s.background?.kind === 'image' && s.background.assetId === id) ||
+                          s.layers.some(
+                            (l) => 'assetId' in l && (l as { assetId?: string }).assetId === id
+                          )
+                      ) ||
+                      (curr.audio?.clips?.some((c) => c.assetId === id) ?? false);
 
-                  if (!isReferenced) continue;
+                    if (!isReferenced) continue;
+                  }
+
+                  restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
+                  hasNewData = true;
                 }
-
-                restoredAssets[id] = { ...(restoredAssets[id] || {}), ...asset };
-                hasNewData = true;
               }
-            }
-            if (!hasNewData) return curr;
-            return {
-              ...curr,
-              assets: restoredAssets,
-            };
-          },
-          { skipHistory: true }
-        );
-      }
-    });
-  }, [updateProject]);
+              if (!hasNewData) return curr;
+              return {
+                ...curr,
+                assets: restoredAssets,
+              };
+            },
+            { skipHistory: true }
+          );
+        }
+      })
+      .catch((err) => {
+        console.warn('[Raylight Storage] Hydration from IndexedDB failed:', err);
+      })
+      .finally(() => {
+        setHydrated(true);
+      });
+  }, [updateProject, setHydrated]);
 
   // Decode imported audio assets and keep WebAudio playback synchronized with the active playhead.
   useEffect(() => {
@@ -475,7 +489,6 @@ export default function App() {
             assetId: assetRecord.id,
             position: { x: 0, y: 0, z: 0 },
             rotation: { x: 0, y: 0, z: 0 },
-            device: undefined,
           });
           updateProject(
             (p) => ({
@@ -493,7 +506,7 @@ export default function App() {
       if (copiedLayersRef.current.length > 0) {
         e.preventDefault();
         const clonedLayers: Layer[] = copiedLayersRef.current.map((orig, i) => {
-          const clone: Layer = JSON.parse(JSON.stringify(orig));
+          const clone: Layer = structuredClone(orig);
           clone.id = `layer-${orig.kind}-${Date.now()}-${i}`;
           clone.name = `${orig.name} Copy`;
           clone.position = {
@@ -614,7 +627,7 @@ export default function App() {
           selectedLayerIds.includes(l.id)
         );
         if (toCopy.length > 0) {
-          copiedLayersRef.current = JSON.parse(JSON.stringify(toCopy));
+          copiedLayersRef.current = structuredClone(toCopy);
         }
         return;
       }
@@ -791,7 +804,7 @@ export default function App() {
         const dy =
           e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
 
-        if (isAnimateMode && selectedLayer && !selectedLayer.locked) {
+        if (isAnimateMode && selectedLayer && !isLayerEffectivelyLocked(selectedLayer, activeShot.groups)) {
           const blkId = recordAnimatedBlockAtPlayhead(
             activeShot.id,
             selectedLayer.id,
@@ -810,7 +823,7 @@ export default function App() {
         updateShot(activeShot.id, (s) => ({
           ...s,
           layers: s.layers.map((l) =>
-            selectedLayerIds.includes(l.id) && !l.locked
+            selectedLayerIds.includes(l.id) && !isLayerEffectivelyLocked(l, s.groups)
               ? {
                 ...l,
                 position: {
@@ -832,6 +845,7 @@ export default function App() {
     selectedLayerIds,
     activeShot.id,
     activeShot.layers,
+    activeShot.groups,
     isAnimateMode,
     frame.shotLocalTimeMs,
     updateShot,
@@ -1028,6 +1042,8 @@ export default function App() {
   const handleStartExport = async () => {
     setIsPlaying(false);
     setExportError('');
+    setExportProgressText('');
+    let controller: AbortController | null = null;
     try {
       if (exportSettings.format === 'png') {
         const { exportCurrentFrameAsPng } = await import('./engine/exporter');
@@ -1045,7 +1061,7 @@ export default function App() {
         window.clearTimeout(exportCloseTimerRef.current);
         exportCloseTimerRef.current = null;
       }
-      const controller = new AbortController();
+      controller = new AbortController();
       exportAbortRef.current = controller;
       setExporting(true);
       setExportPercent(0);
@@ -1068,13 +1084,19 @@ export default function App() {
       );
 
       if (!controller.signal.aborted) {
+        setExportPercent(100);
+        setExportProgressText('Export Complete!');
         exportCloseTimerRef.current = window.setTimeout(() => {
           setExportModalOpen(false);
           exportCloseTimerRef.current = null;
-        }, 600);
+        }, 1200);
       }
     } catch (error) {
-      setExportError(error instanceof Error ? error.message : 'Export failed.');
+      if (controller?.signal.aborted) {
+        setExportProgressText('Export cancelled.');
+      } else {
+        setExportError(error instanceof Error ? error.message : 'Export failed.');
+      }
     } finally {
       setExporting(false);
       exportAbortRef.current = null;
@@ -1199,7 +1221,7 @@ export default function App() {
             onClick={toggleLeftPanel}
             title="Expand Left Panel ( [ )"
             aria-label="Expand Left Panel"
-            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
           >
             <PanelLeftOpen className="w-3.5 h-3.5 text-[#0088ff]" />
             <span className="hidden sm:inline">Panels</span>
@@ -1209,7 +1231,7 @@ export default function App() {
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
           <StageErrorBoundary>
-            <Suspense fallback={<div className="flex-1 bg-[var(--bg-canvas,#07080d)]" />}>
+            <Suspense fallback={<div className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />}>
               <Stage
                 project={project}
                 frame={frame}
@@ -1266,6 +1288,7 @@ export default function App() {
               selectedLayerIds={selectedLayerIds}
               onSwapImageClick={handleUploadClick}
               onOpenExportModal={handleOpenExportModal}
+              onOpenShortcuts={handleOpenShortcuts}
             />
           </>
         ) : (
@@ -1274,7 +1297,7 @@ export default function App() {
             onClick={toggleRightSidebar}
             title="Expand Inspector ( ] )"
             aria-label="Expand Inspector"
-            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-all duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
           >
             <PanelRightOpen className="w-3.5 h-3.5 text-[#0088ff]" />
             <span className="hidden sm:inline">Inspector</span>
@@ -1341,85 +1364,116 @@ export default function App() {
               ))}
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Resolution</span>
-                <select
-                  disabled={exporting || exportSettings.format === 'gif'}
-                  value={exportSettings.resolution}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      resolution: e.target.value as ExportResolution,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+            {/* Scope */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-[#8e8e93] block font-medium">Scope</span>
+              <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-2 gap-0.5">
+                <button
+                  type="button"
+                  disabled={exporting || exportSettings.format === 'png'}
+                  onClick={() => setExportSettings((s) => ({ ...s, scope: 'entire' }))}
+                  className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                    exportSettings.scope === 'entire'
+                      ? 'bg-[#0088ff] text-white shadow-xs'
+                      : 'text-[#8e8e93] hover:text-white'
+                  }`}
                 >
-                  <option value="720p">720p HD</option>
-                  <option value="1080p">1080p Full HD</option>
-                  <option value="4k">4K Ultra HD</option>
-                </select>
-              </div>
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Frame Rate</span>
-                <select
-                  disabled={exporting || exportSettings.format !== 'mp4'}
-                  value={exportSettings.fps}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      fps: Number(e.target.value) as 24 | 30 | 60,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
+                  Entire Timeline ({project.shots.length} shots)
+                </button>
+                <button
+                  type="button"
+                  disabled={exporting || exportSettings.format === 'png'}
+                  onClick={() => setExportSettings((s) => ({ ...s, scope: 'shot' }))}
+                  className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-2 ${
+                    exportSettings.scope === 'shot'
+                      ? 'bg-[#0088ff] text-white shadow-xs'
+                      : 'text-[#8e8e93] hover:text-white'
+                  }`}
                 >
-                  <option value={60}>60 FPS (Smooth)</option>
-                  <option value={30}>30 FPS (Standard)</option>
-                  <option value={24}>24 FPS (Cinematic)</option>
-                </select>
+                  Selected Shot ({activeShot.name})
+                </button>
               </div>
             </div>
 
+            {/* Resolution & Frame Rate Grid */}
             <div className="grid grid-cols-2 gap-3">
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Quality</span>
-                <select
-                  disabled={exporting || (exportSettings.format !== 'mp4' && exportSettings.format !== 'webm')}
-                  value={exportSettings.quality}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      quality: e.target.value as ExportQuality,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
-                >
-                  <option value="studio">Studio (Sharpest)</option>
-                  <option value="social">Social Media</option>
-                  <option value="web">Web (Smallest)</option>
-                </select>
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#8e8e93] block font-medium">Resolution</span>
+                <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                  {(['720p', '1080p', '4k'] as ExportResolution[]).map((res) => (
+                    <button
+                      key={res}
+                      type="button"
+                      disabled={exporting || exportSettings.format === 'gif'}
+                      onClick={() => setExportSettings((s) => ({ ...s, resolution: res }))}
+                      className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                        exportSettings.resolution === res
+                          ? 'bg-[#0088ff] text-white shadow-xs'
+                          : 'text-[#8e8e93] hover:text-white'
+                      }`}
+                    >
+                      {res === '4k' ? '4K' : res.toUpperCase()}
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div>
-                <span className="text-[#a1a1aa] block mb-1">Scope</span>
-                <select
-                  disabled={exporting || exportSettings.format === 'png'}
-                  value={exportSettings.scope}
-                  onChange={(e) =>
-                    setExportSettings((s) => ({
-                      ...s,
-                      scope: e.target.value as ExportScope,
-                    }))
-                  }
-                  className="w-full rounded-lg bg-[#1c1c1f] border border-white/10 px-3 py-2 text-white outline-none"
-                >
-                  <option value="entire">
-                    Entire Timeline ({project.shots.length} Shots)
-                  </option>
-                  <option value="shot">
-                    Selected Shot ({activeShot.name})
-                  </option>
-                </select>
+              <div className="space-y-1.5">
+                <span className="text-[11px] text-[#8e8e93] block font-medium">Frame Rate</span>
+                <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                  {([24, 30, 60] as (24 | 30 | 60)[]).map((f) => (
+                    <button
+                      key={f}
+                      type="button"
+                      disabled={exporting || exportSettings.format !== 'mp4'}
+                      onClick={() => setExportSettings((s) => ({ ...s, fps: f }))}
+                      className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
+                        exportSettings.fps === f
+                          ? 'bg-[#0088ff] text-white shadow-xs'
+                          : 'text-[#8e8e93] hover:text-white'
+                      }`}
+                    >
+                      {f} FPS
+                    </button>
+                  ))}
+                </div>
               </div>
+            </div>
+
+            {/* Quality & Compression */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] text-[#8e8e93] block font-medium">Compression</span>
+              <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+                {[
+                  { id: 'studio' as const, label: 'Studio (Sharp)' },
+                  { id: 'social' as const, label: 'Social Media' },
+                  { id: 'web' as const, label: 'Web (Fast)' },
+                ].map((q) => (
+                  <button
+                    key={q.id}
+                    type="button"
+                    disabled={exporting || (exportSettings.format !== 'mp4' && exportSettings.format !== 'webm')}
+                    onClick={() => setExportSettings((s) => ({ ...s, quality: q.id }))}
+                    className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-1 ${
+                      exportSettings.quality === q.id
+                        ? 'bg-[#0088ff] text-white shadow-xs'
+                        : 'text-[#8e8e93] hover:text-white'
+                    }`}
+                  >
+                    {q.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Made in Raylight Badge */}
+            <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#18181c] border border-white/[0.08]">
+              <div>
+                <span className="text-[11px] text-white font-medium block">Made in Raylight Watermark</span>
+                <span className="text-[10px] text-[#71717a]">Free plan watermark included on export</span>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
+                Included
+              </span>
             </div>
 
             <div className="p-3 rounded-xl bg-[#18181c] border border-white/10 font-mono tabular-nums text-[11px] space-y-1.5 text-[#f4f4f5] tracking-tight">
@@ -1444,17 +1498,30 @@ export default function App() {
             </div>
 
             {exporting && (
-              <div className="space-y-1.5">
-                <div className="flex justify-between text-[11px] font-mono tabular-nums text-[#38bdf8] tracking-tight">
-                  <span>{exportProgressText}</span>
-                  <span className="font-semibold">{exportPercent}%</span>
+              <div className="space-y-2 p-3 rounded-xl bg-[#18181c] border border-[#0088ff]/30 shadow-lg animate-fade-in">
+                <div className="flex justify-between items-center text-[11px] font-mono tabular-nums tracking-tight">
+                  <span className="flex items-center gap-2 text-[#38bdf8] font-medium truncate">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0088ff] shrink-0" />
+                    <span className="truncate">{exportProgressText}</span>
+                  </span>
+                  <span className="font-semibold text-white shrink-0 ml-2">{exportPercent}%</span>
                 </div>
-                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden">
+                <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative">
                   <div
-                    className="h-full bg-[#0088ff] transition-all duration-150"
+                    className="h-full bg-gradient-to-r from-[#0088ff] via-[#38bdf8] to-[#0088ff] shadow-[0_0_12px_rgba(0,136,255,0.5)] transition-[width] duration-150 ease-out"
                     style={{ width: `${exportPercent}%` }}
                   />
                 </div>
+              </div>
+            )}
+
+            {!exporting && exportProgressText && exportProgressText.includes('Complete') && (
+              <div className="p-3 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 flex items-center justify-between text-[11px] font-medium shadow-md animate-fade-in">
+                <div className="flex items-center gap-2">
+                  <Check className="w-4 h-4 text-emerald-400 shrink-0" />
+                  <span>{exportProgressText} Saved to Downloads.</span>
+                </div>
+                <span className="text-[10px] text-emerald-400/80 font-mono px-1.5 py-0.5 rounded bg-emerald-500/20">Ready</span>
               </div>
             )}
 
