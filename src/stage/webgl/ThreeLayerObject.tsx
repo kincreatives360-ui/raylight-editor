@@ -65,7 +65,7 @@ function createNormalizedRoundedGeometry(
     radius: number
 ): THREE.ShapeGeometry {
     const shape = createRoundedRectShape(width, height, radius);
-    const geom = new THREE.ShapeGeometry(shape, 16);
+    const geom = new THREE.ShapeGeometry(shape, 36);
     const pos = geom.attributes.position;
     const uvs = new Float32Array(pos.count * 2);
 
@@ -171,6 +171,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const screenFit = deviceFrameSettings?.screenFit ?? 'stretch';
     const screenFill = deviceFrameSettings?.screenFillColor;
+    const screenPan = deviceFrameSettings?.screenPan;
+    const screenZoom = deviceFrameSettings?.screenZoom;
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
@@ -243,7 +245,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
-        const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
+        const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH, 2048);
 
         const canvas = document.createElement('canvas');
         canvas.width = canvasW;
@@ -253,7 +255,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         if (layer.kind === 'image' || layer.kind === 'video') {
             const imgL = layer as ImageLayer | VideoLayer;
-            const options = { crop: imgL.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx };
+            const options = {
+                crop: imgL.crop,
+                fit: screenFit,
+                fillColor: screenFill,
+                blurPx: totalBlurPx,
+                pan: screenPan,
+                zoom: screenZoom,
+            };
             if (isVideoAsset && videoElement) {
                 drawMediaFrame(ctx, videoElement, videoElement.readyState >= 2 ? videoElement.videoWidth : 0, videoElement.videoHeight, canvasW, canvasH, options);
             } else if (loadedImg) {
@@ -433,8 +442,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = true;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = 16;
         tex.needsUpdate = true;
         return tex;
     }, [
@@ -451,6 +462,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         evalLayer.size.height,
         screenFit,
         screenFill,
+        screenPan,
+        screenZoom,
     ]);
 
     // Dispose previous texture whenever a new one is generated or component unmounts
@@ -472,7 +485,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             if (videoElement.readyState < 2) return;
             const media = layer as ImageLayer | VideoLayer;
             drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvas.width, canvas.height, {
-                crop: media.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx,
+                crop: media.crop,
+                fit: screenFit,
+                fillColor: screenFill,
+                blurPx: totalBlurPx,
+                pan: screenPan,
+                zoom: screenZoom,
             });
             drawMediaShimmer(ctx, canvas.width, canvas.height, evalLayer.shimmerProgress);
             applyTextureMask(ctx, canvas.width, canvas.height, layer, project);
@@ -483,7 +501,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const events = ['loadeddata', 'seeked', 'timeupdate'] as const;
         for (const event of events) videoElement.addEventListener(event, redraw);
         return () => { for (const event of events) videoElement.removeEventListener(event, redraw); };
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, evalLayer.shimmerProgress, invalidate]);
+    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, screenPan, screenZoom, evalLayer.shimmerProgress, invalidate]);
 
     const cornerRadiusWorld = useMemo(() => {
         if (deviceFrameMetrics) return deviceFrameMetrics.cornerRadius;

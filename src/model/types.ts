@@ -44,11 +44,13 @@ export interface DeviceFrameSettings {
   geometryVersion?: 1;
   deviceId?: string;
   deviceScale?: number;
+  family?: 'phone' | 'laptop' | 'tablet' | 'display';
   /** Preserves legacy placement height when replacing a nonuniform transform. */
   legacyHeightCompensation?: number;
   enabled: boolean;
   model: 'iphone-pro' | 'iphone' | 'iphone-classic';
   frameColor: string;
+  finish?: string;
   frameRoughness: number;
   frameMetalness: number;
   scale: number;
@@ -57,6 +59,10 @@ export interface DeviceFrameSettings {
   cornerRadius: number;
   screenFit: ScreenFit;
   screenFillColor: string;
+  screenPan?: { x: number; y: number };
+  screenZoom?: number;
+  hingeAngleDeg?: number;
+  tiltAngleDeg?: number;
   glassTint: string;
   glassOpacity: number;
   glassRoughness: number;
@@ -344,6 +350,7 @@ export interface VideoLayer extends LayerBase {
   assetId: string;
   size: Size2D;
   cornerRadius: number;
+  deviceFrame?: DeviceFrameSettings;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
 }

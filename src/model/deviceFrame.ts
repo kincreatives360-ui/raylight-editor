@@ -5,14 +5,69 @@ import type { DeviceFrameSettings, ScreenFit, Size2D, Vec3 } from './types';
 // screen always agree on where the screen lives.
 export const SCREEN_PLANE_Z = 0.016;
 
+export interface DeviceSpec {
+  id: string;
+  name: string;
+  family: 'phone' | 'laptop' | 'tablet' | 'display';
+  body: { width: number; height: number; depth: number; cornerRadius: number };
+  screen: { width: number; height: number; cornerRadius: number };
+}
+
 // Published body dimensions and nominal display PPI: https://support.apple.com/en-bn/111829
-// Corner profiles are approximations, to be refined with the detailed hardware model.
-export const IPHONE_15_PRO = {
+export const IPHONE_15_PRO: DeviceSpec = {
   id: 'iphone-15-pro',
   name: 'iPhone 15 Pro',
+  family: 'phone',
   body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
-  screen: { width: 1179 / 460 * 25.4, height: 2556 / 460 * 25.4, cornerRadius: 9.5 },
-} as const;
+  screen: { width: (1179 / 460) * 25.4, height: (2556 / 460) * 25.4, cornerRadius: 9.5 },
+};
+
+export const ANDROID_FLAGSHIP: DeviceSpec = {
+  id: 'android-flagship',
+  name: 'Android Flagship',
+  family: 'phone',
+  body: { width: 76.5, height: 162.6, depth: 8.8, cornerRadius: 12.0 },
+  screen: { width: 71.5, height: 156.8, cornerRadius: 10.0 },
+};
+
+export const MACBOOK_PRO_16: DeviceSpec = {
+  id: 'macbook-pro-16',
+  name: 'MacBook Pro 16"',
+  family: 'laptop',
+  body: { width: 355.7, height: 248.1, depth: 16.8, cornerRadius: 8.0 },
+  screen: { width: 345.0, height: 224.0, cornerRadius: 5.0 },
+};
+
+export const IPAD_PRO_13: DeviceSpec = {
+  id: 'ipad-pro-13',
+  name: 'iPad Pro 13"',
+  family: 'tablet',
+  body: { width: 215.5, height: 281.6, depth: 5.1, cornerRadius: 12.0 },
+  screen: { width: 202.0, height: 268.0, cornerRadius: 10.0 },
+};
+
+export const STUDIO_DISPLAY_27: DeviceSpec = {
+  id: 'studio-display-27',
+  name: 'Studio Display 27"',
+  family: 'display',
+  body: { width: 622.7, height: 362.0, depth: 16.0, cornerRadius: 6.0 },
+  screen: { width: 597.0, height: 336.0, cornerRadius: 2.0 },
+};
+
+export const SUPPORTED_DEVICES: Record<string, DeviceSpec> = {
+  'iphone-15-pro': IPHONE_15_PRO,
+  'android-flagship': ANDROID_FLAGSHIP,
+  'macbook-pro-16': MACBOOK_PRO_16,
+  'ipad-pro-13': IPAD_PRO_13,
+  'studio-display-27': STUDIO_DISPLAY_27,
+};
+
+export function getDeviceSpec(deviceId?: string): DeviceSpec {
+  if (deviceId && SUPPORTED_DEVICES[deviceId]) {
+    return SUPPORTED_DEVICES[deviceId];
+  }
+  return IPHONE_15_PRO;
+}
 
 export function isFixedDeviceFrame(settings?: Partial<DeviceFrameSettings> | null): boolean {
   return settings?.geometryVersion === 1;
@@ -55,6 +110,7 @@ export const DEFAULT_DEVICE_FRAME_SETTINGS: DeviceFrameSettings = {
   geometryVersion: 1,
   deviceId: IPHONE_15_PRO.id,
   deviceScale: 1,
+  family: 'phone',
   enabled: false,
   model: 'iphone-pro',
   frameColor: '#202124',
@@ -66,6 +122,10 @@ export const DEFAULT_DEVICE_FRAME_SETTINGS: DeviceFrameSettings = {
   cornerRadius: 0.115,
   screenFit: 'contain',
   screenFillColor: '#050507',
+  screenPan: { x: 0, y: 0 },
+  screenZoom: 1,
+  hingeAngleDeg: 105,
+  tiltAngleDeg: 10,
   glassTint: '#ffffff',
   glassOpacity: 0.08,
   glassRoughness: 0.12,
@@ -97,11 +157,15 @@ export function resolveDeviceFrameSettings(
     ...input,
   };
 
+  const resolvedDeviceId = value.deviceId || IPHONE_15_PRO.id;
+  const spec = getDeviceSpec(resolvedDeviceId);
+
   return {
     ...value,
     ...(isFixedDeviceFrame(value) ? {
-      deviceId: value.deviceId || IPHONE_15_PRO.id,
+      deviceId: resolvedDeviceId,
       deviceScale: clamp(value.deviceScale, 0.65, 2, 1),
+      family: spec.family,
     } : {}),
     scale: clamp(value.scale, 0.65, 2, DEFAULT_DEVICE_FRAME_SETTINGS.scale),
     bezelWidth: clamp(value.bezelWidth, 0.01, 0.2, DEFAULT_DEVICE_FRAME_SETTINGS.bezelWidth),
@@ -109,6 +173,13 @@ export function resolveDeviceFrameSettings(
     cornerRadius: clamp(value.cornerRadius, 0.04, 0.24, DEFAULT_DEVICE_FRAME_SETTINGS.cornerRadius),
     frameRoughness: clamp(value.frameRoughness, 0.04, 1, DEFAULT_DEVICE_FRAME_SETTINGS.frameRoughness),
     frameMetalness: clamp(value.frameMetalness, 0, 1, DEFAULT_DEVICE_FRAME_SETTINGS.frameMetalness),
+    screenPan: {
+      x: clamp(value.screenPan?.x, -1, 1, 0),
+      y: clamp(value.screenPan?.y, -1, 1, 0),
+    },
+    screenZoom: clamp(value.screenZoom, 0.5, 3, 1),
+    hingeAngleDeg: clamp(value.hingeAngleDeg, 0, 135, 105),
+    tiltAngleDeg: clamp(value.tiltAngleDeg, -15, 30, 10),
     glassOpacity: clamp(value.glassOpacity, 0, 0.45, DEFAULT_DEVICE_FRAME_SETTINGS.glassOpacity),
     glassRoughness: clamp(value.glassRoughness, 0.02, 1, DEFAULT_DEVICE_FRAME_SETTINGS.glassRoughness),
     gloss: clamp(value.gloss, 0, 1, DEFAULT_DEVICE_FRAME_SETTINGS.gloss),
@@ -156,18 +227,17 @@ export function getDeviceFrameMetrics(
   settings: DeviceFrameSettings
 ): DeviceFrameMetrics {
   if (isFixedDeviceFrame(settings)) {
-    // Height is the placement anchor; source aspect and legacy rim controls cannot deform hardware.
-    // Unknown IDs retain their saved identity but use the only supported specification for now.
-    const unit = Math.max(0.001, Math.abs(screenHeight)) * clamp(settings.deviceScale, 0.65, 2, 1) * (settings.legacyHeightCompensation ?? 1) / IPHONE_15_PRO.body.height;
+    const spec = getDeviceSpec(settings.deviceId);
+    const unit = Math.max(0.001, Math.abs(screenHeight)) * clamp(settings.deviceScale, 0.65, 2, 1) * (settings.legacyHeightCompensation ?? 1) / spec.body.height;
     return {
-      bodyWidth: IPHONE_15_PRO.body.width * unit,
-      bodyHeight: IPHONE_15_PRO.body.height * unit,
-      bodyDepth: IPHONE_15_PRO.body.depth * unit,
-      bodyCornerRadius: IPHONE_15_PRO.body.cornerRadius * unit,
-      screenWidth: IPHONE_15_PRO.screen.width * unit,
-      screenHeight: IPHONE_15_PRO.screen.height * unit,
-      cornerRadius: IPHONE_15_PRO.screen.cornerRadius * unit,
-      bezel: (IPHONE_15_PRO.body.width - IPHONE_15_PRO.screen.width) * unit / 2,
+      bodyWidth: spec.body.width * unit,
+      bodyHeight: spec.body.height * unit,
+      bodyDepth: spec.body.depth * unit,
+      bodyCornerRadius: spec.body.cornerRadius * unit,
+      screenWidth: spec.screen.width * unit,
+      screenHeight: spec.screen.height * unit,
+      cornerRadius: spec.screen.cornerRadius * unit,
+      bezel: (spec.body.width - spec.screen.width) * unit / 2,
     };
   }
   const shortSide = Math.max(0.001, Math.min(Math.abs(screenWidth), Math.abs(screenHeight)));
@@ -202,14 +272,41 @@ export function getImageFitRect(
   sourceHeight: number,
   targetWidth: number,
   targetHeight: number,
-  fit: ScreenFit
+  fit: ScreenFit,
+  pan?: { x: number; y: number },
+  zoom?: number
 ): ImageFitRect {
-  if (fit === 'stretch') {
+  const sourceAspect = sourceWidth / Math.max(sourceHeight, 0.001);
+  const targetAspect = targetWidth / Math.max(targetHeight, 0.001);
+  const zoomFactor = Math.max(0.5, Math.min(3, zoom ?? 1));
+
+  if (fit === 'cover') {
+    let baseSourceW = sourceWidth;
+    let baseSourceH = sourceHeight;
+
+    if (sourceAspect > targetAspect) {
+      baseSourceW = sourceHeight * targetAspect;
+    } else {
+      baseSourceH = sourceWidth / targetAspect;
+    }
+
+    const finalSourceW = baseSourceW / zoomFactor;
+    const finalSourceH = baseSourceH / zoomFactor;
+
+    const maxPanX = Math.max(0, sourceWidth - finalSourceW);
+    const maxPanY = Math.max(0, sourceHeight - finalSourceH);
+
+    const panOffsetX = (pan?.x ?? 0) * (maxPanX > 0 ? maxPanX / 2 : finalSourceW * 0.5);
+    const panOffsetY = (pan?.y ?? 0) * (maxPanY > 0 ? maxPanY / 2 : finalSourceH * 0.5);
+
+    const sourceX = (sourceWidth - finalSourceW) / 2 + panOffsetX;
+    const sourceY = (sourceHeight - finalSourceH) / 2 + panOffsetY;
+
     return {
-      sourceX: 0,
-      sourceY: 0,
-      sourceWidth,
-      sourceHeight,
+      sourceX,
+      sourceY,
+      sourceWidth: finalSourceW,
+      sourceHeight: finalSourceH,
       targetX: 0,
       targetY: 0,
       targetWidth,
@@ -217,40 +314,55 @@ export function getImageFitRect(
     };
   }
 
-  const sourceAspect = sourceWidth / Math.max(sourceHeight, 0.001);
-  const targetAspect = targetWidth / Math.max(targetHeight, 0.001);
-
   if (fit === 'contain') {
+    let baseTargetW = targetWidth;
+    let baseTargetH = targetHeight;
+    let baseTargetX = 0;
+    let baseTargetY = 0;
+
     if (sourceAspect > targetAspect) {
-      const height = targetWidth / sourceAspect;
-      return {
-        sourceX: 0, sourceY: 0, sourceWidth, sourceHeight,
-        targetX: 0, targetY: (targetHeight - height) / 2,
-        targetWidth, targetHeight: height,
-      };
+      baseTargetH = targetWidth / sourceAspect;
+      baseTargetY = (targetHeight - baseTargetH) / 2;
+    } else {
+      baseTargetW = targetHeight * sourceAspect;
+      baseTargetX = (targetWidth - baseTargetW) / 2;
     }
 
-    const width = targetHeight * sourceAspect;
+    const finalW = baseTargetW * zoomFactor;
+    const finalH = baseTargetH * zoomFactor;
+
+    const panOffsetX = (pan?.x ?? 0) * baseTargetW * 0.5;
+    const panOffsetY = (pan?.y ?? 0) * baseTargetH * 0.5;
+
+    const finalX = baseTargetX + (baseTargetW - finalW) / 2 + panOffsetX;
+    const finalY = baseTargetY + (baseTargetH - finalH) / 2 + panOffsetY;
+
     return {
-      sourceX: 0, sourceY: 0, sourceWidth, sourceHeight,
-      targetX: (targetWidth - width) / 2, targetY: 0,
-      targetWidth: width, targetHeight,
+      sourceX: 0,
+      sourceY: 0,
+      sourceWidth,
+      sourceHeight,
+      targetX: finalX,
+      targetY: finalY,
+      targetWidth: finalW,
+      targetHeight: finalH,
     };
   }
 
-  if (sourceAspect > targetAspect) {
-    const width = sourceHeight * targetAspect;
-    return {
-      sourceX: (sourceWidth - width) / 2, sourceY: 0,
-      sourceWidth: width, sourceHeight,
-      targetX: 0, targetY: 0, targetWidth, targetHeight,
-    };
-  }
+  // fit === 'stretch'
+  const finalW = targetWidth * zoomFactor;
+  const finalH = targetHeight * zoomFactor;
+  const panOffsetX = (pan?.x ?? 0) * targetWidth * 0.5;
+  const panOffsetY = (pan?.y ?? 0) * targetHeight * 0.5;
 
-  const height = sourceWidth / targetAspect;
   return {
-    sourceX: 0, sourceY: (sourceHeight - height) / 2,
-    sourceWidth, sourceHeight: height,
-    targetX: 0, targetY: 0, targetWidth, targetHeight,
+    sourceX: 0,
+    sourceY: 0,
+    sourceWidth,
+    sourceHeight,
+    targetX: (targetWidth - finalW) / 2 + panOffsetX,
+    targetY: (targetHeight - finalH) / 2 + panOffsetY,
+    targetWidth: finalW,
+    targetHeight: finalH,
   };
 }

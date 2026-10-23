@@ -1229,9 +1229,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const refStageH = 1080;
     const aspectSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
     const deviceProjectAspect = aspectSpec.widthRatio / aspectSpec.heightRatio;
-    const fixedDeviceSettings = selectedLayer?.kind === 'image' && selectedLayer.deviceFrame?.enabled && isFixedDeviceFrame(selectedLayer.deviceFrame)
+    const fixedDeviceSettings = (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && selectedLayer.deviceFrame?.enabled && isFixedDeviceFrame(selectedLayer.deviceFrame)
         ? selectedLayer.deviceFrame : null;
-    const devicePlacementSize = selectedLayer?.kind === 'image' && fixedDeviceSettings
+    const devicePlacementSize = (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && fixedDeviceSettings
         ? getDevicePlacementSize(selectedLayer.size, fixedDeviceSettings, deviceProjectAspect) : null;
     const deviceArtboard = getArtboardDimensions(project.aspectRatio);
     const layoutStageW = fixedDeviceSettings ? deviceArtboard.width : refStageW;
@@ -1711,13 +1711,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                         </div>
                                     </div>
 
-                                    {selectedLayer.kind === 'image' && (
+                                    {(selectedLayer.kind === 'image' || selectedLayer.kind === 'video') && (
                                         <DeviceFrameSection
                                             projectAspect={deviceProjectAspect}
                                             layer={selectedLayer}
                                             onChange={(deviceFrame) =>
                                                 updateLayer(activeShot.id, selectedLayer.id, (layer) =>
-                                                    layer.kind === 'image' ? { ...layer, deviceFrame } : layer
+                                                    layer.kind === 'image' || layer.kind === 'video' ? { ...layer, deviceFrame } : layer
                                                 )
                                             }
                                         />
@@ -2104,7 +2104,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'width', nextW, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
+                                                                    size: (l.kind === 'image' || l.kind === 'video') && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'width', nextW, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: nextW,
                                                                         height: aspectLocked
                                                                             ? Number((nextW * ratio).toFixed(4))
@@ -2132,7 +2132,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                             l.kind !== 'text'
                                                                 ? {
                                                                     ...l,
-                                                                    size: l.kind === 'image' && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'height', nextH, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
+                                                                    size: (l.kind === 'image' || l.kind === 'video') && l.deviceFrame?.enabled && isFixedDeviceFrame(l.deviceFrame) ? resizeDevicePlacement(l.size, 'height', nextH, getDevicePlacementSize(l.size, l.deviceFrame, deviceProjectAspect)) : {
                                                                         width: aspectLocked
                                                                             ? Number((nextH * ratio).toFixed(4))
                                                                             : l.size.width,

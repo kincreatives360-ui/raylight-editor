@@ -169,7 +169,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
             <WebGLErrorBoundary>
                 <Canvas
                     id="raylight-stage-webgl-canvas"
-                    shadows
+                    shadows="soft"
                     flat
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                     dpr={[1, 2]}
@@ -180,6 +180,10 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                         toneMapping: THREE.NoToneMapping,
                         outputColorSpace: THREE.SRGBColorSpace,
                         powerPreference: 'high-performance',
+                    }}
+                    onCreated={({ gl }) => {
+                        gl.shadowMap.enabled = true;
+                        gl.shadowMap.type = THREE.PCFSoftShadowMap;
                     }}
                     style={{ width: '100%', height: '100%', display: 'block' }}
                     onPointerMissed={onPointerMissed}

@@ -1,6 +1,0 @@
-{
-  "summary": "Comprehensive Codebase Audit Report and Remediation Plan for the Raylight Motion Graphics Editor, covering critical P0 rendering, export, and storage bugs, P1 playhead re-rendering performance traps, WebGL post-processing integration, and full upgrade roadmap.",
-  "updatedAt": "2026-10-17T07:59:46.593426508Z",
-  "requestFeedback": true,
-  "userFacing": true
-}

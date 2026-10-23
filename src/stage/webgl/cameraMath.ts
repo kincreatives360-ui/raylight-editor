@@ -146,7 +146,7 @@ export function getLayerRenderLayout(
     focalLength: number = DEFAULT_FOCAL_LENGTH
 ) {
     const transform = getLayer3DWorldTransform(evalLayer, aspect, cameraZ, focalLength);
-    const raw = evalLayer.layer.kind === 'image' ? evalLayer.layer.deviceFrame : undefined;
+    const raw = (evalLayer.layer.kind === 'image' || evalLayer.layer.kind === 'video') ? evalLayer.layer.deviceFrame : undefined;
     const deviceSettings = raw?.enabled ? resolveDeviceFrameSettings(raw) : null;
     const frameMetrics = deviceSettings ? getDeviceFrameMetrics(transform.meshW, transform.meshH, deviceSettings) : null;
     const scale = getDeviceFrameScale(deviceSettings, evalLayer.scale ?? { x: 1, y: 1, z: 1 });

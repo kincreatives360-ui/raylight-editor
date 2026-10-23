@@ -18,7 +18,7 @@ export function roundedRect(width: number, height: number, radius: number): THRE
 }
 
 export function createScreenGeometry(width: number, height: number, radius: number): THREE.ShapeGeometry {
-  const geometry = new THREE.ShapeGeometry(roundedRect(width, height, radius), 16);
+  const geometry = new THREE.ShapeGeometry(roundedRect(width, height, radius), 36);
   const position = geometry.attributes.position;
   const uv = new Float32Array(position.count * 2);
   for (let i = 0; i < position.count; i++) {
@@ -39,10 +39,10 @@ export function createBodyGeometry(width: number, height: number, radius: number
   ), {
     depth: fixed ? depth - bevelThickness * 2 : depth,
     bevelEnabled: true,
-    bevelSegments: 3,
+    bevelSegments: 6,
     bevelSize,
     bevelThickness,
-    curveSegments: 10,
+    curveSegments: 36,
     steps: 1,
   });
   // Extrusion bevels extend beyond their input shape. Fixed hardware dimensions include them.
@@ -73,7 +73,7 @@ export function createBezelGeometry(
   return new THREE.ExtrudeGeometry(bezel, {
     depth,
     bevelEnabled: false,
-    curveSegments: 10,
+    curveSegments: 36,
     steps: 1,
   });
 }
@@ -84,10 +84,10 @@ export function createRoundedPanelGeometry(width: number, height: number, radius
   const geometry = new THREE.ExtrudeGeometry(roundedRect(width - bevel * 2, height - bevel * 2, radius - bevel), {
     depth: depth - bevel * 2,
     bevelEnabled: true,
-    bevelSegments: 3,
+    bevelSegments: 6,
     bevelSize: bevel,
     bevelThickness: bevel,
-    curveSegments: 12,
+    curveSegments: 36,
   });
   geometry.translate(0, 0, -depth / 2 + bevel);
   return geometry;
@@ -106,9 +106,9 @@ export function createCameraBarrelGeometry(radius: number, depth: number, glassR
   // A torus leaves a real aperture for the dark lens instead of burying it
   // behind a solid cylinder cap. Its normal is already along local Z.
   const ringTube = Math.max(depth * 0.36, radius * 0.08);
-  const ring = new THREE.TorusGeometry(Math.max(0.0001, radius - ringTube), ringTube, 10, 32);
+  const ring = new THREE.TorusGeometry(Math.max(0.0001, radius - ringTube), ringTube, 24, 64);
   const glassDepth = Math.max(depth * 0.16, 0.0005);
-  const glass = new THREE.CylinderGeometry(glassRadius, glassRadius * 0.97, glassDepth, 32, 1, false);
+  const glass = new THREE.CylinderGeometry(glassRadius, glassRadius * 0.97, glassDepth, 64, 1, false);
   glass.rotateX(Math.PI / 2);
   return {
     ring,
@@ -140,10 +140,10 @@ export function createAppleMarkGeometry(width: number, height: number, depth: nu
   const geometry = new THREE.ExtrudeGeometry([body, leaf], {
     depth,
     bevelEnabled: true,
-    bevelSegments: 2,
+    bevelSegments: 4,
     bevelSize: Math.min(depth * 0.16, width * 0.025),
     bevelThickness: Math.min(depth * 0.16, width * 0.025),
-    curveSegments: 12,
+    curveSegments: 32,
   });
   // Keep the full two-piece mark centered in the layout's supplied mark box.
   geometry.computeBoundingBox();

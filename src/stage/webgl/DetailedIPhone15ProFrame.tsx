@@ -18,13 +18,13 @@ export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: Devic
   const rearGlassGeometry = useMemo(() => createRoundedPanelGeometry(layout.rearGlass.width, layout.rearGlass.height, layout.rearGlass.radius, layout.rearGlass.depth), [layout]);
   const plateauGeometry = useMemo(() => createRoundedPanelGeometry(layout.camera.plateau.width, layout.camera.plateau.height, layout.camera.plateau.radius, layout.camera.plateau.depth), [layout]);
   const barrel = useMemo(() => createCameraBarrelGeometry(layout.camera.lenses[0].radius, layout.camera.lenses[0].depth, layout.camera.lenses[0].radius * 0.73), [layout]);
-  const flashGeometry = useMemo(() => new THREE.CylinderGeometry(layout.camera.flash.radius, layout.camera.flash.radius * 0.92, layout.camera.flash.depth, 24), [layout]);
-  const lidarGeometry = useMemo(() => new THREE.CylinderGeometry(layout.camera.lidar.radius, layout.camera.lidar.radius * 0.92, layout.camera.lidar.depth, 24), [layout]);
+  const flashGeometry = useMemo(() => new THREE.CylinderGeometry(layout.camera.flash.radius, layout.camera.flash.radius * 0.92, layout.camera.flash.depth, 48), [layout]);
+  const lidarGeometry = useMemo(() => new THREE.CylinderGeometry(layout.camera.lidar.radius, layout.camera.lidar.radius * 0.92, layout.camera.lidar.depth, 48), [layout]);
   const markGeometry = useMemo(() => createAppleMarkGeometry(layout.appleMark.width, layout.appleMark.height, layout.appleMark.depth), [layout]);
   const actionGeometry = useMemo(() => createRoundedPanelGeometry(layout.buttons.action.width, layout.buttons.action.height, layout.buttons.action.width / 2, layout.buttons.action.depth), [layout]);
   const volumeGeometry = useMemo(() => createRoundedPanelGeometry(layout.buttons.volumeUp.width, layout.buttons.volumeUp.height, layout.buttons.volumeUp.width / 2, layout.buttons.volumeUp.depth), [layout]);
   const sideGeometry = useMemo(() => createRoundedPanelGeometry(layout.buttons.side.width, layout.buttons.side.height, layout.buttons.side.width / 2, layout.buttons.side.depth), [layout]);
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
+  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 64), []);
   const shadowMaterial = useMemo(() => new THREE.MeshBasicMaterial({ map: shadowTexture, transparent: true, opacity: settings.shadowOpacity, depthWrite: false, side: THREE.DoubleSide }), [settings.shadowOpacity, shadowTexture]);
 
   useDisposable(bodyGeometry); useDisposable(bezelGeometry); useDisposable(screenGeometry); useDisposable(islandGeometry); useDisposable(rearGlassGeometry); useDisposable(plateauGeometry); useDisposable(barrel.ring); useDisposable(barrel.glass); useDisposable(flashGeometry); useDisposable(lidarGeometry); useDisposable(markGeometry); useDisposable(actionGeometry); useDisposable(volumeGeometry); useDisposable(sideGeometry); useDisposable(shadowGeometry);

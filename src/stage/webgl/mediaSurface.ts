@@ -1,11 +1,11 @@
 import type { Layer, ScreenFit } from '../../model/types';
 import { getImageFitRect } from '../../model/deviceFrame';
 
-export function getMediaTextureSize(width: number, height: number) {
+export function getMediaTextureSize(width: number, height: number, maxDimension: number = 1024) {
   const aspect = Math.max(0.0001, width) / Math.max(0.0001, height);
   return aspect >= 1
-    ? { width: 1024, height: Math.max(1, Math.round(1024 / aspect)) }
-    : { width: Math.max(1, Math.round(1024 * aspect)), height: 1024 };
+    ? { width: maxDimension, height: Math.max(1, Math.round(maxDimension / aspect)) }
+    : { width: Math.max(1, Math.round(maxDimension * aspect)), height: maxDimension };
 }
 
 export function drawMediaFrame(
@@ -20,6 +20,8 @@ export function drawMediaFrame(
     crop?: { x: number; y: number; width: number; height: number };
     fillColor?: string;
     blurPx?: number;
+    pan?: { x: number; y: number };
+    zoom?: number;
   }
 ): void {
   ctx.save();
@@ -36,8 +38,15 @@ export function drawMediaFrame(
     const cropWidth = Math.min(clamp(crop.width) * naturalWidth, naturalWidth - x);
     const cropHeight = Math.min(clamp(crop.height) * naturalHeight, naturalHeight - y);
     if (cropWidth > 0 && cropHeight > 0) {
-      const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit);
+      const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit, options.pan, options.zoom);
       if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5)}px)`;
+      if (typeof ctx.beginPath === 'function') {
+        ctx.beginPath();
+        if (typeof ctx.rect === 'function') ctx.rect(0, 0, width, height);
+        if (typeof ctx.clip === 'function') ctx.clip();
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(source, x + rect.sourceX, y + rect.sourceY, rect.sourceWidth, rect.sourceHeight,
         rect.targetX, rect.targetY, rect.targetWidth, rect.targetHeight);
     }

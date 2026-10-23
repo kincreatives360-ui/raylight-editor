@@ -1,11 +1,17 @@
 import React from 'react';
 import { ColorField } from '../ColorPicker';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import type { DeviceFrameSettings, ImageLayer } from '../../../model/types';
-import { DEFAULT_DEVICE_FRAME_SETTINGS, IPHONE_15_PRO, isFixedDeviceFrame, resolveDeviceFrameSettings, upgradeDeviceFrameSettings } from '../../../model/deviceFrame';
+import type { DeviceFrameSettings, ImageLayer, VideoLayer } from '../../../model/types';
+import {
+  DEFAULT_DEVICE_FRAME_SETTINGS,
+  isFixedDeviceFrame,
+  resolveDeviceFrameSettings,
+  upgradeDeviceFrameSettings,
+  SUPPORTED_DEVICES,
+} from '../../../model/deviceFrame';
 
 interface DeviceFrameSectionProps {
-  layer: ImageLayer;
+  layer: ImageLayer | VideoLayer;
   onChange: (settings: DeviceFrameSettings) => void;
   projectAspect: number;
 }
@@ -36,32 +42,66 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
           {!fixed && (
             <div className="text-[10px] text-[#a1a1aa] space-y-1.5">
               <p>Legacy layout retained for this frame.</p>
-              <button type="button" className="text-[#0088ff] cursor-pointer" onClick={() => onChange(upgradeDeviceFrameSettings(settings, layer.size.width * projectAspect, layer.size.height, layer.scale))}>
-                Use fixed phone proportions
+              <button
+                type="button"
+                className="text-[#0088ff] cursor-pointer"
+                onClick={() =>
+                  onChange(
+                    upgradeDeviceFrameSettings(
+                      settings,
+                      layer.size.width * projectAspect,
+                      layer.size.height,
+                      layer.scale
+                    )
+                  )
+                }
+              >
+                Use calibrated 3D hardware proportions
               </button>
-              <p>Retains center and body height; width changes to match the phone.</p>
             </div>
           )}
-          {fixed && settings.deviceId !== IPHONE_15_PRO.id && (
-            <p className="text-[10px] text-[#a1a1aa]">This device is unavailable. Showing {IPHONE_15_PRO.name}; the saved device ID is retained.</p>
-          )}
+
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
             <label className="text-[10px] text-[#a1a1aa] space-y-1">
-              <span className="block">Device</span>
+              <span className="block">Hardware Model</span>
               <select
                 aria-label="Device model"
-                value={fixed ? 'iphone-pro' : settings.model}
-                disabled={fixed}
-                onChange={(event) => update({ model: event.target.value as DeviceFrameSettings['model'] })}
-                className="w-full h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff]"
+                value={fixed ? (settings.deviceId || 'iphone-15-pro') : settings.model}
+                onChange={(event) => {
+                  const val = event.target.value;
+                  if (fixed) {
+                    update({ deviceId: val });
+                  } else {
+                    update({ model: val as DeviceFrameSettings['model'] });
+                  }
+                }}
+                className="w-full h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff] cursor-pointer"
               >
-                <option value="iphone-pro">{fixed ? IPHONE_15_PRO.name : 'iPhone Pro (legacy)'}</option>
-                {!fixed && <option value="iphone">iPhone (legacy)</option>}
-                {!fixed && <option value="iphone-classic">iPhone Classic (legacy)</option>}
+                {fixed ? (
+                  <>
+                    <optgroup label="Phones" className="bg-[#18181b] text-white font-medium">
+                      <option value="iphone-15-pro">{SUPPORTED_DEVICES['iphone-15-pro'].name}</option>
+                      <option value="android-flagship">{SUPPORTED_DEVICES['android-flagship'].name}</option>
+                    </optgroup>
+                    <optgroup label="Laptops & Tablets" className="bg-[#18181b] text-white font-medium">
+                      <option value="macbook-pro-16">{SUPPORTED_DEVICES['macbook-pro-16'].name}</option>
+                      <option value="ipad-pro-13">{SUPPORTED_DEVICES['ipad-pro-13'].name}</option>
+                    </optgroup>
+                    <optgroup label="Displays" className="bg-[#18181b] text-white font-medium">
+                      <option value="studio-display-27">{SUPPORTED_DEVICES['studio-display-27'].name}</option>
+                    </optgroup>
+                  </>
+                ) : (
+                  <>
+                    <option value="iphone-pro">iPhone Pro (legacy)</option>
+                    <option value="iphone">iPhone (legacy)</option>
+                    <option value="iphone-classic">iPhone Classic (legacy)</option>
+                  </>
+                )}
               </select>
             </label>
             <div className="space-y-1">
-              <span className="block text-[10px] text-[#a1a1aa]">Finish</span>
+              <span className="block text-[10px] text-[#a1a1aa]">Chassis</span>
               <ColorField
                 value={settings.frameColor}
                 aria-label="Device frame color"
@@ -71,9 +111,10 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
             </div>
           </div>
 
+          {/* Scale & Bezel */}
           <div className="grid grid-cols-2 gap-1.5">
             <ScrubInput
-              label={fixed ? 'Size' : 'Rim scale'}
+              label={fixed ? 'Scale' : 'Rim scale'}
               value={Math.round((fixed ? settings.deviceScale ?? 1 : settings.scale) * 100)}
               min={65}
               max={200}
@@ -82,59 +123,124 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               onChange={(value) => update(fixed ? { deviceScale: value / 100 } : { scale: value / 100 })}
               className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
             />
-            {!fixed && <ScrubInput
-              label="Bezel"
-              value={Math.round(settings.bezelWidth * 1000)}
-              min={10}
-              max={200}
-              step={1}
-              unit="‰"
-              onChange={(value) => update({ bezelWidth: value / 1000 })}
-              className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-            />}
+            {!fixed && (
+              <ScrubInput
+                label="Bezel"
+                value={Math.round(settings.bezelWidth * 1000)}
+                min={10}
+                max={200}
+                step={1}
+                unit="‰"
+                onChange={(value) => update({ bezelWidth: value / 1000 })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+            )}
+            {fixed && settings.deviceId === 'macbook-pro-16' && (
+              <ScrubInput
+                label="Lid Angle"
+                value={settings.hingeAngleDeg ?? 105}
+                min={0}
+                max={135}
+                step={1}
+                unit="°"
+                onChange={(v) => update({ hingeAngleDeg: v })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+            )}
+            {fixed && settings.deviceId === 'studio-display-27' && (
+              <ScrubInput
+                label="Tilt"
+                value={settings.tiltAngleDeg ?? 10}
+                min={-15}
+                max={30}
+                step={1}
+                unit="°"
+                onChange={(v) => update({ tiltAngleDeg: v })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+            )}
           </div>
 
-          <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
-            <span>Screen fit</span>
-            <select
-              aria-label="Screen fit"
-              value={settings.screenFit}
-              onChange={(event) => update({ screenFit: event.target.value as DeviceFrameSettings['screenFit'] })}
-              className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff]"
-            >
-              <option value="stretch">Stretch</option>
-              <option value="contain">Fit</option>
-              <option value="cover">Fill</option>
-            </select>
-          </label>
+          {/* Screen Fit & Letterbox Backing */}
+          <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
+            <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
+              <span>Screen fit</span>
+              <select
+                aria-label="Screen fit"
+                value={settings.screenFit}
+                onChange={(event) => update({ screenFit: event.target.value as DeviceFrameSettings['screenFit'] })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff] cursor-pointer"
+              >
+                <option value="contain">Fit (letterbox)</option>
+                <option value="cover">Fill (crop edges)</option>
+                <option value="stretch">Direct UV (stretch)</option>
+              </select>
+            </label>
+            <div className="space-y-0.5">
+              <ColorField
+                value={settings.screenFillColor || '#050507'}
+                aria-label="Screen backing color"
+                onChange={(event) => update({ screenFillColor: event.target.value })}
+                className="w-8 h-7 rounded-md border border-white/10 cursor-pointer"
+              />
+            </div>
+          </div>
+
+          {/* Interactive Screen Pan & Zoom */}
+          <div className="space-y-1.5 p-2 rounded-lg bg-[#161619] border border-white/[0.06]">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] font-medium text-[#e4e4e7]">Screen Viewport Framing</span>
+              {((settings.screenPan?.x ?? 0) !== 0 || (settings.screenPan?.y ?? 0) !== 0 || (settings.screenZoom ?? 1) !== 1) && (
+                <button
+                  type="button"
+                  onClick={() => update({ screenPan: { x: 0, y: 0 }, screenZoom: 1 })}
+                  className="text-[9px] text-[#0088ff] hover:underline cursor-pointer"
+                >
+                  Reset
+                </button>
+              )}
+            </div>
+            <div className="grid grid-cols-3 gap-1.5">
+              <ScrubInput
+                label="Zoom"
+                value={Math.round((settings.screenZoom ?? 1) * 100)}
+                min={100}
+                max={300}
+                step={5}
+                unit="%"
+                onChange={(v) => update({ screenZoom: v / 100 })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+              <ScrubInput
+                label="Pan X"
+                value={Math.round((settings.screenPan?.x ?? 0) * 100)}
+                min={-100}
+                max={100}
+                step={2}
+                unit="%"
+                onChange={(v) => update({ screenPan: { ...(settings.screenPan ?? { x: 0, y: 0 }), x: v / 100 } })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+              <ScrubInput
+                label="Pan Y"
+                value={Math.round((settings.screenPan?.y ?? 0) * 100)}
+                min={-100}
+                max={100}
+                step={2}
+                unit="%"
+                onChange={(v) => update({ screenPan: { ...(settings.screenPan ?? { x: 0, y: 0 }), y: v / 100 } })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+            </div>
+          </div>
 
           <details className="group rounded-lg bg-[#17171a] border border-white/[0.06]">
             <summary className="px-2.5 py-2 list-none flex items-center justify-between text-[10px] text-[#a1a1aa] cursor-pointer select-none">
-              <span>Frame details</span>
+              <span>Hardware &amp; Optical Details</span>
               <span className="text-[#71717a] group-open:rotate-180 transition-transform">⌄</span>
             </summary>
             <div className="px-2.5 pb-2.5 space-y-2">
               <div className="grid grid-cols-2 gap-1.5">
-                {!fixed && <ScrubInput
-                  label="Depth"
-                  value={Math.round(settings.thickness * 1000)}
-                  min={5}
-                  max={160}
-                  step={1}
-                  unit="‰"
-                  onChange={(value) => update({ thickness: value / 1000 })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                />}
-                {!fixed && <ScrubInput
-                  label="Corners"
-                  value={Math.round(settings.cornerRadius * 1000)}
-                  min={40}
-                  max={240}
-                  step={1}
-                  unit="‰"
-                  onChange={(value) => update({ cornerRadius: value / 1000 })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                />}
                 <ScrubInput
                   label="Metal"
                   value={Math.round(settings.frameMetalness * 100)}
@@ -159,36 +265,6 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
 
               <div className="grid grid-cols-2 gap-1.5">
                 <ScrubInput
-                  label="Glass"
-                  value={Math.round(settings.glassOpacity * 100)}
-                  min={0}
-                  max={45}
-                  step={1}
-                  unit="%"
-                  onChange={(value) => update({ glassOpacity: value / 100 })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                />
-                <ScrubInput
-                  label="Polish"
-                  value={Math.round(settings.glassRoughness * 100)}
-                  min={2}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  onChange={(value) => update({ glassRoughness: value / 100 })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                />
-                <ScrubInput
-                  label="Gloss"
-                  value={Math.round(settings.gloss * 100)}
-                  min={0}
-                  max={100}
-                  step={1}
-                  unit="%"
-                  onChange={(value) => update({ gloss: value / 100 })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                />
-                <ScrubInput
                   label="Reflection"
                   value={Math.round(settings.reflection * 100)}
                   min={0}
@@ -198,75 +274,64 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                   onChange={(value) => update({ reflection: value / 100 })}
                   className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
                 />
+                <ScrubInput
+                  label="Glass opacity"
+                  value={Math.round(settings.glassOpacity * 100)}
+                  min={0}
+                  max={45}
+                  step={1}
+                  unit="%"
+                  onChange={(value) => update({ glassOpacity: value / 100 })}
+                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+                />
               </div>
 
-              <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
-                <span>Top cutout</span>
-                <select
-                  aria-label="Top cutout style"
-                  value={settings.cutoutStyle}
-                  onChange={(event) => update({ cutoutStyle: event.target.value as DeviceFrameSettings['cutoutStyle'] })}
-                  className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff]"
-                >
-                  <option value="dynamic-island">Dynamic Island</option>
-                  <option value="notch">Notch</option>
-                  <option value="punch-hole">Punch hole</option>
-                  <option value="none">No cutout</option>
-                </select>
-              </label>
-
-              {settings.cutoutStyle !== 'none' && settings.cutoutStyle !== 'punch-hole' && (
-                <div className="grid grid-cols-2 gap-1.5">
-                  <ScrubInput
-                    label="Cutout W"
-                    value={Math.round(settings.cutoutWidth * 100)}
-                    min={8}
-                    max={85}
-                    step={1}
-                    unit="%"
-                    onChange={(value) => update({ cutoutWidth: value / 100 })}
-                    className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                  />
-                  <ScrubInput
-                    label="Cutout H"
-                    value={Math.round(settings.cutoutHeight * 1000)}
-                    min={15}
-                    max={140}
-                    step={1}
-                    unit="‰"
-                    onChange={(value) => update({ cutoutHeight: value / 1000 })}
-                    className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-                  />
-                </div>
+              {settings.deviceId === 'iphone-15-pro' && (
+                <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
+                  <span>Cutout</span>
+                  <select
+                    aria-label="Top cutout style"
+                    value={settings.cutoutStyle}
+                    onChange={(event) => update({ cutoutStyle: event.target.value as DeviceFrameSettings['cutoutStyle'] })}
+                    className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff] cursor-pointer"
+                  >
+                    <option value="dynamic-island">Dynamic Island</option>
+                    <option value="notch">Notch</option>
+                    <option value="none">No cutout</option>
+                  </select>
+                </label>
               )}
 
               <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                <span>Side buttons</span>
+                <span>Physical buttons</span>
                 <input
                   type="checkbox"
                   checked={settings.showSideButtons}
                   onChange={(event) => update({ showSideButtons: event.target.checked })}
-                  className="w-3.5 h-3.5 accent-[#0088ff]"
+                  className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
                 />
               </label>
+
               <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                <span>Rear camera cluster</span>
+                <span>Rear camera system</span>
                 <input
                   type="checkbox"
                   checked={settings.showRearCameras}
                   onChange={(event) => update({ showRearCameras: event.target.checked })}
-                  className="w-3.5 h-3.5 accent-[#0088ff]"
+                  className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
                 />
               </label>
+
               <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                <span>Studio shadow</span>
+                <span>Studio contact shadow</span>
                 <input
                   type="checkbox"
                   checked={settings.shadowEnabled}
                   onChange={(event) => update({ shadowEnabled: event.target.checked })}
-                  className="w-3.5 h-3.5 accent-[#0088ff]"
+                  className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
                 />
               </label>
+
               {settings.shadowEnabled && (
                 <div className="grid grid-cols-2 gap-1.5">
                   <ScrubInput

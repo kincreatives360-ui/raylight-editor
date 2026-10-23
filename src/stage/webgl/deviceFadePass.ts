@@ -81,11 +81,9 @@ export function createDeviceFadeMaterial(target: THREE.WebGLRenderTarget): THREE
       void main() {
         vec4 color = texture2D(deviceColor, vUv);
         if (color.a <= 0.00001) discard;
-        // Render-target RGB is already premultiplied; convert once before output-space blending.
-        gl_FragColor = vec4(color.rgb / color.a, color.a * layerOpacity);
+        // Render-target RGB is already in linear space. Modulate by layerOpacity.
+        gl_FragColor = vec4(color.rgb * layerOpacity, color.a * layerOpacity);
         gl_FragDepth = texture2D(deviceDepth, vUv).x;
-        #include <colorspace_fragment>
-        #include <premultiplied_alpha_fragment>
       }
     `,
   });
