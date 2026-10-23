@@ -1,4 +1,3 @@
-/* eslint-disable react-hooks/refs */
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
@@ -78,6 +77,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const popupRef = useRef<HTMLDivElement>(null);
     const squareRef = useRef<HTMLDivElement>(null);
     const hexInputRef = useRef<HTMLInputElement>(null);
+    const hueBarRef = useRef<HTMLDivElement>(null);
     const pickerId = useId();
     const [open, setOpen] = useState(false);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
@@ -86,8 +86,12 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const [position, setPosition] = useState({ left: 0, top: 0 });
     const [draggingSquare, setDraggingSquare] = useState(false);
     const [draggingHue, setDraggingHue] = useState(false);
-    const hueBarRef = useRef<HTMLDivElement>(null);
-    const [previousColor, setPreviousColor] = useState(color);
+    const [isHexFocused, setIsHexFocused] = useState(false);
+    const [prevColor, setPrevColor] = useState(color);
+
+    const hsvRef = useRef<Hsv>(hsv);
+    const onExitGradientRef = useRef(onExitGradient);
+
     const hueColor = useMemo(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }), [hsv.h]);
     const gradient = gradientValue ?? {
         angle: 0,
@@ -95,28 +99,21 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
     };
 
-    const isHexInputFocused =
-        typeof document !== 'undefined' &&
-        hexInputRef.current !== null &&
-        hexInputRef.current === document.activeElement;
-
-    if (color !== previousColor && !draggingSquare && !draggingHue) {
-        setPreviousColor(color);
-        if (!isHexInputFocused) {
-            setHexDraft(color);
-        }
-        setHsv(hexToHsv(color));
-    }
-
-    const hsvRef = useRef<Hsv>(hsv);
     useEffect(() => {
         hsvRef.current = hsv;
     }, [hsv]);
 
-    const onExitGradientRef = useRef(onExitGradient);
     useEffect(() => {
         onExitGradientRef.current = onExitGradient;
     }, [onExitGradient]);
+
+    if (color !== prevColor && !draggingSquare && !draggingHue) {
+        setPrevColor(color);
+        if (!isHexFocused) {
+            setHexDraft(color);
+        }
+        setHsv(hexToHsv(color));
+    }
 
     useEffect(() => {
         if (!open) return;
@@ -334,7 +331,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 setHexDraft(`#${raw}`);
                                 if (raw.length === 3 || raw.length === 6) commitHex(raw);
                             }}
+                            onFocus={() => setIsHexFocused(true)}
                             onBlur={() => {
+                                setIsHexFocused(false);
                                 commitHex(hexDraft);
                                 setHexDraft(normalizeHex(hexDraft) || color);
                             }}

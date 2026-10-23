@@ -155,6 +155,8 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     exposure: 1.0,
     contrast: 1.0,
     saturation: 1.0,
+    temperature: 0,
+    tint: 0,
   },
   edgeFade: {
     enabled: false,

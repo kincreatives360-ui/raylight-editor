@@ -606,6 +606,8 @@ export const ShotSchema = z.object({
       exposure: z.number(),
       contrast: z.number(),
       saturation: z.number(),
+      temperature: z.number().optional(),
+      tint: z.number().optional(),
     }),
     edgeFade: z.object({
       enabled: z.boolean(),

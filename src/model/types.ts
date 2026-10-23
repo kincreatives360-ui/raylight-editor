@@ -555,6 +555,8 @@ export interface SceneEffects {
     exposure: number;
     contrast: number;
     saturation: number;
+    temperature?: number;
+    tint?: number;
   };
   edgeFade: {
     enabled: boolean;
