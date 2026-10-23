@@ -1,4 +1,4 @@
-import { SCREEN_PLANE_Z, isFixedDeviceFrame, type DeviceFrameMetrics } from '../../model/deviceFrame';
+import { SCREEN_PLANE_Z, isFixedDeviceFrame, IPHONE_15_PRO, type DeviceFrameMetrics } from '../../model/deviceFrame';
 import type { DeviceFrameSettings } from '../../model/types';
 
 export interface LocalBounds {
@@ -22,6 +22,17 @@ export interface IPhone15ProLayout {
   camera: { plateau: PanelLayout; lenses: [CircleLayout, CircleLayout, CircleLayout]; flash: CircleLayout; lidar: CircleLayout; };
   appleMark: PanelLayout;
 }
+
+export const UNIT_IPHONE_15_PRO_METRICS: DeviceFrameMetrics = {
+  bodyWidth: IPHONE_15_PRO.body.width / IPHONE_15_PRO.body.height,
+  bodyHeight: 1,
+  bodyDepth: IPHONE_15_PRO.body.depth / IPHONE_15_PRO.body.height,
+  bodyCornerRadius: IPHONE_15_PRO.body.cornerRadius / IPHONE_15_PRO.body.height,
+  screenWidth: IPHONE_15_PRO.screen.width / IPHONE_15_PRO.body.height,
+  screenHeight: IPHONE_15_PRO.screen.height / IPHONE_15_PRO.body.height,
+  cornerRadius: IPHONE_15_PRO.screen.cornerRadius / IPHONE_15_PRO.body.height,
+  bezel: (IPHONE_15_PRO.body.width - IPHONE_15_PRO.screen.width) / (IPHONE_15_PRO.body.height * 2),
+};
 
 /**
  * Calibrated, scale-independent hardware placements for the one complete
@@ -74,14 +85,43 @@ export function getIPhone15ProLayout(metrics: DeviceFrameMetrics, settings: Devi
       dynamicIslandZ: SCREEN_PLANE_Z + proud * 0.72,
       screenOverlap: shortSide * 0.008,
     },
-    dynamicIsland: {
-      center: { x: 0, y: screenHeight / 2 - shortSide * 0.115 },
-      width: screenWidth * 0.33,
-      height: shortSide * 0.055,
-      radius: shortSide * 0.0275,
-      z: SCREEN_PLANE_Z + proud * 0.72,
-      depth: proud * 0.25,
-    },
+    dynamicIsland: (() => {
+      const cutoutStyle = settings.cutoutStyle ?? 'dynamic-island';
+      const rawCutoutW = settings.cutoutWidth ?? 0.34;
+      const rawCutoutH = settings.cutoutHeight ?? 0.048;
+
+      let cutoutW: number;
+      let cutoutH: number;
+      let cutoutRadius: number;
+      let cutoutCenterY: number;
+
+      if (cutoutStyle === 'punch-hole') {
+        const d = Math.max(fixed ? 0.0001 : 0.005, shortSide * 0.055);
+        cutoutW = d;
+        cutoutH = d;
+        cutoutRadius = d / 2;
+        cutoutCenterY = screenHeight / 2 - shortSide * 0.09;
+      } else if (cutoutStyle === 'notch') {
+        cutoutW = Math.min(screenWidth * 0.85, Math.max(fixed ? 0.0001 : 0.01, screenWidth * (rawCutoutW / 0.34) * 0.52));
+        cutoutH = Math.max(fixed ? 0.0001 : 0.005, shortSide * (rawCutoutH / 0.048) * 0.075);
+        cutoutRadius = Math.min(cutoutH * 0.35, shortSide * 0.02);
+        cutoutCenterY = screenHeight / 2 - cutoutH / 2;
+      } else {
+        cutoutW = Math.min(screenWidth * 0.85, Math.max(fixed ? 0.0001 : 0.01, screenWidth * (rawCutoutW / 0.34) * 0.33));
+        cutoutH = Math.max(fixed ? 0.0001 : 0.005, shortSide * (rawCutoutH / 0.048) * 0.055);
+        cutoutRadius = cutoutH / 2;
+        cutoutCenterY = screenHeight / 2 - shortSide * 0.115;
+      }
+
+      return {
+        center: { x: 0, y: cutoutCenterY },
+        width: cutoutW,
+        height: cutoutH,
+        radius: cutoutRadius,
+        z: SCREEN_PLANE_Z + proud * 0.72,
+        depth: proud * 0.25,
+      };
+    })(),
     buttons: {
       action: { center: { x: leftX, y: screenHeight * 0.235 }, width: buttonWidth, height: screenHeight * 0.074, depth: buttonDepth, z: railZ },
       volumeUp: { center: { x: leftX, y: screenHeight * 0.10 }, width: buttonWidth, height: screenHeight * 0.095, depth: buttonDepth, z: railZ },
@@ -90,7 +130,7 @@ export function getIPhone15ProLayout(metrics: DeviceFrameMetrics, settings: Devi
     },
     rearGlass: {
       center: { x: 0, y: 0 }, width: metrics.bodyWidth - metrics.bezel * 0.34, height: metrics.bodyHeight - metrics.bezel * 0.34,
-      radius: Math.max(0.001, metrics.bodyCornerRadius - metrics.bezel * 0.17), z: bodyRearZ - proud * 0.08, depth: proud * 0.18,
+      radius: Math.max(fixed ? 0.00001 : 0.001, metrics.bodyCornerRadius - metrics.bezel * 0.17), z: bodyRearZ - proud * 0.08, depth: proud * 0.18,
     },
     camera: {
       plateau: { center: plateauCenter, width: plateauWidth, height: plateauHeight, radius: shortSide * 0.09, z: plateauZ, depth: plateauDepth },
@@ -101,6 +141,11 @@ export function getIPhone15ProLayout(metrics: DeviceFrameMetrics, settings: Devi
     appleMark: { center: { x: 0, y: -metrics.bodyHeight * 0.035 }, width: screenWidth * 0.145, height: screenWidth * 0.175, radius: screenWidth * 0.045, z: bodyRearZ - proud * 0.19, depth: proud * 0.08 },
   };
 }
+
+export const BASE_UNIT_IPHONE_15_PRO_LAYOUT: IPhone15ProLayout = getIPhone15ProLayout(
+  UNIT_IPHONE_15_PRO_METRICS,
+  { geometryVersion: 1 } as DeviceFrameSettings
+);
 
 export function getIPhone15ProBounds(layout: IPhone15ProLayout, options: { includeButtons?: boolean; includeCameras?: boolean } = {}): LocalBounds {
   const { body, buttons, camera, front, dynamicIsland } = layout;

@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DEVICE_FRAME_SETTINGS, getDeviceFrameMetrics } from '../../model/deviceFrame';
-import { getIPhone15ProBounds, getIPhone15ProLayout } from './iphone15ProLayout';
+import { DEFAULT_DEVICE_FRAME_SETTINGS, getDeviceFrameMetrics, SCREEN_PLANE_Z } from '../../model/deviceFrame';
+import {
+  BASE_UNIT_IPHONE_15_PRO_LAYOUT,
+  UNIT_IPHONE_15_PRO_METRICS,
+  getIPhone15ProBounds,
+  getIPhone15ProLayout,
+} from './iphone15ProLayout';
 
 describe('iPhone 15 Pro feature layout', () => {
   const settings = { ...DEFAULT_DEVICE_FRAME_SETTINGS, enabled: true };
@@ -13,6 +18,19 @@ describe('iPhone 15 Pro feature layout', () => {
     expect(layout.dynamicIsland.center.y).toBeGreaterThan(0);
     expect(layout.dynamicIsland.center.y + layout.dynamicIsland.height / 2).toBeLessThan(metrics.screenHeight / 2);
     expect(layout.dynamicIsland.width).toBeLessThan(metrics.screenWidth * 0.45);
+  });
+
+  it('adapts cutout layout to notch, punch-hole, and custom dimensions', () => {
+    const notchLayout = getIPhone15ProLayout(metrics, { ...settings, cutoutStyle: 'notch', cutoutWidth: 0.5 });
+    expect(notchLayout.dynamicIsland.width).toBeGreaterThan(metrics.screenWidth * 0.5);
+    expect(notchLayout.dynamicIsland.center.y + notchLayout.dynamicIsland.height / 2).toBeCloseTo(metrics.screenHeight / 2, 5);
+
+    const punchLayout = getIPhone15ProLayout(metrics, { ...settings, cutoutStyle: 'punch-hole' });
+    expect(punchLayout.dynamicIsland.width).toBeCloseTo(punchLayout.dynamicIsland.height, 5);
+
+    const wideIsland = getIPhone15ProLayout(metrics, { ...settings, cutoutWidth: 0.6 });
+    const standardIsland = getIPhone15ProLayout(metrics, settings);
+    expect(wideIsland.dynamicIsland.width).toBeGreaterThan(standardIsland.dynamicIsland.width);
   });
 
   it('places action and volume controls on the left rail and the side button on the right rail', () => {
@@ -59,5 +77,38 @@ describe('iPhone 15 Pro feature layout', () => {
 
     expect(bounds.min.z).toBeLessThanOrEqual(layout.rearGlass.z - layout.rearGlass.depth / 2);
     expect(bounds.min.z).toBeLessThanOrEqual(layout.appleMark.z - layout.appleMark.depth / 2);
+  });
+
+  it('provides normalized unit metrics with unit body height', () => {
+    expect(UNIT_IPHONE_15_PRO_METRICS.bodyHeight).toBe(1);
+    expect(UNIT_IPHONE_15_PRO_METRICS.bodyWidth).toBeCloseTo(70.6 / 146.6, 6);
+    expect(UNIT_IPHONE_15_PRO_METRICS.bodyDepth).toBeCloseTo(8.25 / 146.6, 6);
+  });
+
+  it('preserves exact spatial congruence when scaling base unit layout to world metrics', () => {
+    const scaleFactor = metrics.bodyHeight;
+    const directLayout = getIPhone15ProLayout(metrics, settings);
+
+    // Body dimensions and Z position relative to SCREEN_PLANE_Z
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.width * scaleFactor).toBeCloseTo(directLayout.body.width, 6);
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.height * scaleFactor).toBeCloseTo(directLayout.body.height, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.z - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.body.z, 6);
+
+    // Front bezel, glass, reflection
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.bezelZ - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.front.bezelZ, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.glassZ - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.front.glassZ, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.reflectionZ - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.front.reflectionZ, 6);
+
+    // Rear components: plateau, lenses, apple mark
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.plateau.center.x * scaleFactor).toBeCloseTo(directLayout.camera.plateau.center.x, 6);
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.plateau.center.y * scaleFactor).toBeCloseTo(directLayout.camera.plateau.center.y, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.plateau.z - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.camera.plateau.z, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.appleMark.z - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.appleMark.z, 6);
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.appleMark.center.y * scaleFactor).toBeCloseTo(directLayout.appleMark.center.y, 6);
+
+    // Side buttons
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.buttons.action.center.x * scaleFactor).toBeCloseTo(directLayout.buttons.action.center.x, 6);
+    expect(BASE_UNIT_IPHONE_15_PRO_LAYOUT.buttons.action.center.y * scaleFactor).toBeCloseTo(directLayout.buttons.action.center.y, 6);
+    expect(SCREEN_PLANE_Z + (BASE_UNIT_IPHONE_15_PRO_LAYOUT.buttons.action.z - SCREEN_PLANE_Z) * scaleFactor).toBeCloseTo(directLayout.buttons.action.z, 6);
   });
 });

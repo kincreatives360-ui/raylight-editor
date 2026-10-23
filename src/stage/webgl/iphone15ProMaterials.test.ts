@@ -19,6 +19,19 @@ describe('iPhone 15 Pro material policy', () => {
     expect(policy.flash.emissiveIntensity).toBeGreaterThan(0);
   });
 
+  it('respects frameMetalness and frameRoughness overrides when provided', () => {
+    const policy = getIPhone15ProMaterialPolicy({
+      gloss: 0.5,
+      reflection: 0.65,
+      glassOpacity: 0.08,
+      frameMetalness: 0.42,
+      frameRoughness: 0.85,
+    });
+
+    expect(policy.titanium.metalness).toBeCloseTo(0.42, 5);
+    expect(policy.titanium.roughness).toBeCloseTo(0.85, 5);
+  });
+
   it('keeps the Dynamic Island above reflections in the front render stack', () => {
     const policy = getIPhone15ProMaterialPolicy({ gloss: 0.5, reflection: 0.65, glassOpacity: 0.08 });
 

@@ -1,7 +1,13 @@
 import * as THREE from 'three';
 import type { DeviceFrameSettings } from '../../model/types';
 
-interface MaterialInput { gloss: number; reflection: number; glassOpacity: number; }
+interface MaterialInput {
+  gloss: number;
+  reflection: number;
+  glassOpacity: number;
+  frameMetalness?: number;
+  frameRoughness?: number;
+}
 
 export function getIPhone15ProMaterialPolicy(input: MaterialInput) {
   const gloss = Math.max(0, Math.min(1, input.gloss));
@@ -13,7 +19,10 @@ export function getIPhone15ProMaterialPolicy(input: MaterialInput) {
     displayToneMapped: false,
     headOnReflectionOpacity: Math.min(0.1, 0.028 + gloss * reflection * 0.06),
     screenGlassOpacity: Math.min(0.12, Math.max(0.015, input.glassOpacity * 0.72)),
-    titanium: { metalness: 0.88, roughness: 0.31 },
+    titanium: {
+      metalness: input.frameMetalness !== undefined ? Math.max(0, Math.min(1, input.frameMetalness)) : 0.88,
+      roughness: input.frameRoughness !== undefined ? Math.max(0.04, Math.min(1, input.frameRoughness)) : 0.31,
+    },
     rearGlass: { metalness: 0.06, roughness: 0.24 },
     lensGlass: { metalness: 0.18, roughness: 0.055 },
     flash: { emissiveIntensity: 0.42 },
