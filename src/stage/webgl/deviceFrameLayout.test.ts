@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createDefaultImageLayer, createDefaultProject } from '../../model/defaults';
+import { createDefaultImageLayer, createDefaultVideoLayer, createDefaultProject } from '../../model/defaults';
 import { evaluateProjectAtTime } from '../../engine/evaluateShot';
 import { DEFAULT_DEVICE_FRAME_SETTINGS, getDevicePlacementSize, resizeDeviceFromHandle, resizeDevicePlacement } from '../../model/deviceFrame';
 import { validateProject } from '../../model/schema';
@@ -95,5 +95,19 @@ describe('device frame stage layout contract', () => {
     const next = getDevicePlacementSize(resized.size, layer.deviceFrame, 16 / 9, ev.scale);
     expect(next.width - visible.width).toBeCloseTo(0.1, 8);
     expect(resized.centerOffset.x - mirrorX * next.width / 2).toBeCloseTo(-mirrorX * visible.width / 2, 8);
+  });
+
+  it('correctly resolves frame metrics and device settings for video layers', () => {
+    const project = createDefaultProject();
+    project.shots[0].layers = [createDefaultVideoLayer({
+      size: { width: 0.7, height: 0.6 },
+      deviceFrame: { ...DEFAULT_DEVICE_FRAME_SETTINGS, enabled: true },
+      entrance: { type: 'none', durationMs: 0, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } },
+    })];
+    const ev = evaluateProjectAtTime(project, 1000).layers[0];
+    const layout = getLayerRenderLayout(ev, 16 / 9);
+    expect(layout.deviceSettings).not.toBeNull();
+    expect(layout.frameMetrics).not.toBeNull();
+    expect(layout.frameMetrics!.bodyWidth / layout.frameMetrics!.bodyHeight).toBeCloseTo(70.6 / 146.6, 8);
   });
 });

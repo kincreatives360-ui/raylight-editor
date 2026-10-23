@@ -366,9 +366,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 nextPosY = initialPosY - (nextH - initialH) / 2;
             }
 
-            if (layer.kind === 'image' && layer.deviceFrame?.enabled && isFixedDeviceFrame(layer.deviceFrame)) {
+            const isMedia = layer.kind === 'image' || layer.kind === 'video';
+            const mediaDeviceFrame = isMedia ? (layer as ImageLayer | VideoLayer).deviceFrame : undefined;
+            if (mediaDeviceFrame?.enabled && isFixedDeviceFrame(mediaDeviceFrame)) {
                 const initialSize = { width: initialW, height: initialH };
-                const visibleSize = getDevicePlacementSize(initialSize, layer.deviceFrame, aspect, primaryEval.scale);
+                const visibleSize = getDevicePlacementSize(initialSize, mediaDeviceFrame, aspect, primaryEval.scale);
                 const resized = resizeDeviceFromHandle(initialSize, visibleSize, dir, dxFrac, dyFrac, {
                     // Body handles now follow screen-space bounds, including mirrored devices.
                     x: 1, y: 1,

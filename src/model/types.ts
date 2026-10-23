@@ -344,6 +344,7 @@ export interface VideoLayer extends LayerBase {
   assetId: string;
   size: Size2D;
   cornerRadius: number;
+  deviceFrame?: DeviceFrameSettings;
   crop?: { x: number; y: number; width: number; height: number };
   stroke?: { color: string; width: number; opacity: number };
 }

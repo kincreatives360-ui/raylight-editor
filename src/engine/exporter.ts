@@ -59,7 +59,10 @@ function downloadBlob(blob: Blob, filename: string): void {
 
 function projectUsesDeviceFrames(project: Project): boolean {
     return project.shots.some((shot) =>
-        shot.layers.some((layer) => layer.kind === 'image' && layer.deviceFrame?.enabled)
+        shot.layers.some((layer) =>
+            (layer.kind === 'image' || layer.kind === 'video') &&
+            (layer as { deviceFrame?: { enabled?: boolean } }).deviceFrame?.enabled
+        )
     );
 }
 

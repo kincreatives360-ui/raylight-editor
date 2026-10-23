@@ -1,11 +1,11 @@
 import React from 'react';
 import { ColorField } from '../ColorPicker';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import type { DeviceFrameSettings, ImageLayer } from '../../../model/types';
+import type { DeviceFrameSettings, ImageLayer, VideoLayer } from '../../../model/types';
 import { DEFAULT_DEVICE_FRAME_SETTINGS, IPHONE_15_PRO, isFixedDeviceFrame, resolveDeviceFrameSettings, upgradeDeviceFrameSettings } from '../../../model/deviceFrame';
 
 interface DeviceFrameSectionProps {
-  layer: ImageLayer;
+  layer: ImageLayer | VideoLayer;
   onChange: (settings: DeviceFrameSettings) => void;
   projectAspect: number;
 }
