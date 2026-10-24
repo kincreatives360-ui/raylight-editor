@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
@@ -14,15 +14,36 @@ import { ViewportCamera } from './ViewportCamera';
 import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
+import { getViewportPixelRatio } from './viewportResolution';
 
 
 interface ViewportCanvasProps {
     project: Project;
+    canvasZoom: number;
+    frameWidth: number;
+    frameHeight: number;
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     onPointerMissed?: () => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
+}
+
+function useDevicePixelRatio() {
+    const [deviceDpr, setDeviceDpr] = useState(() => window.devicePixelRatio || 1);
+
+    useEffect(() => {
+        const query = window.matchMedia(`(resolution: ${deviceDpr}dppx)`);
+        const update = () => setDeviceDpr(window.devicePixelRatio || 1);
+        query.addEventListener('change', update);
+        window.addEventListener('resize', update);
+        return () => {
+            query.removeEventListener('change', update);
+            window.removeEventListener('resize', update);
+        };
+    }, [deviceDpr]);
+
+    return deviceDpr;
 }
 
 const StudioEnvironment: React.FC = () => {
@@ -152,6 +173,9 @@ class WebGLErrorBoundary extends React.Component<{ children: React.ReactNode }, 
 
 export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     project,
+    canvasZoom,
+    frameWidth,
+    frameHeight,
     frame,
     selectedLayerIds,
     onSelectLayer,
@@ -163,6 +187,9 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const activeBackground = resolveShotBackground(project, activeShot);
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
+    const deviceDpr = useDevicePixelRatio();
+    const [maxTextureSize, setMaxTextureSize] = useState(4096);
+    const dpr = getViewportPixelRatio(frameWidth, frameHeight, canvasZoom, deviceDpr, maxTextureSize);
 
     return (
         <div className="w-full h-full relative overflow-hidden select-none">
@@ -172,7 +199,9 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     shadows
                     flat
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
-                    dpr={[1, 2]}
+                    dpr={dpr}
+                    resize={{ offsetSize: true }}
+                    onCreated={({ gl }) => setMaxTextureSize(gl.capabilities.maxTextureSize)}
                     gl={{
                         antialias: true,
                         alpha: true,
@@ -222,6 +251,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             key={evalLayer.id}
                             evalLayer={evalLayer}
                             project={project}
+                            evaluatedCamera={frame.camera}
                             onSelect={onSelectLayer}
                         />
                     ))}

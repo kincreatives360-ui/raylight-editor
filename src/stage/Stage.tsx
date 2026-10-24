@@ -1177,6 +1177,9 @@ const StageComponent: React.FC<StageProps> = ({
                     <div className="absolute inset-0 overflow-hidden pointer-events-auto border border-black/80 shadow-2xl">
                         <ViewportCanvas
                             project={project}
+                            canvasZoom={canvasZoom}
+                            frameWidth={frameWidth}
+                            frameHeight={frameHeight}
                             frame={effectiveViewportFrame}
                             selectedLayerIds={selectedLayerIds}
                             onSelectLayer={handleSelectLayerWithDeepSelect}

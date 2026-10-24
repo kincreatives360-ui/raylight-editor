@@ -5,6 +5,7 @@ import { DeviceOpacityGroup } from './DeviceOpacityGroup';
 import { drawMediaFrame, getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';
 import { applyTextureMask, drawMediaShimmer } from './mediaDecorations';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
+import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 import type {
     Project,
     TextLayer,
@@ -12,7 +13,7 @@ import type {
     ImageLayer,
     VideoLayer,
 } from '../../model/types';
-import { getLayerRenderLayout } from './cameraMath';
+import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout } from './cameraMath';
 import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z } from '../../model/deviceFrame';
@@ -21,6 +22,7 @@ import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
     project: Project;
+    evaluatedCamera: EvaluatedCamera;
     onSelect: (layerId: string, multiSelect?: boolean) => void;
 }
 
@@ -84,11 +86,12 @@ function drawStudioPlaceholder(
     w: number,
     h: number,
     layerName: string,
-    blurPx: number = 0
+    blurPx: number = 0,
+    pixelRatio: number = 1
 ): void {
     ctx.save();
     if (blurPx > 0) {
-        ctx.filter = `blur(${Math.min(24, blurPx)}px)`;
+        ctx.filter = `blur(${Math.min(24, blurPx) * pixelRatio}px)`;
     }
 
     const bgGrad = ctx.createLinearGradient(0, 0, w, h);
@@ -135,10 +138,12 @@ function drawStudioPlaceholder(
 export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     evalLayer,
     project,
+    evaluatedCamera,
     onSelect,
 }) => {
     const { layer } = evalLayer;
-    const invalidate = useThree(state => state.invalidate);
+    const { invalidate, gl, size } = useThree();
+    const dpr = useThree(state => state.viewport.dpr);
 
     const aspect =
         project.aspectRatio === '16:9'
@@ -174,6 +179,21 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
+    const cameraPose = evaluateCameraPose(evaluatedCamera, {
+        position: project.defaultCamera?.position ?? { x: 0, y: 0, z: cameraZ },
+        rotation: project.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+        focalLength,
+    }, aspect);
+    const corners = getLayerProjectedCorners(evalLayer, size.width * dpr, size.height * dpr,
+        aspect, cameraPose, cameraZ, focalLength, 'screen');
+    const edgeLength = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
+    const { width: textureW, height: textureH } = getMediaTextureSize(meshW, meshH, {
+        pixelWidth: Math.max(edgeLength(corners.pNW, corners.pNE), edgeLength(corners.pSW, corners.pSE)),
+        pixelHeight: Math.max(edgeLength(corners.pNW, corners.pSW), edgeLength(corners.pNE, corners.pSE)),
+        maxTextureSize: gl.capabilities.maxTextureSize,
+    });
+    const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
+    const texturePixelRatio = textureW / canvasW;
 
     const isVideoAsset = useMemo(() => {
         if (layer.kind === 'video') return true;
@@ -243,23 +263,25 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
-        const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
-
         const canvas = document.createElement('canvas');
-        canvas.width = canvasW;
-        canvas.height = canvasH;
+        canvas.width = textureW;
+        canvas.height = textureH;
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
+        // Keep authored layout, padding and strokes in their original coordinate space.
+        ctx.scale(textureW / canvasW, textureH / canvasH);
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
 
         if (layer.kind === 'image' || layer.kind === 'video') {
             const imgL = layer as ImageLayer | VideoLayer;
-            const options = { crop: imgL.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx };
+            const options = { crop: imgL.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx, pixelRatio: texturePixelRatio };
             if (isVideoAsset && videoElement) {
                 drawMediaFrame(ctx, videoElement, videoElement.readyState >= 2 ? videoElement.videoWidth : 0, videoElement.videoHeight, canvasW, canvasH, options);
             } else if (loadedImg) {
                 drawMediaFrame(ctx, loadedImg, loadedImg.naturalWidth, loadedImg.naturalHeight, canvasW, canvasH, options);
             } else {
-                drawStudioPlaceholder(ctx, canvasW, canvasH, imgL.name, totalBlurPx);
+                drawStudioPlaceholder(ctx, canvasW, canvasH, imgL.name, totalBlurPx, texturePixelRatio);
             }
 
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
@@ -269,7 +291,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
             ctx.save();
             if (totalBlurPx > 0) {
-                ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
+                ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5) * texturePixelRatio}px)`;
             }
 
             const relFontRatio =
@@ -308,7 +330,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
             ctx.save();
             if (totalBlurPx > 0) {
-                ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5)}px)`;
+                ctx.filter = `blur(${Math.min(28, totalBlurPx * 1.5) * texturePixelRatio}px)`;
             }
 
             if (shapeL.fill.kind === 'solid') {
@@ -433,8 +455,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
+        tex.generateMipmaps = !isVideoAsset;
+        tex.minFilter = isVideoAsset ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
         tex.magFilter = THREE.LinearFilter;
+        tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
         tex.needsUpdate = true;
         return tex;
     }, [
@@ -444,8 +468,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         isVideoAsset,
         videoElement,
         totalBlurPx,
-        meshW,
-        meshH,
+        canvasW,
+        canvasH,
+        textureW,
+        textureH,
+        texturePixelRatio,
+        gl,
         evalLayer.shimmerProgress,
         evalLayer.textContentOverride,
         evalLayer.size.height,
@@ -471,11 +499,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const redraw = () => {
             if (videoElement.readyState < 2) return;
             const media = layer as ImageLayer | VideoLayer;
-            drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvas.width, canvas.height, {
-                crop: media.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx,
+            drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvasW, canvasH, {
+                crop: media.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx, pixelRatio: texturePixelRatio,
             });
-            drawMediaShimmer(ctx, canvas.width, canvas.height, evalLayer.shimmerProgress);
-            applyTextureMask(ctx, canvas.width, canvas.height, layer, project);
+            drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
+            applyTextureMask(ctx, canvasW, canvasH, layer, project);
             markTextureUpdated(texture);
             invalidate();
         };
@@ -483,7 +511,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const events = ['loadeddata', 'seeked', 'timeupdate'] as const;
         for (const event of events) videoElement.addEventListener(event, redraw);
         return () => { for (const event of events) videoElement.removeEventListener(event, redraw); };
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, evalLayer.shimmerProgress, invalidate]);
+    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, evalLayer.shimmerProgress, invalidate, canvasW, canvasH, texturePixelRatio]);
 
     const cornerRadiusWorld = useMemo(() => {
         if (deviceFrameMetrics) return deviceFrameMetrics.cornerRadius;

@@ -19,6 +19,46 @@ describe('device media surfaces', () => {
     expect(getMediaTextureSize(1, 0.1)).toEqual({ width: 1024, height: 102 });
   });
 
+  it('retains detail when a landscape screenshot fills a high-density viewport', () => {
+    expect(getMediaTextureSize(16, 9, { pixelWidth: 1920, pixelHeight: 1080, maxTextureSize: 8192 }))
+      .toEqual({ width: 4096, height: 2304 });
+  });
+
+  it('increases resolution when text grows on screen without changing its proportions', () => {
+    const baseline = getMediaTextureSize(10, 1, { pixelWidth: 400, pixelHeight: 40, maxTextureSize: 4096 });
+    const zoomed = getMediaTextureSize(10, 1, { pixelWidth: 1200, pixelHeight: 120, maxTextureSize: 4096 });
+    expect(baseline).toEqual({ width: 1024, height: 102 });
+    expect(zoomed).toEqual({ width: 4096, height: 410 });
+  });
+
+  it('uses both projected axes when a layer is stretched or viewed at an angle', () => {
+    expect(getMediaTextureSize(1, 2, { pixelWidth: 700, pixelHeight: 500, maxTextureSize: 4096 }))
+      .toEqual({ width: 2048, height: 4096 });
+  });
+
+  it('bounds allocations at the GPU limit even for extreme camera close-ups', () => {
+    expect(getMediaTextureSize(16, 9, { pixelWidth: 100000, pixelHeight: 56250, maxTextureSize: 2048 }))
+      .toEqual({ width: 2048, height: 1152 });
+  });
+
+  it('keeps texture sizes stable across small camera movements', () => {
+    expect(getMediaTextureSize(2, 1, { pixelWidth: 600, pixelHeight: 300, maxTextureSize: 4096 }))
+      .toEqual(getMediaTextureSize(2, 1, { pixelWidth: 610, pixelHeight: 305, maxTextureSize: 4096 }));
+  });
+
+  it('keeps allocations finite when a projected corner crosses the camera plane', () => {
+    const result = getMediaTextureSize(2, 1, { pixelWidth: NaN, pixelHeight: Infinity, maxTextureSize: 4096 });
+    expect(result).toEqual({ width: 4096, height: 2048 });
+  });
+
+  it('preserves authored blur when the backing canvas is supersampled', () => {
+    const ctx = context();
+    drawMediaFrame(ctx as unknown as CanvasRenderingContext2D, {} as CanvasImageSource, 400, 200, 100, 50, {
+      fit: 'stretch', blurPx: 2, pixelRatio: 4,
+    });
+    expect(ctx.filter).toBe('blur(12px)');
+  });
+
   it.each(['contain', 'cover', 'stretch'] as const)('fills the display behind transparent media using %s', fit => {
     const ctx = context();
     const source = {} as CanvasImageSource;

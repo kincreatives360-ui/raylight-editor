@@ -147,11 +147,13 @@ const CinematicEffectsShader = {
 
 export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects }) => {
     const { gl, scene, camera, size } = useThree();
+    const dpr = useThree(state => state.viewport.dpr);
     const composerRef = useRef<EffectComposer | null>(null);
     const shaderPassRef = useRef<ShaderPass | null>(null);
     // Initialize or resize EffectComposer
     useLayoutEffect(() => {
         const composer = new EffectComposer(gl);
+        composer.setPixelRatio(dpr);
         composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(4, gl.capabilities.maxSamples);
         composer.setSize(size.width, size.height);
 
@@ -171,7 +173,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             composerRef.current = null;
             shaderPassRef.current = null;
         };
-    }, [gl, scene, camera, size.width, size.height]);
+    }, [gl, scene, camera, size.width, size.height, dpr]);
 
     // Update uniforms from evaluated effects state
     useLayoutEffect(() => {
@@ -181,7 +183,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const s = effects.state;
         const u = pass.uniforms;
 
-        u.uResolution.value.set(size.width, size.height);
+        u.uResolution.value.set(size.width * dpr, size.height * dpr);
 
         // Vignette
         u.uVignetteEnabled.value = s.vignette?.enabled ? 1 : 0;
@@ -209,7 +211,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         u.uExposure.value = s.colorGrade?.exposure ?? 0.0;
         u.uContrast.value = s.colorGrade?.contrast ?? 1.0;
         u.uSaturation.value = s.colorGrade?.saturation ?? 1.0;
-    }, [effects, size.width, size.height]);
+    }, [effects, size.width, size.height, dpr]);
 
     // Keep glass blending in the same linear space at every device opacity.
     useFrame((_state, delta) => {

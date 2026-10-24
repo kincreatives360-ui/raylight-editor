@@ -1,11 +1,24 @@
 import type { Layer, ScreenFit } from '../../model/types';
 import { getImageFitRect } from '../../model/deviceFrame';
 
-export function getMediaTextureSize(width: number, height: number) {
+export function getMediaTextureSize(width: number, height: number, projected?: {
+  pixelWidth: number;
+  pixelHeight: number;
+  maxTextureSize: number;
+}) {
   const aspect = Math.max(0.0001, width) / Math.max(0.0001, height);
+  // Two texels per display pixel keep rasterized glyphs and masks sharp after filtering.
+  const required = projected ? 2 * Math.max(
+    projected.pixelWidth * Math.max(1, 1 / aspect),
+    projected.pixelHeight * Math.max(1, aspect),
+  ) : 1024;
+  const limit = Math.max(1, Math.min(4096, projected?.maxTextureSize ?? 4096));
+  const longEdge = Number.isFinite(required)
+    ? Math.min(limit, 2 ** Math.ceil(Math.log2(Math.max(1024, required))))
+    : limit;
   return aspect >= 1
-    ? { width: 1024, height: Math.max(1, Math.round(1024 / aspect)) }
-    : { width: Math.max(1, Math.round(1024 * aspect)), height: 1024 };
+    ? { width: longEdge, height: Math.max(1, Math.round(longEdge / aspect)) }
+    : { width: Math.max(1, Math.round(longEdge * aspect)), height: longEdge };
 }
 
 export function drawMediaFrame(
@@ -20,6 +33,7 @@ export function drawMediaFrame(
     crop?: { x: number; y: number; width: number; height: number };
     fillColor?: string;
     blurPx?: number;
+    pixelRatio?: number;
   }
 ): void {
   ctx.save();
@@ -37,7 +51,7 @@ export function drawMediaFrame(
     const cropHeight = Math.min(clamp(crop.height) * naturalHeight, naturalHeight - y);
     if (cropWidth > 0 && cropHeight > 0) {
       const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit);
-      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5)}px)`;
+      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1)}px)`;
       ctx.drawImage(source, x + rect.sourceX, y + rect.sourceY, rect.sourceWidth, rect.sourceHeight,
         rect.targetX, rect.targetY, rect.targetWidth, rect.targetHeight);
     }
