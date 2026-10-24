@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DEVICE_FRAME_SETTINGS, getDeviceFrameMetrics } from '../../model/deviceFrame';
+import { DEFAULT_DEVICE_FRAME_SETTINGS, getDeviceFrameMetrics, SCREEN_PLANE_Z } from '../../model/deviceFrame';
 import { getPhoneLayout, getPhoneLocalBounds } from './phoneLayout';
 import { getLayerProjectedCorners } from './cameraMath';
 import { createDefaultImageLayer, createDefaultProject } from '../../model/defaults';
@@ -86,9 +86,13 @@ describe('physical device selection bounds', () => {
     const macMetrics = getDeviceFrameMetrics(0.8, 0.5, macbookSettings);
     const macBounds = getPhoneLocalBounds(macMetrics, macbookSettings);
 
-    // Hinge is at -bodyHeight / 2; base projects downwards and backwards
+    // Hinge is at -bodyHeight / 2; base projects downwards and forwards in front of lid
     expect(macBounds.min.y).toBeLessThan(-macMetrics.bodyHeight / 2);
     expect(macBounds.min.z).toBeLessThan(-macMetrics.bodyDepth);
+    const baseLength = macMetrics.bodyHeight * 0.94;
+    const lidAngleRad = (110 * Math.PI) / 180;
+    expect(macBounds.max.z).toBeCloseTo(SCREEN_PLANE_Z + baseLength * Math.sin(lidAngleRad), 5);
+    expect(macBounds.min.y).toBeCloseTo(-macMetrics.bodyHeight / 2 + baseLength * Math.cos(lidAngleRad), 5);
 
     const displaySettings = { ...settings, deviceId: 'studio-display' };
     const displayMetrics = getDeviceFrameMetrics(1.6, 0.9, displaySettings);

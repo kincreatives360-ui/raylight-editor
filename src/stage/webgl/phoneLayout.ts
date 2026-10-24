@@ -40,11 +40,11 @@ export function getPhoneLocalBounds(metrics: DeviceFrameMetrics, settings: Devic
   const layout = getPhoneLayout(metrics, settings);
   if (isFixedDeviceFrame(settings) && settings.deviceId === 'macbook-pro') {
     const lidAngleRad = (settings.lidAngle ?? 110) * (Math.PI / 180);
-    const baseLength = metrics.bodyHeight * 0.98;
+    const baseLength = metrics.bodyHeight * 0.94;
     const hingeY = -metrics.bodyHeight / 2;
     // Base projects forward (+Z) and down (-Y) from the hinge
-    const baseDepthZ = baseLength * Math.sin(lidAngleRad - Math.PI / 2);
-    const baseExtY = baseLength * Math.cos(lidAngleRad - Math.PI / 2);
+    const baseDepthZ = baseLength * Math.sin(lidAngleRad);
+    const baseExtY = -baseLength * Math.cos(lidAngleRad);
     return {
       min: {
         x: -metrics.bodyWidth / 2,

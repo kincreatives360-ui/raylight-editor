@@ -323,7 +323,7 @@ export function MacBookProFrame({
         />
 
         {/* Pivoting Lower Base Assembly */}
-        <group rotation={[basePivotAngleRad, 0, 0]}>
+        <group rotation={[-basePivotAngleRad, 0, 0]}>
           {/* Base Unibody: Extends forward along +Y in local hinge space */}
           <mesh
             name="macbook-base-chassis"
