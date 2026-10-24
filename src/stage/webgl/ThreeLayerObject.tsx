@@ -537,6 +537,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 <PhoneDeviceFrame
                     metrics={deviceFrameMetrics}
                     settings={deviceFrameSettings}
+                    rotation={rot}
                 />
             )}
     </>;

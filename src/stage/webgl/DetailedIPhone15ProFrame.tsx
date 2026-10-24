@@ -18,8 +18,18 @@ import {
 import { createDeviceShadowTexture, createIPhone15ProMaterials } from './iphone15ProMaterials';
 import { useDisposable } from './useDisposable';
 
-export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: DeviceFrameMetrics; settings: DeviceFrameSettings }) {
+export function DetailedIPhone15ProFrame({
+  metrics,
+  settings,
+  rotation,
+}: {
+  metrics: DeviceFrameMetrics;
+  settings: DeviceFrameSettings;
+  rotation?: { x: number; y: number; z: number };
+}) {
   const scaleFactor = Math.max(0.000001, Number.isFinite(metrics.bodyHeight) ? metrics.bodyHeight : 1);
+  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
+  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
 
   const { cutoutStyle, cutoutWidth, cutoutHeight } = settings;
   // Unit cutout layout only recomputes when cutout style/dimensions change
@@ -209,11 +219,11 @@ export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: Devic
     () => new THREE.MeshBasicMaterial({
       map: shadowTexture,
       transparent: true,
-      opacity: settings.shadowOpacity,
+      opacity: effectiveShadowOpacity,
       depthWrite: false,
-      side: THREE.DoubleSide,
+      side: THREE.FrontSide,
     }),
-    [settings.shadowOpacity, shadowTexture]
+    [effectiveShadowOpacity, shadowTexture]
   );
 
   useDisposable(bodyGeometry);
@@ -251,7 +261,7 @@ export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: Devic
       position={[0, 0, SCREEN_PLANE_Z]}
       scale={[scaleFactor, scaleFactor, scaleFactor]}
     >
-      {settings.shadowEnabled && (
+      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
         <mesh
           name="iphone-device-shadow"
           geometry={shadowGeometry}
@@ -414,7 +424,7 @@ export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: Devic
               BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.flash.center.y,
               BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.flash.z - SCREEN_PLANE_Z,
             ]}
-            rotation={[Math.PI / 2, 0, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
           />
           <mesh
             name="iphone-camera-lidar"
@@ -425,7 +435,7 @@ export function DetailedIPhone15ProFrame({ metrics, settings }: { metrics: Devic
               BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.lidar.center.y,
               BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.lidar.z - SCREEN_PLANE_Z,
             ]}
-            rotation={[Math.PI / 2, 0, 0]}
+            rotation={[-Math.PI / 2, 0, 0]}
           />
         </group>
       )}

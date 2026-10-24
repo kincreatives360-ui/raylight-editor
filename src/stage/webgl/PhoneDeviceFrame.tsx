@@ -7,9 +7,10 @@ import type { DeviceFrameSettings } from '../../model/types';
 import { isFixedDeviceFrame, type DeviceFrameMetrics } from '../../model/deviceFrame';
 import { DetailedIPhone15ProFrame } from './DetailedIPhone15ProFrame';
 
-interface PhoneDeviceFrameProps {
+export interface PhoneDeviceFrameProps {
   metrics: DeviceFrameMetrics;
   settings: DeviceFrameSettings;
+  rotation?: { x: number; y: number; z: number };
 }
 
 function createReflectionTexture(gloss: number, reflection: number, tint: string): THREE.CanvasTexture {
@@ -66,7 +67,9 @@ export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props =>
     ? <DetailedIPhone15ProFrame {...props} />
     : <LegacyPhoneDeviceFrame {...props} />;
 
-const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, settings }) => {
+const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, settings, rotation }) => {
+  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
+  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
   const { fixed, safeWidth, safeHeight, depth, shortSide, proud, bezelDepth, bodyZ,
     bezelZ, glassZ, reflectionZ, cutoutZ, screenOverlap, cameraX, cameraY, cameraZ,
     lensRadius, buttonWidth, buttonHeight, buttonDepth, buttonZ } = getPhoneLayout(metrics, settings);
@@ -149,10 +152,10 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
   const shadowMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     map: shadowTexture,
     transparent: true,
-    opacity: settings.shadowOpacity,
+    opacity: effectiveShadowOpacity,
     depthWrite: false,
-    side: THREE.DoubleSide,
-  }), [shadowTexture, settings.shadowOpacity]);
+    side: THREE.FrontSide,
+  }), [shadowTexture, effectiveShadowOpacity]);
   const cameraBumpGeometry = useMemo(
     () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 10),
     [safeWidth]
@@ -210,7 +213,7 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
 
   return (
     <group name="iphone-device-frame">
-      {settings.shadowEnabled && (
+      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
         <mesh
           geometry={shadowGeometry}
           material={shadowMaterial}

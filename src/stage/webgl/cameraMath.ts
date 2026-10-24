@@ -231,6 +231,42 @@ export function getLayerProjectedCorners(
 
     if (bounds === 'body' && frameMetrics && deviceSettings) {
         const volume = getPhoneLocalBounds(frameMetrics, deviceSettings);
+        const rotX = evalLayer.rotation.x;
+        const rotY = evalLayer.rotation.y;
+        const isPlanar = Math.abs(rotX) < 0.001 && Math.abs(rotY) < 0.001;
+
+        if (isPlanar) {
+            const frontZ = SCREEN_PLANE_Z * (scale.z || 1);
+            const pNW = projectLocalPoint(volume.min.x * scale.x, volume.max.y * scale.y, frontZ);
+            const pNE = projectLocalPoint(volume.max.x * scale.x, volume.max.y * scale.y, frontZ);
+            const pSE = projectLocalPoint(volume.max.x * scale.x, volume.min.y * scale.y, frontZ);
+            const pSW = projectLocalPoint(volume.min.x * scale.x, volume.min.y * scale.y, frontZ);
+            const pN = { x: (pNW.x + pNE.x) / 2, y: (pNW.y + pNE.y) / 2 };
+            const pE = { x: (pNE.x + pSE.x) / 2, y: (pNE.y + pSE.y) / 2 };
+            const pS = { x: (pSW.x + pSE.x) / 2, y: (pSW.y + pSE.y) / 2 };
+            const pW = { x: (pNW.x + pSW.x) / 2, y: (pNW.y + pSW.y) / 2 };
+            const pCenter = projectLocalPoint(0, 0, frontZ);
+
+            const topEdgeDx = pNE.x - pNW.x;
+            const topEdgeDy = pNE.y - pNW.y;
+            const edgeLen = Math.hypot(topEdgeDx, topEdgeDy) || 1;
+            const perpX = -topEdgeDy / edgeLen;
+            const perpY = topEdgeDx / edgeLen;
+            const rotDist = 28;
+            const pRot = {
+                x: pN.x + perpX * rotDist,
+                y: pN.y + perpY * rotDist,
+            };
+
+            return {
+                pNW, pNE, pSE, pSW,
+                pN, pE, pS, pW,
+                pCenter,
+                pRot,
+                corners: [pNW, pNE, pSE, pSW],
+            };
+        }
+
         const projected = [];
         for (const x of [volume.min.x, volume.max.x])
             for (const y of [volume.min.y, volume.max.y])

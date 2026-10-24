@@ -54,4 +54,18 @@ describe('iPhone 15 Pro material policy', () => {
     expect(texture.image.height).toBeGreaterThan(0);
     texture.dispose();
   });
+
+  it('attenuates shadow opacity to zero when rotated away from the camera', () => {
+    const shadowOpacity = 0.6;
+    const calculateEffectiveOpacity = (rotX = 0, rotY = 0) => {
+      const facingCamera = Math.max(0, Math.cos(rotX) * Math.cos(rotY));
+      return Math.max(0, Math.min(1, shadowOpacity * facingCamera));
+    };
+
+    expect(calculateEffectiveOpacity(0, 0)).toBeCloseTo(0.6, 5);
+    expect(calculateEffectiveOpacity(Math.PI / 2, 0)).toBeCloseTo(0, 5);
+    expect(calculateEffectiveOpacity(0, Math.PI / 2)).toBeCloseTo(0, 5);
+    expect(calculateEffectiveOpacity(Math.PI, 0)).toBeCloseTo(0, 5);
+    expect(calculateEffectiveOpacity(Math.PI / 4, 0)).toBeCloseTo(0.6 * Math.cos(Math.PI / 4), 5);
+  });
 });

@@ -57,4 +57,27 @@ describe('physical device selection bounds', () => {
     expect(getPhoneLocalBounds(thick, legacy).min.z).toBeLessThanOrEqual(actualRear + 0.000001);
     geometry.dispose();
   });
+
+  it('rotates selection handles synchronously with the device body under planar roll', () => {
+    const project = createDefaultProject();
+    project.shots[0].layers = [createDefaultImageLayer({ deviceFrame: settings, rotation: { x: 0, y: 0, z: Math.PI / 2 } })];
+    const ev = evaluateProjectAtTime(project, 1500).layers[0];
+    const projected = getLayerProjectedCorners(ev, 1600, 900, 16 / 9);
+
+    expect(projected.corners).toHaveLength(4);
+    // At 90 deg roll, the rotation handle pRot should be oriented perpendicular to the rotated top edge (along screen X)
+    expect(Math.abs(projected.pRot.y - projected.pN.y)).toBeLessThan(5);
+    expect(Math.abs(projected.pRot.x - projected.pN.x)).toBeGreaterThan(20);
+  });
+
+  it('produces convex hull bounding corners under 3D tilt', () => {
+    const project = createDefaultProject();
+    project.shots[0].layers = [createDefaultImageLayer({ deviceFrame: settings, rotation: { x: 0.5, y: 0.5, z: 0 } })];
+    const ev = evaluateProjectAtTime(project, 1500).layers[0];
+    const projected = getLayerProjectedCorners(ev, 1600, 900, 16 / 9);
+
+    expect(projected.corners.length).toBeGreaterThan(4);
+    expect(projected.pNW.x).toBeLessThan(projected.pNE.x);
+    expect(projected.pNW.y).toBeLessThan(projected.pSW.y);
+  });
 });

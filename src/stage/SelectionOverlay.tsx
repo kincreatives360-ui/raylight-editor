@@ -679,6 +679,17 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                             />
                         )}
 
+                        {primaryProj.corners.length > 4 && (
+                            <polygon
+                                points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
+                                fill="none"
+                                stroke={borderColor}
+                                strokeWidth="1"
+                                strokeDasharray="3 3"
+                                strokeOpacity="0.45"
+                            />
+                        )}
+
                         <polygon
                             points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
                             fill="var(--accent-primary, #0088ff)"
