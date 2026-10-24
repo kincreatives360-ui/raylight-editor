@@ -80,4 +80,23 @@ describe('physical device selection bounds', () => {
     expect(projected.pNW.x).toBeLessThan(projected.pNE.x);
     expect(projected.pNW.y).toBeLessThan(projected.pSW.y);
   });
+
+  it('expands 3D local bounds for MacBook Pro base chassis and Studio Display stand', () => {
+    const macbookSettings = { ...settings, deviceId: 'macbook-pro', lidAngle: 110 };
+    const macMetrics = getDeviceFrameMetrics(0.8, 0.5, macbookSettings);
+    const macBounds = getPhoneLocalBounds(macMetrics, macbookSettings);
+
+    // Hinge is at -bodyHeight / 2; base projects downwards and backwards
+    expect(macBounds.min.y).toBeLessThan(-macMetrics.bodyHeight / 2);
+    expect(macBounds.min.z).toBeLessThan(-macMetrics.bodyDepth);
+
+    const displaySettings = { ...settings, deviceId: 'studio-display' };
+    const displayMetrics = getDeviceFrameMetrics(1.6, 0.9, displaySettings);
+    const displayBounds = getPhoneLocalBounds(displayMetrics, displaySettings);
+
+    // Stand neck extends below the display panel
+    expect(displayBounds.min.y).toBeLessThan(-displayMetrics.bodyHeight / 2);
+    expect(displayBounds.min.z).toBeLessThan(-displayMetrics.bodyDepth);
+  });
 });
+

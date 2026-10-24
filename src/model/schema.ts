@@ -54,6 +54,7 @@ export const DeviceFrameSettingsSchema = z.preprocess(
   shadowOpacity: z.number().min(0).max(1),
   shadowBlur: z.number().min(0).max(1),
   shadowOffset: z.number().min(0).max(0.5),
+  lidAngle: z.number().min(0).max(180).optional(),
 }));
 
 export const GradientStopSchema = z.object({

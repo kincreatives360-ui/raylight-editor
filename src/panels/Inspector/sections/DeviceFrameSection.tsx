@@ -2,7 +2,16 @@ import React from 'react';
 import { ColorField } from '../ColorPicker';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import type { DeviceFrameSettings, ImageLayer, VideoLayer } from '../../../model/types';
-import { DEFAULT_DEVICE_FRAME_SETTINGS, IPHONE_15_PRO, isFixedDeviceFrame, resolveDeviceFrameSettings, upgradeDeviceFrameSettings } from '../../../model/deviceFrame';
+import {
+  DEFAULT_DEVICE_FRAME_SETTINGS,
+  DEVICE_FINISH_PRESETS,
+  DEVICE_SPECS,
+  getDeviceSpec,
+  IPHONE_15_PRO,
+  isFixedDeviceFrame,
+  resolveDeviceFrameSettings,
+  upgradeDeviceFrameSettings,
+} from '../../../model/deviceFrame';
 
 interface DeviceFrameSectionProps {
   layer: ImageLayer | VideoLayer;
@@ -42,7 +51,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               <p>Retains center and body height; width changes to match the phone.</p>
             </div>
           )}
-          {fixed && settings.deviceId !== IPHONE_15_PRO.id && (
+          {fixed && settings.deviceId && !DEVICE_SPECS[settings.deviceId] && (
             <p className="text-[10px] text-[#a1a1aa]">This device is unavailable. Showing {IPHONE_15_PRO.name}; the saved device ID is retained.</p>
           )}
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
@@ -50,18 +59,47 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               <span className="block">Device</span>
               <select
                 aria-label="Device model"
-                value={fixed ? 'iphone-pro' : settings.model}
-                disabled={fixed}
-                onChange={(event) => update({ model: event.target.value as DeviceFrameSettings['model'] })}
+                value={fixed ? (settings.deviceId ?? 'iphone-15-pro') : settings.model}
+                onChange={(event) => {
+                  if (fixed) {
+                    const nextId = event.target.value;
+                    const spec = getDeviceSpec(nextId);
+                    update({
+                      deviceId: nextId,
+                      cutoutStyle: spec.defaultCutout,
+                    });
+                  } else {
+                    update({ model: event.target.value as DeviceFrameSettings['model'] });
+                  }
+                }}
                 className="w-full h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff]"
               >
-                <option value="iphone-pro">{fixed ? IPHONE_15_PRO.name : 'iPhone Pro (legacy)'}</option>
-                {!fixed && <option value="iphone">iPhone (legacy)</option>}
-                {!fixed && <option value="iphone-classic">iPhone Classic (legacy)</option>}
+                {fixed ? (
+                  <>
+                    <optgroup label="Smartphones">
+                      <option value="iphone-15-pro">iPhone 15 Pro</option>
+                      <option value="samsung-galaxy">Galaxy S24 Ultra</option>
+                    </optgroup>
+                    <optgroup label="Computers & Tablets">
+                      <option value="macbook-pro">MacBook Pro</option>
+                      <option value="ipad-pro">iPad Pro</option>
+                      <option value="studio-display">Studio Display</option>
+                    </optgroup>
+                    <optgroup label="Window & UI">
+                      <option value="browser">Browser Window</option>
+                    </optgroup>
+                  </>
+                ) : (
+                  <>
+                    <option value="iphone-pro">iPhone Pro (legacy)</option>
+                    <option value="iphone">iPhone (legacy)</option>
+                    <option value="iphone-classic">iPhone Classic (legacy)</option>
+                  </>
+                )}
               </select>
             </label>
             <div className="space-y-1">
-              <span className="block text-[10px] text-[#a1a1aa]">Finish</span>
+              <span className="block text-[10px] text-[#a1a1aa]">Custom</span>
               <ColorField
                 value={settings.frameColor}
                 aria-label="Device frame color"
@@ -71,7 +109,39 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-1.5">
+          <div className="space-y-1">
+            <span className="block text-[10px] text-[#a1a1aa]">Finish presets</span>
+            <div className="flex flex-wrap gap-1">
+              {DEVICE_FINISH_PRESETS.map((preset) => {
+                const isSelected = settings.frameColor.toLowerCase() === preset.color.toLowerCase();
+                return (
+                  <button
+                    key={preset.id}
+                    type="button"
+                    title={`${preset.name} (${preset.color})`}
+                    onClick={() => update({
+                      frameColor: preset.color,
+                      frameMetalness: preset.metalness,
+                      frameRoughness: preset.roughness,
+                    })}
+                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] transition-colors border ${
+                      isSelected
+                        ? 'bg-white/15 text-white border-white/30 font-medium'
+                        : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/5 hover:border-white/20 hover:text-white'
+                    }`}
+                  >
+                    <span
+                      className="w-2.5 h-2.5 rounded-full border border-white/20 shrink-0"
+                      style={{ backgroundColor: preset.color }}
+                    />
+                    <span>{preset.name}</span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className={fixed && settings.deviceId !== 'macbook-pro' ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-2 gap-1.5'}>
             <ScrubInput
               label={fixed ? 'Size' : 'Rim scale'}
               value={Math.round((fixed ? settings.deviceScale ?? 1 : settings.scale) * 100)}
@@ -82,6 +152,18 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               onChange={(value) => update(fixed ? { deviceScale: value / 100 } : { scale: value / 100 })}
               className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
             />
+            {fixed && settings.deviceId === 'macbook-pro' && (
+              <ScrubInput
+                label="Lid angle"
+                value={Math.round(settings.lidAngle ?? 110)}
+                min={70}
+                max={140}
+                step={1}
+                unit="°"
+                onChange={(value) => update({ lidAngle: value })}
+                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
+              />
+            )}
             {!fixed && <ScrubInput
               label="Bezel"
               value={Math.round(settings.bezelWidth * 1000)}

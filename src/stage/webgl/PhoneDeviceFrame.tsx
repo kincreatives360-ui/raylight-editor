@@ -6,6 +6,13 @@ import { getPhoneLayout } from './phoneLayout';
 import type { DeviceFrameSettings } from '../../model/types';
 import { isFixedDeviceFrame, type DeviceFrameMetrics } from '../../model/deviceFrame';
 import { DetailedIPhone15ProFrame } from './DetailedIPhone15ProFrame';
+import { MacBookProFrame } from './MacBookProFrame';
+import { IPadProFrame } from './IPadProFrame';
+import { SamsungGalaxyFrame } from './SamsungGalaxyFrame';
+import { StudioDisplayFrame } from './StudioDisplayFrame';
+import { BrowserFrame } from './BrowserFrame';
+
+import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export interface PhoneDeviceFrameProps {
   metrics: DeviceFrameMetrics;
@@ -13,59 +20,28 @@ export interface PhoneDeviceFrameProps {
   rotation?: { x: number; y: number; z: number };
 }
 
-function createReflectionTexture(gloss: number, reflection: number, tint: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.CanvasTexture(canvas);
-
-  const wash = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  wash.addColorStop(0, `${tint}${Math.round(gloss * 26).toString(16).padStart(2, '0')}`);
-  wash.addColorStop(0.26, `${tint}00`);
-  wash.addColorStop(0.52, `${tint}${Math.round(reflection * 23).toString(16).padStart(2, '0')}`);
-  wash.addColorStop(0.7, `${tint}00`);
-  wash.addColorStop(1, `${tint}${Math.round(gloss * 12).toString(16).padStart(2, '0')}`);
-  ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const specular = ctx.createRadialGradient(42, 48, 1, 42, 48, 190);
-  specular.addColorStop(0, `rgba(255,255,255,${0.38 * gloss})`);
-  specular.addColorStop(0.22, `rgba(255,255,255,${0.11 * gloss})`);
-  specular.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = specular;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.generateMipmaps = true;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  return texture;
-}
-
-function createShadowTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    const gradient = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
-    gradient.addColorStop(0, 'rgba(0,0,0,0.78)');
-    gradient.addColorStop(0.35, 'rgba(0,0,0,0.38)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 128, 128);
+export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
+  if (isFixedDeviceFrame(props.settings)) {
+    const deviceId = props.settings.deviceId || 'iphone-15-pro';
+    switch (deviceId) {
+      case 'iphone-15-pro':
+        return <DetailedIPhone15ProFrame {...props} />;
+      case 'macbook-pro':
+        return <MacBookProFrame {...props} />;
+      case 'ipad-pro':
+        return <IPadProFrame {...props} />;
+      case 'samsung-galaxy':
+        return <SamsungGalaxyFrame {...props} />;
+      case 'studio-display':
+        return <StudioDisplayFrame {...props} />;
+      case 'browser':
+        return <BrowserFrame {...props} />;
+      default:
+        return <DetailedIPhone15ProFrame {...props} />;
+    }
   }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  return texture;
-}
-
-export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props =>
-  isFixedDeviceFrame(props.settings) && props.settings.deviceId === 'iphone-15-pro'
-    ? <DetailedIPhone15ProFrame {...props} />
-    : <LegacyPhoneDeviceFrame {...props} />;
+  return <LegacyPhoneDeviceFrame {...props} />;
+};
 
 const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, settings, rotation }) => {
   const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));

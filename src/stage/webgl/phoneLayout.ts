@@ -31,13 +31,49 @@ export function getPhoneLayout(metrics: DeviceFrameMetrics, settings: DeviceFram
 }
 
 export function getPhoneLocalBounds(metrics: DeviceFrameMetrics, settings: DeviceFrameSettings) {
-  if (isFixedDeviceFrame(settings) && settings.deviceId === 'iphone-15-pro') {
+  if (isFixedDeviceFrame(settings) && (settings.deviceId === 'iphone-15-pro' || !settings.deviceId)) {
     return getIPhone15ProBounds(getIPhone15ProLayout(metrics, settings), {
       includeButtons: settings.showSideButtons,
       includeCameras: settings.showRearCameras,
     });
   }
   const layout = getPhoneLayout(metrics, settings);
+  if (isFixedDeviceFrame(settings) && settings.deviceId === 'macbook-pro') {
+    const lidAngleRad = (settings.lidAngle ?? 110) * (Math.PI / 180);
+    const baseLength = metrics.bodyHeight * 0.98;
+    const hingeY = -metrics.bodyHeight / 2;
+    // Base projects forward (+Z) and down (-Y) from the hinge
+    const baseDepthZ = baseLength * Math.sin(lidAngleRad - Math.PI / 2);
+    const baseExtY = baseLength * Math.cos(lidAngleRad - Math.PI / 2);
+    return {
+      min: {
+        x: -metrics.bodyWidth / 2,
+        y: Math.min(-metrics.bodyHeight / 2, hingeY - baseExtY),
+        z: Math.min(layout.bodyZ, -metrics.bodyDepth * 1.5),
+      },
+      max: {
+        x: metrics.bodyWidth / 2,
+        y: metrics.bodyHeight / 2,
+        z: Math.max(SCREEN_PLANE_Z + layout.proud, SCREEN_PLANE_Z + baseDepthZ),
+      },
+    };
+  }
+  if (isFixedDeviceFrame(settings) && settings.deviceId === 'studio-display') {
+    const standHeight = metrics.bodyHeight * 0.35;
+    const standFootDepth = metrics.bodyWidth * 0.28;
+    return {
+      min: {
+        x: -metrics.bodyWidth / 2,
+        y: -metrics.bodyHeight / 2 - standHeight,
+        z: -standFootDepth / 2,
+      },
+      max: {
+        x: metrics.bodyWidth / 2,
+        y: metrics.bodyHeight / 2,
+        z: Math.max(SCREEN_PLANE_Z + layout.proud, standFootDepth / 2),
+      },
+    };
+  }
   const bevel = layout.fixed ? 0 : Math.min(layout.depth * 0.08, metrics.bodyCornerRadius * 0.08);
   const min = { x: -metrics.bodyWidth / 2 - bevel, y: -metrics.bodyHeight / 2 - bevel, z: layout.bodyZ - (layout.fixed ? 0 : layout.depth * 0.08) };
   const max = { x: metrics.bodyWidth / 2 + bevel, y: metrics.bodyHeight / 2 + bevel, z: SCREEN_PLANE_Z + layout.proud };

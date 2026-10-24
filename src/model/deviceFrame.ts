@@ -7,12 +7,94 @@ export const SCREEN_PLANE_Z = 0.016;
 
 // Published body dimensions and nominal display PPI: https://support.apple.com/en-bn/111829
 // Corner profiles are approximations, to be refined with the detailed hardware model.
-export const IPHONE_15_PRO = {
-  id: 'iphone-15-pro',
-  name: 'iPhone 15 Pro',
-  body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
-  screen: { width: 1179 / 460 * 25.4, height: 2556 / 460 * 25.4, cornerRadius: 9.5 },
-} as const;
+export interface DeviceSpec {
+  id: string;
+  name: string;
+  category: 'phone' | 'tablet' | 'laptop' | 'display' | 'browser';
+  body: { width: number; height: number; depth: number; cornerRadius: number };
+  screen: { width: number; height: number; cornerRadius: number };
+  defaultCutout: 'dynamic-island' | 'notch' | 'punch-hole' | 'none';
+  aspectRatio: number;
+}
+
+export const DEVICE_SPECS: Record<string, DeviceSpec> = {
+  'iphone-15-pro': {
+    id: 'iphone-15-pro',
+    name: 'iPhone 15 Pro',
+    category: 'phone',
+    body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
+    screen: { width: 1179 / 460 * 25.4, height: 2556 / 460 * 25.4, cornerRadius: 9.5 },
+    defaultCutout: 'dynamic-island',
+    aspectRatio: 1179 / 2556,
+  },
+  'ipad-pro': {
+    id: 'ipad-pro',
+    name: 'iPad Pro',
+    category: 'tablet',
+    body: { width: 178.5, height: 247.6, depth: 5.9, cornerRadius: 10.0 },
+    screen: { width: 166.5, height: 235.6, cornerRadius: 8.0 },
+    defaultCutout: 'none',
+    aspectRatio: 166.5 / 235.6,
+  },
+  'macbook-pro': {
+    id: 'macbook-pro',
+    name: 'MacBook Pro',
+    category: 'laptop',
+    body: { width: 312.6, height: 221.2, depth: 15.5, cornerRadius: 8.0 },
+    screen: { width: 298.0, height: 196.0, cornerRadius: 4.0 },
+    defaultCutout: 'notch',
+    aspectRatio: 298.0 / 196.0,
+  },
+  'samsung-galaxy': {
+    id: 'samsung-galaxy',
+    name: 'Galaxy S24 Ultra',
+    category: 'phone',
+    body: { width: 79.0, height: 162.3, depth: 8.6, cornerRadius: 3.5 },
+    screen: { width: 75.0, height: 158.0, cornerRadius: 2.0 },
+    defaultCutout: 'punch-hole',
+    aspectRatio: 75.0 / 158.0,
+  },
+  'studio-display': {
+    id: 'studio-display',
+    name: 'Studio Display',
+    category: 'display',
+    body: { width: 623.0, height: 362.0, depth: 19.0, cornerRadius: 6.0 },
+    screen: { width: 600.0, height: 339.0, cornerRadius: 2.0 },
+    defaultCutout: 'none',
+    aspectRatio: 600.0 / 339.0,
+  },
+  'browser': {
+    id: 'browser',
+    name: 'Browser Window',
+    category: 'browser',
+    body: { width: 320.0, height: 200.0, depth: 6.0, cornerRadius: 8.0 },
+    screen: { width: 320.0, height: 180.0, cornerRadius: 0.0 },
+    defaultCutout: 'none',
+    aspectRatio: 16 / 9,
+  },
+};
+
+export function getDeviceSpec(deviceId?: string): DeviceSpec {
+  return (deviceId && DEVICE_SPECS[deviceId]) || DEVICE_SPECS['iphone-15-pro'];
+}
+
+export const IPHONE_15_PRO = DEVICE_SPECS['iphone-15-pro'];
+
+export interface DeviceFinishPreset {
+  id: string;
+  name: string;
+  color: string;
+  metalness: number;
+  roughness: number;
+}
+
+export const DEVICE_FINISH_PRESETS: DeviceFinishPreset[] = [
+  { id: 'space-black', name: 'Space Black', color: '#202124', metalness: 0.85, roughness: 0.22 },
+  { id: 'titanium', name: 'Titanium', color: '#8e8a83', metalness: 0.72, roughness: 0.32 },
+  { id: 'silver', name: 'Silver', color: '#e2e4e6', metalness: 0.90, roughness: 0.18 },
+  { id: 'midnight', name: 'Midnight', color: '#1e2530', metalness: 0.80, roughness: 0.26 },
+  { id: 'black', name: 'Black', color: '#121214', metalness: 0.60, roughness: 0.40 },
+];
 
 export function isFixedDeviceFrame(settings?: Partial<DeviceFrameSettings> | null): boolean {
   return settings?.geometryVersion === 1;
@@ -80,6 +162,7 @@ export const DEFAULT_DEVICE_FRAME_SETTINGS: DeviceFrameSettings = {
   shadowOpacity: 0.38,
   shadowBlur: 0.66,
   shadowOffset: 0.04,
+  lidAngle: 110,
 };
 
 const clamp = (value: number | undefined, min: number, max: number, fallback: number): number =>
@@ -118,6 +201,7 @@ export function resolveDeviceFrameSettings(
     shadowOpacity: clamp(value.shadowOpacity, 0, 1, DEFAULT_DEVICE_FRAME_SETTINGS.shadowOpacity),
     shadowBlur: clamp(value.shadowBlur, 0, 1, DEFAULT_DEVICE_FRAME_SETTINGS.shadowBlur),
     shadowOffset: clamp(value.shadowOffset, 0, 0.5, DEFAULT_DEVICE_FRAME_SETTINGS.shadowOffset),
+    lidAngle: clamp(value.lidAngle, 60, 150, 110),
   };
 }
 
@@ -156,18 +240,17 @@ export function getDeviceFrameMetrics(
   settings: DeviceFrameSettings
 ): DeviceFrameMetrics {
   if (isFixedDeviceFrame(settings)) {
-    // Height is the placement anchor; source aspect and legacy rim controls cannot deform hardware.
-    // Unknown IDs retain their saved identity but use the only supported specification for now.
-    const unit = Math.max(0.001, Math.abs(screenHeight)) * clamp(settings.deviceScale, 0.65, 2, 1) * (settings.legacyHeightCompensation ?? 1) / IPHONE_15_PRO.body.height;
+    const spec = getDeviceSpec(settings.deviceId);
+    const unit = Math.max(0.001, Math.abs(screenHeight)) * clamp(settings.deviceScale, 0.65, 2, 1) * (settings.legacyHeightCompensation ?? 1) / spec.body.height;
     return {
-      bodyWidth: IPHONE_15_PRO.body.width * unit,
-      bodyHeight: IPHONE_15_PRO.body.height * unit,
-      bodyDepth: IPHONE_15_PRO.body.depth * unit,
-      bodyCornerRadius: IPHONE_15_PRO.body.cornerRadius * unit,
-      screenWidth: IPHONE_15_PRO.screen.width * unit,
-      screenHeight: IPHONE_15_PRO.screen.height * unit,
-      cornerRadius: IPHONE_15_PRO.screen.cornerRadius * unit,
-      bezel: (IPHONE_15_PRO.body.width - IPHONE_15_PRO.screen.width) * unit / 2,
+      bodyWidth: spec.body.width * unit,
+      bodyHeight: spec.body.height * unit,
+      bodyDepth: spec.body.depth * unit,
+      bodyCornerRadius: spec.body.cornerRadius * unit,
+      screenWidth: spec.screen.width * unit,
+      screenHeight: spec.screen.height * unit,
+      cornerRadius: spec.screen.cornerRadius * unit,
+      bezel: (spec.body.width - spec.screen.width) * unit / 2,
     };
   }
   const shortSide = Math.max(0.001, Math.min(Math.abs(screenWidth), Math.abs(screenHeight)));

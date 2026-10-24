@@ -71,6 +71,8 @@ export interface DeviceFrameSettings {
   shadowOpacity: number;
   shadowBlur: number;
   shadowOffset: number;
+  /** Laptop lid opening angle in degrees (e.g. 70° to 140°, default 110°). */
+  lidAngle?: number;
 }
 
 export interface GradientStop {

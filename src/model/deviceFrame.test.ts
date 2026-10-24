@@ -4,6 +4,9 @@ import {
   getImageFitRect,
   resolveDeviceFrameSettings,
   DEFAULT_DEVICE_FRAME_SETTINGS,
+  DEVICE_SPECS,
+  getDeviceSpec,
+  DEVICE_FINISH_PRESETS,
 } from './deviceFrame';
 
 describe('device frame settings', () => {
@@ -108,3 +111,61 @@ describe('fixed device geometry', () => {
     })).toEqual(normal);
   });
 });
+
+describe('procedural device models and finish presets', () => {
+  it('registers all 6 procedural devices from PRODUCT.md with valid specs', () => {
+    const expectedIds = ['iphone-15-pro', 'ipad-pro', 'macbook-pro', 'samsung-galaxy', 'studio-display', 'browser'];
+    for (const id of expectedIds) {
+      const spec = getDeviceSpec(id);
+      expect(spec.id).toBe(id);
+      expect(spec.name).toBeTruthy();
+      expect(spec.body.width).toBeGreaterThan(0);
+      expect(spec.body.height).toBeGreaterThan(0);
+      expect(spec.body.depth).toBeGreaterThan(0);
+      expect(spec.screen.width).toBeGreaterThan(0);
+      expect(spec.screen.height).toBeGreaterThan(0);
+      expect(spec.aspectRatio).toBeCloseTo(spec.screen.width / spec.screen.height);
+    }
+  });
+
+  it('falls back to iPhone 15 Pro for unknown device IDs', () => {
+    const fallback = getDeviceSpec('unknown-model-xyz');
+    expect(fallback.id).toBe('iphone-15-pro');
+  });
+
+  it('resolves and clamps lidAngle for laptops', () => {
+    const defaultSettings = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: 'macbook-pro' });
+    expect(defaultSettings.lidAngle).toBe(110);
+
+    const clampedMin = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: 'macbook-pro', lidAngle: 20 });
+    expect(clampedMin.lidAngle).toBe(60);
+
+    const clampedMax = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: 'macbook-pro', lidAngle: 200 });
+    expect(clampedMax.lidAngle).toBe(150);
+  });
+
+  it('computes proportional metrics for tablet, laptop, display, and browser models', () => {
+    for (const [id, spec] of Object.entries(DEVICE_SPECS)) {
+      const settings = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: id });
+      const metrics = getDeviceFrameMetrics(1.0, 1.0, settings);
+      expect(metrics.bodyWidth / metrics.bodyHeight).toBeCloseTo(spec.body.width / spec.body.height, 4);
+      expect(metrics.screenWidth / metrics.screenHeight).toBeCloseTo(spec.screen.width / spec.screen.height, 4);
+      expect(metrics.bodyDepth).toBeGreaterThan(0);
+    }
+  });
+
+  it('defines 5 official physical finish presets with valid material properties', () => {
+    expect(DEVICE_FINISH_PRESETS).toHaveLength(5);
+    const presetIds = DEVICE_FINISH_PRESETS.map((p) => p.id);
+    expect(presetIds).toEqual(['space-black', 'titanium', 'silver', 'midnight', 'black']);
+
+    for (const preset of DEVICE_FINISH_PRESETS) {
+      expect(preset.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+      expect(preset.metalness).toBeGreaterThanOrEqual(0);
+      expect(preset.metalness).toBeLessThanOrEqual(1);
+      expect(preset.roughness).toBeGreaterThanOrEqual(0);
+      expect(preset.roughness).toBeLessThanOrEqual(1);
+    }
+  });
+});
+
