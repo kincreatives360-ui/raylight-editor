@@ -40,7 +40,7 @@ describe('device media surfaces', () => {
     expect(getMediaTextureSize(16, 9, { pixelWidth: 100000, pixelHeight: 56250, maxTextureSize: 2048 }))
       .toEqual({ width: 2048, height: 1152 });
     expect(getMediaTextureSize(16, 9, { pixelWidth: 100000, pixelHeight: 56250, maxTextureSize: 8192 }))
-      .toEqual({ width: 8192, height: 4608 });
+      .toEqual({ width: 4096, height: 2304 });
   });
 
   it('keeps texture sizes stable across small camera movements', () => {

@@ -326,8 +326,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                                 castShadow={castShadow}
                                 shadow-bias={-0.0001}
                                 shadow-normalBias={0.02}
-                                shadow-mapSize-width={2048}
-                                shadow-mapSize-height={2048}
+                                shadow-mapSize-width={castShadow ? 1024 : undefined}
+                                shadow-mapSize-height={castShadow ? 1024 : undefined}
                                 shadow-camera-near={0.1}
                                 shadow-camera-far={Math.max(10, source.distance ?? 10)}
                             />

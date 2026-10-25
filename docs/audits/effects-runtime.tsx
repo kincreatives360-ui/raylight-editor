@@ -94,14 +94,42 @@ async function runPixels() {
   results.grainSameTimelineFrameAfterRendering = compare(first, pixels(canvas).image);
   output.pixels = results;
 }
-const captured: { filename: string; blob: Blob }[] = [];
-document.addEventListener('click', event => {
-  const anchor = event.target as HTMLAnchorElement;
+interface CapturedDownload { filename: string; blob: Blob; fetchError?: string; }
+const captured: CapturedDownload[] = [];
+
+function captureAnchorDownload(anchor: HTMLAnchorElement) {
   if (anchor?.tagName === 'A' && anchor.href.startsWith('blob:') && anchor.download && !anchor.dataset.audit) {
     const filename = anchor.download;
-    void fetch(anchor.href).then(r => r.blob()).then(blob => captured.push({ filename, blob }));
+    fetch(anchor.href)
+      .then(r => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.blob();
+      })
+      .then(blob => captured.push({ filename, blob }))
+      .catch(err => {
+        captured.push({
+          filename,
+          blob: new Blob(),
+          fetchError: err instanceof Error ? err.message : String(err),
+        });
+      });
+  }
+}
+
+document.addEventListener('click', event => {
+  const anchor = event.target as HTMLAnchorElement;
+  if (anchor?.isConnected) {
+    captureAnchorDownload(anchor);
   }
 }, true);
+
+const originalAnchorClick = HTMLAnchorElement.prototype.click;
+HTMLAnchorElement.prototype.click = function (this: HTMLAnchorElement) {
+  if (!this.isConnected) {
+    captureAnchorDownload(this);
+  }
+  return originalAnchorClick.apply(this);
+};
 async function decodeVideo(blob: Blob, filename: string) {
   const bounded = <T,>(promise: Promise<T>) => Promise.race([promise, new Promise<never>((_, reject) => setTimeout(() => reject(new Error('Video operation timed out after 20 seconds')), 20000))]);
   const dataUrl = await new Promise<string>(resolve => { const reader = new FileReader(); reader.onload = () => resolve(String(reader.result)); reader.readAsDataURL(blob); });
@@ -139,6 +167,7 @@ async function exportOne(format: 'mp4' | 'webm', device = false) {
   await runVideoExportPipeline(p, progress => { status.textContent = progress.statusText; }, { format, resolution: '720p', fps: 30, quality: 'studio', scope: 'shot', selectedShotId: p.shots[0].id, onSeekFrame: async t => { await show(p, t, 1); } });
   for (let i = 0; i < 90 && captured.length === before; i++) await frame();
   const item = captured[before]; if (!item) throw new Error('Exporter finished without a captured download');
+  if (item.fetchError) return { exportWallMs: performance.now() - started, filename: item.filename, fetchError: item.fetchError };
   const details = { exportWallMs: performance.now() - started, filename: item.filename, bytes: item.blob.size, mime: item.blob.type };
   try { return { ...details, ...await decodeVideo(item.blob, item.filename) }; }
   catch (error) { return { ...details, playbackError: String(error) }; }
@@ -181,7 +210,7 @@ button('control', async () => {
   const controls: Record<string, unknown> = {};
   for (const [mime, detached] of [['video/webm;codecs=vp9', false], ['video/webm;codecs=vp9', true], ['video/webm;codecs=vp8', false], ['video/mp4', false]] as const) {
     const key = `${mime}-${detached ? 'detached' : 'attached'}`;
-    if (!MediaRecorder.isTypeSupported(mime)) { controls[mime] = { supported: false }; continue; }
+    if (!MediaRecorder.isTypeSupported(mime)) { controls[key] = { supported: false }; continue; }
     const target = detached ? document.createElement('canvas') : reference;
     target.width = 1280; target.height = 720;
     const ctx = target.getContext('2d')!;

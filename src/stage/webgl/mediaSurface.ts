@@ -12,7 +12,7 @@ export function getMediaTextureSize(width: number, height: number, projected?: {
     projected.pixelWidth * Math.max(1, 1 / aspect),
     projected.pixelHeight * Math.max(1, aspect),
   ) : 1024;
-  const limit = Math.max(1, Math.min(8192, projected?.maxTextureSize ?? 4096));
+  const limit = Math.max(1, Math.min(4096, projected?.maxTextureSize ?? 4096));
   const longEdge = Number.isFinite(required)
     ? Math.min(limit, 2 ** Math.ceil(Math.log2(Math.max(1024, required))))
     : limit;
