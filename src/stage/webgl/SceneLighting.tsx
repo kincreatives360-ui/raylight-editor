@@ -85,9 +85,10 @@ const SpotLightItem: React.FC<{
                 angle={angle}
                 penumbra={penumbra}
                 castShadow={castShadow}
-                shadow-bias={-0.0002}
-                shadow-mapSize-width={1024}
-                shadow-mapSize-height={1024}
+                shadow-bias={-0.0001}
+                shadow-normalBias={0.02}
+                shadow-mapSize-width={2048}
+                shadow-mapSize-height={2048}
             />
         </group>
     );
@@ -281,7 +282,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                     shadow-camera-right={4}
                     shadow-camera-top={4}
                     shadow-camera-bottom={-4}
-                    shadow-bias={-0.0002}
+                    shadow-bias={-0.0001}
+                    shadow-normalBias={0.02}
                 />
             )}
 
@@ -320,7 +322,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                                 distance={source.distance ?? 10}
                                 decay={source.decay ?? 2}
                                 castShadow={castShadow}
-                                shadow-bias={-0.0002}
+                                shadow-bias={-0.0001}
+                                shadow-normalBias={0.02}
                             />
                             {showGizmos && <LightGizmo source={source} position={position} color={color} />}
                         </React.Fragment>
@@ -369,7 +372,10 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                             intensity={sourceIntensity}
                             color={color}
                             castShadow={castShadow}
-                            shadow-bias={-0.0002}
+                            shadow-bias={-0.0001}
+                            shadow-normalBias={0.02}
+                            shadow-mapSize-width={2048}
+                            shadow-mapSize-height={2048}
                         />
                         {showGizmos && <LightGizmo source={source} position={position} color={color} />}
                     </React.Fragment>

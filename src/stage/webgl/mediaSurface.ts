@@ -6,6 +6,7 @@ export function getMediaTextureSize(width: number, height: number, projected?: {
   pixelHeight: number;
   maxTextureSize: number;
 }) {
+export function getMediaTextureSize(width: number, height: number, maxDimension: number = 1024) {
   const aspect = Math.max(0.0001, width) / Math.max(0.0001, height);
   // Two texels per display pixel keep rasterized glyphs and masks sharp after filtering.
   const required = projected ? 2 * Math.max(
@@ -19,6 +20,8 @@ export function getMediaTextureSize(width: number, height: number, projected?: {
   return aspect >= 1
     ? { width: longEdge, height: Math.max(1, Math.round(longEdge / aspect)) }
     : { width: Math.max(1, Math.round(longEdge * aspect)), height: longEdge };
+    ? { width: maxDimension, height: Math.max(1, Math.round(maxDimension / aspect)) }
+    : { width: Math.max(1, Math.round(maxDimension * aspect)), height: maxDimension };
 }
 
 export function drawMediaFrame(
@@ -34,6 +37,8 @@ export function drawMediaFrame(
     fillColor?: string;
     blurPx?: number;
     pixelRatio?: number;
+    pan?: { x: number; y: number };
+    zoom?: number;
   }
 ): void {
   ctx.save();
@@ -52,6 +57,15 @@ export function drawMediaFrame(
     if (cropWidth > 0 && cropHeight > 0) {
       const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit);
       if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1)}px)`;
+      const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit, options.pan, options.zoom);
+      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5)}px)`;
+      if (typeof ctx.beginPath === 'function') {
+        ctx.beginPath();
+        if (typeof ctx.rect === 'function') ctx.rect(0, 0, width, height);
+        if (typeof ctx.clip === 'function') ctx.clip();
+      }
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
       ctx.drawImage(source, x + rect.sourceX, y + rect.sourceY, rect.sourceWidth, rect.sourceHeight,
         rect.targetX, rect.targetY, rect.targetWidth, rect.targetHeight);
     }

@@ -11,6 +11,10 @@ import { IPadProFrame } from './IPadProFrame';
 import { SamsungGalaxyFrame } from './SamsungGalaxyFrame';
 import { StudioDisplayFrame } from './StudioDisplayFrame';
 import { BrowserFrame } from './BrowserFrame';
+import { AndroidFlagshipFrame } from './AndroidFlagshipFrame';
+import { MacBookProFrame } from './MacBookProFrame';
+import { IPadProFrame } from './IPadProFrame';
+import { StudioDisplayFrame } from './StudioDisplayFrame';
 
 import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
@@ -36,6 +40,76 @@ export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
         return <StudioDisplayFrame {...props} />;
       case 'browser':
         return <BrowserFrame {...props} />;
+      default:
+        return <DetailedIPhone15ProFrame {...props} />;
+    }
+  }
+function createReflectionTexture(gloss: number, reflection: number, tint: string): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 1024;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return new THREE.CanvasTexture(canvas);
+
+  const wash = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
+  wash.addColorStop(0, `${tint}${Math.round(gloss * 14).toString(16).padStart(2, '0')}`);
+  wash.addColorStop(0.26, `${tint}00`);
+  wash.addColorStop(0.52, `${tint}${Math.round(reflection * 12).toString(16).padStart(2, '0')}`);
+  wash.addColorStop(0.7, `${tint}00`);
+  wash.addColorStop(1, `${tint}${Math.round(gloss * 8).toString(16).padStart(2, '0')}`);
+  ctx.fillStyle = wash;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const specular = ctx.createRadialGradient(84, 96, 2, 84, 96, 380);
+  specular.addColorStop(0, `rgba(255,255,255,${0.12 * gloss})`);
+  specular.addColorStop(0.22, `rgba(255,255,255,${0.03 * gloss})`);
+  specular.addColorStop(1, 'rgba(255,255,255,0)');
+  ctx.fillStyle = specular;
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
+function createShadowTexture(): THREE.CanvasTexture {
+  const canvas = document.createElement('canvas');
+  canvas.width = 512;
+  canvas.height = 512;
+  const ctx = canvas.getContext('2d');
+  if (ctx) {
+    const gradient = ctx.createRadialGradient(256, 256, 4, 256, 256, 250);
+    gradient.addColorStop(0, 'rgba(0,0,0,0.78)');
+    gradient.addColorStop(0.35, 'rgba(0,0,0,0.38)');
+    gradient.addColorStop(0.7, 'rgba(0,0,0,0.12)');
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, 512, 512);
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
+  return texture;
+}
+
+export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
+  if (isFixedDeviceFrame(props.settings)) {
+    const id = props.settings.deviceId || 'iphone-15-pro';
+    switch (id) {
+      case 'android-flagship':
+        return <AndroidFlagshipFrame {...props} />;
+      case 'macbook-pro-16':
+        return <MacBookProFrame {...props} />;
+      case 'ipad-pro-13':
+        return <IPadProFrame {...props} />;
+      case 'studio-display-27':
+        return <StudioDisplayFrame {...props} />;
+      case 'iphone-15-pro':
       default:
         return <DetailedIPhone15ProFrame {...props} />;
     }
@@ -80,12 +154,12 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
   const cutoutGeometry = useMemo(() => {
     if (settings.cutoutStyle === 'none') return null;
     if (settings.cutoutStyle === 'punch-hole') {
-      return new THREE.CircleGeometry(cutoutHeight * 0.46, 32);
+      return new THREE.CircleGeometry(cutoutHeight * 0.46, 48);
     }
     const notchWidth = settings.cutoutStyle === 'notch' ? safeWidth * 0.78 : cutoutWidth;
     const notchHeight = settings.cutoutStyle === 'notch' ? shortSide * 0.085 : cutoutHeight;
     const radius = settings.cutoutStyle === 'notch' ? notchHeight * 0.23 : cutoutRadius;
-    return new THREE.ShapeGeometry(roundedRect(notchWidth, notchHeight, radius), 10);
+    return new THREE.ShapeGeometry(roundedRect(notchWidth, notchHeight, radius), 32);
   }, [settings.cutoutStyle, cutoutWidth, cutoutHeight, cutoutRadius, shortSide, safeWidth]);
   const reflectionTexture = useMemo(
     () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
@@ -101,16 +175,17 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     side: THREE.DoubleSide,
   }), [settings.frameColor, settings.frameMetalness, settings.frameRoughness]);
   const glassMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: settings.glassTint,
+    color: '#000000',
     transparent: true,
-    opacity: settings.glassOpacity,
-    roughness: settings.glassRoughness,
+    opacity: Math.min(0.2, settings.glassOpacity * 0.4),
+    roughness: Math.max(0.02, settings.glassRoughness),
     metalness: 0,
     clearcoat: 1,
-    clearcoatRoughness: settings.glassRoughness,
+    clearcoatRoughness: Math.max(0.02, settings.glassRoughness),
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
-  }), [settings.glassTint, settings.glassOpacity, settings.glassRoughness]);
+  }), [settings.glassOpacity, settings.glassRoughness]);
   const cutoutMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#050507',
     transparent: true,
@@ -121,7 +196,8 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
   const reflectionMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     map: reflectionTexture,
     transparent: true,
-    opacity: settings.reflection,
+    opacity: Math.min(0.5, settings.reflection * 0.6),
+    blending: THREE.AdditiveBlending,
     depthWrite: false,
     side: THREE.DoubleSide,
   }), [reflectionTexture, settings.reflection]);
@@ -133,10 +209,10 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     side: THREE.FrontSide,
   }), [shadowTexture, effectiveShadowOpacity]);
   const cameraBumpGeometry = useMemo(
-    () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 10),
+    () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 32),
     [safeWidth]
   );
-  const lensGeometry = useMemo(() => new THREE.CircleGeometry(safeWidth * 0.033, 24), [safeWidth]);
+  const lensGeometry = useMemo(() => new THREE.CircleGeometry(safeWidth * 0.033, 48), [safeWidth]);
   const lensMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: '#101216',
     metalness: 0.35,
@@ -153,7 +229,7 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
   }), []);
   const buttonMaterial = shellMaterial;
   const shadowGeometry = useMemo(
-    () => new THREE.CircleGeometry(1, 48),
+    () => new THREE.CircleGeometry(1, 64),
     []
   );
   const buttonGeometry = useMemo(

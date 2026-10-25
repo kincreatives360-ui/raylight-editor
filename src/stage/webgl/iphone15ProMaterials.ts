@@ -55,19 +55,23 @@ function createReflectionTexture(opacity: number, tint: string): THREE.CanvasTex
 /** Soft local compositing shadow retained from the original device frame. */
 export function createDeviceShadowTexture(): THREE.CanvasTexture {
   const canvas = document.createElement('canvas');
-  canvas.width = 128;
-  canvas.height = 128;
+  canvas.width = 512;
+  canvas.height = 512;
   const ctx = canvas.getContext('2d');
   if (ctx) {
-    const gradient = ctx.createRadialGradient(64, 64, 2, 64, 64, 62);
+    const gradient = ctx.createRadialGradient(256, 256, 4, 256, 256, 250);
     gradient.addColorStop(0, 'rgba(0,0,0,0.78)');
     gradient.addColorStop(0.35, 'rgba(0,0,0,0.38)');
+    gradient.addColorStop(0.7, 'rgba(0,0,0,0.12)');
     gradient.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
+  texture.magFilter = THREE.LinearFilter;
   return texture;
 }
 
@@ -79,8 +83,8 @@ export function createIPhone15ProMaterials(settings: DeviceFrameSettings) {
     reflectionTexture,
     titanium: new THREE.MeshPhysicalMaterial({ color: settings.frameColor, ...policy.titanium, clearcoat: 0.34, clearcoatRoughness: 0.29, side: THREE.DoubleSide }),
     rearGlass: new THREE.MeshPhysicalMaterial({ color: settings.frameColor, ...policy.rearGlass, clearcoat: 0.75, clearcoatRoughness: 0.17, side: THREE.DoubleSide }),
-    screenGlass: new THREE.MeshPhysicalMaterial({ color: settings.glassTint, transparent: true, opacity: policy.screenGlassOpacity, roughness: Math.max(0.04, settings.glassRoughness), metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, depthWrite: false, side: THREE.DoubleSide }),
-    reflection: new THREE.MeshBasicMaterial({ map: reflectionTexture, transparent: true, opacity: 1, depthWrite: false, side: THREE.DoubleSide }),
+    screenGlass: new THREE.MeshPhysicalMaterial({ color: '#000000', transparent: true, opacity: policy.screenGlassOpacity, roughness: Math.max(0.04, settings.glassRoughness), metalness: 0, clearcoat: 1, clearcoatRoughness: 0.08, blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
+    reflection: new THREE.MeshBasicMaterial({ map: reflectionTexture, transparent: true, opacity: Math.min(0.5, settings.reflection * 0.6), blending: THREE.AdditiveBlending, depthWrite: false, side: THREE.DoubleSide }),
     island: new THREE.MeshBasicMaterial({ color: '#050507', toneMapped: false, side: THREE.DoubleSide }),
     lensRing: new THREE.MeshPhysicalMaterial({ color: '#2b2e33', metalness: 0.86, roughness: 0.19, clearcoat: 0.54, side: THREE.DoubleSide }),
     lensGlass: new THREE.MeshPhysicalMaterial({ color: '#101722', ...policy.lensGlass, clearcoat: 1, clearcoatRoughness: 0.045, side: THREE.DoubleSide }),

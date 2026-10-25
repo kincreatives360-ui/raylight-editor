@@ -155,6 +155,8 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const composer = new EffectComposer(gl);
         composer.setPixelRatio(dpr);
         composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(4, gl.capabilities.maxSamples);
+        composer.setPixelRatio(gl.getPixelRatio());
+        composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(8, gl.capabilities.maxSamples);
         composer.setSize(size.width, size.height);
 
         const renderPass = new RenderPass(scene, camera);
@@ -182,6 +184,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         const s = effects.state;
         const u = pass.uniforms;
+        const dpr = gl.getPixelRatio();
 
         u.uResolution.value.set(size.width * dpr, size.height * dpr);
 
@@ -212,6 +215,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         u.uContrast.value = s.colorGrade?.contrast ?? 1.0;
         u.uSaturation.value = s.colorGrade?.saturation ?? 1.0;
     }, [effects, size.width, size.height, dpr]);
+    }, [effects, size.width, size.height, gl]);
 
     // Keep glass blending in the same linear space at every device opacity.
     useFrame((_state, delta) => {

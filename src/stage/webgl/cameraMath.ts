@@ -149,6 +149,7 @@ export function getLayerRenderLayout(
     const raw = (evalLayer.layer.kind === 'image' || evalLayer.layer.kind === 'video')
         ? (evalLayer.layer as ImageLayer | VideoLayer).deviceFrame
         : undefined;
+    const raw = (evalLayer.layer.kind === 'image' || evalLayer.layer.kind === 'video') ? evalLayer.layer.deviceFrame : undefined;
     const deviceSettings = raw?.enabled ? resolveDeviceFrameSettings(raw) : null;
     const frameMetrics = deviceSettings ? getDeviceFrameMetrics(transform.meshW, transform.meshH, deviceSettings) : null;
     const scale = getDeviceFrameScale(deviceSettings, evalLayer.scale ?? { x: 1, y: 1, z: 1 });

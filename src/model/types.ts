@@ -44,11 +44,13 @@ export interface DeviceFrameSettings {
   geometryVersion?: 1;
   deviceId?: string;
   deviceScale?: number;
+  family?: 'phone' | 'laptop' | 'tablet' | 'display';
   /** Preserves legacy placement height when replacing a nonuniform transform. */
   legacyHeightCompensation?: number;
   enabled: boolean;
   model: 'iphone-pro' | 'iphone' | 'iphone-classic';
   frameColor: string;
+  finish?: string;
   frameRoughness: number;
   frameMetalness: number;
   scale: number;
@@ -57,6 +59,10 @@ export interface DeviceFrameSettings {
   cornerRadius: number;
   screenFit: ScreenFit;
   screenFillColor: string;
+  screenPan?: { x: number; y: number };
+  screenZoom?: number;
+  hingeAngleDeg?: number;
+  tiltAngleDeg?: number;
   glassTint: string;
   glassOpacity: number;
   glassRoughness: number;
@@ -551,6 +557,8 @@ export interface SceneEffects {
     exposure: number;
     contrast: number;
     saturation: number;
+    temperature?: number;
+    tint?: number;
   };
   edgeFade: {
     enabled: boolean;

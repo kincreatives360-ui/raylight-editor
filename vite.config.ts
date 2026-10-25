@@ -5,11 +5,26 @@ import tailwindcss from '@tailwindcss/vite';
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   resolve: {
-    dedupe: ['react', 'react-dom'],
+    dedupe: ['react', 'react-dom', 'react-dom/client', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+  },
+  optimizeDeps: {
+    include: [
+      'react',
+      'react-dom',
+      'react-dom/client',
+      'react/jsx-runtime',
+      'react/jsx-dev-runtime',
+      '@react-three/fiber',
+      'three',
+      'lucide-react',
+      'zustand',
+      'zod',
+    ],
   },
   server: {
     host: '0.0.0.0',
     port: 3000,
+    allowedHosts: true,
   },
   build: {
     chunkSizeWarningLimit: 1000,

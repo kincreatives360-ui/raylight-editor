@@ -1231,12 +1231,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const refStageH = 1080;
     const aspectSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
     const deviceProjectAspect = aspectSpec.widthRatio / aspectSpec.heightRatio;
-    const isMediaLayer = selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video';
-    const mediaLayer = isMediaLayer ? (selectedLayer as ImageLayer | VideoLayer) : null;
-    const fixedDeviceSettings = mediaLayer && mediaLayer.deviceFrame?.enabled && isFixedDeviceFrame(mediaLayer.deviceFrame)
-        ? mediaLayer.deviceFrame : null;
-    const devicePlacementSize = mediaLayer && fixedDeviceSettings
-        ? getDevicePlacementSize(mediaLayer.size, fixedDeviceSettings, deviceProjectAspect) : null;
+    const fixedDeviceSettings = (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && selectedLayer.deviceFrame?.enabled && isFixedDeviceFrame(selectedLayer.deviceFrame)
+        ? selectedLayer.deviceFrame : null;
+    const devicePlacementSize = (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && fixedDeviceSettings
+        ? getDevicePlacementSize(selectedLayer.size, fixedDeviceSettings, deviceProjectAspect) : null;
     const deviceArtboard = getArtboardDimensions(project.aspectRatio);
     const layoutStageW = fixedDeviceSettings ? deviceArtboard.width : refStageW;
     const layoutStageH = fixedDeviceSettings ? deviceArtboard.height : refStageH;
@@ -1722,6 +1720,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             onChange={(deviceFrame) =>
                                                 updateLayer(activeShot.id, selectedLayer.id, (layer) =>
                                                     (layer.kind === 'image' || layer.kind === 'video') ? { ...layer, deviceFrame } : layer
+                                                    layer.kind === 'image' || layer.kind === 'video' ? { ...layer, deviceFrame } : layer
                                                 )
                                             }
                                         />
