@@ -12,12 +12,15 @@ import {
 import { createDeviceShadowTexture } from './iphone15ProMaterials';
 import { useDisposable } from './useDisposable';
 
-interface AndroidFlagshipFrameProps {
+export interface AndroidFlagshipFrameProps {
   metrics: DeviceFrameMetrics;
   settings: DeviceFrameSettings;
+  rotation?: { x: number; y: number; z: number };
 }
 
-export function AndroidFlagshipFrame({ metrics, settings }: AndroidFlagshipFrameProps) {
+export function AndroidFlagshipFrame({ metrics, settings, rotation }: AndroidFlagshipFrameProps) {
+  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
+  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
   const shortSide = Math.min(metrics.screenWidth, metrics.screenHeight);
   const proud = shortSide * 0.001;
   const bodyZ = SCREEN_PLANE_Z - proud / 2 - metrics.bodyDepth;

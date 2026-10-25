@@ -201,7 +201,6 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                     dpr={dpr}
                     resize={{ offsetSize: true }}
-                    onCreated={({ gl }) => setMaxTextureSize(gl.capabilities.maxTextureSize)}
                     gl={{
                         antialias: true,
                         alpha: true,
@@ -211,6 +210,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                         powerPreference: 'high-performance',
                     }}
                     onCreated={({ gl }) => {
+                        setMaxTextureSize(gl.capabilities.maxTextureSize);
                         gl.shadowMap.enabled = true;
                         gl.shadowMap.type = THREE.PCFSoftShadowMap;
                     }}

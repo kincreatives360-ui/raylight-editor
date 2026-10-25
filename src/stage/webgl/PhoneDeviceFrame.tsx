@@ -12,9 +12,6 @@ import { SamsungGalaxyFrame } from './SamsungGalaxyFrame';
 import { StudioDisplayFrame } from './StudioDisplayFrame';
 import { BrowserFrame } from './BrowserFrame';
 import { AndroidFlagshipFrame } from './AndroidFlagshipFrame';
-import { MacBookProFrame } from './MacBookProFrame';
-import { IPadProFrame } from './IPadProFrame';
-import { StudioDisplayFrame } from './StudioDisplayFrame';
 
 import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
@@ -26,89 +23,23 @@ export interface PhoneDeviceFrameProps {
 
 export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
   if (isFixedDeviceFrame(props.settings)) {
-    const deviceId = props.settings.deviceId || 'iphone-15-pro';
-    switch (deviceId) {
-      case 'iphone-15-pro':
-        return <DetailedIPhone15ProFrame {...props} />;
-      case 'macbook-pro':
-        return <MacBookProFrame {...props} />;
-      case 'ipad-pro':
-        return <IPadProFrame {...props} />;
-      case 'samsung-galaxy':
-        return <SamsungGalaxyFrame {...props} />;
-      case 'studio-display':
-        return <StudioDisplayFrame {...props} />;
-      case 'browser':
-        return <BrowserFrame {...props} />;
-      default:
-        return <DetailedIPhone15ProFrame {...props} />;
-    }
-  }
-function createReflectionTexture(gloss: number, reflection: number, tint: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 1024;
-  const ctx = canvas.getContext('2d');
-  if (!ctx) return new THREE.CanvasTexture(canvas);
-
-  const wash = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-  wash.addColorStop(0, `${tint}${Math.round(gloss * 14).toString(16).padStart(2, '0')}`);
-  wash.addColorStop(0.26, `${tint}00`);
-  wash.addColorStop(0.52, `${tint}${Math.round(reflection * 12).toString(16).padStart(2, '0')}`);
-  wash.addColorStop(0.7, `${tint}00`);
-  wash.addColorStop(1, `${tint}${Math.round(gloss * 8).toString(16).padStart(2, '0')}`);
-  ctx.fillStyle = wash;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const specular = ctx.createRadialGradient(84, 96, 2, 84, 96, 380);
-  specular.addColorStop(0, `rgba(255,255,255,${0.12 * gloss})`);
-  specular.addColorStop(0.22, `rgba(255,255,255,${0.03 * gloss})`);
-  specular.addColorStop(1, 'rgba(255,255,255,0)');
-  ctx.fillStyle = specular;
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.generateMipmaps = true;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  return texture;
-}
-
-function createShadowTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
-  if (ctx) {
-    const gradient = ctx.createRadialGradient(256, 256, 4, 256, 256, 250);
-    gradient.addColorStop(0, 'rgba(0,0,0,0.78)');
-    gradient.addColorStop(0.35, 'rgba(0,0,0,0.38)');
-    gradient.addColorStop(0.7, 'rgba(0,0,0,0.12)');
-    gradient.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, 512, 512);
-  }
-  const texture = new THREE.CanvasTexture(canvas);
-  texture.colorSpace = THREE.SRGBColorSpace;
-  texture.generateMipmaps = true;
-  texture.minFilter = THREE.LinearMipmapLinearFilter;
-  texture.magFilter = THREE.LinearFilter;
-  return texture;
-}
-
-export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
-  if (isFixedDeviceFrame(props.settings)) {
     const id = props.settings.deviceId || 'iphone-15-pro';
     switch (id) {
       case 'android-flagship':
         return <AndroidFlagshipFrame {...props} />;
+      case 'samsung-galaxy':
+        return <SamsungGalaxyFrame {...props} />;
+      case 'macbook-pro':
       case 'macbook-pro-16':
         return <MacBookProFrame {...props} />;
+      case 'ipad-pro':
       case 'ipad-pro-13':
         return <IPadProFrame {...props} />;
+      case 'studio-display':
       case 'studio-display-27':
         return <StudioDisplayFrame {...props} />;
+      case 'browser':
+        return <BrowserFrame {...props} />;
       case 'iphone-15-pro':
       default:
         return <DetailedIPhone15ProFrame {...props} />;

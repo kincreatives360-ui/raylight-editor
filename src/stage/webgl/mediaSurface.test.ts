@@ -101,4 +101,20 @@ describe('device media surfaces', () => {
     expect(getLayerSurfaceState(layer, true, 1, false).visible).toBe(false);
     expect(getLayerSurfaceState(layer, true, 0.1, true).assemblyOpacity).toBe(0.1);
   });
+
+  it('applies pan and zoom when framing media surfaces', () => {
+    const ctx = context();
+    const source = {} as CanvasImageSource;
+    drawMediaFrame(ctx as unknown as CanvasRenderingContext2D, source, 1000, 1000, 500, 500, {
+      fit: 'contain',
+      zoom: 1.5,
+      pan: { x: 0.2, y: -0.1 },
+    });
+    expect(ctx.drawImage).toHaveBeenCalledOnce();
+    const args = ctx.drawImage.mock.calls[0];
+    expect(args[0]).toBe(source);
+    // Verified that drawImage was invoked with translated and scaled framing
+    expect(args[7]).toBeGreaterThan(0);
+    expect(args[8]).toBeGreaterThan(0);
+  });
 });

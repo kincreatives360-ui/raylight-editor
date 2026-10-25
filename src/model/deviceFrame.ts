@@ -8,27 +8,19 @@ export const SCREEN_PLANE_Z = 0.016;
 export interface DeviceSpec {
   id: string;
   name: string;
-  family: 'phone' | 'laptop' | 'tablet' | 'display';
+  family?: 'phone' | 'laptop' | 'tablet' | 'display';
+  category?: 'phone' | 'tablet' | 'laptop' | 'display' | 'browser';
   body: { width: number; height: number; depth: number; cornerRadius: number };
   screen: { width: number; height: number; cornerRadius: number };
-}
-
-// Published body dimensions and nominal display PPI: https://support.apple.com/en-bn/111829
-// Corner profiles are approximations, to be refined with the detailed hardware model.
-export interface DeviceSpec {
-  id: string;
-  name: string;
-  category: 'phone' | 'tablet' | 'laptop' | 'display' | 'browser';
-  body: { width: number; height: number; depth: number; cornerRadius: number };
-  screen: { width: number; height: number; cornerRadius: number };
-  defaultCutout: 'dynamic-island' | 'notch' | 'punch-hole' | 'none';
-  aspectRatio: number;
+  defaultCutout?: 'dynamic-island' | 'notch' | 'punch-hole' | 'none';
+  aspectRatio?: number;
 }
 
 export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'iphone-15-pro': {
     id: 'iphone-15-pro',
     name: 'iPhone 15 Pro',
+    family: 'phone',
     category: 'phone',
     body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
     screen: { width: 1179 / 460 * 25.4, height: 2556 / 460 * 25.4, cornerRadius: 9.5 },
@@ -38,6 +30,7 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'ipad-pro': {
     id: 'ipad-pro',
     name: 'iPad Pro',
+    family: 'tablet',
     category: 'tablet',
     body: { width: 178.5, height: 247.6, depth: 5.9, cornerRadius: 10.0 },
     screen: { width: 166.5, height: 235.6, cornerRadius: 8.0 },
@@ -47,6 +40,7 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'macbook-pro': {
     id: 'macbook-pro',
     name: 'MacBook Pro',
+    family: 'laptop',
     category: 'laptop',
     body: { width: 312.6, height: 221.2, depth: 15.5, cornerRadius: 8.0 },
     screen: { width: 298.0, height: 196.0, cornerRadius: 4.0 },
@@ -56,6 +50,7 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'samsung-galaxy': {
     id: 'samsung-galaxy',
     name: 'Galaxy S24 Ultra',
+    family: 'phone',
     category: 'phone',
     body: { width: 79.0, height: 162.3, depth: 8.6, cornerRadius: 3.5 },
     screen: { width: 75.0, height: 158.0, cornerRadius: 2.0 },
@@ -65,6 +60,7 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'studio-display': {
     id: 'studio-display',
     name: 'Studio Display',
+    family: 'display',
     category: 'display',
     body: { width: 623.0, height: 362.0, depth: 19.0, cornerRadius: 6.0 },
     screen: { width: 600.0, height: 339.0, cornerRadius: 2.0 },
@@ -74,6 +70,7 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
   'browser': {
     id: 'browser',
     name: 'Browser Window',
+    family: 'display',
     category: 'browser',
     body: { width: 320.0, height: 200.0, depth: 6.0, cornerRadius: 8.0 },
     screen: { width: 320.0, height: 180.0, cornerRadius: 0.0 },
@@ -81,12 +78,6 @@ export const DEVICE_SPECS: Record<string, DeviceSpec> = {
     aspectRatio: 16 / 9,
   },
 };
-
-export function getDeviceSpec(deviceId?: string): DeviceSpec {
-  return (deviceId && DEVICE_SPECS[deviceId]) || DEVICE_SPECS['iphone-15-pro'];
-}
-
-export const IPHONE_15_PRO = DEVICE_SPECS['iphone-15-pro'];
 
 export interface DeviceFinishPreset {
   id: string;
@@ -107,40 +98,55 @@ export const IPHONE_15_PRO: DeviceSpec = {
   id: 'iphone-15-pro',
   name: 'iPhone 15 Pro',
   family: 'phone',
+  category: 'phone',
   body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
   screen: { width: (1179 / 460) * 25.4, height: (2556 / 460) * 25.4, cornerRadius: 9.5 },
+  defaultCutout: 'dynamic-island',
+  aspectRatio: 1179 / 2556,
 };
 
 export const ANDROID_FLAGSHIP: DeviceSpec = {
   id: 'android-flagship',
   name: 'Android Flagship',
   family: 'phone',
+  category: 'phone',
   body: { width: 76.5, height: 162.6, depth: 8.8, cornerRadius: 12.0 },
   screen: { width: 71.5, height: 156.8, cornerRadius: 10.0 },
+  defaultCutout: 'punch-hole',
+  aspectRatio: 71.5 / 156.8,
 };
 
 export const MACBOOK_PRO_16: DeviceSpec = {
   id: 'macbook-pro-16',
   name: 'MacBook Pro 16"',
   family: 'laptop',
+  category: 'laptop',
   body: { width: 355.7, height: 248.1, depth: 16.8, cornerRadius: 8.0 },
   screen: { width: 345.0, height: 224.0, cornerRadius: 5.0 },
+  defaultCutout: 'notch',
+  aspectRatio: 345.0 / 224.0,
 };
 
 export const IPAD_PRO_13: DeviceSpec = {
   id: 'ipad-pro-13',
   name: 'iPad Pro 13"',
   family: 'tablet',
+  category: 'tablet',
   body: { width: 215.5, height: 281.6, depth: 5.1, cornerRadius: 12.0 },
   screen: { width: 202.0, height: 268.0, cornerRadius: 10.0 },
+  defaultCutout: 'none',
+  aspectRatio: 202.0 / 268.0,
 };
 
 export const STUDIO_DISPLAY_27: DeviceSpec = {
   id: 'studio-display-27',
   name: 'Studio Display 27"',
   family: 'display',
+  category: 'display',
   body: { width: 622.7, height: 362.0, depth: 16.0, cornerRadius: 6.0 },
   screen: { width: 597.0, height: 336.0, cornerRadius: 2.0 },
+  defaultCutout: 'none',
+  aspectRatio: 597.0 / 336.0,
 };
 
 export const SUPPORTED_DEVICES: Record<string, DeviceSpec> = {
@@ -152,10 +158,13 @@ export const SUPPORTED_DEVICES: Record<string, DeviceSpec> = {
 };
 
 export function getDeviceSpec(deviceId?: string): DeviceSpec {
+  if (deviceId && DEVICE_SPECS[deviceId]) {
+    return DEVICE_SPECS[deviceId];
+  }
   if (deviceId && SUPPORTED_DEVICES[deviceId]) {
     return SUPPORTED_DEVICES[deviceId];
   }
-  return IPHONE_15_PRO;
+  return DEVICE_SPECS['iphone-15-pro'];
 }
 
 export function isFixedDeviceFrame(settings?: Partial<DeviceFrameSettings> | null): boolean {
@@ -249,13 +258,15 @@ export function resolveDeviceFrameSettings(
 
   const resolvedDeviceId = value.deviceId || IPHONE_15_PRO.id;
   const spec = getDeviceSpec(resolvedDeviceId);
+  const specFamily = spec.family || (spec.category === 'browser' ? 'display' : spec.category) || 'phone';
 
   return {
     ...value,
     ...(isFixedDeviceFrame(value) ? {
       deviceId: resolvedDeviceId,
       deviceScale: clamp(value.deviceScale, 0.65, 2, 1),
-      family: spec.family,
+      family: specFamily as DeviceFrameSettings['family'],
+      cutoutStyle: input?.cutoutStyle ?? spec.defaultCutout ?? DEFAULT_DEVICE_FRAME_SETTINGS.cutoutStyle,
     } : {}),
     scale: clamp(value.scale, 0.65, 2, DEFAULT_DEVICE_FRAME_SETTINGS.scale),
     bezelWidth: clamp(value.bezelWidth, 0.01, 0.2, DEFAULT_DEVICE_FRAME_SETTINGS.bezelWidth),
@@ -387,8 +398,8 @@ export function getImageFitRect(
     const maxPanX = Math.max(0, sourceWidth - finalSourceW);
     const maxPanY = Math.max(0, sourceHeight - finalSourceH);
 
-    const panOffsetX = (pan?.x ?? 0) * (maxPanX > 0 ? maxPanX / 2 : finalSourceW * 0.5);
-    const panOffsetY = (pan?.y ?? 0) * (maxPanY > 0 ? maxPanY / 2 : finalSourceH * 0.5);
+    const panOffsetX = (pan?.x ?? 0) * (maxPanX / 2);
+    const panOffsetY = (pan?.y ?? 0) * (maxPanY / 2);
 
     const sourceX = (sourceWidth - finalSourceW) / 2 + panOffsetX;
     const sourceY = (sourceHeight - finalSourceH) / 2 + panOffsetY;

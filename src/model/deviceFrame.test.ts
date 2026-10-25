@@ -167,5 +167,27 @@ describe('procedural device models and finish presets', () => {
       expect(preset.roughness).toBeLessThanOrEqual(1);
     }
   });
+
+  it('ensures cover pan on an axis with no slack produces zero offset and cannot expose empty area', () => {
+    // Square source (100x100) on wide target (200x100) in cover mode:
+    // Aspect ratio: sourceAspect = 1, targetAspect = 2.
+    // In cover mode: baseSourceH = sourceWidth / targetAspect = 100 / 2 = 50.
+    // baseSourceW = 100.
+    // maxPanX = sourceWidth - finalSourceW = 100 - 100 = 0 (no slack on X!).
+    // maxPanY = sourceHeight - finalSourceH = 100 - 50 = 50.
+    const rect = getImageFitRect(100, 100, 200, 100, 'cover', { x: 1, y: 1 }, 1);
+    expect(rect.sourceX).toBe(0); // must produce 0 offset when maxPanX is 0!
+    expect(rect.sourceY).toBe(50); // max pan on Y
+  });
+
+  it('maps browser category to display family without any cast and resolves defaultCutout', () => {
+    const browserSettings = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: 'browser' });
+    expect(browserSettings.family).toBe('display');
+    expect(browserSettings.cutoutStyle).toBe('none');
+
+    const iphoneSettings = resolveDeviceFrameSettings({ geometryVersion: 1, deviceId: 'iphone-15-pro' });
+    expect(iphoneSettings.family).toBe('phone');
+    expect(iphoneSettings.cutoutStyle).toBe('dynamic-island');
+  });
 });
 

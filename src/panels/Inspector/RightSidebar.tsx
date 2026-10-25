@@ -1720,7 +1720,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                             onChange={(deviceFrame) =>
                                                 updateLayer(activeShot.id, selectedLayer.id, (layer) =>
                                                     (layer.kind === 'image' || layer.kind === 'video') ? { ...layer, deviceFrame } : layer
-                                                    layer.kind === 'image' || layer.kind === 'video' ? { ...layer, deviceFrame } : layer
                                                 )
                                             }
                                         />

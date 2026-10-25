@@ -4,6 +4,7 @@ import { useThree, useFrame } from '@react-three/fiber';
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { renderSceneFrame } from './sceneRenderLoop';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
@@ -145,35 +146,61 @@ const CinematicEffectsShader = {
     `,
 };
 
+/**
+ * Calculates a safe MSAA sample count based on viewport pixel dimensions and GPU limits.
+ * Reduces or disables samples for oversized buffers (e.g. 4K / high-DPI displays)
+ * to respect GPU memory budgets, while relying on the downstream FXAA pass for anti-aliasing.
+ */
+export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, maxSamples = 4): number {
+    const hwCap = Math.max(0, Math.min(4, Number.isFinite(maxSamples) ? maxSamples : 4));
+    if (hwCap === 0) return 0;
+    const totalPixels = Math.max(0, pixelWidth * pixelHeight);
+    // Over 8 million pixels (e.g. 4K canvas): disable MSAA to prevent VRAM exhaustion
+    if (totalPixels > 8_000_000) return 0;
+    // Over 3.5 million pixels (e.g. 1440p / Retina viewport): reduce to 2 samples
+    if (totalPixels > 3_500_000) return Math.min(2, hwCap);
+    return hwCap;
+}
+
 export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects }) => {
     const { gl, scene, camera, size } = useThree();
     const dpr = useThree(state => state.viewport.dpr);
     const composerRef = useRef<EffectComposer | null>(null);
     const shaderPassRef = useRef<ShaderPass | null>(null);
+    const fxaaPassRef = useRef<FXAAPass | null>(null);
     // Initialize or resize EffectComposer
     useLayoutEffect(() => {
         const composer = new EffectComposer(gl);
         composer.setPixelRatio(dpr);
-        composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(4, gl.capabilities.maxSamples);
-        composer.setPixelRatio(gl.getPixelRatio());
-        composer.renderTarget1.samples = composer.renderTarget2.samples = Math.min(8, gl.capabilities.maxSamples);
+        const pixelW = Math.round(size.width * dpr);
+        const pixelH = Math.round(size.height * dpr);
+        const sampleCount = getSafeMsaaSampleCount(pixelW, pixelH, gl.capabilities?.maxSamples ?? 4);
+        composer.renderTarget1.samples = composer.renderTarget2.samples = sampleCount;
         composer.setSize(size.width, size.height);
 
         const renderPass = new RenderPass(scene, camera);
         composer.addPass(renderPass);
 
+        // CinematicEffectsShader encodes to sRGB via <colorspace_fragment>
         const shaderPass = new ShaderPass(CinematicEffectsShader);
-        shaderPass.renderToScreen = true;
         composer.addPass(shaderPass);
+
+        // FXAAPass runs in sRGB perceptual space for edge detection and outputs to screen without re-encoding
+        const fxaaPass = new FXAAPass();
+        fxaaPass.renderToScreen = true;
+        composer.addPass(fxaaPass);
 
         composerRef.current = composer;
         shaderPassRef.current = shaderPass;
+        fxaaPassRef.current = fxaaPass;
 
         return () => {
+            fxaaPass.material.dispose();
             shaderPass.material.dispose();
             composer.dispose();
             composerRef.current = null;
             shaderPassRef.current = null;
+            fxaaPassRef.current = null;
         };
     }, [gl, scene, camera, size.width, size.height, dpr]);
 
@@ -184,9 +211,13 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         const s = effects.state;
         const u = pass.uniforms;
-        const dpr = gl.getPixelRatio();
 
         u.uResolution.value.set(size.width * dpr, size.height * dpr);
+
+        const fxaa = fxaaPassRef.current;
+        if (fxaa) {
+            fxaa.setSize(size.width * dpr, size.height * dpr);
+        }
 
         // Vignette
         u.uVignetteEnabled.value = s.vignette?.enabled ? 1 : 0;
@@ -215,7 +246,6 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         u.uContrast.value = s.colorGrade?.contrast ?? 1.0;
         u.uSaturation.value = s.colorGrade?.saturation ?? 1.0;
     }, [effects, size.width, size.height, dpr]);
-    }, [effects, size.width, size.height, gl]);
 
     // Keep glass blending in the same linear space at every device opacity.
     useFrame((_state, delta) => {

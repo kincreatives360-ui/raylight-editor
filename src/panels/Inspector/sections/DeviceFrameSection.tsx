@@ -11,9 +11,6 @@ import {
   isFixedDeviceFrame,
   resolveDeviceFrameSettings,
   upgradeDeviceFrameSettings,
-  isFixedDeviceFrame,
-  resolveDeviceFrameSettings,
-  upgradeDeviceFrameSettings,
   SUPPORTED_DEVICES,
 } from '../../../model/deviceFrame';
 
@@ -67,7 +64,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               </button>
             </div>
           )}
-          {fixed && settings.deviceId && !DEVICE_SPECS[settings.deviceId] && (
+          {fixed && settings.deviceId && !DEVICE_SPECS[settings.deviceId] && !SUPPORTED_DEVICES[settings.deviceId] && (
             <p className="text-[10px] text-[#a1a1aa]">This device is unavailable. Showing {IPHONE_15_PRO.name}; the saved device ID is retained.</p>
           )}
 
@@ -95,38 +92,19 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                   <>
                     <optgroup label="Smartphones">
                       <option value="iphone-15-pro">iPhone 15 Pro</option>
+                      <option value="android-flagship">Android Flagship</option>
                       <option value="samsung-galaxy">Galaxy S24 Ultra</option>
                     </optgroup>
                     <optgroup label="Computers & Tablets">
                       <option value="macbook-pro">MacBook Pro</option>
+                      <option value="macbook-pro-16">MacBook Pro 16"</option>
                       <option value="ipad-pro">iPad Pro</option>
+                      <option value="ipad-pro-13">iPad Pro 13"</option>
                       <option value="studio-display">Studio Display</option>
+                      <option value="studio-display-27">Studio Display 27"</option>
                     </optgroup>
                     <optgroup label="Window & UI">
                       <option value="browser">Browser Window</option>
-                value={fixed ? (settings.deviceId || 'iphone-15-pro') : settings.model}
-                onChange={(event) => {
-                  const val = event.target.value;
-                  if (fixed) {
-                    update({ deviceId: val });
-                  } else {
-                    update({ model: val as DeviceFrameSettings['model'] });
-                  }
-                }}
-                className="w-full h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none focus:border-[#0088ff] cursor-pointer"
-              >
-                {fixed ? (
-                  <>
-                    <optgroup label="Phones" className="bg-[#18181b] text-white font-medium">
-                      <option value="iphone-15-pro">{SUPPORTED_DEVICES['iphone-15-pro'].name}</option>
-                      <option value="android-flagship">{SUPPORTED_DEVICES['android-flagship'].name}</option>
-                    </optgroup>
-                    <optgroup label="Laptops & Tablets" className="bg-[#18181b] text-white font-medium">
-                      <option value="macbook-pro-16">{SUPPORTED_DEVICES['macbook-pro-16'].name}</option>
-                      <option value="ipad-pro-13">{SUPPORTED_DEVICES['ipad-pro-13'].name}</option>
-                    </optgroup>
-                    <optgroup label="Displays" className="bg-[#18181b] text-white font-medium">
-                      <option value="studio-display-27">{SUPPORTED_DEVICES['studio-display-27'].name}</option>
                     </optgroup>
                   </>
                 ) : (
@@ -182,9 +160,8 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
             </div>
           </div>
 
-          <div className={fixed && settings.deviceId !== 'macbook-pro' ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-2 gap-1.5'}>
+          <div className={fixed && settings.deviceId !== 'macbook-pro' && settings.deviceId !== 'macbook-pro-16' && settings.deviceId !== 'studio-display' && settings.deviceId !== 'studio-display-27' ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-2 gap-1.5'}>
           {/* Scale & Bezel */}
-          <div className="grid grid-cols-2 gap-1.5">
             <ScrubInput
               label={fixed ? 'Scale' : 'Rim scale'}
               value={Math.round((fixed ? settings.deviceScale ?? 1 : settings.scale) * 100)}
@@ -195,28 +172,18 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               onChange={(value) => update(fixed ? { deviceScale: value / 100 } : { scale: value / 100 })}
               className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
             />
-            {fixed && settings.deviceId === 'macbook-pro' && (
+            {fixed && (settings.deviceId === 'macbook-pro' || settings.deviceId === 'macbook-pro-16') && (
               <ScrubInput
                 label="Lid angle"
-                value={Math.round(settings.lidAngle ?? 110)}
-                min={70}
+                value={Math.round(settings.hingeAngleDeg ?? settings.lidAngle ?? 105)}
+                min={0}
                 max={140}
                 step={1}
                 unit="°"
-                onChange={(value) => update({ lidAngle: value })}
+                onChange={(value) => update({ lidAngle: value, hingeAngleDeg: value })}
                 className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
               />
             )}
-            {!fixed && <ScrubInput
-              label="Bezel"
-              value={Math.round(settings.bezelWidth * 1000)}
-              min={10}
-              max={200}
-              step={1}
-              unit="‰"
-              onChange={(value) => update({ bezelWidth: value / 1000 })}
-              className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-            />}
             {!fixed && (
               <ScrubInput
                 label="Bezel"
@@ -229,19 +196,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                 className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
               />
             )}
-            {fixed && settings.deviceId === 'macbook-pro-16' && (
-              <ScrubInput
-                label="Lid Angle"
-                value={settings.hingeAngleDeg ?? 105}
-                min={0}
-                max={135}
-                step={1}
-                unit="°"
-                onChange={(v) => update({ hingeAngleDeg: v })}
-                className="h-7 px-2 rounded-md bg-[#1c1c1f] border border-white/10 flex items-center justify-between text-[10px]"
-              />
-            )}
-            {fixed && settings.deviceId === 'studio-display-27' && (
+            {fixed && (settings.deviceId === 'studio-display' || settings.deviceId === 'studio-display-27') && (
               <ScrubInput
                 label="Tilt"
                 value={settings.tiltAngleDeg ?? 10}

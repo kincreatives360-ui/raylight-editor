@@ -6,7 +6,6 @@ export function getMediaTextureSize(width: number, height: number, projected?: {
   pixelHeight: number;
   maxTextureSize: number;
 }) {
-export function getMediaTextureSize(width: number, height: number, maxDimension: number = 1024) {
   const aspect = Math.max(0.0001, width) / Math.max(0.0001, height);
   // Two texels per display pixel keep rasterized glyphs and masks sharp after filtering.
   const required = projected ? 2 * Math.max(
@@ -20,8 +19,6 @@ export function getMediaTextureSize(width: number, height: number, maxDimension:
   return aspect >= 1
     ? { width: longEdge, height: Math.max(1, Math.round(longEdge / aspect)) }
     : { width: Math.max(1, Math.round(longEdge * aspect)), height: longEdge };
-    ? { width: maxDimension, height: Math.max(1, Math.round(maxDimension / aspect)) }
-    : { width: Math.max(1, Math.round(maxDimension * aspect)), height: maxDimension };
 }
 
 export function drawMediaFrame(
@@ -55,10 +52,8 @@ export function drawMediaFrame(
     const cropWidth = Math.min(clamp(crop.width) * naturalWidth, naturalWidth - x);
     const cropHeight = Math.min(clamp(crop.height) * naturalHeight, naturalHeight - y);
     if (cropWidth > 0 && cropHeight > 0) {
-      const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit);
-      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1)}px)`;
       const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit, options.pan, options.zoom);
-      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5)}px)`;
+      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1)}px)`;
       if (typeof ctx.beginPath === 'function') {
         ctx.beginPath();
         if (typeof ctx.rect === 'function') ctx.rect(0, 0, width, height);

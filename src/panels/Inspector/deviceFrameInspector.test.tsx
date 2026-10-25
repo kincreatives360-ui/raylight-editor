@@ -4,6 +4,7 @@ import { createDefaultImageLayer, createDefaultProject } from '../../model/defau
 import { DEFAULT_DEVICE_FRAME_SETTINGS } from '../../model/deviceFrame';
 import { useProjectStore } from '../../store/useProjectStore';
 import { RightSidebar } from './RightSidebar';
+import { DeviceFrameSection } from './sections/DeviceFrameSection';
 
 // SSR uses Zustand's initial snapshot. Read the real loaded state for this rendering-only fixture.
 vi.mock('../../store/useProjectStore', async (importOriginal) => {
@@ -33,5 +34,20 @@ describe('fixed device inspector dimensions', () => {
     const height = html.match(/aria-label="H" aria-valuenow="([^"]+)"/)?.[1];
     expect(Number(width)).toBe(Math.round(1920 * 0.6 * 70.6 / 146.6));
     expect(Number(height)).toBe(1152);
+  });
+
+  it('renders registered hardware model options and does not flag supported devices as unavailable', () => {
+    const layer = createDefaultImageLayer({
+      deviceFrame: {
+        ...DEFAULT_DEVICE_FRAME_SETTINGS,
+        enabled: true,
+        deviceId: 'macbook-pro-16',
+      },
+    });
+    const html = renderToStaticMarkup(<DeviceFrameSection layer={layer} onChange={() => {}} projectAspect={16 / 9} />);
+    expect(html).toContain('macbook-pro-16');
+    expect(html).toContain('studio-display-27');
+    expect(html).toContain('android-flagship');
+    expect(html).not.toContain('This device is unavailable');
   });
 });

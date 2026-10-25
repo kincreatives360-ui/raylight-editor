@@ -181,6 +181,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
+    const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
     const cameraPose = evaluateCameraPose(evaluatedCamera, {
         position: project.defaultCamera?.position ?? { x: 0, y: 0, z: cameraZ },
         rotation: project.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
@@ -265,7 +266,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
-        const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH, 2048);
+        if (!surface.visible) return null;
 
         const canvas = document.createElement('canvas');
         canvas.width = textureW;
@@ -279,12 +280,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         if (layer.kind === 'image' || layer.kind === 'video') {
             const imgL = layer as ImageLayer | VideoLayer;
-            const options = { crop: imgL.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx, pixelRatio: texturePixelRatio };
             const options = {
                 crop: imgL.crop,
                 fit: screenFit,
                 fillColor: screenFill,
                 blurPx: totalBlurPx,
+                pixelRatio: texturePixelRatio,
                 pan: screenPan,
                 zoom: screenZoom,
             };
@@ -466,16 +467,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
 
         const tex = new THREE.CanvasTexture(canvas);
-        tex.colorSpace = THREE.SRGBColorSpace;
-        tex.generateMipmaps = !isVideoAsset;
-        tex.minFilter = isVideoAsset ? THREE.LinearFilter : THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.anisotropy = Math.min(8, gl.capabilities.getMaxAnisotropy());
-        tex.generateMipmaps = true;
-        tex.minFilter = THREE.LinearMipmapLinearFilter;
-        tex.magFilter = THREE.LinearFilter;
-        tex.anisotropy = 16;
-        tex.needsUpdate = true;
+        const maxAniso = gl.capabilities?.getMaxAnisotropy?.() ?? 16;
+        configureLayerTexture(tex, maxAniso);
         return tex;
     }, [
         layer,
@@ -497,6 +490,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         screenFill,
         screenPan,
         screenZoom,
+        surface.visible,
     ]);
 
     // Dispose previous texture whenever a new one is generated or component unmounts
@@ -517,16 +511,24 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const redraw = () => {
             if (videoElement.readyState < 2) return;
             const media = layer as ImageLayer | VideoLayer;
-            drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvasW, canvasH, {
-                crop: media.crop, fit: screenFit, fillColor: screenFill, blurPx: totalBlurPx, pixelRatio: texturePixelRatio,
-            drawMediaFrame(ctx, videoElement, videoElement.videoWidth, videoElement.videoHeight, canvas.width, canvas.height, {
+            const options = {
                 crop: media.crop,
                 fit: screenFit,
                 fillColor: screenFill,
                 blurPx: totalBlurPx,
+                pixelRatio: texturePixelRatio,
                 pan: screenPan,
                 zoom: screenZoom,
-            });
+            };
+            drawMediaFrame(
+                ctx,
+                videoElement,
+                videoElement.videoWidth,
+                videoElement.videoHeight,
+                canvasW,
+                canvasH,
+                options
+            );
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
             applyTextureMask(ctx, canvasW, canvasH, layer, project);
             markTextureUpdated(texture);
@@ -536,8 +538,24 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const events = ['loadeddata', 'seeked', 'timeupdate'] as const;
         for (const event of events) videoElement.addEventListener(event, redraw);
         return () => { for (const event of events) videoElement.removeEventListener(event, redraw); };
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, evalLayer.shimmerProgress, invalidate, canvasW, canvasH, texturePixelRatio]);
-    }, [currentTimeMs, isVideoAsset, videoElement, texture, layer, project, totalBlurPx, screenFit, screenFill, screenPan, screenZoom, evalLayer.shimmerProgress, invalidate]);
+    }, [
+        currentTimeMs,
+        isVideoAsset,
+        videoElement,
+        texture,
+        layer,
+        project,
+        totalBlurPx,
+        screenFit,
+        screenFill,
+        screenPan,
+        screenZoom,
+        evalLayer.shimmerProgress,
+        invalidate,
+        canvasW,
+        canvasH,
+        texturePixelRatio,
+    ]);
 
     const cornerRadiusWorld = useMemo(() => {
         if (deviceFrameMetrics) return deviceFrameMetrics.cornerRadius;
@@ -559,7 +577,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         };
     }, [normalizedScreenGeometry]);
 
-    const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
     if (!surface.visible) return null;
     const renderOpacity = surface.surfaceOpacity;
     const receivesLight = surface.receivesLight;
@@ -607,3 +624,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 };
 
 function markTextureUpdated(texture: THREE.Texture) { texture.needsUpdate = true; }
+ 
+export function configureLayerTexture(tex: THREE.Texture, maxAnisotropy = 16): THREE.Texture {
+    tex.colorSpace = THREE.SRGBColorSpace;
+    tex.generateMipmaps = true;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.magFilter = THREE.LinearFilter;
+    tex.anisotropy = Math.max(1, Math.min(16, maxAnisotropy));
+    tex.needsUpdate = true;
+    return tex;
+}
