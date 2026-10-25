@@ -77,25 +77,36 @@ const CANVAS_TEX_FRAGMENT_SHADER = `
   uniform sampler2D uTexture;
   uniform float uOpacity;
   varying vec2 vUv;
+
+  float hashDither(vec2 p) {
+    return fract(sin(dot(p, vec2(12.9898, 78.233))) * 43758.5453);
+  }
+
   void main() {
     vec4 tex = texture2D(uTexture, vUv);
-    gl_FragColor = vec4(tex.rgb, tex.a * uOpacity);
+    // Sub-LSB dither to eliminate 8-bit banding on subtle gradient transitions
+    float dither = (hashDither(gl_FragCoord.xy) - 0.5) / 255.0;
+    vec3 col = clamp(tex.rgb + dither, 0.0, 1.0);
+    gl_FragColor = vec4(col, tex.a * uOpacity);
   }
 `;
 
 // Helper to render gradient to an offscreen canvas
-function createGradientTexture(bg: Extract<Background, { kind: 'gradient' }>): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 1024;
-  canvas.height = 1024;
-  const ctx = canvas.getContext('2d');
+export function createGradientTexture(bg: Extract<Background, { kind: 'gradient' }>): THREE.CanvasTexture {
+  const canvas = typeof document !== 'undefined'
+    ? document.createElement('canvas')
+    : ({ width: 0, height: 0, getContext: () => null } as unknown as HTMLCanvasElement);
+  canvas.width = 2048;
+  canvas.height = 2048;
+  const ctx = canvas.getContext ? canvas.getContext('2d') : null;
   if (ctx) {
-    ctx.fillStyle = createCanvasFillStyle(ctx, bg, 1024, 1024, 1);
-    ctx.fillRect(0, 0, 1024, 1024);
+    ctx.fillStyle = createCanvasFillStyle(ctx, bg, 2048, 2048, 1);
+    ctx.fillRect(0, 0, 2048, 2048);
   }
   const tex = new THREE.CanvasTexture(canvas);
   tex.colorSpace = THREE.SRGBColorSpace;
-  tex.minFilter = THREE.LinearFilter;
+  tex.generateMipmaps = true;
+  tex.minFilter = THREE.LinearMipmapLinearFilter;
   tex.magFilter = THREE.LinearFilter;
   return tex;
 }
@@ -147,9 +158,10 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
         }
         currentTex = tex;
         tex.colorSpace = THREE.SRGBColorSpace;
-        tex.minFilter = THREE.LinearFilter;
+        tex.minFilter = THREE.LinearMipmapLinearFilter;
         tex.magFilter = THREE.LinearFilter;
-        tex.generateMipmaps = false;
+        tex.generateMipmaps = true;
+        tex.anisotropy = 8;
         tex.needsUpdate = true;
         setLoadedTextureInfo({ url: dataUrl, texture: tex });
         invalidate();

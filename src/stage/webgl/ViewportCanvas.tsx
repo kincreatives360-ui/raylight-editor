@@ -188,7 +188,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
     const deviceDpr = useDevicePixelRatio();
-    const [maxTextureSize, setMaxTextureSize] = useState(4096);
+    const [maxTextureSize, setMaxTextureSize] = useState(8192);
     const dpr = getViewportPixelRatio(frameWidth, frameHeight, canvasZoom, deviceDpr, maxTextureSize);
 
     return (

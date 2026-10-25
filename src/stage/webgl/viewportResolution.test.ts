@@ -12,7 +12,12 @@ describe('viewport resolution', () => {
     const ratio = getViewportPixelRatio(1920, 1080, 3.5, 3, 2048);
     expect(ratio * 1920).toBeLessThanOrEqual(2048);
     const large = getViewportPixelRatio(3840, 2160, 3.5, 3, 16384);
-    expect(large * 3840).toBeLessThanOrEqual(4096);
-    expect(large * 2160).toBeLessThanOrEqual(4096);
+    expect(large * 3840).toBeLessThanOrEqual(8192);
+    expect(large * 2160).toBeLessThanOrEqual(8192);
+    // Scales dynamically with zoom on high-DPI displays up to the 8K limit
+    expect(getViewportPixelRatio(1920, 1080, 2, 2, 16384)).toBe(4);
+    // Respects custom maxBufferDimension override
+    const capped = getViewportPixelRatio(3840, 2160, 3.5, 3, 16384, 4096);
+    expect(capped * 3840).toBeLessThanOrEqual(4096);
   });
 });

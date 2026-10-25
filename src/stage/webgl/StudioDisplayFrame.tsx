@@ -153,7 +153,7 @@ export function StudioDisplayFrame({
   );
 
   const cameraSensorGeometry = useMemo(
-    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.006, 16),
+    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.006, 48),
     [metrics.bodyWidth]
   );
 

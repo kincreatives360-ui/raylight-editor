@@ -152,11 +152,11 @@ export function IPadProFrame({
   const cameraBumpGeometry = useMemo(() => {
     const bumpW = metrics.bodyWidth * 0.14;
     const bumpH = metrics.bodyHeight * 0.11;
-    return new THREE.ShapeGeometry(roundedRect(bumpW, bumpH, bumpW * 0.25), 10);
+    return new THREE.ShapeGeometry(roundedRect(bumpW, bumpH, bumpW * 0.25), 48);
   }, [metrics.bodyWidth, metrics.bodyHeight]);
 
   const lensGeometry = useMemo(
-    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.024, 24),
+    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.024, 48),
     [metrics.bodyWidth]
   );
 

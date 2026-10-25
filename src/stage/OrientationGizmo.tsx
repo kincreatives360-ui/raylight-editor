@@ -12,6 +12,7 @@ interface OrientationGizmoProps {
     onDragEnd?: () => void;
     onResetCamera: () => void;
     currentZoom?: number;
+    topInset?: number;
 }
 
 export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
@@ -22,6 +23,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
     onDragEnd,
     onResetCamera,
     currentZoom = 1,
+    topInset = 12,
 }) => {
     const [isHovered, setIsHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
@@ -148,7 +150,8 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             onMouseLeave={() => setIsHovered(false)}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="absolute top-3 right-3 z-35 flex flex-col items-end gap-1.5 select-none"
+            className="absolute right-3 z-35 flex flex-col items-end gap-1.5 select-none"
+            style={{ top: topInset }}
         >
             {/* Main Interactive Orbit Tripod Sphere (Drag to Orbit / Tilt) */}
             <div

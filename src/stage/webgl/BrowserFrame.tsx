@@ -120,12 +120,12 @@ export function BrowserFrame({
   );
 
   const dotRadius = Math.max(0.0025, titlebarHeight * 0.16);
-  const dotGeometry = useMemo(() => new THREE.CircleGeometry(dotRadius, 20), [dotRadius]);
+  const dotGeometry = useMemo(() => new THREE.CircleGeometry(dotRadius, 48), [dotRadius]);
 
   const urlBarWidth = metrics.bodyWidth * 0.42;
   const urlBarHeight = titlebarHeight * 0.52;
   const urlBarGeometry = useMemo(
-    () => new THREE.ShapeGeometry(roundedRect(urlBarWidth, urlBarHeight, urlBarHeight * 0.35), 10),
+    () => new THREE.ShapeGeometry(roundedRect(urlBarWidth, urlBarHeight, urlBarHeight * 0.35), 48),
     [urlBarWidth, urlBarHeight]
   );
 

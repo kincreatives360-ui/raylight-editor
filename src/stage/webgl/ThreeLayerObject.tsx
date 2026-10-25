@@ -67,7 +67,7 @@ function createNormalizedRoundedGeometry(
     radius: number
 ): THREE.ShapeGeometry {
     const shape = createRoundedRectShape(width, height, radius);
-    const geom = new THREE.ShapeGeometry(shape, 36);
+    const geom = new THREE.ShapeGeometry(shape, 64);
     const pos = geom.attributes.position;
     const uvs = new Float32Array(pos.count * 2);
 

@@ -151,18 +151,18 @@ export function SamsungGalaxyFrame({
 
   // Centered punch-hole cutout
   const punchHoleGeometry = useMemo(
-    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.02, 24),
+    () => new THREE.CircleGeometry(metrics.bodyWidth * 0.02, 48),
     [metrics.bodyWidth]
   );
 
   // Galaxy vertical camera rings
   const lensRadius = metrics.bodyWidth * 0.046;
   const lensGeometry = useMemo(
-    () => new THREE.CylinderGeometry(lensRadius, lensRadius, depth * 0.15, 24),
+    () => new THREE.CylinderGeometry(lensRadius, lensRadius, depth * 0.15, 48),
     [lensRadius, depth]
   );
   const lensGlassGeo = useMemo(
-    () => new THREE.CircleGeometry(lensRadius * 0.78, 24),
+    () => new THREE.CircleGeometry(lensRadius * 0.78, 48),
     [lensRadius]
   );
 

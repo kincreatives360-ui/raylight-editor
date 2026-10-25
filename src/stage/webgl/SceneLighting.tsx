@@ -89,6 +89,8 @@ const SpotLightItem: React.FC<{
                 shadow-normalBias={0.02}
                 shadow-mapSize-width={2048}
                 shadow-mapSize-height={2048}
+                shadow-camera-near={0.1}
+                shadow-camera-far={Math.max(12, distance)}
             />
         </group>
     );
@@ -324,6 +326,10 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                                 castShadow={castShadow}
                                 shadow-bias={-0.0001}
                                 shadow-normalBias={0.02}
+                                shadow-mapSize-width={2048}
+                                shadow-mapSize-height={2048}
+                                shadow-camera-near={0.1}
+                                shadow-camera-far={Math.max(10, source.distance ?? 10)}
                             />
                             {showGizmos && <LightGizmo source={source} position={position} color={color} />}
                         </React.Fragment>
@@ -376,6 +382,12 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                             shadow-normalBias={0.02}
                             shadow-mapSize-width={2048}
                             shadow-mapSize-height={2048}
+                            shadow-camera-near={0.1}
+                            shadow-camera-far={40}
+                            shadow-camera-left={-4}
+                            shadow-camera-right={4}
+                            shadow-camera-top={4}
+                            shadow-camera-bottom={-4}
                         />
                         {showGizmos && <LightGizmo source={source} position={position} color={color} />}
                     </React.Fragment>

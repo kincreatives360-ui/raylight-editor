@@ -176,7 +176,7 @@ export function MacBookProFrame({
     const notchW = metrics.screenWidth * 0.14;
     const notchH = metrics.screenHeight * 0.052;
     const notchRadius = notchH * 0.25;
-    return new THREE.ShapeGeometry(roundedRect(notchW, notchH, notchRadius), 8);
+    return new THREE.ShapeGeometry(roundedRect(notchW, notchH, notchRadius), 48);
   }, [metrics.screenWidth, metrics.screenHeight]);
 
   const baseBodyGeometry = useMemo(
@@ -217,7 +217,7 @@ export function MacBookProFrame({
         baseThickness * 0.36,
         baseThickness * 0.36,
         metrics.bodyWidth * 0.62,
-        24
+        48
       ),
     [baseThickness, metrics.bodyWidth]
   );

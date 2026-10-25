@@ -63,4 +63,18 @@ describe('detailed iPhone hardware geometry', () => {
     expect(geometry.groups.length).toBeGreaterThanOrEqual(2);
     geometry.dispose();
   });
+
+  it('allocates high tessellation segment counts for smooth curves and round hardware apertures', () => {
+    const barrel = createCameraBarrelGeometry(0.04, 0.016, 0.007);
+    expect(barrel.ring.parameters.radialSegments).toBeGreaterThanOrEqual(32);
+    expect(barrel.ring.parameters.tubularSegments).toBeGreaterThanOrEqual(96);
+    expect(barrel.glass.parameters.radialSegments).toBeGreaterThanOrEqual(96);
+    barrel.ring.dispose();
+    barrel.glass.dispose();
+
+    const screen = createScreenGeometry(0.3, 0.65, 0.03);
+    // 64 curve segments ensures high polygon density for corners
+    expect(screen.attributes.position.count).toBeGreaterThan(100);
+    screen.dispose();
+  });
 });

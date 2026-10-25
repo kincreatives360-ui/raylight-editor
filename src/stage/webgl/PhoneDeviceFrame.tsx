@@ -90,7 +90,7 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     const notchWidth = settings.cutoutStyle === 'notch' ? safeWidth * 0.78 : cutoutWidth;
     const notchHeight = settings.cutoutStyle === 'notch' ? shortSide * 0.085 : cutoutHeight;
     const radius = settings.cutoutStyle === 'notch' ? notchHeight * 0.23 : cutoutRadius;
-    return new THREE.ShapeGeometry(roundedRect(notchWidth, notchHeight, radius), 32);
+    return new THREE.ShapeGeometry(roundedRect(notchWidth, notchHeight, radius), 48);
   }, [settings.cutoutStyle, cutoutWidth, cutoutHeight, cutoutRadius, shortSide, safeWidth]);
   const reflectionTexture = useMemo(
     () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
@@ -140,7 +140,7 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     side: THREE.FrontSide,
   }), [shadowTexture, effectiveShadowOpacity]);
   const cameraBumpGeometry = useMemo(
-    () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 32),
+    () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 48),
     [safeWidth]
   );
   const lensGeometry = useMemo(() => new THREE.CircleGeometry(safeWidth * 0.033, 48), [safeWidth]);

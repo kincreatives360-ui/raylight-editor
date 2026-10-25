@@ -160,7 +160,7 @@ export function DetailedIPhone15ProFrame({
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.flash.radius,
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.flash.radius * 0.92,
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.flash.depth,
-      24
+      48
     ),
     []
   );
@@ -170,7 +170,7 @@ export function DetailedIPhone15ProFrame({
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.lidar.radius,
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.lidar.radius * 0.92,
       BASE_UNIT_IPHONE_15_PRO_LAYOUT.camera.lidar.depth,
-      24
+      48
     ),
     []
   );

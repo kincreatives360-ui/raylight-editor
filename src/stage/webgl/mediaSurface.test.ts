@@ -39,6 +39,8 @@ describe('device media surfaces', () => {
   it('bounds allocations at the GPU limit even for extreme camera close-ups', () => {
     expect(getMediaTextureSize(16, 9, { pixelWidth: 100000, pixelHeight: 56250, maxTextureSize: 2048 }))
       .toEqual({ width: 2048, height: 1152 });
+    expect(getMediaTextureSize(16, 9, { pixelWidth: 100000, pixelHeight: 56250, maxTextureSize: 8192 }))
+      .toEqual({ width: 8192, height: 4608 });
   });
 
   it('keeps texture sizes stable across small camera movements', () => {

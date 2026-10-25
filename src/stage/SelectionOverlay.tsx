@@ -102,10 +102,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryProj = projectCorners(primaryEval);
 
-    const rotXDeg = radToDeg(primaryEval.rotation.x);
-    const rotYDeg = radToDeg(primaryEval.rotation.y);
-    const rotZDeg = radToDeg(primaryEval.rotation.z);
-
     // ============================================================================
     // 1. DRAG TO MOVE (Supports V Plane-Aware Move, G Screen Move, & Shift+A Rec!)
     // ============================================================================
@@ -854,61 +850,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 )}
             </div>
 
-            {/* FLOATING CROP PILL BUTTON DIRECTLY BENEATH SELECTED ELEMENT */}
-            {(layer.kind === 'image' || layer.kind === 'video') && !isLocked && !isEditingInlineText && (
-                <div
-                    style={{
-                        left: `${primaryProj.pS.x}px`,
-                        top: `${primaryProj.pS.y + 12}px`,
-                        transform: 'translate(-50%, 0)',
-                    }}
-                    className="absolute pointer-events-auto z-40"
-                >
-                    <button
-                        type="button"
-                        onClick={(e) => {
-                            e.stopPropagation();
-                            useSelectionStore.getState().setIsCropping(!isCropping);
-                        }}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-medium shadow-xl cursor-pointer transition border ${
-                            isCropping
-                                ? 'bg-[#0088ff] text-white border-white'
-                                : 'bg-[#18181b]/95 hover:bg-[#27272a] text-white border-white/15'
-                        }`}
-                        title="Crop image or video"
-                    >
-                        <Crop className="w-3 h-3" />
-                        <span>{isCropping ? 'Done' : 'Crop'}</span>
-                    </button>
-                </div>
-            )}
-
-            {/* BOTTOM HUD COORDINATE PILL */}
-            {!isEditingInlineText && (
-                <div
-                    style={{
-                        left: `${primaryProj.pS.x}px`,
-                        top: `${primaryProj.pS.y + ((layer.kind === 'image' || layer.kind === 'video') && !isLocked ? 44 : 12)}px`,
-                        transform: 'translate(-50%, 0)',
-                    }}
-                    className="absolute whitespace-nowrap px-2 py-0.5 rounded-full bg-[var(--bg-surface,#161619)]/90 border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[10px] font-mono tabular-nums text-[var(--text-muted,#a1a1aa)] shadow-xl pointer-events-none flex items-center gap-1.5"
-                >
-                    {isAnimateMode && (
-                        <span className="px-1.5 py-0.2 rounded bg-[var(--accent-danger,#f43f5e)] text-white font-bold">
-                            REC ⇧A
-                        </span>
-                    )}
-                    <span>
-                        {Math.round(primaryEval.position.x * 1920)},{' '}
-                        {Math.round(primaryEval.position.y * 1080)}, Z:{' '}
-                        {Math.round(primaryEval.position.z * 500)}
-                    </span>
-                    <span className="text-[var(--text-disabled,#71717a)]">|</span>
-                    <span className="text-[var(--accent-primary,#0088ff)]">
-                        {rotXDeg}° / {rotYDeg}° / {rotZDeg}°
-                    </span>
-                </div>
-            )}
         </div>
     );
 };

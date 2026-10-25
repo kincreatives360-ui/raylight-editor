@@ -31,10 +31,12 @@ export function getIPhone15ProMaterialPolicy(input: MaterialInput) {
 }
 
 function createReflectionTexture(opacity: number, tint: string): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 256;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
+  const canvas = typeof document !== 'undefined'
+    ? document.createElement('canvas')
+    : ({ width: 0, height: 0, getContext: () => null } as unknown as HTMLCanvasElement);
+  canvas.width = 1024;
+  canvas.height = 2048;
+  const ctx = canvas.getContext ? canvas.getContext('2d') : null;
   if (ctx) {
     const band = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
     band.addColorStop(0, `${tint}00`);
@@ -47,19 +49,23 @@ function createReflectionTexture(opacity: number, tint: string): THREE.CanvasTex
   }
   const texture = new THREE.CanvasTexture(canvas);
   texture.colorSpace = THREE.SRGBColorSpace;
-  texture.minFilter = THREE.LinearFilter;
+  texture.generateMipmaps = true;
+  texture.minFilter = THREE.LinearMipmapLinearFilter;
   texture.magFilter = THREE.LinearFilter;
+  texture.anisotropy = 8;
   return texture;
 }
 
 /** Soft local compositing shadow retained from the original device frame. */
 export function createDeviceShadowTexture(): THREE.CanvasTexture {
-  const canvas = document.createElement('canvas');
-  canvas.width = 512;
-  canvas.height = 512;
-  const ctx = canvas.getContext('2d');
+  const canvas = typeof document !== 'undefined'
+    ? document.createElement('canvas')
+    : ({ width: 0, height: 0, getContext: () => null } as unknown as HTMLCanvasElement);
+  canvas.width = 1024;
+  canvas.height = 1024;
+  const ctx = canvas.getContext ? canvas.getContext('2d') : null;
   if (ctx) {
-    const gradient = ctx.createRadialGradient(256, 256, 4, 256, 256, 250);
+    const gradient = ctx.createRadialGradient(512, 512, 8, 512, 512, 500);
     gradient.addColorStop(0, 'rgba(0,0,0,0.78)');
     gradient.addColorStop(0.35, 'rgba(0,0,0,0.38)');
     gradient.addColorStop(0.7, 'rgba(0,0,0,0.12)');

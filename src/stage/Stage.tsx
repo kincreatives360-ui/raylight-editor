@@ -84,6 +84,7 @@ const StageComponent: React.FC<StageProps> = ({
         isAnimateMode,
         canvasZoom,
         canvasPan,
+        rightSidebarOpen,
         selectLayer,
         setSelectedLayerIds,
         setActiveTool,
@@ -1360,6 +1361,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
             <OrientationGizmo
+                topInset={rightSidebarOpen ? 12 : 56}
                 cameraRotation={effectiveViewportFrame.camera.rotation}
                 onSetOrientation={handleSetOrientation}
                 onDragStart={beginDragTransaction}
