@@ -24,17 +24,32 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
     return <div className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />;
   }
 
-  // Calculate approximate aspect ratio percentage for skeleton box
-  const aspectStyle =
+  // Sizing: One dimension is relative to the workspace container, and the other is derived via aspectRatio.
+  const isPortrait = aspectRatio === '9:16';
+  const ratioString =
     aspectRatio === '9:16'
-      ? { aspectRatio: '9 / 16', maxHeight: '75%' }
+      ? '9 / 16'
       : aspectRatio === '1:1'
-      ? { aspectRatio: '1 / 1', maxHeight: '70%' }
+      ? '1 / 1'
       : aspectRatio === '4:3'
-      ? { aspectRatio: '4 / 3', maxHeight: '72%' }
+      ? '4 / 3'
       : aspectRatio === '21:9'
-      ? { aspectRatio: '21 / 9', maxHeight: '55%' }
-      : { aspectRatio: '16 / 9', maxHeight: '68%' };
+      ? '21 / 9'
+      : '16 / 9';
+
+  const aspectStyle: React.CSSProperties = isPortrait
+    ? {
+        height: '75%',
+        maxHeight: '75%',
+        maxWidth: '85%',
+        aspectRatio: ratioString,
+      }
+    : {
+        width: '75%',
+        maxWidth: '85%',
+        maxHeight: '75%',
+        aspectRatio: ratioString,
+      };
 
   return (
     <div
@@ -48,7 +63,7 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
       {/* Stage Artboard Skeleton */}
       <div
         style={aspectStyle}
-        className="w-auto h-auto max-w-[85%] rounded-lg border border-white/[0.08] bg-[#121217]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse"
+        className="rounded-lg border border-white/[0.08] bg-[#121217]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse"
       >
         <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3" />
         <div className="w-32 h-2.5 rounded bg-white/[0.05] mb-1.5" />

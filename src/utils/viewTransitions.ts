@@ -25,8 +25,8 @@ export function withViewTransition(updateFn: () => void | Promise<void>): void {
   }
 
   try {
-    (document as unknown as { startViewTransition: (cb: () => void) => void }).startViewTransition(() => {
-      updateFn();
+    (document as unknown as { startViewTransition: (cb: () => void | Promise<void>) => unknown }).startViewTransition(() => {
+      return updateFn();
     });
   } catch {
     updateFn();

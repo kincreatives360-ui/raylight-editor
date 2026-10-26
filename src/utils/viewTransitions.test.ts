@@ -1,7 +1,11 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, afterEach } from 'vitest';
 import { withViewTransition } from './viewTransitions';
 
 describe('View Transitions Utility (Detail 9)', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
   it('calls callback directly when startViewTransition is unsupported', () => {
     const cb = vi.fn();
     withViewTransition(cb);
@@ -10,16 +14,8 @@ describe('View Transitions Utility (Detail 9)', () => {
 
   it('uses document.startViewTransition when available', () => {
     const mockStartViewTransition = vi.fn((updateCb: () => void) => updateCb());
-    Object.defineProperty(globalThis, 'document', {
-      value: { startViewTransition: mockStartViewTransition },
-      configurable: true,
-      writable: true,
-    });
-    Object.defineProperty(globalThis, 'window', {
-      value: { matchMedia: () => ({ matches: false }) },
-      configurable: true,
-      writable: true,
-    });
+    vi.stubGlobal('document', { startViewTransition: mockStartViewTransition });
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
 
     const cb = vi.fn();
     withViewTransition(cb);
@@ -28,18 +24,25 @@ describe('View Transitions Utility (Detail 9)', () => {
     expect(cb).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves promise returned by updateFn in startViewTransition', async () => {
+    let capturedCbResult: unknown;
+    const mockStartViewTransition = vi.fn((updateCb: () => unknown) => {
+      capturedCbResult = updateCb();
+      return capturedCbResult;
+    });
+    vi.stubGlobal('document', { startViewTransition: mockStartViewTransition });
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: false }) });
+
+    const promise: Promise<void> = Promise.resolve();
+    withViewTransition(() => promise);
+
+    expect(capturedCbResult).toBe(promise);
+  });
+
   it('bypasses startViewTransition when prefers-reduced-motion is true', () => {
     const mockStartViewTransition = vi.fn((updateCb: () => void) => updateCb());
-    Object.defineProperty(globalThis, 'document', {
-      value: { startViewTransition: mockStartViewTransition },
-      configurable: true,
-      writable: true,
-    });
-    Object.defineProperty(globalThis, 'window', {
-      value: { matchMedia: () => ({ matches: true }) },
-      configurable: true,
-      writable: true,
-    });
+    vi.stubGlobal('document', { startViewTransition: mockStartViewTransition });
+    vi.stubGlobal('window', { matchMedia: () => ({ matches: true }) });
 
     const cb = vi.fn();
     withViewTransition(cb);

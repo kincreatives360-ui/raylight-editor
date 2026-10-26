@@ -145,7 +145,33 @@ export default function App() {
   const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [commandMenuOpen, setCommandMenuOpen] = useState<boolean>(false);
-  const [undoToast, setUndoToast] = useState<{ message: string; isOpen: boolean }>({ message: '', isOpen: false });
+  const [undoToast, setUndoToast] = useState<{ message: string; isOpen: boolean; historyLength?: number }>({ message: '', isOpen: false });
+
+  const handleDismissUndoToast = useCallback(() => {
+    setUndoToast((prev) => ({ ...prev, isOpen: false }));
+  }, []);
+
+  const handleToastUndo = useCallback(() => {
+    if (undoToast.isOpen) {
+      if (undoToast.historyLength !== undefined) {
+        if (useProjectStore.getState().past.length >= undoToast.historyLength) {
+          undo();
+        }
+      } else {
+        undo();
+      }
+      handleDismissUndoToast();
+    }
+  }, [undoToast.isOpen, undoToast.historyLength, undo, handleDismissUndoToast]);
+
+  useEffect(() => {
+    if (!undoToast.isOpen || undoToast.historyLength === undefined) return;
+    return useProjectStore.subscribe((state) => {
+      if (state.past.length < undoToast.historyLength!) {
+        setUndoToast((prev) => ({ ...prev, isOpen: false }));
+      }
+    });
+  }, [undoToast.isOpen, undoToast.historyLength]);
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(() => ({
     format: isMediaRecorderMp4Supported() ? 'mp4' : 'webm',
@@ -601,6 +627,13 @@ export default function App() {
 
       const key = e.key.toLowerCase();
 
+      // Cmd/Ctrl + E: Export Video / GIF / Frame (Detail 4)
+      if ((e.metaKey || e.ctrlKey) && key === 'e') {
+        e.preventDefault();
+        handleOpenExportModal();
+        return;
+      }
+
       // Cmd/Ctrl + K: Open Command Menu (Detail 3)
       if ((e.metaKey || e.ctrlKey) && key === 'k') {
         e.preventDefault();
@@ -738,24 +771,32 @@ export default function App() {
         }
       }
 
-      // \: Zen Mode (Distraction-free 3D & Timeline stage)
+      // \: Zen Mode (Distraction-free 3D & Timeline stage) with View Transition (Detail 9)
       if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === '\\') {
         e.preventDefault();
-        if (leftPanelOpen || rightSidebarOpen) {
-          setLeftPanelOpen(false);
-          setRightSidebarOpen(false);
-        } else {
-          setLeftPanelOpen(true);
-          setRightSidebarOpen(true);
-        }
+        withViewTransition(() => {
+          if (leftPanelOpen || rightSidebarOpen) {
+            setLeftPanelOpen(false);
+            setRightSidebarOpen(false);
+          } else {
+            setLeftPanelOpen(true);
+            setRightSidebarOpen(true);
+          }
+        });
         return;
       }
 
       // Cmd/Ctrl + Z / Cmd/Ctrl + Shift + Z: Undo / Redo
       if ((e.metaKey || e.ctrlKey) && key === 'z') {
         e.preventDefault();
-        if (e.shiftKey) redo();
-        else undo();
+        if (e.shiftKey) {
+          redo();
+        } else {
+          undo();
+          if (undoToast.isOpen) {
+            setUndoToast((prev) => ({ ...prev, isOpen: false }));
+          }
+        }
         return;
       }
 
@@ -798,6 +839,7 @@ export default function App() {
         setUndoToast({
           message: count === 1 ? 'Deleted layer' : `Deleted ${count} layers`,
           isOpen: true,
+          historyLength: useProjectStore.getState().past.length,
         });
         return;
       }
@@ -894,6 +936,9 @@ export default function App() {
     setShowSafeArea,
     setShortcutsModalOpen,
     shortcutsModalOpen,
+    commandMenuOpen,
+    handleOpenExportModal,
+    undoToast.isOpen,
   ]);
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1164,7 +1209,7 @@ export default function App() {
       category: 'Project',
       icon: Download,
       shortcut: ['Mod', 'E'],
-      action: () => setExportModalOpen(true),
+      action: handleOpenExportModal,
     },
     {
       id: 'toggle-zen',
@@ -1175,8 +1220,13 @@ export default function App() {
       shortcut: ['\\'],
       action: () => {
         withViewTransition(() => {
-          toggleLeftPanel();
-          toggleRightSidebar();
+          if (leftPanelOpen || rightSidebarOpen) {
+            setLeftPanelOpen(false);
+            setRightSidebarOpen(false);
+          } else {
+            setLeftPanelOpen(true);
+            setRightSidebarOpen(true);
+          }
         });
       },
     },
@@ -1233,10 +1283,10 @@ export default function App() {
       shortcut: ['?'],
       action: () => setShortcutsModalOpen(true),
     },
-  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, setLeftPanelOpen, setRightSidebarOpen]);
+  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, handleOpenExportModal]);
 
   return (
-    <div className="flex h-screen w-screen flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
+    <div className="flex h-full w-full flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
       <input
         ref={fileInputRef}
@@ -1693,8 +1743,8 @@ export default function App() {
       <UndoToast
         message={undoToast.message}
         isOpen={undoToast.isOpen}
-        onUndo={undo}
-        onDismiss={() => setUndoToast((prev) => ({ ...prev, isOpen: false }))}
+        onUndo={handleToastUndo}
+        onDismiss={handleDismissUndoToast}
       />
       <CommandMenu isOpen={commandMenuOpen} onClose={() => setCommandMenuOpen(false)} commands={commandList} />
       <KeyboardShortcutsModal

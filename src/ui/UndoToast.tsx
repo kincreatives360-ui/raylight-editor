@@ -19,11 +19,13 @@ export const UndoToast: React.FC<UndoToastProps> = ({
   durationMs = 6000,
 }) => {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const onDismissRef = useRef(onDismiss);
+  onDismissRef.current = onDismiss;
 
   useEffect(() => {
     if (!isOpen) return;
     timerRef.current = setTimeout(() => {
-      onDismiss();
+      onDismissRef.current();
     }, durationMs);
 
     return () => {
@@ -31,7 +33,7 @@ export const UndoToast: React.FC<UndoToastProps> = ({
         clearTimeout(timerRef.current);
       }
     };
-  }, [isOpen, durationMs, onDismiss]);
+  }, [isOpen, durationMs]);
 
   if (!isOpen) return null;
 
