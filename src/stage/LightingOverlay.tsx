@@ -387,9 +387,10 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                             }}
                             transform={`translate(${posScreen.x}, ${posScreen.y})`}
                         >
+                            <title>{l.name || 'Light'}</title>
                             <circle
                                 r="14"
-                                className="fill-[#161619]/80 stroke-[#f97316]/70 group-hover:stroke-[#f97316] group-hover:scale-110 transition-all duration-150"
+                                className="fill-[#161619]/90 stroke-[#f97316]/70 group-hover:stroke-[#f97316] group-hover:scale-110 transition-all duration-150"
                                 strokeWidth="1.5"
                             />
                             <foreignObject x="-7" y="-7" width="14" height="14" className="pointer-events-none">
@@ -397,6 +398,13 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                                     {renderLightIcon(l.type)}
                                 </div>
                             </foreignObject>
+                            <text
+                                x="18"
+                                y="4"
+                                className="fill-white text-[10px] font-medium opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none drop-shadow"
+                            >
+                                {l.name || 'Light'}
+                            </text>
                         </g>
                     );
                 })}

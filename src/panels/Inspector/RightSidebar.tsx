@@ -75,6 +75,7 @@ import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
 import { DeviceFrameSection } from './sections/DeviceFrameSection';
 import { LightInspector } from './sections/LightInspector';
+import { SceneLightsList } from './sections/SceneLightsList';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDevicePlacement } from '../../model/deviceFrame';
 import { ASPECT_RATIO_CONFIG, getArtboardDimensions } from '../../stage/stageUtils';
 import { EasingPopover } from '../Timeline/EasingPopover';
@@ -516,15 +517,19 @@ const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
 };
 
 interface ProjectSettingsPanelProps {
+    activeShot?: Shot;
     onSwapImageClick?: () => void;
     onOpenShortcuts?: () => void;
 }
 
 const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
+    activeShot: propsActiveShot,
     onSwapImageClick: _onSwapImageClick,
     onOpenShortcuts: _onOpenShortcuts,
 }) => {
     const { project, updateProject } = useProjectStore();
+    const { selectedLightId, selectLight } = useSelectionStore();
+    const activeShot = propsActiveShot || project.shots[0];
     const [presetMenuOpen, setPresetMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -1172,6 +1177,17 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                         </div>
                     )}
                 </div>
+
+                {/* Scene Lights */}
+                {activeShot && (
+                    <div className="pt-3 border-t border-white/[0.06]">
+                        <SceneLightsList
+                            activeShot={activeShot}
+                            selectedLightId={selectedLightId}
+                            onSelectLight={selectLight}
+                        />
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -3609,6 +3625,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 />
             ) : (
                 <ProjectSettingsPanel
+                    activeShot={activeShot}
                     onSwapImageClick={onSwapImageClick}
                     onOpenShortcuts={onOpenShortcuts}
                 />

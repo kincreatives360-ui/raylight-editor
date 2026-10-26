@@ -6,6 +6,8 @@ import { radToDeg, degToRad } from '../../../model/defaults';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { ColorPicker } from '../ColorPicker';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
+import { SceneLightsList } from './SceneLightsList';
 
 interface LightInspectorProps {
     activeShot: Shot;
@@ -19,6 +21,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
     onClose,
 }) => {
     const { updateShot } = useProjectStore();
+    const selectLight = useSelectionStore((s) => s.selectLight);
     const shotLight = activeShot.light;
 
     const isKey =
@@ -127,6 +130,18 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 >
                     <X className="w-3.5 h-3.5" />
                 </button>
+            </div>
+
+            {/* Scene Lights Navigator */}
+            <div className="p-3.5 bg-[#141416]/60">
+                <SceneLightsList
+                    activeShot={activeShot}
+                    selectedLightId={selectedLightId}
+                    onSelectLight={(id) => {
+                        if (id) selectLight(id);
+                        else onClose();
+                    }}
+                />
             </div>
 
             {/* Type Dropdown */}
