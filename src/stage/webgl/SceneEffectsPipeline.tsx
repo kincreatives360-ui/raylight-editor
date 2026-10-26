@@ -79,6 +79,8 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         };
     }, [gl, scene, camera, size.width, size.height, dpr]);
 
+    const prevCameraPosRef = useRef<{ x: number; y: number } | null>(null);
+
     // Update passes and uniforms from evaluated effects state
     useLayoutEffect(() => {
         const composer = composerRef.current;
@@ -90,6 +92,11 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const pixelW = Math.round(size.width * dpr);
         const pixelH = Math.round(size.height * dpr);
         fxaaPass.setSize(pixelW, pixelH);
+
+        const deltaX = prevCameraPosRef.current ? camera.position.x - prevCameraPosRef.current.x : 0;
+        const deltaY = prevCameraPosRef.current ? camera.position.y - prevCameraPosRef.current.y : 0;
+        prevCameraPosRef.current = { x: camera.position.x, y: camera.position.y };
+        const cameraMotion = { x: deltaX * 0.15, y: deltaY * 0.15 };
 
         // Reconstruct active passes in evaluated order
         composer.passes = [renderPass];
@@ -103,7 +110,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 passMapRef.current.set(key, pass);
             }
             pass.renderToScreen = false;
-            configureSceneEffectPass(pass, key, effects, pixelW, pixelH);
+            configureSceneEffectPass(pass, key, effects, pixelW, pixelH, cameraMotion);
             composer.addPass(pass);
         }
 
@@ -114,7 +121,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         // Run FXAA on sRGB perceptual samples and output to canvas
         fxaaPass.renderToScreen = true;
         composer.addPass(fxaaPass);
-    }, [effects, size.width, size.height, dpr]);
+    }, [effects, size.width, size.height, dpr, camera.position.x, camera.position.y]);
 
     // Deterministic frame render
     useFrame(() => {

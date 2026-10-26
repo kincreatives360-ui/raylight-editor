@@ -780,26 +780,25 @@ export const IMAGE_FRAGMENT_SHADER = `precision highp float;
 
     vec2 uv = uOffset + vUv * uRepeat;
 
-    // Contain fit letterboxes: outside the image rect the backdrop
-    // color shows through.
-    float inside =
-      step(0.0, uv.x) * step(uv.x, 1.0) *
-      step(0.0, uv.y) * step(uv.y, 1.0);
-
     vec4 tex;
+    float inside;
     if (uBlur > 0.001) {
       float spread = uBlur * 0.035;
-      tex = texture2D(uMap, uv) * 0.22;
-      tex += texture2D(uMap, uv + vec2( 0.94, -0.40) * spread) * 0.13;
-      tex += texture2D(uMap, uv + vec2(-0.94,  0.46) * spread) * 0.13;
-      tex += texture2D(uMap, uv + vec2(-0.09,  0.93) * spread) * 0.13;
-      tex += texture2D(uMap, uv + vec2( 0.34, -0.79) * spread) * 0.13;
-      tex += texture2D(uMap, uv + vec2( 0.55,  0.55) * spread * 1.5) * 0.065;
-      tex += texture2D(uMap, uv + vec2(-0.55, -0.55) * spread * 1.5) * 0.065;
-      tex += texture2D(uMap, uv + vec2(-0.55,  0.55) * spread * 1.5) * 0.065;
-      tex += texture2D(uMap, uv + vec2( 0.55, -0.55) * spread * 1.5) * 0.065;
+      tex = texture2D(uMap, clamp(uv, vec2(0.0), vec2(1.0))) * 0.22;
+      tex += texture2D(uMap, clamp(uv + vec2( 0.94, -0.40) * spread, vec2(0.0), vec2(1.0))) * 0.13;
+      tex += texture2D(uMap, clamp(uv + vec2(-0.94,  0.46) * spread, vec2(0.0), vec2(1.0))) * 0.13;
+      tex += texture2D(uMap, clamp(uv + vec2(-0.09,  0.93) * spread, vec2(0.0), vec2(1.0))) * 0.13;
+      tex += texture2D(uMap, clamp(uv + vec2( 0.34, -0.79) * spread, vec2(0.0), vec2(1.0))) * 0.13;
+      tex += texture2D(uMap, clamp(uv + vec2( 0.55,  0.55) * spread * 1.5, vec2(0.0), vec2(1.0))) * 0.065;
+      tex += texture2D(uMap, clamp(uv + vec2(-0.55, -0.55) * spread * 1.5, vec2(0.0), vec2(1.0))) * 0.065;
+      tex += texture2D(uMap, clamp(uv + vec2(-0.55,  0.55) * spread * 1.5, vec2(0.0), vec2(1.0))) * 0.065;
+      tex += texture2D(uMap, clamp(uv + vec2( 0.55, -0.55) * spread * 1.5, vec2(0.0), vec2(1.0))) * 0.065;
+      float feather = spread * 1.8;
+      inside = smoothstep(-feather, feather, uv.x) * (1.0 - smoothstep(1.0 - feather, 1.0 + feather, uv.x)) *
+               smoothstep(-feather, feather, uv.y) * (1.0 - smoothstep(1.0 - feather, 1.0 + feather, uv.y));
     } else {
       tex = texture2D(uMap, uv);
+      inside = step(0.0, uv.x) * step(uv.x, 1.0) * step(0.0, uv.y) * step(uv.y, 1.0);
     }
 
     // The texture is tagged sRGB, so sampling already yields linear

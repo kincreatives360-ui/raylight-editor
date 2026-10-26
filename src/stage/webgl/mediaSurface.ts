@@ -53,8 +53,11 @@ export function drawMediaFrame(
     const cropHeight = Math.min(clamp(crop.height) * naturalHeight, naturalHeight - y);
     if (cropWidth > 0 && cropHeight > 0) {
       const rect = getImageFitRect(cropWidth, cropHeight, width, height, options.fit, options.pan, options.zoom);
-      if (options.blurPx) ctx.filter = `blur(${Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1)}px)`;
-      if (typeof ctx.beginPath === 'function') {
+      const blurVal = options.blurPx ? Math.min(28, options.blurPx * 1.5) * (options.pixelRatio ?? 1) : 0;
+      if (blurVal > 0) {
+        ctx.filter = `blur(${blurVal}px)`;
+      }
+      if (blurVal <= 0 && typeof ctx.beginPath === 'function') {
         ctx.beginPath();
         if (typeof ctx.rect === 'function') ctx.rect(0, 0, width, height);
         if (typeof ctx.clip === 'function') ctx.clip();

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo } from './layerEffects';
+import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo, applyMotionBlur } from './layerEffects';
 
 describe('layer effect rendering', () => {
   let origDocument: unknown;
@@ -88,5 +88,37 @@ describe('layer effect rendering', () => {
     expect(withShadow).not.toBeNull();
     expect(withShadow!.widthScale).toBeGreaterThan(1);
     expect(withShadow!.heightScale).toBeGreaterThan(1);
+  });
+
+  it('applyMotionBlur executes sample draws along motion vector when displacement > 0.5', () => {
+    const mockCtx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      resetTransform: vi.fn(),
+      drawImage: vi.fn(),
+      clearRect: vi.fn(),
+    };
+    (globalThis as unknown as { document?: unknown }).document = {
+      createElement: vi.fn(() => ({
+        width: 100,
+        height: 100,
+        getContext: vi.fn(() => mockCtx),
+      })),
+    };
+
+    const targetCanvas = {
+      width: 100,
+      height: 100,
+      getContext: vi.fn(() => mockCtx),
+    } as unknown as HTMLCanvasElement;
+
+    // Displacement <= 0.5: no-op
+    applyMotionBlur(targetCanvas, 0.2, 0.1, 8);
+    expect(mockCtx.drawImage).not.toHaveBeenCalled();
+
+    // Displacement > 0.5: draws 8 samples
+    applyMotionBlur(targetCanvas, 10, 5, 8);
+    // 1 draw to source canvas + 8 draws to target
+    expect(mockCtx.drawImage).toHaveBeenCalledTimes(9);
   });
 });

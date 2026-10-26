@@ -14,6 +14,7 @@ export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
     dofBlurPx: number;
     dofBokehShape?: SceneEffects['depthOfField']['bokehShape'];
     totalBlurPx: number;
+    motionBlur?: { x: number; y: number; samples: number };
 }
 
 export interface EvaluatedProjectFrame {
@@ -243,6 +244,26 @@ export function evaluateProjectAtTime(
         const manualBlurPx =
             (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
 
+        let motionBlur: { x: number; y: number; samples: number } | undefined;
+        if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
+            const dt = 1000 / 60;
+            const prevTime = Math.max(0, shotLocalTimeMs - dt);
+            const prevLayer = evaluateLayerAtTime(
+                isHidden ? { ...layer, hidden: true } : layer,
+                prevTime
+            );
+            const shutter = (effects.state.motionBlur.shutterAngle ?? 180) / 360;
+            const dx = (evalLayer.position.x - prevLayer.position.x) * shutter;
+            const dy = (evalLayer.position.y - prevLayer.position.y) * shutter;
+            if (Math.hypot(dx, dy) > 0.0001) {
+                motionBlur = {
+                    x: dx,
+                    y: dy,
+                    samples: Math.max(2, Math.min(32, Math.round(effects.state.motionBlur.samples ?? 8))),
+                };
+            }
+        }
+
         return {
             ...evalLayer,
             layer:
@@ -252,6 +273,7 @@ export function evaluateProjectAtTime(
             dofBlurPx,
             dofBokehShape: effects.state.depthOfField.bokehShape,
             totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
+            motionBlur,
         };
     });
 

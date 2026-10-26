@@ -1,6 +1,8 @@
 // src/ui/ScrubInput.tsx
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
+
+const DRAG_THRESHOLD = 3;
 
 interface ScrubInputProps {
     label: React.ReactNode;
@@ -20,7 +22,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     min = -Infinity,
     max = Infinity,
     step = 1,
-    decimals = 0,
+    decimals,
     unit = '',
     onChange,
     className,
@@ -29,59 +31,128 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     const [isEditing, setIsEditing] = useState(false);
     const [isScrubbing, setIsScrubbing] = useState(false);
     const [inputText, setInputText] = useState('');
+
     const startXRef = useRef<number>(0);
-    const startValRef = useRef<number>(value);
-    const movedRef = useRef<boolean>(false);
+    const startValRef = useRef<number>(0);
+    const hasDraggedRef = useRef<boolean>(false);
+    const isDragTransactionActiveRef = useRef<boolean>(false);
     const activePointerIdRef = useRef<number | null>(null);
+    const isCanceledRef = useRef<boolean>(false);
+    const isCommittedRef = useRef<boolean>(false);
+
     const containerRef = useRef<HTMLDivElement | null>(null);
+    const inputRef = useRef<HTMLInputElement | null>(null);
+
+    const safeValue = Number.isFinite(value) ? value : (Number.isFinite(min) ? min : 0);
+
+    const autoDecimals = step.toString().includes('.')
+        ? (step.toString().split('.')[1]?.length ?? 0)
+        : 0;
+    const effectiveDecimals = decimals !== undefined ? decimals : autoDecimals;
 
     const clampAndRound = useCallback(
         (raw: number) => {
             const clamped = Math.max(min, Math.min(max, raw));
-            const factor = Math.pow(10, decimals);
+            const factor = Math.pow(10, effectiveDecimals);
             return Math.round(clamped * factor) / factor;
         },
-        [min, max, decimals]
+        [min, max, effectiveDecimals]
     );
+
+    // Reset document cursor on unmount if component unmounts mid-scrub
+    useEffect(() => {
+        return () => {
+            if (typeof document !== 'undefined') {
+                document.body.style.cursor = '';
+                document.body.style.userSelect = '';
+            }
+        };
+    }, []);
+
+    // Focus & select all text when entering edit mode
+    useEffect(() => {
+        if (isEditing && inputRef.current) {
+            inputRef.current.focus();
+            inputRef.current.select();
+        }
+    }, [isEditing]);
+
+    const startEditing = () => {
+        isCanceledRef.current = false;
+        isCommittedRef.current = false;
+        setInputText(safeValue.toFixed(effectiveDecimals));
+        setIsEditing(true);
+    };
+
+    const commitTextInput = () => {
+        if (isCanceledRef.current || isCommittedRef.current) return;
+        isCommittedRef.current = true;
+        setIsEditing(false);
+
+        const parsed = parseFloat(inputText);
+        if (!Number.isNaN(parsed)) {
+            onChange(clampAndRound(parsed));
+        }
+    };
+
+    const cancelTextInput = () => {
+        isCanceledRef.current = true;
+        setIsEditing(false);
+        containerRef.current?.focus();
+    };
 
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (isEditing) return;
-        // Only primary pointer (e.g. left click or first touch)
         if (e.button !== 0 && e.pointerType === 'mouse') return;
 
         startXRef.current = e.clientX;
-        startValRef.current = value;
-        movedRef.current = false;
+        startValRef.current = safeValue;
+        hasDraggedRef.current = false;
         activePointerIdRef.current = e.pointerId;
-        setIsScrubbing(true);
 
         try {
             e.currentTarget.setPointerCapture(e.pointerId);
         } catch {
             // Ignore capture failure in environments that don't support it
         }
-
-        beginDragTransaction();
     };
 
     const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
         if (activePointerIdRef.current !== e.pointerId) return;
 
         const dx = e.clientX - startXRef.current;
-        if (Math.abs(dx) > 2) {
-            movedRef.current = true;
+
+        if (!hasDraggedRef.current) {
+            if (Math.abs(dx) < DRAG_THRESHOLD) {
+                return;
+            }
+            hasDraggedRef.current = true;
+            setIsScrubbing(true);
+
+            if (typeof document !== 'undefined') {
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+            }
+
+            beginDragTransaction();
+            isDragTransactionActiveRef.current = true;
         }
 
         const multiplier = e.shiftKey ? 10 : e.altKey ? 0.1 : 1;
-        const delta = dx * step * multiplier * 0.5;
+        const delta = (dx - Math.sign(dx) * DRAG_THRESHOLD) * step * multiplier * 0.5;
         onChange(clampAndRound(startValRef.current + delta));
     };
 
-    const finishPointerDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const finishPointerDrag = (e: React.PointerEvent<HTMLDivElement>): boolean => {
         if (activePointerIdRef.current !== e.pointerId) return false;
         activePointerIdRef.current = null;
-        movedRef.current = false;
         setIsScrubbing(false);
+
+        if (typeof document !== 'undefined') {
+            document.body.style.cursor = '';
+            document.body.style.userSelect = '';
+        }
+
         try {
             if (e.currentTarget.hasPointerCapture(e.pointerId)) {
                 e.currentTarget.releasePointerCapture(e.pointerId);
@@ -89,15 +160,22 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         } catch {
             // Ignore release failure
         }
-        commitDragTransaction();
+
+        if (isDragTransactionActiveRef.current) {
+            isDragTransactionActiveRef.current = false;
+            commitDragTransaction();
+        }
+
         return true;
     };
 
     const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
+        const didDrag = hasDraggedRef.current;
         if (!finishPointerDrag(e)) return;
-        if (!movedRef.current) {
-            setInputText(value.toFixed(decimals));
-            setIsEditing(true);
+
+        if (!didDrag) {
+            // User performed a click without dragging -> open inline editor
+            startEditing();
         }
     };
 
@@ -107,14 +185,6 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
 
     const handleLostPointerCapture = (e: React.PointerEvent<HTMLDivElement>) => {
         finishPointerDrag(e);
-    };
-
-    const commitTextInput = () => {
-        setIsEditing(false);
-        const parsed = parseFloat(inputText);
-        if (!Number.isNaN(parsed)) {
-            onChange(clampAndRound(parsed));
-        }
     };
 
     const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -136,8 +206,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             e.stopPropagation();
             e.preventDefault();
             if (e.code === 'Space') {
-                setInputText(value.toFixed(decimals));
-                setIsEditing(true);
+                startEditing();
             }
             return;
         }
@@ -148,20 +217,15 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
             e.preventDefault();
             e.stopPropagation();
-            beginDragTransaction();
-            onChange(clampAndRound(value + effectiveStep));
-            commitDragTransaction();
+            onChange(clampAndRound(safeValue + effectiveStep));
         } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
             e.preventDefault();
             e.stopPropagation();
-            beginDragTransaction();
-            onChange(clampAndRound(value - effectiveStep));
-            commitDragTransaction();
+            onChange(clampAndRound(safeValue - effectiveStep));
         } else if (e.key === 'Enter') {
             e.preventDefault();
             e.stopPropagation();
-            setInputText(value.toFixed(decimals));
-            setIsEditing(true);
+            startEditing();
         }
     };
 
@@ -173,7 +237,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             role="spinbutton"
             tabIndex={isEditing ? -1 : 0}
             aria-label={labelString}
-            aria-valuenow={value}
+            aria-valuenow={safeValue}
             aria-valuemin={Number.isFinite(min) ? min : undefined}
             aria-valuemax={Number.isFinite(max) ? max : undefined}
             onPointerDown={handlePointerDown}
@@ -183,8 +247,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             onLostPointerCapture={handleLostPointerCapture}
             onKeyDown={handleKeyDown}
             onDoubleClick={() => {
-                setInputText(value.toFixed(decimals));
-                setIsEditing(true);
+                if (!isEditing) startEditing();
             }}
             title="Drag left/right to scrub, use arrow keys, or click/press Enter to type exact value"
             style={{ touchAction: 'none' }}
@@ -200,8 +263,8 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
 
             {isEditing ? (
                 <input
+                    ref={inputRef}
                     type="text"
-                    autoFocus
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onBlur={commitTextInput}
@@ -210,17 +273,17 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                         if (e.key === 'Enter') {
                             e.preventDefault();
                             commitTextInput();
+                            containerRef.current?.focus();
                         } else if (e.key === 'Escape') {
                             e.preventDefault();
-                            setIsEditing(false);
-                            containerRef.current?.blur();
+                            cancelTextInput();
                         }
                     }}
                     className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] outline-none tracking-tight caret-[var(--accent-primary,#0088ff)]"
                 />
             ) : (
                 <span className="text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] truncate tracking-tight">
-                    {value.toFixed(decimals)}
+                    {safeValue.toFixed(effectiveDecimals)}
                     {unit}
                 </span>
             )}

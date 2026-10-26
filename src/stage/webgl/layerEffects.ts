@@ -30,6 +30,29 @@ export function applyBokehBlur(canvas: HTMLCanvasElement, radius: number, shape?
     ctx.restore();
 }
 
+export function applyMotionBlur(canvas: HTMLCanvasElement, motionX: number, motionY: number, samples = 8) {
+    const dist = Math.hypot(motionX, motionY);
+    if (dist <= 0.5) return;
+    const source = document.createElement('canvas');
+    source.width = canvas.width;
+    source.height = canvas.height;
+    const sourceCtx = source.getContext('2d');
+    const ctx = canvas.getContext('2d');
+    if (!sourceCtx || !ctx) return;
+    sourceCtx.drawImage(canvas, 0, 0);
+    ctx.save();
+    ctx.resetTransform();
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const count = Math.max(2, Math.min(32, Math.round(samples)));
+    ctx.globalAlpha = 1 / count;
+    ctx.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < count; i++) {
+        const t = (i / (count - 1)) - 0.5;
+        ctx.drawImage(source, motionX * t, motionY * t);
+    }
+    ctx.restore();
+}
+
 export function applyLayerReveal(ctx: CanvasRenderingContext2D, width: number, height: number, sweep = 1, path = 1) {
     const progress = Math.max(0, Math.min(1, sweep, path));
     if (progress < 1) ctx.clearRect(width * progress, 0, width * (1 - progress), height);

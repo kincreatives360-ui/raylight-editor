@@ -675,8 +675,10 @@ async function drawLayerContentOnCanvas(
       ctx.fill();
       clearShadow(ctx);
       ctx.save();
-      drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
-      ctx.clip();
+      if (totalBlur <= 0.35) {
+        drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
+        ctx.clip();
+      }
       const asset = project.assets[imageLayer.assetId];
       const isVideo = layer.kind === 'video' || Boolean(asset?.mimeType?.startsWith('video/'));
       const video = isVideo && asset?.dataUrl ? getOrCreateVideoElement(asset.dataUrl) : undefined;

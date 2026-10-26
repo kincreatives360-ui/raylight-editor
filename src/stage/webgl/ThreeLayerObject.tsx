@@ -19,7 +19,7 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 import { MacBookProDeviceFrame } from './MacBookProDeviceFrame';
-import { applyBokehBlur, applyLayerReveal, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
+import { applyBokehBlur, applyMotionBlur, applyLayerReveal, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -137,6 +137,33 @@ function drawStudioPlaceholder(
     ctx.restore();
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function getLayerBlurBleedLayout(
+    canvasW: number,
+    canvasH: number,
+    totalBlurPx: number,
+    dofBlurPx: number,
+    motionBlur?: { x: number; y: number },
+    deviceFramed = false
+) {
+    const motionDistPx = motionBlur ? Math.hypot(motionBlur.x * canvasW, motionBlur.y * canvasH) : 0;
+    const effectiveBlurPx = totalBlurPx + dofBlurPx * 1.5 + motionDistPx;
+    const blurPadding = (!deviceFramed && effectiveBlurPx > 0.1)
+        ? Math.min(256, Math.ceil(effectiveBlurPx * 3))
+        : 0;
+    const paddedCanvasW = canvasW + blurPadding * 2;
+    const paddedCanvasH = canvasH + blurPadding * 2;
+    const widthScale = paddedCanvasW / canvasW;
+    const heightScale = paddedCanvasH / canvasH;
+    return {
+        blurPadding,
+        paddedCanvasW,
+        paddedCanvasH,
+        widthScale,
+        heightScale,
+    };
+}
+
 export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     evalLayer,
     project,
@@ -183,6 +210,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
     const totalBlurPx = Math.max(0, Math.round(((evalLayer.totalBlurPx ?? 0) - (evalLayer.dofBlurPx ?? 0)) * 2) / 2);
+    const dofBlurPx = evalLayer.dofBlurPx ?? 0;
     const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
     const cameraPose = evaluateCameraPose(evaluatedCamera, {
         position: project.defaultCamera?.position ?? { x: 0, y: 0, z: cameraZ },
@@ -192,13 +220,24 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const corners = getLayerProjectedCorners(evalLayer, size.width * dpr, size.height * dpr,
         aspect, cameraPose, cameraZ, focalLength, 'screen');
     const edgeLength = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-    const { width: textureW, height: textureH } = getMediaTextureSize(meshW, meshH, {
+    const { width: textureW } = getMediaTextureSize(meshW, meshH, {
         pixelWidth: Math.max(edgeLength(corners.pNW, corners.pNE), edgeLength(corners.pSW, corners.pSE)),
         pixelHeight: Math.max(edgeLength(corners.pNW, corners.pSW), edgeLength(corners.pNE, corners.pSE)),
         maxTextureSize: gl.capabilities.maxTextureSize,
     });
     const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
     const texturePixelRatio = textureW / canvasW;
+
+    const { blurPadding, paddedCanvasW, paddedCanvasH, widthScale, heightScale } = getLayerBlurBleedLayout(
+        canvasW,
+        canvasH,
+        totalBlurPx,
+        dofBlurPx,
+        evalLayer.motionBlur,
+        Boolean(deviceFrameSettings)
+    );
+    const paddedTextureW = Math.round(paddedCanvasW * texturePixelRatio);
+    const paddedTextureH = Math.round(paddedCanvasH * texturePixelRatio);
     const effectUniforms = useMemo(() => getLayerEffectUniforms(layer.effects, layer.blendMode), [layer.effects, layer.blendMode]);
     const sceneCopy = useRef<THREE.FramebufferTexture | null>(null);
     useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
@@ -290,12 +329,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         if (!surface.visible) return null;
 
         const canvas = document.createElement('canvas');
-        canvas.width = textureW;
-        canvas.height = textureH;
+        canvas.width = paddedTextureW;
+        canvas.height = paddedTextureH;
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
         // Keep authored layout, padding and strokes in their original coordinate space.
-        ctx.scale(textureW / canvasW, textureH / canvasH);
+        ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
+        if (blurPadding > 0) {
+            ctx.translate(blurPadding, blurPadding);
+        }
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
 
@@ -485,7 +527,20 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             ctx.restore();
         }
 
-        applyBokehBlur(canvas, (evalLayer.dofBlurPx ?? 0) * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
+        applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
+        if (evalLayer.motionBlur) {
+            applyMotionBlur(
+                canvas,
+                evalLayer.motionBlur.x * canvasW * texturePixelRatio,
+                evalLayer.motionBlur.y * canvasH * texturePixelRatio,
+                evalLayer.motionBlur.samples
+            );
+        }
+
+        ctx.resetTransform();
+        ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
+        if (blurPadding > 0) ctx.translate(blurPadding, blurPadding);
+
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
         applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
 
@@ -502,16 +557,20 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         totalBlurPx,
         canvasW,
         canvasH,
-        textureW,
-        textureH,
         texturePixelRatio,
+        blurPadding,
+        paddedCanvasW,
+        paddedCanvasH,
+        paddedTextureW,
+        paddedTextureH,
         gl,
         evalLayer.shimmerProgress,
         evalLayer.textContentOverride,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
-        evalLayer.dofBlurPx,
+        dofBlurPx,
         evalLayer.dofBokehShape,
+        evalLayer.motionBlur,
         evalLayer.size.height,
         screenFit,
         screenFill,
@@ -557,6 +616,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 pan: screenPan,
                 zoom: screenZoom,
             };
+            ctx.resetTransform();
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
+            if (blurPadding > 0) ctx.translate(blurPadding, blurPadding);
             drawMediaFrame(
                 ctx,
                 videoElement,
@@ -567,7 +630,18 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 options
             );
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
-            applyBokehBlur(canvas, (evalLayer.dofBlurPx ?? 0) * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
+            applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
+            if (evalLayer.motionBlur) {
+                applyMotionBlur(
+                    canvas,
+                    evalLayer.motionBlur.x * canvasW * texturePixelRatio,
+                    evalLayer.motionBlur.y * canvasH * texturePixelRatio,
+                    evalLayer.motionBlur.samples
+                );
+            }
+            ctx.resetTransform();
+            ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
+            if (blurPadding > 0) ctx.translate(blurPadding, blurPadding);
             applyTextureMask(ctx, canvasW, canvasH, layer, project);
             applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
             if (halo) {
@@ -601,8 +675,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         evalLayer.shimmerProgress,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
-        evalLayer.dofBlurPx,
+        dofBlurPx,
         evalLayer.dofBokehShape,
+        evalLayer.motionBlur,
         evalLayer.glowIntensityOffset,
         evalLayer.glowRadiusOffset,
         halo,
@@ -611,6 +686,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         canvasW,
         canvasH,
         texturePixelRatio,
+        blurPadding,
+        paddedCanvasW,
+        paddedCanvasH,
+        paddedTextureW,
+        paddedTextureH,
     ]);
 
     const cornerRadiusWorld = useMemo(() => {
@@ -644,7 +724,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const contents = <>
             {halo && <mesh position={[0, 0, haloZ]} renderOrder={layer.order * 2}>
-                <planeGeometry args={[meshW * halo.widthScale, meshH * halo.heightScale]} />
+                <planeGeometry args={[meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale]} />
                 <meshBasicMaterial map={halo.texture} transparent opacity={renderOpacity} toneMapped={false} depthWrite={false} side={THREE.DoubleSide} />
             </mesh>}
             <mesh
@@ -657,11 +737,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 // occludes the screen edge at every tilt instead of the
                 // artwork floating over the chassis.
                 position={[0, 0, SCREEN_PLANE_Z]}
-                geometry={(layer.kind === 'image' || layer.kind === 'video') ? normalizedScreenGeometry ?? undefined : undefined}
+                geometry={(blurPadding <= 0 && (layer.kind === 'image' || layer.kind === 'video') && !deviceFrameSettings) ? normalizedScreenGeometry ?? undefined : undefined}
                 castShadow={receivesLight && (layer.kind === 'image' || layer.kind === 'video')}
                 receiveShadow={receivesLight}
             >
-                {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
+                {(blurPadding > 0 || (layer.kind !== 'image' && layer.kind !== 'video') || Boolean(deviceFrameSettings)) && (
+                    <planeGeometry args={[meshW * widthScale, meshH * heightScale]} />
+                )}
                 {receivesLight ? (
                     <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 ) : (
