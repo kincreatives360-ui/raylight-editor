@@ -66,7 +66,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
             {isVisible && (
                 <div
                     role="tooltip"
-                    className={`absolute z-50 pointer-events-none whitespace-nowrap rounded-[var(--radius-xs)] border border-[var(--surface-border-strong)] bg-[var(--panel-active)] px-2 py-1 text-[10px] font-medium text-[var(--text-primary)] shadow-xl transition-opacity duration-150 ${positionClasses} ${className}`}
+                    className={`absolute z-50 pointer-events-none whitespace-nowrap rounded-[var(--radius-xs)] border border-[var(--surface-border-strong)] bg-[var(--panel-active)] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] shadow-xl transition-opacity duration-150 ${positionClasses} ${className}`}
                 >
                     {content}
                 </div>
@@ -279,7 +279,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                 )}
                 {icon && <span className="text-[var(--text-secondary)]">{icon}</span>}
                 <span className="truncate">{title}</span>
-                {subtitle && <span className="text-[10px] text-[var(--text-muted)] font-mono">{subtitle}</span>}
+                {subtitle && <span className="text-[11px] text-[var(--text-muted)] font-mono tabular-nums">{subtitle}</span>}
             </div>
 
             {actions && <div className="flex items-center gap-1">{actions}</div>}
@@ -313,7 +313,7 @@ export const InspectorRow: React.FC<InspectorRowProps> = ({
             <div className={`flex flex-col gap-1 py-1 ${className}`}>
                 {label && (
                     <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-secondary)] font-medium">
+                        <span className="text-[11px] text-[var(--text-secondary)] font-medium">
                             {tooltip ? <Tooltip content={tooltip}>{<span>{label}</span>}</Tooltip> : label}
                         </span>
                         {actions && <div className="flex items-center gap-1">{actions}</div>}
@@ -327,7 +327,7 @@ export const InspectorRow: React.FC<InspectorRowProps> = ({
     return (
         <div className={`flex min-h-[var(--control-height)] items-center justify-between gap-2 py-1 text-[11px] ${className}`}>
             {label && (
-                <div className="w-[72px] shrink-0 text-[10.5px] text-[var(--text-secondary)] font-medium truncate">
+                <div className="w-[72px] shrink-0 text-[11px] text-[var(--text-secondary)] font-medium truncate">
                     {tooltip ? <Tooltip content={tooltip}>{<span>{label}</span>}</Tooltip> : label}
                 </div>
             )}

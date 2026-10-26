@@ -1456,7 +1456,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 {m.isHalf ? (
                                     <span className="w-1 h-1 rounded-full bg-[#52525b]/70 mt-1.5" />
                                 ) : (
-                                    <span className="text-[10px] font-mono text-[#a1a1aa] font-medium tracking-tight">
+                                    <span className="text-[11px] font-mono tabular-nums text-[#a1a1aa] font-medium tracking-tight">
                                         {m.timeMs === 0 ? '0.00' : `${Math.round(m.timeMs / 1000)}s`}
                                     </span>
                                 )}
@@ -1637,7 +1637,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             title={`${shot.name} · ${(shot.durationMs / 1000).toFixed(2)}s · Drag to reorder, drag the right edge to trim, double-click to open layer tracks`}
                                             style={{ width: `${width}px` }}
                                             className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
-                                                    ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-[0_0_12px_rgba(129,118,217,0.22)]'
+                                                    ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-sm'
                                                     : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
                                                 }`}
                                         >
@@ -1891,9 +1891,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             left: `${ghostDragPreview.startMs * pxPerMs}px`,
                                                             width: `${Math.max(32, ghostDragPreview.durationMs * pxPerMs)}px`,
                                                         }}
-                                                        className="absolute top-0.5 bottom-0.5 rounded-lg border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/20 pointer-events-none z-20 shadow-[0_0_12px_rgba(56,189,248,0.35)] flex items-center justify-center animate-in fade-in duration-75"
+                                                        className="absolute top-0.5 bottom-0.5 rounded-lg border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/20 pointer-events-none z-20 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
                                                     >
-                                                        <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                        <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
                                                             {ghostDragPreview.snapped && <span>🧲</span>}
                                                             <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
                                                             <span className="text-white/40">·</span>
@@ -2103,9 +2103,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     left: `${ghostDragPreview.startMs * pxPerMs}px`,
                                                                     width: `${Math.max(28, ghostDragPreview.durationMs * pxPerMs)}px`,
                                                                 }}
-                                                                className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-[0_0_10px_rgba(56,189,248,0.4)] flex items-center justify-center animate-in fade-in duration-75"
+                                                                className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
                                                             >
-                                                                <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                                <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
                                                                     {ghostDragPreview.snapped && <span>🧲</span>}
                                                                     <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
                                                                 </div>
@@ -2216,9 +2216,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                         left: `${ghostDragPreview.startMs * pxPerMs}px`,
                                                                         width: `${Math.max(36, ghostDragPreview.durationMs * pxPerMs)}px`,
                                                                     }}
-                                                                    className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-[0_0_10px_rgba(56,189,248,0.4)] flex items-center justify-center animate-in fade-in duration-75"
+                                                                    className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
                                                                 >
-                                                                    <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono text-[9px] shadow-lg flex items-center gap-1 whitespace-nowrap">
+                                                                    <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
                                                                         {ghostDragPreview.snapped && <span>🧲</span>}
                                                                         <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
                                                                         <span className="text-white/40">·</span>
@@ -2269,7 +2269,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             />
 
                             {/* Small dark pill label with grey monospace text sitting on ruler at top */}
-                            <div className="relative px-1.5 py-0.5 rounded-full bg-[#242428] border border-white/10 text-[#a1a1aa] text-[9.5px] font-mono font-medium shadow-sm whitespace-nowrap leading-none select-none mt-1 z-10">
+                            <div className="relative px-2 py-0.5 rounded-full bg-[#242428] border border-white/10 text-[#a1a1aa] text-[11px] font-mono tabular-nums font-medium shadow-sm whitespace-nowrap leading-none select-none mt-1 z-10">
                                 {(hoverDisplayTimeMs / 1000).toFixed(2)}
                             </div>
                         </div>

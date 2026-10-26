@@ -59,7 +59,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     <section className="pt-3 border-t border-white/[0.06] space-y-2.5" aria-label="Scene effects">
       <div className="flex items-center justify-between">
         <h3 className="text-[12px] font-semibold text-white tracking-wide">Scene Effects</h3>
-        <span className="text-[10px] text-zinc-500 font-mono">1920×1080 Ref</span>
+        <span className="text-[11px] text-[#a1a1aa] font-mono tabular-nums">1920×1080 Ref</span>
       </div>
       <p className="text-[11px] text-zinc-400">
         Shader post-processing passes evaluated in visual order. Use arrows to reorder.

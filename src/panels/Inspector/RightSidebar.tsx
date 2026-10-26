@@ -1559,7 +1559,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             setTimeout(() => setShareToast(false), 2000);
                             onOpenExportModal();
                         }}
-                        className="px-3.5 py-1.5 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
+                        className="px-3.5 py-1.5 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
                     >
                         {shareToast ? 'Copied!' : 'Share'}
                     </button>

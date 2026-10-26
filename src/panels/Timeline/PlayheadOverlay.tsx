@@ -105,14 +105,14 @@ export const PlayheadOverlay: React.FC<PlayheadOverlayProps> = React.memo(({
             <div
                 className="absolute inset-y-0 w-px"
                 style={{
-                    background: 'linear-gradient(to bottom, #0088ff 0%, #0088ff 85%, rgba(0, 136, 255, 0) 100%)',
+                    background: 'linear-gradient(to bottom, #0070e0 0%, #0070e0 85%, rgba(0, 112, 224, 0) 100%)',
                 }}
             />
 
             {/* Rounded blue pill label sitting on the ruler at the top */}
             <div
                 ref={labelRef}
-                className="relative px-2 py-0.5 rounded-full bg-[#0088ff] text-white text-[10px] font-mono font-semibold tracking-tight shadow-lg shadow-sky-500/30 whitespace-nowrap leading-none select-none mt-1 z-10 border border-sky-300/40"
+                className="relative px-2 py-0.5 rounded-full bg-[#0070e0] text-white text-[11px] font-mono tabular-nums font-semibold tracking-tight shadow-md whitespace-nowrap leading-none select-none mt-1 z-10 border border-sky-300/40"
             >
                 {(initialDisplayTimeMs / 1000).toFixed(2)}
             </div>

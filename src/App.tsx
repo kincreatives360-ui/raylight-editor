@@ -630,7 +630,7 @@ export default function App() {
       if (width < 1024) {
         setLeftPanelOpen(false);
       }
-      if (width < 768) {
+      if (width < 860) {
         setRightSidebarOpen(false);
       }
     };

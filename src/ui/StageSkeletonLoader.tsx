@@ -58,12 +58,12 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
       className="flex-1 w-full h-full bg-[var(--canvas-workspace,#080a10)] flex flex-col items-center justify-center relative overflow-hidden select-none"
     >
       {/* Top stage toolbar skeleton */}
-      <div className="absolute top-4 z-10 w-48 h-8 rounded-full bg-[#18181f]/80 border border-white/[0.06] animate-pulse" />
+      <div className="absolute top-4 z-10 w-48 h-8 rounded-full bg-[#18181f]/80 border border-white/[0.06] animate-pulse motion-reduce:animate-none" />
 
       {/* Stage Artboard Skeleton */}
       <div
         style={aspectStyle}
-        className="rounded-lg border border-white/[0.08] bg-[#121217]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse"
+        className="rounded-lg border border-white/[0.08] bg-[#121217]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse motion-reduce:animate-none"
       >
         <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3" />
         <div className="w-32 h-2.5 rounded bg-white/[0.05] mb-1.5" />
@@ -71,7 +71,7 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
       </div>
 
       {/* Bottom status skeleton */}
-      <div className="absolute bottom-4 z-10 w-64 h-6 rounded-md bg-[#18181f]/60 border border-white/[0.04] animate-pulse" />
+      <div className="absolute bottom-4 z-10 w-64 h-6 rounded-md bg-[#18181f]/60 border border-white/[0.04] animate-pulse motion-reduce:animate-none" />
     </div>
   );
 };

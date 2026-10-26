@@ -1391,11 +1391,11 @@ const StageComponent: React.FC<StageProps> = ({
             {/* Top-Center Camera Tool Floating Pill (when camera tool is active) */}
             {activeTool === 'camera' && !isAnimateMode && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-medium text-[var(--text-primary,#f4f4f5)] flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
-                    <div className="flex items-center gap-1.5 text-[var(--accent-primary,#0088ff)]">
+                    <div className="flex items-center gap-1.5 text-[var(--accent-primary,#0070e0)]">
                         <Camera className="w-3.5 h-3.5" />
                         <span className="font-semibold">Camera Tool (C)</span>
                     </div>
-                    <div className="text-[10px] text-gray-400 font-mono hidden sm:flex items-center gap-2">
+                    <div className="text-[11px] text-gray-400 font-mono hidden sm:flex items-center gap-2">
                         <span>Left-drag: Orbit</span>
                         <span>•</span>
                         <span>Middle: Pan</span>
@@ -1405,16 +1405,16 @@ const StageComponent: React.FC<StageProps> = ({
                     <button
                         type="button"
                         onClick={handleFrameSelectedLayers}
-                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-gray-200 cursor-pointer transition flex items-center gap-1"
+                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] text-gray-200 cursor-pointer transition flex items-center gap-1"
                         title={selectedLayerIds.length > 0 ? "Frame Selected Layer(s) [F]" : "Frame All Visible Content [F]"}
                     >
-                        <Focus className="w-2.5 h-2.5 text-[var(--accent-primary,#0088ff)]" />
+                        <Focus className="w-2.5 h-2.5 text-[var(--accent-primary,#0070e0)]" />
                         <span>Frame [F]</span>
                     </button>
                     <button
                         type="button"
                         onClick={handleResetCamera}
-                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-gray-200 cursor-pointer transition flex items-center gap-1"
+                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] text-gray-200 cursor-pointer transition flex items-center gap-1"
                         title="Reset Camera Pose to Default"
                     >
                         <RotateCcw className="w-2.5 h-2.5" />
@@ -1447,7 +1447,7 @@ const StageComponent: React.FC<StageProps> = ({
                 >
                     {contextMenuLayer ? (
                         <>
-                            <div className="px-2.5 py-1 text-[10px] font-mono text-gray-400 uppercase tracking-wider truncate border-b border-white/10 mb-0.5">
+                            <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider truncate border-b border-white/10 mb-0.5">
                                 {contextMenuLayer.name}
                             </div>
                             <button
@@ -1465,7 +1465,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Copy className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Duplicate</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘D
                                 </span>
                             </button>
@@ -1485,7 +1485,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <FolderPlus className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Group</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘G
                                 </span>
                             </button>
@@ -1506,7 +1506,7 @@ const StageComponent: React.FC<StageProps> = ({
                                         <FolderMinus className="w-3.5 h-3.5 text-amber-400" />
                                         <span>Ungroup</span>
                                     </div>
-                                    <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                    <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                         ⌘⇧G
                                     </span>
                                 </button>
@@ -1527,7 +1527,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <ChevronsUp className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Bring to Front</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘⇧]
                                 </span>
                             </button>
@@ -1546,7 +1546,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <ChevronUp className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Bring Forward</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘]
                                 </span>
                             </button>
@@ -1565,7 +1565,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Send Backward</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘[
                                 </span>
                             </button>
@@ -1584,7 +1584,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <ChevronsDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Send to Back</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘⇧[
                                 </span>
                             </button>
@@ -1632,7 +1632,7 @@ const StageComponent: React.FC<StageProps> = ({
                                         {contextMenuLayer.hidden ? 'Show Layer' : 'Hide Layer'}
                                     </span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘⇧H
                                 </span>
                             </button>
@@ -1651,14 +1651,14 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Trash2 className="w-3.5 h-3.5 text-rose-400" />
                                     <span>Delete</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-rose-400/70">
+                                <span className="text-[11px] font-mono text-rose-400/80">
                                     Del
                                 </span>
                             </button>
                         </>
                     ) : (
                         <>
-                            <div className="px-2.5 py-1 text-[10px] font-mono text-gray-400 uppercase tracking-wider border-b border-white/10 mb-0.5">
+                            <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider border-b border-white/10 mb-0.5">
                                 Canvas
                             </div>
                             <button
@@ -1675,7 +1675,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Type className="w-3.5 h-3.5 text-sky-400" />
                                     <span>Add Text</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     T
                                 </span>
                             </button>
@@ -1694,7 +1694,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Square className="w-3.5 h-3.5 text-amber-400" />
                                     <span>Add Rectangle</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     R
                                 </span>
                             </button>
@@ -1713,7 +1713,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Circle className="w-3.5 h-3.5 text-emerald-400" />
                                     <span>Add Ellipse</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     O
                                 </span>
                             </button>
@@ -1731,7 +1731,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     <Layers className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
                                     <span>Select All Layers</span>
                                 </div>
-                                <span className="text-[10px] font-mono text-gray-500 group-hover:text-gray-300">
+                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
                                     ⌘A
                                 </span>
                             </button>

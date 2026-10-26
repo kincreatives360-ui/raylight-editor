@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import type { Shot, CameraKeyframeEndpoint, CameraBlock } from '../model/types';
 import { Film, Focus, SlidersHorizontal, X } from 'lucide-react';
 import { getArtboardDimensions, computeFramingBox } from './stageUtils';
@@ -94,6 +94,18 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         startCornerX: number;
         startCornerY: number;
     } | null>(null);
+
+    useEffect(() => {
+        if (!movementMenuOpen && !popoverEndpoint) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setMovementMenuOpen(false);
+                setPopoverEndpoint(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [movementMenuOpen, popoverEndpoint]);
 
     if (!selectedCameraBlockId) return null;
 
@@ -367,7 +379,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         <span className="font-semibold capitalize text-white">
                             {which} Camera Controls
                         </span>
-                        <span className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${isEmerald ? 'bg-emerald-950 text-emerald-300' : 'bg-sky-950 text-sky-300'}`}>
+                        <span className={`text-[11px] px-1.5 py-0.5 rounded font-mono ${isEmerald ? 'bg-emerald-950 text-emerald-300' : 'bg-sky-950 text-sky-300'}`}>
                             {activePreset ? activePreset.name : 'Custom'}
                         </span>
                     </div>
@@ -384,7 +396,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                 {/* Presets Quick Grid */}
                 <div className="space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
                         <span>Camera Presets</span>
                         <button
                             type="button"
@@ -415,7 +427,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                                     key={btn.id}
                                     type="button"
                                     onClick={() => handleApplyPreset(preset)}
-                                    className={`px-1 py-1 rounded text-[10px] transition-colors cursor-pointer truncate text-center ${
+                                    className={`px-1 py-1 rounded text-[11px] font-mono transition-colors cursor-pointer truncate text-center ${
                                         isSelected
                                             ? activeBtnClass
                                             : 'bg-[#1c1c21] hover:bg-white/10 text-[#d4d4d8] border border-white/5'
@@ -464,7 +476,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                 {/* Overall Camera Movement Preset */}
                 <div className="space-y-1 pt-1 border-t border-white/5">
-                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                    <div className="flex items-center justify-between text-[11px] text-zinc-400">
                         <span>Movement Preset</span>
                         <span className="font-mono text-sky-400 font-semibold">{activeBlock.label || `${activeBlock.mode.toUpperCase()}`}</span>
                     </div>
@@ -579,7 +591,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                     {/* Lens mm */}
                     <div className="space-y-1">
-                        <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <div className="flex items-center justify-between text-[11px] text-zinc-400">
                             <span>Lens Focal Length</span>
                             <span className="font-mono text-zinc-500">
                                 {focalLengthToFov(ep.focalLength ?? 50).toFixed(1)}° FOV
@@ -591,7 +603,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                                     key={lens.mm}
                                     type="button"
                                     onClick={() => patchEndpoint(which, { focalLength: lens.mm })}
-                                    className={`flex-1 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer text-center ${
+                                    className={`flex-1 py-0.5 rounded text-[11px] font-mono transition-colors cursor-pointer text-center ${
                                         (ep.focalLength ?? 50) === lens.mm
                                             ? activeBtnClass
                                             : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
@@ -681,7 +693,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             >
                 {/* Header Chip */}
                 <div
-                    className="absolute top-1.5 left-1.5 pl-2 pr-1 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-[10px] font-mono text-emerald-300 flex items-center gap-1.5 shadow-md pointer-events-auto"
+                    className="absolute top-1.5 left-1.5 pl-2 pr-1 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-400/50 text-[11px] font-mono tabular-nums text-emerald-300 flex items-center gap-1.5 shadow-md pointer-events-auto"
                 >
                     <div
                         onPointerDown={(e) => handleStartDrag(e, 'from', 'pan')}
@@ -690,7 +702,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     >
                         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse motion-reduce:animate-none" />
                         <span className="font-semibold">From: {Number(fromEp.zoom.toFixed(2))}x</span>
-                        <span className="px-1 py-0.2 rounded bg-emerald-900/60 text-emerald-200 text-[9px]">
+                        <span className="px-1.5 py-0.5 rounded bg-emerald-900/60 text-emerald-200 text-[11px]">
                             {activeFromPreset ? activeFromPreset.name : 'Custom'}
                         </span>
                         {fromEp.orbit !== 0 && <span className="text-emerald-400/70">• {fromEp.orbit}°</span>}
@@ -745,13 +757,13 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerCancel={handlePointerUp}
                         onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale From framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-emerald-400 border-2 border-emerald-950 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none"
+                        className="absolute w-3 h-3 rounded-xs bg-emerald-400 border-2 border-emerald-950 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 
                 {/* Live Zoom Tooltip while scaling */}
                 {activeDrag?.which === 'from' && activeDrag.type === 'resize' && (
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-emerald-900/95 border border-emerald-400 text-[10px] font-mono text-emerald-200 shadow-xl pointer-events-none">
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-emerald-900/95 border border-emerald-400 text-[11px] font-mono tabular-nums text-emerald-200 shadow-xl pointer-events-none">
                         Zoom: {Number(activeDrag.currentZoom.toFixed(2))}x
                     </div>
                 )}
@@ -779,7 +791,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             >
                 {/* Header Chip */}
                 <div
-                    className="absolute bottom-1.5 right-1.5 pl-2 pr-1 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/50 text-[10px] font-mono text-sky-300 flex items-center gap-1.5 shadow-md pointer-events-auto"
+                    className="absolute bottom-1.5 right-1.5 pl-2 pr-1 py-0.5 rounded-full bg-sky-950/90 border border-sky-400/50 text-[11px] font-mono tabular-nums text-sky-300 flex items-center gap-1.5 shadow-md pointer-events-auto"
                 >
                     <div
                         onPointerDown={(e) => handleStartDrag(e, 'to', 'pan')}
@@ -788,7 +800,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     >
                         <span className="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse motion-reduce:animate-none" />
                         <span className="font-semibold">To: {Number(toEp.zoom.toFixed(2))}x ({activeBlock.mode})</span>
-                        <span className="px-1 py-0.2 rounded bg-sky-900/60 text-sky-200 text-[9px]">
+                        <span className="px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-200 text-[11px]">
                             {activeToPreset ? activeToPreset.name : 'Custom'}
                         </span>
                         {toEp.orbit !== 0 && <span className="text-sky-400/70">• {toEp.orbit}°</span>}
@@ -843,13 +855,13 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerCancel={handlePointerUp}
                         onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale To framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-sky-400 border-2 border-sky-950 shadow-md hover:scale-130 active:scale-140 hover:bg-sky-300 pointer-events-auto transition-transform touch-none"
+                        className="absolute w-3 h-3 rounded-xs bg-sky-400 border-2 border-sky-950 shadow-md hover:scale-130 active:scale-140 hover:bg-sky-300 pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 
                 {/* Live Zoom Tooltip while scaling */}
                 {activeDrag?.which === 'to' && activeDrag.type === 'resize' && (
-                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-sky-900/95 border border-sky-400 text-[10px] font-mono text-sky-200 shadow-xl pointer-events-none">
+                    <div className="absolute -top-7 left-1/2 -translate-x-1/2 px-2 py-0.5 rounded bg-sky-900/95 border border-sky-400 text-[11px] font-mono tabular-nums text-sky-200 shadow-xl pointer-events-none">
                         Zoom: {Number(activeDrag.currentZoom.toFixed(2))}x
                     </div>
                 )}
@@ -872,7 +884,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         setMovementMenuOpen((v) => !v);
                         setPopoverEndpoint(null);
                     }}
-                    className={`px-2.5 py-1 rounded-full bg-[#121216]/95 backdrop-blur-md border text-[10px] font-mono tabular-nums shadow-xl flex items-center gap-1.5 cursor-pointer transition hover:bg-white/10 ${
+                    className={`px-2.5 py-1 rounded-full bg-[#121216]/95 backdrop-blur-md border text-[11px] font-mono tabular-nums shadow-xl flex items-center gap-1.5 cursor-pointer transition hover:bg-white/10 ${
                         movementMenuOpen
                             ? 'border-sky-400 text-sky-200 ring-2 ring-sky-400/30'
                             : 'border-white/15 text-gray-200 hover:text-white'
@@ -951,7 +963,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                         {/* Quick 1-Click Move Buttons */}
                         <div className="space-y-1">
-                            <span className="text-[10px] text-zinc-400 font-medium">Quick Moves</span>
+                            <span className="text-[11px] text-zinc-400 font-medium">Quick Moves</span>
                             <div className="grid grid-cols-4 gap-1">
                                 {[
                                     { id: 'zoom-in', label: 'Zoom In' },
@@ -973,7 +985,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                                             key={btn.id}
                                             type="button"
                                             onClick={() => handleApplyMovement(btn.id as CameraMovementId)}
-                                            className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                            className={`py-1 rounded text-[11px] font-mono tabular-nums transition-colors cursor-pointer text-center truncate ${
                                                 isSelected
                                                     ? 'bg-sky-500 text-black font-semibold'
                                                     : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
@@ -995,7 +1007,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                                             key={btn.id}
                                             type="button"
                                             onClick={() => handleApplyMovement(btn.id as CameraMovementId)}
-                                            className={`py-1 px-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                            className={`py-1 px-1 rounded text-[11px] font-mono tabular-nums transition-colors cursor-pointer text-center truncate ${
                                                 isSelected
                                                     ? 'bg-sky-500 text-black font-semibold'
                                                     : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'

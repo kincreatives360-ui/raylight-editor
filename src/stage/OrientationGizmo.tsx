@@ -264,7 +264,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(0, 0, 0)}
                     title="Front View (0°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Front
                 </button>
@@ -272,7 +272,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(0, -89, 0)}
                     title="Top View (0°, -89°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Top
                 </button>
@@ -280,7 +280,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(90, 0, 0)}
                     title="Right View (90°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Right
                 </button>
@@ -288,7 +288,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={() => onSetOrientation(45, 35.26, 0)}
                     title="Isometric 3D View (45°, 35°)"
-                    className="px-1.5 py-0.5 rounded text-[10px] font-mono font-medium text-[var(--accent-primary,#0088ff)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--accent-primary,#0070e0)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
                 >
                     Iso
                 </button>
@@ -332,7 +332,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                         if (items.length === 0) return null;
                         return (
                             <div key={cat} className="space-y-0.5">
-                                <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--text-muted,#71717a)] px-1.5 py-0.5">
+                                <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--text-muted,#a1a1aa)] px-1.5 py-0.5">
                                     {catLabel}
                                 </div>
                                 <div className="grid grid-cols-2 gap-0.5">
@@ -345,7 +345,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                                                 setMenuOpen(false);
                                             }}
                                             title={preset.description}
-                                            className="px-1.5 py-1 rounded text-[10px] font-mono text-left text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 truncate transition-colors cursor-pointer"
+                                            className="px-1.5 py-1 rounded text-[11px] font-mono tabular-nums text-left text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 truncate transition-colors cursor-pointer"
                                         >
                                             {preset.name}
                                         </button>
@@ -358,7 +358,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             )}
 
             {/* Readout pill */}
-            <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[10px] font-mono tabular-nums text-[var(--text-muted,#a1a1aa)] tracking-tight pointer-events-none">
+            <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-mono tabular-nums text-[#a1a1aa] tracking-tight pointer-events-none">
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x
             </div>
         </div>

@@ -19,11 +19,11 @@
   --surface-border-strong: rgba(255, 255, 255, 0.14);
   --text-primary: #f3f4f6;
   --text-secondary: #a1a1aa;
-  --text-muted: #71717a;
+  --text-muted: #8e8e96;
   --text-disabled: #52525b;
-  --accent: #0088ff;
-  --accent-hover: #1d9bff;
-  --accent-soft: rgba(0, 136, 255, 0.14);
+  --accent: #0070e0;
+  --accent-hover: #005bb5;
+  --accent-soft: rgba(0, 112, 224, 0.14);
   --focus-ring: rgba(56, 189, 248, 0.8);
   --success: #34d399;
   --warning: #fbbf24;
@@ -179,7 +179,7 @@ samp {
 }
 
 .typeset-section {
-  font-size: calc(10.5px * var(--p-scale, 1));
+  font-size: calc(11px * var(--p-scale, 1));
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -215,7 +215,7 @@ samp {
 
 .typeset-keycap {
   font-family: var(--font-mono);
-  font-size: calc(9.5px * var(--p-scale, 1));
+  font-size: calc(11px * var(--p-scale, 1));
   font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1;

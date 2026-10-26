@@ -106,7 +106,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 }`}
             >
               <div className="font-semibold text-xs">{fmt.label}</div>
-              <div className="text-[10px] opacity-70 mt-0.5">
+              <div className="text-[11px] text-[#a1a1aa] mt-0.5">
                 {fmt.desc}
               </div>
             </button>
@@ -218,9 +218,9 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         <div className="flex items-center justify-between p-2.5 rounded-xl bg-[#18181c] border border-white/[0.08]">
           <div>
             <span className="text-[11px] text-white font-medium block">Made in Raylight Watermark</span>
-            <span className="text-[10px] text-[#71717a]">Free plan watermark included on export</span>
+            <span className="text-[11px] text-[#a1a1aa]">Free plan watermark included on export</span>
           </div>
-          <span className="text-[10px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
+          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
             Included
           </span>
         </div>
@@ -250,14 +250,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <div className="space-y-2 p-3 rounded-xl bg-[#18181c] border border-[#0088ff]/30 shadow-lg animate-fade-in">
             <div className="flex justify-between items-center text-[11px] font-mono tabular-nums tracking-tight">
               <span className="flex items-center gap-2 text-[#38bdf8] font-medium truncate">
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0088ff] shrink-0" />
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0070e0] shrink-0" />
                 <span className="truncate">{exportProgressText}</span>
               </span>
               <span className="font-semibold text-white shrink-0 ml-2">{exportPercent}%</span>
             </div>
             <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative">
               <div
-                className="h-full bg-gradient-to-r from-[#0088ff] via-[#38bdf8] to-[#0088ff] shadow-[0_0_12px_rgba(0,136,255,0.5)] transition-[width] duration-150 ease-out"
+                className="h-full bg-gradient-to-r from-[#0070e0] via-[#38bdf8] to-[#0070e0] shadow-sm transition-[width] duration-150 ease-out"
                 style={{ width: `${exportPercent}%` }}
               />
             </div>
@@ -270,7 +270,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <Check className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>{exportProgressText} Saved to Downloads.</span>
             </div>
-            <span className="text-[10px] text-emerald-400/80 font-mono px-1.5 py-0.5 rounded bg-emerald-500/20">Ready</span>
+            <span className="text-[11px] text-emerald-400/90 font-mono px-1.5 py-0.5 rounded bg-emerald-500/20">Ready</span>
           </div>
         )}
 
@@ -288,7 +288,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           <button
             disabled={exporting}
             onClick={onStartExport}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold cursor-pointer"
+            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-semibold cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             <span>
