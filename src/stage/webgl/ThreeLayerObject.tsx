@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { DeviceOpacityGroup } from './DeviceOpacityGroup';
@@ -196,12 +196,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const cameraZ = project.defaultCamera?.position?.z ?? 2.65;
     const focalLength = project.defaultCamera?.focalLength ?? 50;
 
-    const { worldX, worldY, worldZ, meshW, meshH, deviceSettings: deviceFrameSettings, frameMetrics: deviceFrameMetrics, scale } = getLayerRenderLayout(
+    const { worldX, worldY, worldZ, meshW, meshH, deviceSettings: deviceFrameSettings, frameMetrics: deviceFrameMetrics, scale } = useMemo(() => getLayerRenderLayout(
         evalLayer,
         aspect,
         cameraZ,
         focalLength
-    );
+    ), [evalLayer, aspect, cameraZ, focalLength]);
 
     const screenFit = deviceFrameSettings?.screenFit ?? 'stretch';
     const screenFill = deviceFrameSettings?.screenFillColor;
@@ -220,13 +220,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const corners = getLayerProjectedCorners(evalLayer, size.width * dpr, size.height * dpr,
         aspect, cameraPose, cameraZ, focalLength, 'screen');
     const edgeLength = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
-    const { width: textureW } = getMediaTextureSize(meshW, meshH, {
-        pixelWidth: Math.max(edgeLength(corners.pNW, corners.pNE), edgeLength(corners.pSW, corners.pSE)),
-        pixelHeight: Math.max(edgeLength(corners.pNW, corners.pSW), edgeLength(corners.pNE, corners.pSE)),
-        maxTextureSize: gl.capabilities.maxTextureSize,
-    });
     const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
-    const texturePixelRatio = textureW / canvasW;
 
     const { blurPadding, paddedCanvasW, paddedCanvasH, widthScale, heightScale } = getLayerBlurBleedLayout(
         canvasW,
@@ -236,13 +230,30 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         evalLayer.motionBlur,
         Boolean(deviceFrameSettings)
     );
-    const paddedTextureW = Math.round(paddedCanvasW * texturePixelRatio);
-    const paddedTextureH = Math.round(paddedCanvasH * texturePixelRatio);
+
+    const maxTexSize = gl.capabilities.maxTextureSize || 4096;
+    const { width: targetPaddedTextureW, height: targetPaddedTextureH } = getMediaTextureSize(
+        meshW * widthScale,
+        meshH * heightScale,
+        {
+            pixelWidth: Math.max(edgeLength(corners.pNW, corners.pNE), edgeLength(corners.pSW, corners.pSE)) * widthScale,
+            pixelHeight: Math.max(edgeLength(corners.pNW, corners.pSW), edgeLength(corners.pNE, corners.pSE)) * heightScale,
+            maxTextureSize: maxTexSize,
+        }
+    );
+    const paddedTextureW = Math.min(maxTexSize, Math.max(1, Math.round(targetPaddedTextureW)));
+    const paddedTextureH = Math.min(maxTexSize, Math.max(1, Math.round(targetPaddedTextureH)));
+    const texturePixelRatio = paddedTextureW / paddedCanvasW;
     const effectUniforms = useMemo(() => getLayerEffectUniforms(layer.effects, layer.blendMode), [layer.effects, layer.blendMode]);
+    const effectUniformsRef = useRef(effectUniforms);
+    useLayoutEffect(() => {
+        effectUniformsRef.current = effectUniforms;
+    }, [effectUniforms]);
     const sceneCopy = useRef<THREE.FramebufferTexture | null>(null);
     useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
     const captureBackdrop = (renderer: THREE.WebGLRenderer) => {
-        if (!effectUniforms.layerBlend.value && !effectUniforms.layerBackdrop.value && !effectUniforms.layerGlass.value) return;
+        const uniforms = effectUniformsRef.current;
+        if (!uniforms.layerBlend.value && !uniforms.layerBackdrop.value && !uniforms.layerGlass.value) return;
         const target = renderer.getRenderTarget();
         const dimensions = target ? new THREE.Vector2(target.width, target.height) : renderer.getDrawingBufferSize(new THREE.Vector2());
         if (!sceneCopy.current || sceneCopy.current.image.width !== dimensions.x || sceneCopy.current.image.height !== dimensions.y) {
@@ -253,11 +264,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             sceneCopy.current.magFilter = THREE.LinearFilter;
         }
         renderer.copyFramebufferToTexture(sceneCopy.current);
-        effectUniforms.layerScene.value = sceneCopy.current;
-        effectUniforms.layerResolution.value.copy(dimensions);
-        effectUniforms.layerBackdrop.value = Math.max(0, layer.effects.backdropBlur ?? 0) * 100 * dimensions.x / 960;
+        uniforms.layerScene.value = sceneCopy.current;
+        uniforms.layerResolution.value.copy(dimensions);
+        uniforms.layerBackdrop.value = Math.max(0, layer.effects.backdropBlur ?? 0) * 100 * dimensions.x / 960;
     };
-    const compileEffects = (shader: THREE.WebGLProgramParametersWithUniforms) => installLayerEffects(shader, effectUniforms);
+    const compileEffects = (shader: THREE.WebGLProgramParametersWithUniforms) => installLayerEffects(shader, effectUniformsRef.current);
 
     const isVideoAsset = useMemo(() => {
         if (layer.kind === 'video') return true;
@@ -314,15 +325,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     // Keep video currentTime synchronized with timeline playhead
     useEffect(() => {
-        const vid = videoElement;
-        if (!vid) return;
+        if (!isVideoAsset || !assetUrl) return;
+        const vid = getOrCreateVideoElement(assetUrl);
         const targetSec = Math.max(0, (currentTimeMs - layer.inMs) / 1000);
         if (Number.isFinite(targetSec)) {
             if (Math.abs(vid.currentTime - targetSec) > 0.04) {
                 vid.currentTime = targetSec;
             }
         }
-    }, [videoElement, currentTimeMs, layer.inMs]);
+    }, [isVideoAsset, assetUrl, currentTimeMs, layer.inMs]);
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {

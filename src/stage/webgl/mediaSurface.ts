@@ -64,8 +64,43 @@ export function drawMediaFrame(
       }
       ctx.imageSmoothingEnabled = true;
       ctx.imageSmoothingQuality = 'high';
-      ctx.drawImage(source, x + rect.sourceX, y + rect.sourceY, rect.sourceWidth, rect.sourceHeight,
-        rect.targetX, rect.targetY, rect.targetWidth, rect.targetHeight);
+
+      let { sourceX, sourceY, sourceWidth, sourceHeight, targetX, targetY, targetWidth, targetHeight } = rect;
+
+      if (blurVal > 0 && targetWidth > 0 && targetHeight > 0) {
+        const scaleX = sourceWidth / targetWidth;
+        const scaleY = sourceHeight / targetHeight;
+
+        if (targetX < 0) {
+          const cutLeft = -targetX;
+          sourceX += cutLeft * scaleX;
+          sourceWidth -= cutLeft * scaleX;
+          targetWidth -= cutLeft;
+          targetX = 0;
+        }
+        if (targetX + targetWidth > width) {
+          const cutRight = (targetX + targetWidth) - width;
+          sourceWidth -= cutRight * scaleX;
+          targetWidth = width - targetX;
+        }
+        if (targetY < 0) {
+          const cutTop = -targetY;
+          sourceY += cutTop * scaleY;
+          sourceHeight -= cutTop * scaleY;
+          targetHeight -= cutTop;
+          targetY = 0;
+        }
+        if (targetY + targetHeight > height) {
+          const cutBottom = (targetY + targetHeight) - height;
+          sourceHeight -= cutBottom * scaleY;
+          targetHeight = height - targetY;
+        }
+      }
+
+      if (sourceWidth > 0 && sourceHeight > 0 && targetWidth > 0 && targetHeight > 0) {
+        ctx.drawImage(source, x + sourceX, y + sourceY, sourceWidth, sourceHeight,
+          targetX, targetY, targetWidth, targetHeight);
+      }
     }
   }
   ctx.restore();

@@ -16,6 +16,21 @@ interface ScrubInputProps {
     className?: string;
 }
 
+function inferStepDecimals(stepValue: number): number {
+    if (!Number.isFinite(stepValue) || stepValue <= 0) return 0;
+    const str = stepValue.toString().toLowerCase();
+    if (str.includes('e-')) {
+        const [base, exp] = str.split('e-');
+        const baseDecimals = base.includes('.') ? (base.split('.')[1]?.length ?? 0) : 0;
+        const exponent = parseInt(exp, 10) || 0;
+        return Math.min(20, baseDecimals + exponent);
+    }
+    if (str.includes('.')) {
+        return Math.min(20, str.split('.')[1]?.length ?? 0);
+    }
+    return 0;
+}
+
 export const ScrubInput: React.FC<ScrubInputProps> = ({
     label,
     value,
@@ -45,9 +60,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
 
     const safeValue = Number.isFinite(value) ? value : (Number.isFinite(min) ? min : 0);
 
-    const autoDecimals = step.toString().includes('.')
-        ? (step.toString().split('.')[1]?.length ?? 0)
-        : 0;
+    const autoDecimals = inferStepDecimals(step);
     const effectiveDecimals = decimals !== undefined ? decimals : autoDecimals;
 
     const clampAndRound = useCallback(
@@ -62,12 +75,16 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     // Reset document cursor on unmount if component unmounts mid-scrub
     useEffect(() => {
         return () => {
+            if (isDragTransactionActiveRef.current) {
+                isDragTransactionActiveRef.current = false;
+                commitDragTransaction();
+            }
             if (typeof document !== 'undefined') {
                 document.body.style.cursor = '';
                 document.body.style.userSelect = '';
             }
         };
-    }, []);
+    }, [commitDragTransaction]);
 
     // Focus & select all text when entering edit mode
     useEffect(() => {
@@ -90,7 +107,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         setIsEditing(false);
 
         const parsed = parseFloat(inputText);
-        if (!Number.isNaN(parsed)) {
+        if (Number.isFinite(parsed)) {
             onChange(clampAndRound(parsed));
         }
     };
@@ -217,11 +234,15 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         if (e.key === 'ArrowUp' || e.key === 'ArrowRight') {
             e.preventDefault();
             e.stopPropagation();
+            beginDragTransaction();
             onChange(clampAndRound(safeValue + effectiveStep));
+            commitDragTransaction();
         } else if (e.key === 'ArrowDown' || e.key === 'ArrowLeft') {
             e.preventDefault();
             e.stopPropagation();
+            beginDragTransaction();
             onChange(clampAndRound(safeValue - effectiveStep));
+            commitDragTransaction();
         } else if (e.key === 'Enter') {
             e.preventDefault();
             e.stopPropagation();

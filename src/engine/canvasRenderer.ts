@@ -599,7 +599,10 @@ async function drawLayerContentOnCanvas(
         : (layer.blendMode as GlobalCompositeOperation);
   }
 
-  const totalBlur = evalLayer.totalBlurPx * (canvasW / 1920);
+  const motionBlurPx = evalLayer.motionBlur
+    ? Math.hypot(evalLayer.motionBlur.x * canvasW, evalLayer.motionBlur.y * canvasH)
+    : 0;
+  const totalBlur = (evalLayer.totalBlurPx + motionBlurPx) * (canvasW / 1920);
   if (totalBlur > 0.35) {
     ctx.filter = `blur(${totalBlur.toFixed(1)}px)`;
   }

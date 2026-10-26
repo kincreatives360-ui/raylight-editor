@@ -246,7 +246,8 @@ export function evaluateProjectAtTime(
 
         let motionBlur: { x: number; y: number; samples: number } | undefined;
         if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
-            const dt = 1000 / 60;
+            const fps = project.fps && project.fps > 0 ? project.fps : 60;
+            const dt = 1000 / fps;
             const prevTime = Math.max(0, shotLocalTimeMs - dt);
             const prevLayer = evaluateLayerAtTime(
                 isHidden ? { ...layer, hidden: true } : layer,
