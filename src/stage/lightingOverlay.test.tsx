@@ -153,4 +153,16 @@ describe('LightingOverlay Component', () => {
         expect(html).toContain('data-testid="selected-light-source-handle"');
         expect(html).toContain('data-testid="point-reach-handle"');
     });
+
+    it('renders selected light depth handle and ground projection drop-line and shadow ellipse', () => {
+        useSelectionStore.getState().selectLight('sun-key');
+        const frame = createDummyFrame();
+        const html = renderToStaticMarkup(
+            <LightingOverlay frame={frame} frameWidth={1920} frameHeight={1080} />
+        );
+
+        expect(html).toContain('data-testid="selected-light-depth-handle"');
+        expect(html).toContain('data-testid="selected-light-ground-projection"');
+        expect(html).toContain('↕Z');
+    });
 });

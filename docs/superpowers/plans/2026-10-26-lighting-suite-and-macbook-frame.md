@@ -38,22 +38,22 @@
 - Modify: `src/stage/LightingOverlay.tsx`
 - Test: `src/panels/Inspector/sections/sceneLightsList.test.tsx`
 
-- [ ] **Step 1: Write unit tests in `src/panels/Inspector/sections/sceneLightsList.test.tsx`**
+- [x] **Step 1: Write unit tests in `src/panels/Inspector/sections/sceneLightsList.test.tsx`**
   - Test rendering list of all lights in active shot (Sun Key + Sources).
   - Test toggle enabled/disabled eye button calling `updateShot`.
   - Test duplicate light creating a new light with unique ID.
   - Test delete light removing it and clearing selection if active.
   - Test add light action.
-- [ ] **Step 2: Implement `SceneLightsList.tsx`**
+- [x] **Step 2: Implement `SceneLightsList.tsx`**
   - Render compact light items: Icon, Name (inline editable), Eye toggle, Duplicate button, Delete button.
   - Highlight currently selected light.
   - Add "+ Add Light" quick menu.
-- [ ] **Step 3: Integrate `SceneLightsList` into `LightInspector.tsx` and `RightSidebar.tsx`**
+- [x] **Step 3: Integrate `SceneLightsList` into `LightInspector.tsx` and `RightSidebar.tsx`**
   - Add collapsible "Scene Lights" section at the top of `LightInspector` so switching lights is instant.
   - Add "Scene Lights" section in `ProjectSettingsPanel` when no light is selected.
-- [ ] **Step 4: Enhance unselected light badges in `LightingOverlay.tsx`**
+- [x] **Step 4: Enhance unselected light badges in `LightingOverlay.tsx`**
   - Add tooltip label with light name and hover glow.
-- [ ] **Step 5: Run tests and verify with `npx vitest run src/panels/Inspector/sections/sceneLightsList.test.tsx`**
+- [x] **Step 5: Run tests and verify with `npx vitest run src/panels/Inspector/sections/sceneLightsList.test.tsx`**
 
 ---
 
@@ -64,18 +64,18 @@
 - Modify: `src/stage/LightingOverlay.tsx`
 - Test: `src/stage/lightingOverlay.test.tsx`
 
-- [ ] **Step 1: Write math tests in `src/stage/lightingMath.test.ts`**
+- [x] **Step 1: Write math tests in `src/stage/lightingMath.test.ts`**
   - Test calculating screen-space ground drop point $(X, 0, Z)$ from light position $(X, Y, Z)$.
   - Test delta-Z screen drag calculation mapping vertical delta to clamped Z ($0.1$ to $5.0$).
-- [ ] **Step 2: Implement ground plane projection and Z-delta helpers in `src/stage/lightingMath.ts`**
+- [x] **Step 2: Implement ground plane projection and Z-delta helpers in `src/stage/lightingMath.ts`**
   - `calculateLightGroundProjection(pos, cameraPose, frameW, frameH, aspect)`
   - `calculateDepthDeltaFromScreen(deltaScreenY, canvasZoom)`
-- [ ] **Step 3: Update `LightingOverlay.tsx` with Depth Gizmo & Ground Plane Visualization**
+- [x] **Step 3: Update `LightingOverlay.tsx` with Depth Gizmo & Ground Plane Visualization**
   - For selected light: render vertical dashed drop line from light to ground $(Y=0)$.
   - Render an elliptical shadow ring on ground plane showing spatial footprint.
   - Add a dedicated Depth Handle (or secondary Z-handle) beside the position handle.
   - Wire drag using `startDrag` with Z delta updates and floating `Z: N.Nm` indicator badge.
-- [ ] **Step 4: Run tests and verify with `npx vitest run src/stage/lightingOverlay.test.tsx src/stage/lightingMath.test.ts`**
+- [x] **Step 4: Run tests and verify with `npx vitest run src/stage/lightingOverlay.test.tsx src/stage/lightingMath.test.ts`**
 
 ---
 

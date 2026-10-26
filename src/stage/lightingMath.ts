@@ -363,3 +363,68 @@ export function calculatePointReachOverlay(
         radiusScreen,
     };
 }
+
+export interface LightGroundProjectionResult {
+    sourceScreen: ScreenPoint;
+    groundScreen: ScreenPoint;
+    radiusX: number;
+    radiusY: number;
+}
+
+/**
+ * Calculates screen projection of light position and its ground plane point (Y = 0)
+ * along with ground ellipse radius for spatial 3D orientation.
+ */
+export function calculateLightGroundProjection(
+    position: Vec3Like,
+    cameraPose?: EvaluatedCameraPose,
+    frameWidth: number = 1920,
+    frameHeight: number = 1080,
+    aspect: number = 16 / 9
+): LightGroundProjectionResult {
+    const camera = createVirtualCamera(cameraPose, aspect);
+    const pSource = lightToWorld(position);
+    const pGround = new THREE.Vector3(pSource.x, 0, pSource.z);
+
+    const sourceScreen = projectWorldToScreen(pSource, camera, frameWidth, frameHeight);
+    const groundScreen = projectWorldToScreen(pGround, camera, frameWidth, frameHeight);
+
+    // Calculate ground ellipse dimensions by projecting sample offsets along X and Z
+    const groundOffsetX = projectWorldToScreen(
+        new THREE.Vector3(pSource.x + 0.5, 0, pSource.z),
+        camera,
+        frameWidth,
+        frameHeight
+    );
+    const groundOffsetZ = projectWorldToScreen(
+        new THREE.Vector3(pSource.x, 0, pSource.z + 0.5),
+        camera,
+        frameWidth,
+        frameHeight
+    );
+
+    const radiusX = Math.max(8, Math.hypot(groundOffsetX.x - groundScreen.x, groundOffsetX.y - groundScreen.y));
+    const radiusY = Math.max(4, Math.hypot(groundOffsetZ.x - groundScreen.x, groundOffsetZ.y - groundScreen.y));
+
+    return {
+        sourceScreen,
+        groundScreen,
+        radiusX,
+        radiusY,
+    };
+}
+
+/**
+ * Calculates clamped depth (Z) value from vertical screen drag delta.
+ * Dragging upward (negative deltaScreenY) increases depth, dragging downward decreases depth.
+ * Strictly clamps between 0.1 and 5.0.
+ */
+export function calculateDepthDeltaFromScreen(
+    deltaScreenY: number,
+    startZ: number,
+    scaleFactor: number = 0.005
+): number {
+    const deltaZ = -deltaScreenY * scaleFactor;
+    const nextZ = Math.max(0.1, Math.min(5.0, Number((startZ + deltaZ).toFixed(2))));
+    return nextZ;
+}

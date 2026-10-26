@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Sun, Flashlight, Lightbulb, Square } from 'lucide-react';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { SceneLight, LightSourceType } from '../model/types';
@@ -15,6 +15,8 @@ import {
     calculateSpotConeOverlay,
     calculateAreaRectOverlay,
     calculatePointReachOverlay,
+    calculateLightGroundProjection,
+    calculateDepthDeltaFromScreen,
     lightToWorld,
     type Vec3Like,
 } from './lightingMath';
@@ -165,6 +167,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                 window.removeEventListener('pointerup', handleEnd);
                 window.removeEventListener('pointercancel', handleEnd);
                 activeDragCleanupRef.current = null;
+                setActiveDepthDrag(null);
                 commitDragTransaction();
             };
 
@@ -180,6 +183,33 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         [beginDragTransaction, commitDragTransaction]
     );
 
+    const [activeDepthDrag, setActiveDepthDrag] = useState<number | null>(null);
+
+    // Depth (Z) Drag Handler
+    const handleDepthDragStart = useCallback((e: React.PointerEvent) => {
+        if (!selectedLight) return;
+        e.preventDefault();
+        e.stopPropagation();
+
+        const startClientY = e.clientY;
+        const startZ = selectedLight.position.z ?? 1.0;
+        setActiveDepthDrag(startZ);
+
+        const onPointerMove = (moveEv: PointerEvent) => {
+            const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
+            const nextZ = calculateDepthDeltaFromScreen(deltaPxY, startZ);
+            setActiveDepthDrag(nextZ);
+            updateLight({
+                position: {
+                    ...selectedLight.position,
+                    z: nextZ,
+                },
+            });
+        };
+
+        startDrag(onPointerMove);
+    }, [selectedLight, canvasZoom, startDrag, updateLight]);
+
     // Drag handlers
     const handleSourceDragStart = useCallback((e: React.PointerEvent) => {
         if (!selectedLight) return;
@@ -189,6 +219,12 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startClientX = e.clientX;
         const startClientY = e.clientY;
         const startLightPos = { ...selectedLight.position };
+
+        // Support Shift + Drag on source position handle for direct depth adjustment
+        if (e.shiftKey) {
+            handleDepthDragStart(e);
+            return;
+        }
 
         const onPointerMove = (moveEv: PointerEvent) => {
             const deltaScreenX = (moveEv.clientX - startClientX) / canvasZoom;
@@ -425,8 +461,40 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                         ? projectLightToScreen(targetPos, cameraPose, frameWidth, frameHeight, aspect)
                         : null;
 
+                    const ground = calculateLightGroundProjection(
+                        selectedLight.position,
+                        cameraPose,
+                        frameWidth,
+                        frameHeight,
+                        aspect
+                    );
+
                     return (
                         <g key="selected-light-gizmo">
+                            {/* Ground Plane Projection Drop-line and Shadow Ellipse */}
+                            <g key="ground-projection" data-testid="selected-light-ground-projection">
+                                <line
+                                    x1={srcScreen.x}
+                                    y1={srcScreen.y}
+                                    x2={ground.groundScreen.x}
+                                    y2={ground.groundScreen.y}
+                                    stroke="#f97316"
+                                    strokeWidth="1.5"
+                                    strokeDasharray="3,3"
+                                    strokeOpacity="0.45"
+                                />
+                                <ellipse
+                                    cx={ground.groundScreen.x}
+                                    cy={ground.groundScreen.y}
+                                    rx={ground.radiusX}
+                                    ry={ground.radiusY}
+                                    fill="rgba(249, 115, 22, 0.08)"
+                                    stroke="#f97316"
+                                    strokeWidth="1.5"
+                                    strokeDasharray="2,2"
+                                    strokeOpacity="0.5"
+                                />
+                            </g>
                             {/* Aim Target Dashed Line */}
                             {tgtScreen && (
                                 <>
@@ -620,6 +688,61 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                                     </g>
                                 );
                             })()}
+
+                            {/* Dedicated Depth (Z) Handle */}
+                            <g
+                                data-testid="selected-light-depth-handle"
+                                className="pointer-events-auto cursor-ns-resize group"
+                                onPointerDown={handleDepthDragStart}
+                                transform={`translate(${srcScreen.x}, ${srcScreen.y - 32})`}
+                            >
+                                <line
+                                    x1="0"
+                                    y1="14"
+                                    x2="0"
+                                    y2="0"
+                                    stroke="#0088ff"
+                                    strokeWidth="1.5"
+                                    strokeDasharray="2,2"
+                                />
+                                <rect
+                                    x="-12"
+                                    y="-10"
+                                    width="24"
+                                    height="18"
+                                    rx="5"
+                                    className="fill-[#18181b] stroke-[#0088ff] group-hover:stroke-white group-hover:scale-110 shadow-md transition-all"
+                                    strokeWidth="1.5"
+                                />
+                                <text
+                                    x="0"
+                                    y="3"
+                                    textAnchor="middle"
+                                    className="fill-[#0088ff] group-hover:fill-white text-[10px] font-bold pointer-events-none select-none transition-colors"
+                                >
+                                    ↕Z
+                                </text>
+                                {activeDepthDrag !== null && (
+                                    <g transform="translate(18, -2)">
+                                        <rect
+                                            x="-4"
+                                            y="-10"
+                                            width="48"
+                                            height="18"
+                                            rx="4"
+                                            className="fill-[#0088ff] text-white shadow-lg"
+                                        />
+                                        <text
+                                            x="20"
+                                            y="3"
+                                            textAnchor="middle"
+                                            className="fill-white text-[10px] font-semibold select-none"
+                                        >
+                                            {`${activeDepthDrag.toFixed(2)}m`}
+                                        </text>
+                                    </g>
+                                )}
+                            </g>
 
                             {/* Prominent Selected Light Source Handle */}
                             <g

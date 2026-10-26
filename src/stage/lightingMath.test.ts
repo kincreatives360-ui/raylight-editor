@@ -11,6 +11,8 @@ import {
     calculateSpotConeOverlay,
     calculateAreaRectOverlay,
     calculatePointReachOverlay,
+    calculateLightGroundProjection,
+    calculateDepthDeltaFromScreen,
 } from './lightingMath';
 import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, focalLengthToFov } from './webgl/cameraMath';
 
@@ -137,5 +139,32 @@ describe('lightingMath - Light Type Overlays', () => {
         expect(point.centerScreen).toBeDefined();
         expect(point.edgeScreen).toBeDefined();
         expect(point.radiusScreen).toBeGreaterThan(0);
+    });
+
+    it('calculates ground plane projection and drop line', () => {
+        const position = { x: 0.1, y: 0.5, z: 0 };
+        const proj = calculateLightGroundProjection(position, undefined, frameW, frameH, aspect);
+
+        expect(proj.sourceScreen.inFront).toBe(true);
+        expect(proj.groundScreen.inFront).toBe(true);
+        // In screen coordinates with y-down, ground (y=0) is below source (y=0.5)
+        expect(proj.groundScreen.y).toBeGreaterThan(proj.sourceScreen.y);
+        expect(proj.radiusX).toBeGreaterThan(0);
+        expect(proj.radiusY).toBeGreaterThan(0);
+    });
+
+    it('calculates delta depth and clamps between 0.1 and 5.0', () => {
+        const startZ = 1.0;
+        // Dragging upward (negative deltaScreenY) increases depth
+        const increasedZ = calculateDepthDeltaFromScreen(-100, startZ);
+        expect(increasedZ).toBeGreaterThan(startZ);
+
+        // Clamping to max 5.0
+        const maxClamped = calculateDepthDeltaFromScreen(-2000, startZ);
+        expect(maxClamped).toBe(5.0);
+
+        // Clamping to min 0.1
+        const minClamped = calculateDepthDeltaFromScreen(2000, startZ);
+        expect(minClamped).toBe(0.1);
     });
 });
