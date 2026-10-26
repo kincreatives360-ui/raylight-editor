@@ -427,7 +427,6 @@ const StageComponent: React.FC<StageProps> = ({
         frameHeight,
     ]);
 
-    const eff = frame.effects.state;
     const effectiveBackground = resolveShotBackground(project, frame.activeShot);
     const isTransparentBg = effectiveBackground.kind === 'transparent';
     const showGradientAngleControl = gradientEditorActive
@@ -499,9 +498,6 @@ const StageComponent: React.FC<StageProps> = ({
         }
         commitDragTransaction();
     };
-    const colorGradeCss = eff.colorGrade.enabled
-        ? `brightness(${eff.colorGrade.exposure}) contrast(${eff.colorGrade.contrast}) saturate(${eff.colorGrade.saturation})`
-        : undefined;
 
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
@@ -1149,7 +1145,6 @@ const StageComponent: React.FC<StageProps> = ({
                     style={{
                         width: `${frameWidth}px`,
                         height: `${frameHeight}px`,
-                        filter: colorGradeCss,
                         boxShadow: 'none',
                     }}
                 >
@@ -1248,56 +1243,6 @@ const StageComponent: React.FC<StageProps> = ({
                             </span>
                         </div>
                     )}
-
-                    {/* SCENE POST-PROCESSING OVERLAYS (Vignette, Edge Fade, Film Grain) */}
-                    <div className="absolute inset-0 overflow-hidden pointer-events-none z-20">
-                        {eff.vignette.enabled && (
-                            <div
-                                className="absolute inset-0"
-                                style={{
-                                    boxShadow: `inset 0 0 ${Math.round(
-                                        Math.min(frameWidth, frameHeight) * 0.45
-                                    )}px rgba(0, 0, 0, ${eff.vignette.intensity})`,
-                                }}
-                            />
-                        )}
-
-                        {eff.edgeFade.enabled && (
-                            <div
-                                className="absolute inset-0"
-                                style={{
-                                    boxShadow: `inset 0 ${Math.round(
-                                        eff.edgeFade.top * 120
-                                    )}px 60px -20px #05060a, inset 0 -${Math.round(
-                                        eff.edgeFade.bottom * 120
-                                    )}px 60px -20px #05060a`,
-                                }}
-                            />
-                        )}
-
-                        {eff.filmGrain.enabled && (
-                            <div
-                                className="absolute inset-0 mix-blend-overlay pointer-events-none"
-                                style={{
-                                    opacity: Math.min(0.35, (eff.filmGrain?.intensity ?? 0.02) * 2.5),
-                                }}
-                            >
-                                <svg className="w-full h-full" xmlns="http://www.w3.org/2000/svg">
-                                    <filter id="cinematic-film-grain">
-                                        <feTurbulence
-                                            type="fractalNoise"
-                                            baseFrequency="0.8"
-                                            numOctaves="3"
-                                            stitchTiles="stitch"
-                                            seed={frame.frameNumber % 100}
-                                        />
-                                        <feColorMatrix type="saturate" values="0" />
-                                    </filter>
-                                    <rect width="100%" height="100%" filter="url(#cinematic-film-grain)" />
-                                </svg>
-                            </div>
-                        )}
-                    </div>
 
                     {/* MIDDLE SURFACE: Smart Alignment Snapping Guides & Safe Area */}
                     <Guides

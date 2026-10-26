@@ -1,6 +1,7 @@
 // src/engine/evaluateEffects.ts
 import type { Shot, Effects, EffectKey } from '../model/types';
 
+import { DEFAULT_EFFECTS_ORDER } from '../model/defaults';
 import { evaluateEasing } from './easing';
 
 export interface ActiveEffectPass {
@@ -32,7 +33,7 @@ export function calculateLayerDofBlurPx(
     // Circle of Confusion scaled by aperture, bokehScale, and focalLength
     const lensFactor = (dof.focalLength ?? 50) / 50;
     const rawBlur =
-        outOfFocusDist * dof.aperture * dof.bokehScale * lensFactor * 1.6;
+        outOfFocusDist * (2.8 * 2.8 / Math.max(0.1, dof.aperture)) * dof.bokehScale * lensFactor * 1.6;
 
     if (!Number.isFinite(rawBlur)) return 0;
     return Number(Math.min(40, Math.max(0, rawBlur)).toFixed(2));
@@ -49,7 +50,8 @@ export function evaluateEffectsAtTime(
     // Animate depth of field target.z if focusBlocks are configured (Rack Focus)
     if (shot.focusBlocks && shot.focusBlocks.length > 0 && effects.depthOfField.enabled) {
         let activeZ = effects.depthOfField.target.z;
-        for (const fb of shot.focusBlocks) {
+        for (const original of shot.focusBlocks) {
+            const fb = {...original, startMs: original.sourceStartMs ?? original.startMs, durationMs: original.sourceDurationMs ?? original.durationMs};
             if (shotLocalTimeMs >= fb.startMs && shotLocalTimeMs <= fb.startMs + fb.durationMs) {
                 const raw = (shotLocalTimeMs - fb.startMs) / Math.max(1, fb.durationMs);
                 const progress = evaluateEasing(raw, fb.easing);
@@ -78,7 +80,7 @@ export function evaluateEffectsAtTime(
 
     const orderedEnabledPasses: ActiveEffectPass[] = [];
 
-    (shot.effectsOrder || []).forEach((key, index) => {
+    [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])].forEach((key, index) => {
         const item = effects[key];
         if (!item || !item.enabled) return;
 

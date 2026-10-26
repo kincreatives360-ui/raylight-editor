@@ -92,6 +92,20 @@ function shiftBlocksForSecondHalf<T extends { id?: string; startMs: number; dura
         });
 }
 
+// Keep curve bounds separate from the visible clip bounds. Completed blocks still
+// contribute their held values; future light blocks may hold their first value.
+function sliceSceneBlocks<T extends {id?: string; startMs:number; durationMs:number; sourceStartMs?:number; sourceDurationMs?:number}>(blocks:T[]|undefined, offset:number, duration:number, prefix='blk'):T[] {
+ return (blocks || [])
+   .filter(b => b.startMs < offset + duration && b.startMs + b.durationMs > offset)
+   .map(b => ({...b,
+     id: (offset > 0 && b.startMs < offset) ? generateId(prefix) : (b.id ?? generateId(prefix)),
+     sourceStartMs:(b.sourceStartMs ?? b.startMs)-offset,
+     sourceDurationMs:b.sourceDurationMs ?? b.durationMs,
+     startMs:Math.max(0,b.startMs-offset),
+     durationMs:Math.min(b.durationMs, b.startMs+b.durationMs-offset, duration-Math.max(0,b.startMs-offset))
+   }));
+}
+
 export function pruneEmptyGroups(groups: Group[], remainingLayers: Layer[]): Group[] {
     const layerGroupIds = new Set(remainingLayers.map((l) => l.groupId).filter(Boolean));
     let currentGroups = [...groups];
@@ -137,7 +151,7 @@ interface ProjectStore {
     ) => void;
     updateShot: (
         shotId: string,
-        updater: (shot: Shot) => Shot,
+        updater: Partial<Shot> | ((shot: Shot) => Shot),
         options?: { skipHistory?: boolean }
     ) => void;
     updateLayer: (
@@ -263,7 +277,13 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         get().updateProject(
             (proj) => ({
                 ...proj,
-                shots: proj.shots.map((s) => (s.id === shotId ? updater(s) : s)),
+                shots: proj.shots.map((s) =>
+                    s.id === shotId
+                        ? typeof updater === 'function'
+                            ? updater(s)
+                            : { ...s, ...updater }
+                        : s
+                ),
             }),
             options
         );
@@ -819,9 +839,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             blocks: shiftBlocksForSecondHalf(l.blocks, firstDuration, 'blk'),
         }));
         secondShot.cameraBlocks = shiftBlocksForSecondHalf(target.cameraBlocks, firstDuration, 'cam-blk');
-        secondShot.lightBlocks = shiftBlocksForSecondHalf(target.lightBlocks, firstDuration, 'light-blk');
-        secondShot.effectBlocks = shiftBlocksForSecondHalf(target.effectBlocks, firstDuration, 'effect-blk');
-        secondShot.focusBlocks = shiftBlocksForSecondHalf(target.focusBlocks, firstDuration, 'focus-blk');
+        secondShot.lightBlocks = sliceSceneBlocks(target.lightBlocks, firstDuration, secondDuration);
+        secondShot.effectBlocks = sliceSceneBlocks(target.effectBlocks, firstDuration, secondDuration);
+        secondShot.focusBlocks = sliceSceneBlocks(target.focusBlocks, firstDuration, secondDuration, 'focus-blk');
 
         get().updateProject((proj) => {
             const idx = proj.shots.findIndex((s) => s.id === shotId);
@@ -834,9 +854,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                     blocks: trimBlocksForFirstHalf(l.blocks, firstDuration),
                 })),
                 cameraBlocks: trimBlocksForFirstHalf(target.cameraBlocks, firstDuration),
-                lightBlocks: trimBlocksForFirstHalf(target.lightBlocks, firstDuration),
-                effectBlocks: trimBlocksForFirstHalf(target.effectBlocks, firstDuration),
-                focusBlocks: trimBlocksForFirstHalf(target.focusBlocks, firstDuration),
+                lightBlocks: sliceSceneBlocks(target.lightBlocks, 0, firstDuration),
+                effectBlocks: sliceSceneBlocks(target.effectBlocks, 0, firstDuration),
+                focusBlocks: sliceSceneBlocks(target.focusBlocks, 0, firstDuration),
             };
             const nextShots = [...proj.shots];
             nextShots.splice(idx, 1, updatedFirst, secondShot);

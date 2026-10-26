@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LightInspector } from './LightInspector';
 import { RightSidebar } from '../RightSidebar';
@@ -24,7 +23,7 @@ vi.mock('../../../store/useSelectionStore', async (importOriginal) => {
 describe('LightInspector Component', () => {
     beforeEach(() => {
         const project = createDefaultProject();
-        const shot = createDefaultShot('shot-1');
+        const shot = createDefaultShot({ id: 'shot-1' });
         shot.light = {
             position: { x: 0.8, y: 2.5, z: 3.0 },
             intensity: 1.2,

@@ -110,3 +110,5 @@ describe('evaluateEffects', () => {
     });
   });
 });
+
+it('larger f-numbers reduce depth-of-field blur', () => { const d={...createDefaultShot().effects.depthOfField,enabled:true}; expect(calculateLayerDofBlurPx(2,{...d,aperture:2})).toBeGreaterThan(calculateLayerDofBlurPx(2,{...d,aperture:8})); });

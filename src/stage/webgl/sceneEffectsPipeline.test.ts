@@ -78,3 +78,125 @@ describe('SceneEffectsPipeline anti-aliasing setup', () => {
     expect(getSafeMsaaSampleCount(800, 600, 0)).toBe(0);
   });
 });
+
+import {
+  scenePassKeys,
+  createSceneEffectPass,
+  configureSceneEffectPass,
+  createOutputEncodingPass,
+} from './sceneEffectPasses';
+import { createDefaultEffects } from '../../model/defaults';
+import type { EvaluatedEffects } from '../../engine/evaluateEffects';
+
+describe('SceneEffectsPipeline ordered passes & color encoding', () => {
+  it('creates valid shader passes for all 9 scene effect keys', () => {
+    for (const key of scenePassKeys) {
+      const pass = createSceneEffectPass(key);
+      expect(pass).toBeInstanceOf(ShaderPass);
+      expect(pass.uniforms.tDiffuse).toBeDefined();
+      expect(pass.uniforms.uParams).toBeDefined();
+      expect(pass.uniforms.uResolution).toBeDefined();
+      expect(pass.uniforms.uSeed).toBeDefined();
+      pass.material.dispose();
+    }
+  });
+
+  it('configures uniforms with deterministic seed and custom parameters', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.colorGrade.enabled = true;
+    effectsState.colorGrade.exposure = 0.5;
+    effectsState.colorGrade.contrast = 1.2;
+    effectsState.colorGrade.saturation = 1.1;
+    effectsState.colorGrade.temperature = 0.3;
+    effectsState.colorGrade.tint = -0.2;
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'colorGrade', orderIndex: 1, summary: 'Color Grade' },
+      ],
+      deterministicSeed: 0.765432,
+    };
+
+    const pass = createSceneEffectPass('colorGrade');
+    configureSceneEffectPass(pass, 'colorGrade', evaluated, 1920, 1080);
+
+    const params = pass.uniforms.uParams.value as THREE.Vector4;
+    expect(params.x).toBeCloseTo(0.5); // exposure
+    expect(params.y).toBeCloseTo(1.2); // contrast
+    expect(params.z).toBeCloseTo(1.1); // saturation
+    expect(params.w).toBeCloseTo(0.3); // temperature
+    expect(pass.uniforms.uExtra.value.x).toBeCloseTo(-0.2); // tint
+    expect(pass.uniforms.uSeed.value).toBe(0.765432); // deterministicSeed
+    expect(pass.uniforms.uResolution.value.x).toBe(1920);
+    expect(pass.uniforms.uResolution.value.y).toBe(1080);
+    pass.material.dispose();
+  });
+
+  it('provides an output encoding pass converting linear to display sRGB', () => {
+    const encodingPass = createOutputEncodingPass();
+    expect(encodingPass).toBeInstanceOf(ShaderPass);
+    expect(encodingPass.material.fragmentShader).toContain('lessThanEqual');
+    expect(encodingPass.material.fragmentShader).toContain('1.055*pow(rgb,vec3(1.0/2.4))-.055');
+    encodingPass.material.dispose();
+  });
+
+  it('assembles passes in exact evaluated order followed by sRGB encoding and FXAA on screen', () => {
+    const mockGl = {
+      capabilities: { isWebGL2: true, maxSamples: 4 },
+      getPixelRatio: () => 1,
+      getSize: (target: THREE.Vector2) => target.set(1920, 1080),
+      setSize: () => {},
+      setRenderTarget: () => {},
+      clear: () => {},
+      render: () => {},
+    } as unknown as THREE.WebGLRenderer;
+
+    const composer = new EffectComposer(mockGl);
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera();
+    const renderPass = new RenderPass(scene, camera);
+
+    const effectsState = createDefaultEffects();
+    effectsState.glitch.enabled = true;
+    effectsState.bloom.enabled = true;
+
+    // Custom order: glitch first, then bloom
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'glitch', orderIndex: 1, summary: 'Glitch' },
+        { key: 'bloom', orderIndex: 2, summary: 'Bloom' },
+      ],
+      deterministicSeed: 0.123456,
+    };
+
+    composer.passes = [renderPass];
+    renderPass.renderToScreen = false;
+
+    for (const { key } of evaluated.orderedEnabledPasses) {
+      const pass = createSceneEffectPass(key);
+      pass.renderToScreen = false;
+      configureSceneEffectPass(pass, key, evaluated, 1920, 1080);
+      composer.addPass(pass);
+    }
+
+    const encodingPass = createOutputEncodingPass();
+    encodingPass.renderToScreen = false;
+    composer.addPass(encodingPass);
+
+    const fxaaPass = new FXAAPass();
+    fxaaPass.renderToScreen = true;
+    composer.addPass(fxaaPass);
+
+    // renderPass (0) -> glitch (1) -> bloom (2) -> encodingPass (3) -> fxaaPass (4)
+    expect(composer.passes.length).toBe(5);
+    expect(composer.passes[0]).toBe(renderPass);
+    expect(composer.passes[3]).toBe(encodingPass);
+    expect(composer.passes[4]).toBe(fxaaPass);
+    expect(fxaaPass.renderToScreen).toBe(true);
+
+    composer.dispose();
+  });
+});
+

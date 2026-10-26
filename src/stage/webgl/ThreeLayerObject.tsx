@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree } from '@react-three/fiber';
 import { DeviceOpacityGroup } from './DeviceOpacityGroup';
@@ -19,6 +19,7 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 import { MacBookProDeviceFrame } from './MacBookProDeviceFrame';
+import { applyBokehBlur, applyLayerReveal, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -181,7 +182,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const screenZoom = deviceFrameSettings?.screenZoom;
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
-    const totalBlurPx = Math.round((evalLayer.totalBlurPx ?? 0) * 2) / 2;
+    const totalBlurPx = Math.max(0, Math.round(((evalLayer.totalBlurPx ?? 0) - (evalLayer.dofBlurPx ?? 0)) * 2) / 2);
     const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
     const cameraPose = evaluateCameraPose(evaluatedCamera, {
         position: project.defaultCamera?.position ?? { x: 0, y: 0, z: cameraZ },
@@ -198,6 +199,26 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     });
     const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
     const texturePixelRatio = textureW / canvasW;
+    const effectUniforms = useMemo(() => getLayerEffectUniforms(layer.effects, layer.blendMode), [layer.effects, layer.blendMode]);
+    const sceneCopy = useRef<THREE.FramebufferTexture | null>(null);
+    useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
+    const captureBackdrop = (renderer: THREE.WebGLRenderer) => {
+        if (!effectUniforms.layerBlend.value && !effectUniforms.layerBackdrop.value && !effectUniforms.layerGlass.value) return;
+        const target = renderer.getRenderTarget();
+        const dimensions = target ? new THREE.Vector2(target.width, target.height) : renderer.getDrawingBufferSize(new THREE.Vector2());
+        if (!sceneCopy.current || sceneCopy.current.image.width !== dimensions.x || sceneCopy.current.image.height !== dimensions.y) {
+            sceneCopy.current?.dispose();
+            sceneCopy.current = new THREE.FramebufferTexture(dimensions.x, dimensions.y);
+            sceneCopy.current.type = target?.texture.type ?? THREE.UnsignedByteType;
+            sceneCopy.current.minFilter = THREE.LinearFilter;
+            sceneCopy.current.magFilter = THREE.LinearFilter;
+        }
+        renderer.copyFramebufferToTexture(sceneCopy.current);
+        effectUniforms.layerScene.value = sceneCopy.current;
+        effectUniforms.layerResolution.value.copy(dimensions);
+        effectUniforms.layerBackdrop.value = Math.max(0, layer.effects.backdropBlur ?? 0) * 100 * dimensions.x / 960;
+    };
+    const compileEffects = (shader: THREE.WebGLProgramParametersWithUniforms) => installLayerEffects(shader, effectUniforms);
 
     const isVideoAsset = useMemo(() => {
         if (layer.kind === 'video') return true;
@@ -465,7 +486,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             ctx.restore();
         }
 
+        applyBokehBlur(canvas, (evalLayer.dofBlurPx ?? 0) * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
+        applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
 
         const tex = new THREE.CanvasTexture(canvas);
         const maxAniso = gl.capabilities?.getMaxAnisotropy?.() ?? 16;
@@ -486,6 +509,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         gl,
         evalLayer.shimmerProgress,
         evalLayer.textContentOverride,
+        evalLayer.maskSweepProgress,
+        evalLayer.pathRevealProgress,
+        evalLayer.dofBlurPx,
+        evalLayer.dofBokehShape,
         evalLayer.size.height,
         screenFit,
         screenFill,
@@ -493,6 +520,16 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         screenZoom,
         surface.visible,
     ]);
+
+    const halo = useMemo(() => {
+        if (!texture) return null;
+        const result = drawLayerHalo(texture.image as HTMLCanvasElement, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize);
+        if (!result) return null;
+        const haloTexture = new THREE.CanvasTexture(result.canvas);
+        configureLayerTexture(haloTexture, gl.capabilities.getMaxAnisotropy());
+        return { ...result, texture: haloTexture };
+    }, [texture, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl]);
+    useEffect(() => () => { halo?.texture.dispose(); }, [halo]);
 
     // Dispose previous texture whenever a new one is generated or component unmounts
     useEffect(() => {
@@ -531,7 +568,18 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 options
             );
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
+            applyBokehBlur(canvas, (evalLayer.dofBlurPx ?? 0) * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
             applyTextureMask(ctx, canvasW, canvasH, layer, project);
+            applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
+            if (halo) {
+                const updated = drawLayerHalo(canvas, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize);
+                const haloCtx = halo.canvas.getContext('2d');
+                if (updated && haloCtx) {
+                    haloCtx.clearRect(0, 0, halo.canvas.width, halo.canvas.height);
+                    haloCtx.drawImage(updated.canvas, 0, 0);
+                    markTextureUpdated(halo.texture);
+                }
+            }
             markTextureUpdated(texture);
             invalidate();
         };
@@ -552,6 +600,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         screenPan,
         screenZoom,
         evalLayer.shimmerProgress,
+        evalLayer.maskSweepProgress,
+        evalLayer.pathRevealProgress,
+        evalLayer.dofBlurPx,
+        evalLayer.dofBokehShape,
+        evalLayer.glowIntensityOffset,
+        evalLayer.glowRadiusOffset,
+        halo,
+        gl,
         invalidate,
         canvasW,
         canvasH,
@@ -585,8 +641,16 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const surfaceRoughness = layer.material?.roughness ?? 0.24;
     const surfaceMetalness = layer.material?.metalness ?? 0.06;
 
+    const haloZ = deviceFrameMetrics ? SCREEN_PLANE_Z - deviceFrameMetrics.bodyDepth * 1.1 - 0.001 : SCREEN_PLANE_Z - 0.001;
+
     const contents = <>
+            {halo && <mesh position={[0, 0, haloZ]} renderOrder={layer.order * 2}>
+                <planeGeometry args={[meshW * halo.widthScale, meshH * halo.heightScale]} />
+                <meshBasicMaterial map={halo.texture} transparent opacity={renderOpacity} toneMapped={false} depthWrite={false} side={THREE.DoubleSide} />
+            </mesh>}
             <mesh
+                onBeforeRender={captureBackdrop}
+                renderOrder={layer.order * 2 + 1}
                 // One shared screen plane: the artwork sits at SCREEN_PLANE_Z
                 // with or without a frame, so toggling the frame never shifts
                 // it. PhoneDeviceFrame stages the rim just in front of this
@@ -600,9 +664,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             >
                 {(layer.kind !== 'image' && layer.kind !== 'video') && <planeGeometry args={[meshW, meshH]} />}
                 {receivesLight ? (
-                    <meshStandardMaterial map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
+                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 ) : (
-                    <meshBasicMaterial map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
+                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (

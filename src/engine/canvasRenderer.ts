@@ -21,6 +21,7 @@ import type { EvaluatedEffects } from './evaluateEffects';
 import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
 import { getShaderColors } from '../model/backgroundPresets';
 import { resolveKeyIntensity } from './lightMath';
+import { applyCanvasSceneEffects } from './canvasSceneEffects';
 
 const MAX_IMAGE_CACHE_SIZE = 100;
 const imageElementCache = new Map<string, HTMLImageElement>();
@@ -507,7 +508,44 @@ function drawDefaultImagePlaceholder(
   );
 }
 
+// Isolate layers requiring backdrop sampling or distortion.
 async function drawLayerOnCanvas(
+  ctx: CanvasRenderingContext2D, layer: EvaluatedLayerWithEffects, project: Project,
+  frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
+): Promise<void> {
+  const effects = layer.layer.effects;
+  if (!effects?.warp?.enabled && !effects?.liquidGlass?.enabled && !(effects?.backdropBlur && effects.backdropBlur > 0)) {
+    return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
+  }
+  const make = () => { const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; return canvas; };
+  const surface = make(), content = surface.getContext('2d'); if (!content) return;
+  await drawLayerContentOnCanvas(content, { ...layer, layer: { ...layer.layer, blendMode: 'normal' } }, project, frame, w, h);
+  if (effects?.warp?.enabled) {
+    const original = make(); original.getContext('2d')?.drawImage(surface, 0, 0);
+    content.clearRect(0, 0, w, h);
+    const amount = effects.warp.amount ?? 0.05, frequency = effects.warp.frequency ?? 3;
+    for (let y = 0; y < h; y++) content.drawImage(original, 0, y, w, 1, Math.sin(y / h * Math.PI * 2 * frequency) * amount * w, y, w, 1);
+  }
+  if ((effects?.backdropBlur ?? 0) > 0 || effects?.liquidGlass?.enabled) {
+    const backdrop = make(), back = backdrop.getContext('2d');
+    if (back) {
+      const glass = effects?.liquidGlass;
+      back.filter = `blur(${Math.max(effects?.backdropBlur ?? 0, (glass?.enabled ? glass.roughness ?? 0.1 : 0) * 30) * w / 1920}px)`;
+      const offset = glass?.enabled ? (glass.refraction ?? 0.1) * w * 0.03 : 0;
+      back.drawImage(ctx.canvas, offset, 0, w, h);
+      back.filter = 'none';
+      if (glass?.enabled && glass.tint) { back.globalAlpha = 0.12; back.fillStyle = glass.tint; back.fillRect(0, 0, w, h); back.globalAlpha = 1; }
+      back.globalCompositeOperation = 'destination-in'; back.drawImage(surface, 0, 0);
+      content.globalCompositeOperation = 'destination-over'; content.drawImage(backdrop, 0, 0);
+      // Glass replaces the opaque fill with a refracted backdrop and a subtle surface highlight.
+      if (glass?.enabled) { content.clearRect(0, 0, w, h); content.globalCompositeOperation = 'source-over'; content.drawImage(backdrop, 0, 0); }
+    }
+  }
+  ctx.save(); ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
+  ctx.drawImage(surface, 0, 0); ctx.restore();
+}
+
+async function drawLayerContentOnCanvas(
   ctx: CanvasRenderingContext2D,
   evalLayer: EvaluatedLayerWithEffects,
   project: Project,
@@ -523,7 +561,6 @@ async function drawLayerOnCanvas(
   if (!evalLayer.visible || evalLayer.opacity <= 0.001) return;
 
   const { layer } = evalLayer;
-  const eff = frame.effects.state;
 
   const fovRad = (frame.camera.fovDegrees * Math.PI) / 180;
   const perspectivePx = Math.max(
@@ -562,10 +599,7 @@ async function drawLayerOnCanvas(
         : (layer.blendMode as GlobalCompositeOperation);
   }
 
-  const motionBlurAdd = eff.motionBlur.enabled
-    ? (eff.motionBlur.shutterAngle / 360) * 1.5
-    : 0;
-  const totalBlur = (evalLayer.totalBlurPx + motionBlurAdd) * (canvasW / 960);
+  const totalBlur = evalLayer.totalBlurPx * (canvasW / 1920);
   if (totalBlur > 0.35) {
     ctx.filter = `blur(${totalBlur.toFixed(1)}px)`;
   }
@@ -587,18 +621,44 @@ async function drawLayerOnCanvas(
     0
   );
 
-  if (evalLayer.maskSweepProgress < 1) {
+  const revealProgress = Math.max(0, Math.min(1, evalLayer.maskSweepProgress ?? 1, evalLayer.pathRevealProgress ?? 1));
+  if (revealProgress < 1) {
     ctx.beginPath();
     ctx.rect(
       -baseW / 2,
       -baseH / 2,
-      baseW * evalLayer.maskSweepProgress,
+      baseW * revealProgress,
       baseH
     );
     ctx.clip();
   }
 
-  const bloomMultiplier = eff.bloom.enabled ? 1 + eff.bloom.intensity * 1.4 : 1;
+  if (layer.maskLayerId) {
+    const mask = project.shots.flatMap((shot) => shot.layers).find((c) => c.id === layer.maskLayerId);
+    if (mask?.kind === 'shape') {
+      ctx.beginPath();
+      if (mask.shape === 'ellipse') {
+        ctx.ellipse(0, 0, baseW / 2, baseH / 2, 0, 0, Math.PI * 2);
+      } else if (mask.shape === 'polygon') {
+        const points = mask.points?.length ? mask.points : [{ x: 0.5, y: 0 }, { x: 1, y: 0.5 }, { x: 0.5, y: 1 }, { x: 0, y: 0.5 }];
+        points.forEach((pt, i) => {
+          const px = (pt.x - 0.5) * baseW;
+          const py = (pt.y - 0.5) * baseH;
+          if (i === 0) ctx.moveTo(px, py);
+          else ctx.lineTo(px, py);
+        });
+        ctx.closePath();
+      } else if (mask.shape === 'line' || mask.shape === 'arrow') {
+        ctx.rect(-baseW / 2, -Math.max(3, baseH * 0.09), baseW, Math.max(6, baseH * 0.18));
+      } else {
+        const r = Math.max(0, (mask.cornerRadius || 0) * Math.min(baseW, baseH) * 0.5);
+        drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, r);
+      }
+      ctx.clip();
+    }
+  }
+
+  const bloomMultiplier = 1;
 
   if (layer.kind === 'image' || layer.kind === 'video') {
     const imageLayer = layer as ImageLayer | VideoLayer;
@@ -1084,28 +1144,6 @@ export async function renderProjectFrameToCanvas(
   ctx.globalAlpha = incomingOpacity;
   if (incomingSlideX !== 0) ctx.translate(incomingSlideX, 0);
 
-  // 3. Ghost Echo Pass (if Ghost Effect is enabled)
-  const eff = frame.effects.state;
-  if (eff.ghost.enabled && eff.ghost.opacity > 0) {
-    ctx.save();
-    ctx.translate(eff.ghost.offset * canvasW, -eff.ghost.offset * canvasH * 0.5);
-    for (const evalLayer of frame.layers) {
-      await drawLayerOnCanvas(
-        ctx,
-        {
-          ...evalLayer,
-          opacity: evalLayer.opacity * eff.ghost.opacity,
-          totalBlurPx: evalLayer.totalBlurPx + eff.ghost.blur,
-        },
-        project,
-        frame,
-        canvasW,
-        canvasH
-      );
-    }
-    ctx.restore();
-  }
-
   // 4. Render All 3D Layers (Sorted Back-to-Front)
   for (const evalLayer of frame.layers) {
     await drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
@@ -1122,53 +1160,10 @@ export async function renderProjectFrameToCanvas(
   );
   ctx.restore();
 
-  // 5. Vignette Pass (only when explicitly enabled on the shot)
-  if (eff.vignette.enabled && eff.vignette.intensity > 0) {
-    const vigGrad = ctx.createRadialGradient(
-      canvasW / 2,
-      canvasH / 2,
-      Math.min(canvasW, canvasH) * 0.28,
-      canvasW / 2,
-      canvasH / 2,
-      Math.hypot(canvasW, canvasH) * 0.55
-    );
-    vigGrad.addColorStop(0, 'rgba(0,0,0,0)');
-    vigGrad.addColorStop(
-      1,
-      `rgba(0,0,0,${Math.min(0.92, eff.vignette.intensity * 0.9)})`
-    );
-    ctx.fillStyle = vigGrad;
-    ctx.fillRect(0, 0, canvasW, canvasH);
-  }
-
-  // 6. Deterministic Film Grain Pass (only when explicitly enabled)
-  if (eff.filmGrain.enabled && eff.filmGrain.intensity > 0) {
-    const grainAlpha = Math.min(0.25, eff.filmGrain.intensity * 1.4);
-    ctx.fillStyle = `rgba(255,255,255,${grainAlpha.toFixed(3)})`;
-    let seed = Math.floor(frame.effects.deterministicSeed * 100000) + 1;
-    const dotsCount = Math.min(1800, Math.round((canvasW * canvasH) / 700));
-    const dotSize = Math.max(1, eff.filmGrain.size);
-    for (let i = 0; i < dotsCount; i++) {
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      const gx = (seed / 4294967296) * canvasW;
-      seed = (seed * 1664525 + 1013904223) % 4294967296;
-      const gy = (seed / 4294967296) * canvasH;
-      ctx.fillRect(gx, gy, dotSize, dotSize);
-    }
-  }
-
-  // 7. Glitch Scanline Pass
-  if (eff.glitch.enabled && eff.glitch.intensity > 0) {
-    const slices = Math.max(2, Math.round(eff.glitch.intensity * 10));
-    for (let i = 0; i < slices; i++) {
-      const sy = ((i * 97 + frame.frameNumber * 31) % 100) * 0.01 * canvasH;
-      const sh = Math.max(4, canvasH * 0.02);
-      const shiftX =
-        (i % 2 === 0 ? 1 : -1) * eff.glitch.intensity * canvasW * 0.03;
-      ctx.fillStyle =
-        i % 2 === 0 ? 'rgba(244,63,94,0.18)' : 'rgba(56,189,248,0.18)';
-      ctx.fillRect(shiftX, sy, canvasW, sh);
-    }
+  if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+    const image = ctx.getImageData(0, 0, canvasW, canvasH);
+    applyCanvasSceneEffects(image.data, canvasW, canvasH, frame.effects);
+    ctx.putImageData(image, 0, 0);
   }
 
   ctx.restore();

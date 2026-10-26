@@ -1,5 +1,4 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LightBlockInspector } from './LightBlockInspector';
 import { LightInspector } from './LightInspector';
@@ -39,16 +38,16 @@ const mockLightBlock: LightAnimationBlock = {
     toIntensity: 2.5,
     fromTemperature: 6500,
     toTemperature: 4500,
-    easing: { kind: 'bezier', name: 'easeInOut', x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
+    easing: { kind: 'bezier', x1: 0.42, y1: 0, x2: 0.58, y2: 1 },
 };
 
 describe('LightBlockInspector Component', () => {
     beforeEach(() => {
         const project = createDefaultProject();
-        const shot = createDefaultShot('shot-1');
+        const shot = createDefaultShot({ id: 'shot-1' });
         shot.lightBlocks = [mockLightBlock];
         project.shots = [shot];
-        useProjectStore.setState({ project, activeShotId: 'shot-1' });
+        useProjectStore.setState({ project,  });
         useSelectionStore.setState({
             selectedLightBlockId: 'light-blk-1',
             selectedLightId: null,
@@ -57,8 +56,7 @@ describe('LightBlockInspector Component', () => {
     });
 
     it('renders block timing, position, intensity, and temperature controls', () => {
-        const shot = useProjectStore.getState().project.shots[0];
-        const html = renderToStaticMarkup(
+                const html = renderToStaticMarkup(
             <LightBlockInspector
                 activeShotId="shot-1"
                 activeLightBlock={mockLightBlock}
@@ -97,9 +95,9 @@ describe('LightBlockInspector Component', () => {
 describe('LightInspector Animate Light integration', () => {
     beforeEach(() => {
         const project = createDefaultProject();
-        const shot = createDefaultShot('shot-1');
+        const shot = createDefaultShot({ id: 'shot-1' });
         project.shots = [shot];
-        useProjectStore.setState({ project, activeShotId: 'shot-1' });
+        useProjectStore.setState({ project,  });
         useSelectionStore.setState({
             selectedLightId: 'sun-key',
             selectedLightBlockId: null,

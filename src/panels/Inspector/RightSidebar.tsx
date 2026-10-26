@@ -1,3 +1,4 @@
+import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { ColorField, ColorPicker } from './ColorPicker';
 import {
     SHADER_PRESETS,
@@ -1180,6 +1181,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     )}
                 </div>
 
+                {activeShot && <SceneEffectsSection shot={activeShot} />}
                 {/* Scene Lights */}
                 {activeShot && (
                     <div className="pt-3 border-t border-white/[0.06]">

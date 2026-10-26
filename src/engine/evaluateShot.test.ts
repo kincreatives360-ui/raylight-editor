@@ -6,6 +6,7 @@ import {
   createDefaultShot,
   createDefaultShapeLayer,
   createDefaultTextLayer,
+  createDefaultImageLayer,
 } from '../model/defaults';
 import type { Project, Shot } from '../model/types';
 
@@ -241,5 +242,59 @@ describe('evaluateProjectAtTime', () => {
     expect(frame.shotLocalTimeMs).toBe(0);
     expect(frame.activeShot).toBeDefined();
     expect(Array.isArray(frame.layers)).toBe(true);
+  });
+
+  it('7. Animated rack focus dynamically updates layer blur according to evaluated focus distance', () => {
+    const layerAt1 = createDefaultImageLayer({
+      id: 'l-target',
+      position: { x: 0, y: 0, z: 1.0 },
+      inMs: 0,
+      outMs: 2000,
+    });
+
+    const shot = createDefaultShot({
+      durationMs: 2000,
+      layers: [layerAt1],
+      effects: {
+        ...DEFAULT_PROJECT.shots[0].effects,
+        depthOfField: {
+          enabled: true,
+          target: { x: 0, y: 0, z: 0 },
+          focusRange: 0.1,
+          aperture: 2.8,
+          bokehScale: 1.0,
+          bokehShape: 'spherical',
+        },
+      },
+      focusBlocks: [
+        {
+          id: 'focus-rack',
+          startMs: 0,
+          durationMs: 1000,
+          fromZ: 0,
+          toZ: 1.0,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      ],
+    });
+
+    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
+
+    // At t=0: focus is at z=0, layer is at z=1 -> layer is out of focus, has blur
+    const frameAt0 = evaluateProjectAtTime(project, 0);
+    const layerAt0 = frameAt0.layers.find((l) => l.id === 'l-target')!;
+    expect(layerAt0.dofBlurPx).toBeGreaterThan(0);
+    const initialBlur = layerAt0.dofBlurPx;
+
+    // At t=500: focus is at z=0.5 -> layer is closer to focus, blur decreases
+    const frameAt500 = evaluateProjectAtTime(project, 500);
+    const layerAt500 = frameAt500.layers.find((l) => l.id === 'l-target')!;
+    expect(layerAt500.dofBlurPx).toBeLessThan(initialBlur);
+    expect(layerAt500.dofBlurPx).toBeGreaterThan(0);
+
+    // At t=1000: focus is at z=1.0 -> layer is exactly in focus, blur is 0
+    const frameAt1000 = evaluateProjectAtTime(project, 1000);
+    const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
+    expect(layerAt1000.dofBlurPx).toBe(0);
   });
 });

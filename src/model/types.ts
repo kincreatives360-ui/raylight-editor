@@ -405,6 +405,9 @@ export interface CameraBlock {
 }
 
 export interface LightAnimationBlock {
+  /** Original curve bounds retained when a shot is split. */
+  sourceStartMs?: number;
+  sourceDurationMs?: number;
   id: string;
   label: string;
   /** 'key' for primary directional light, or specific source id */
@@ -432,6 +435,9 @@ export interface LightAnimationBlock {
 }
 
 export interface SceneEffectAnimationBlock {
+  /** Original curve bounds retained when a shot is split. */
+  sourceStartMs?: number;
+  sourceDurationMs?: number;
   id: string;
   label: string;
   effectKey: EffectKey;
@@ -608,6 +614,9 @@ export interface Shot {
 export type Effects = SceneEffects;
 
 export interface FocusBlock {
+  /** Original curve bounds retained when a shot is split. */
+  sourceStartMs?: number;
+  sourceDurationMs?: number;
   id: string;
   label?: string;
   startMs: number;

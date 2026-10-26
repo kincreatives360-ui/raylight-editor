@@ -64,10 +64,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         position: patch.position
                             ? { ...currentRig.position, ...patch.position }
                             : currentRig.position,
-                        target: patch.target
-                            ? { ...((currentRig as unknown as { target?: Vec3 })?.target || { x: 0, y: 0, z: 0 }), ...patch.target }
-                            : (currentRig as unknown as { target?: Vec3 })?.target,
-                    },
+                        },
                 });
             } else {
                 const currentSources = currentRig.sources || [];
@@ -137,7 +134,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             toIntensity: Number((currentLight.intensity * 1.5).toFixed(2)),
             fromTemperature: currentLight.temperature ?? 6500,
             toTemperature: currentLight.temperature ?? 6500,
-            easing: { kind: 'preset', name: 'easeInOut' },
+            easing: { kind: 'preset', name: 'ease-in-out' },
         };
 
         updateShot(activeShot.id, (s) => ({

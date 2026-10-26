@@ -1,11 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { LightingOverlay } from './LightingOverlay';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { createDefaultProject, createDefaultShot } from '../model/defaults';
-import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 
 // SSR uses Zustand's initial snapshot. Read real loaded state for rendering.
 vi.mock('../store/useProjectStore', async (importOriginal) => {
@@ -25,7 +23,7 @@ vi.mock('../store/useSelectionStore', async (importOriginal) => {
 describe('LightingOverlay Component', () => {
     beforeEach(() => {
         const project = createDefaultProject();
-        const shot = createDefaultShot('shot-1');
+        const shot = createDefaultShot({ id: 'shot-1' });
         shot.light = {
             position: { x: -0.28, y: 0.36, z: 0.9 },
             intensity: 1.2,
@@ -78,7 +76,7 @@ describe('LightingOverlay Component', () => {
         useSelectionStore.getState().selectLight(null);
     });
 
-    const createDummyFrame = (): EvaluatedProjectFrame => {
+    const createDummyFrame = (): any => {
         const shot = useProjectStore.getState().project.shots[0];
         return {
             activeShot: shot,

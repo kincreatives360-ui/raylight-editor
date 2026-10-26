@@ -188,21 +188,21 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     enabled: true,
                     color: '#000000',
                     opacity: 0.5,
-                    blur: 16,
+                    blur: 16 / refStageW,
                     offsetX: 0,
-                    offsetY: 8,
+                    offsetY: 8 / refStageH,
                 };
             } else if (effectId === 'glow') {
                 effects.glow = {
                     enabled: true,
                     color: '#0088ff',
                     intensity: 1,
-                    radius: 12,
+                    radius: 12 / refStageW,
                 };
             } else if (effectId === 'backdropBlur') {
-                effects.backdropBlur = 12;
+                effects.backdropBlur = 12 / 100;
             } else if (effectId === 'layerBlur') {
-                effects.layerBlur = 12;
+                effects.layerBlur = 12 / 100;
             } else if (effectId === 'liquidGlass') {
                 effects.liquidGlass = {
                     enabled: true,
@@ -1166,10 +1166,10 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                     <Minus className="w-3 h-3" />
                                 </button>
                             </div>
-                            <div className="grid grid-cols-2 gap-1.5">
+                            <div className="grid grid-cols-3 gap-1.5">
                                 <ScrubInput
                                     label="Blur"
-                                    value={layer.effects.dropShadow.blur}
+                                    value={layer.effects.dropShadow.blur * refStageW}
                                     min={0}
                                     max={100}
                                     step={1}
@@ -1181,7 +1181,28 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                                     ...l,
                                                     effects: {
                                                         ...l.effects,
-                                                        dropShadow: { ...l.effects.dropShadow, blur },
+                                                        dropShadow: { ...l.effects.dropShadow, blur: blur / refStageW },
+                                                    },
+                                                }
+                                                : l
+                                        )
+                                    }
+                                />
+                                <ScrubInput
+                                    label="X"
+                                    value={layer.effects.dropShadow.offsetX * refStageW}
+                                    min={-100}
+                                    max={100}
+                                    step={1}
+                                    unit=" px"
+                                    onChange={(offsetX) =>
+                                        updateLayer(activeShotId, layer.id, (l) =>
+                                            l.kind === 'shape' && l.effects.dropShadow
+                                                ? {
+                                                    ...l,
+                                                    effects: {
+                                                        ...l.effects,
+                                                        dropShadow: { ...l.effects.dropShadow, offsetX: offsetX / refStageW },
                                                     },
                                                 }
                                                 : l
@@ -1190,7 +1211,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                 />
                                 <ScrubInput
                                     label="Y"
-                                    value={layer.effects.dropShadow.offsetY}
+                                    value={layer.effects.dropShadow.offsetY * refStageH}
                                     min={-100}
                                     max={100}
                                     step={1}
@@ -1202,7 +1223,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                                     ...l,
                                                     effects: {
                                                         ...l.effects,
-                                                        dropShadow: { ...l.effects.dropShadow, offsetY },
+                                                        dropShadow: { ...l.effects.dropShadow, offsetY: offsetY / refStageH },
                                                     },
                                                 }
                                                 : l
@@ -1233,7 +1254,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                             <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
                                     label="Radius"
-                                    value={layer.effects.glow.radius}
+                                    value={layer.effects.glow.radius * refStageW}
                                     min={0}
                                     max={100}
                                     step={1}
@@ -1245,7 +1266,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                                     ...l,
                                                     effects: {
                                                         ...l.effects,
-                                                        glow: { ...l.effects.glow, radius },
+                                                        glow: { ...l.effects.glow, radius: radius / refStageW },
                                                     },
                                                 }
                                                 : l
@@ -1299,7 +1320,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                             </div>
                             <ScrubInput
                                 label="Blur"
-                                value={layer.effects.backdropBlur}
+                                value={layer.effects.backdropBlur * 100}
                                 min={0}
                                 max={100}
                                 step={1}
@@ -1309,7 +1330,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                         l.kind === 'shape'
                                             ? {
                                                 ...l,
-                                                effects: { ...l.effects, backdropBlur: blur },
+                                                effects: { ...l.effects, backdropBlur: blur / 100 },
                                             }
                                             : l
                                     )
@@ -1337,7 +1358,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                             </div>
                             <ScrubInput
                                 label="Blur"
-                                value={layer.effects.layerBlur}
+                                value={layer.effects.layerBlur * 100}
                                 min={0}
                                 max={100}
                                 step={1}
@@ -1347,7 +1368,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                         l.kind === 'shape'
                                             ? {
                                                 ...l,
-                                                effects: { ...l.effects, layerBlur: blur },
+                                                effects: { ...l.effects, layerBlur: blur / 100 },
                                             }
                                             : l
                                     )

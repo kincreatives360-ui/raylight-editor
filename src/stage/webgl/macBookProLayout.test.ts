@@ -3,7 +3,6 @@ import {
     DEFAULT_DEVICE_FRAME_SETTINGS,
     getDeviceFrameMetrics,
     MACBOOK_PRO_16,
-    SCREEN_PLANE_Z,
 } from '../../model/deviceFrame';
 import {
     getMacBookProLayout,

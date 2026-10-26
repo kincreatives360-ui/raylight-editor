@@ -1,4 +1,4 @@
-import type { Project, Shot, LightRig, SceneEffects, Group } from '../model/types';
+import type { Project, Shot, SceneEffects, Group } from '../model/types';
 import { createDefaultShot } from '../model/defaults';
 import { evaluateEasing } from './easing';
 import { evaluateLightBlocks } from './evaluateLight';
@@ -12,6 +12,7 @@ import {
 
 export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
     dofBlurPx: number;
+    dofBokehShape?: SceneEffects['depthOfField']['bokehShape'];
     totalBlurPx: number;
 }
 
@@ -140,7 +141,7 @@ export function evaluateProjectAtTime(
 
     // 2. Evaluate Animated Scene Effect Blocks on the Timeline (Zero-allocation when idle)
     let evaluatedEffectsConfig: SceneEffects = baseShot.effects;
-    const effectBlocks = baseShot.effectBlocks;
+    const effectBlocks = baseShot.effectBlocks?.map(b => ({...b, startMs:b.sourceStartMs ?? b.startMs, durationMs:b.sourceDurationMs ?? b.durationMs}));
     if (effectBlocks && effectBlocks.length > 0) {
         let hasActiveBlock = false;
         for (const eb of effectBlocks) {
@@ -237,7 +238,7 @@ export function evaluateProjectAtTime(
 
         const dofBlurPx = calculateLayerDofBlurPx(
             evalLayer.position.z,
-            activeShot.effects.depthOfField
+            effects.state.depthOfField
         );
         const manualBlurPx =
             (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
@@ -249,6 +250,7 @@ export function evaluateProjectAtTime(
                     ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                     : layer,
             dofBlurPx,
+            dofBokehShape: effects.state.depthOfField.bokehShape,
             totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
         };
     });
@@ -273,57 +275,18 @@ export function evaluateProjectAtTime(
                 0,
                 prevShot.durationMs - (trans.durationMs - shotLocalTimeMs)
             );
-            const prevCamera = evaluateShotCameraAtTime(prevShot, prevLocalTime);
-            const prevEffects = evaluateEffectsAtTime(
-                prevShot,
-                frameNumber,
-                prevLocalTime
-            );
-            const prevLayers: EvaluatedLayerWithEffects[] = (prevShot.layers || []).map(
-                (layer) => {
-                    const evalLayer = evaluateLayerAtTime(layer, prevLocalTime);
-                    const dofBlurPx = calculateLayerDofBlurPx(
-                        evalLayer.position.z,
-                        prevShot.effects.depthOfField
-                    );
-                    const manualBlurPx =
-                        (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
-                    return {
-                        ...evalLayer,
-                        layer:
-                            layer.kind !== 'text'
-                                ? { ...layer, cornerRadius: evalLayer.cornerRadius }
-                                : layer,
-                        dofBlurPx,
-                        totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
-                    };
-                }
-            );
-            const prevEvaluatedLight: LightRig = {
-                ...prevShot.light,
-                position: { ...prevShot.light.position },
-                sources: prevShot.light.sources
-                    ? prevShot.light.sources.map((s) => ({
-                        ...s,
-                        position: { ...s.position },
-                    }))
-                    : [],
-            };
+            // Reuse the full evaluator so outgoing animated effects, lights and
+            // hidden groups follow the same rules as the incoming shot.
+            const previous = evaluateProjectAtTime({
+                ...project, shots: [{...prevShot, startMs:0, transition:{...prevShot.transition,type:'cut'}}],
+            }, prevLocalTime);
             outgoingFrame = {
+                ...previous,
                 globalTimeMs: clampedGlobalMs,
                 frameNumber,
-                activeShot: { ...prevShot, light: prevEvaluatedLight },
                 shotIndex: shotIndex - 1,
-                shotLocalTimeMs: prevLocalTime,
-                shotProgress: prevLocalTime / Math.max(1, prevShot.durationMs),
-                camera: prevCamera,
-                layers: prevLayers,
-                effects: prevEffects,
-                shotTransition: {
-                    isTransitioning: false,
-                    type: 'cut',
-                    progress: 1,
-                },
+                activeShot: { ...previous.activeShot, startMs: prevShot.startMs },
+                effects: evaluateEffectsAtTime(previous.activeShot, frameNumber, prevLocalTime),
             };
         }
     }

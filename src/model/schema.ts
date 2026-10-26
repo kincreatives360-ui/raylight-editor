@@ -453,6 +453,8 @@ export const CameraBlockSchema = z.object({
 });
 
 export const LightAnimationBlockSchema = z.object({
+  sourceStartMs: z.number().optional(),
+  sourceDurationMs: z.number().min(0).optional(),
   id: z.string(),
   label: z.string(),
   targetLightId: z.string().optional(),
@@ -492,6 +494,8 @@ export const EffectKeySchema = z.enum([
 ]);
 
 export const SceneEffectAnimationBlockSchema = z.object({
+  sourceStartMs: z.number().optional(),
+  sourceDurationMs: z.number().min(0).optional(),
   id: z.string(),
   label: z.string(),
   effectKey: EffectKeySchema,
@@ -503,6 +507,8 @@ export const SceneEffectAnimationBlockSchema = z.object({
 });
 
 export const FocusBlockSchema = z.object({
+  sourceStartMs: z.number().optional(),
+  sourceDurationMs: z.number().min(0).optional(),
   id: z.string(),
   label: z.string().optional(),
   startMs: z.number().min(0),

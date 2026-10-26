@@ -199,7 +199,8 @@ export function evaluateLightBlocks(
   // Group blocks by targetLightId ?? 'key'
   const groups = new Map<string, { block: LightAnimationBlock; index: number }[]>();
   for (let i = 0; i < blocks.length; i++) {
-    const b = blocks[i];
+    const original = blocks[i];
+    const b = {...original, startMs:original.sourceStartMs ?? original.startMs, durationMs:original.sourceDurationMs ?? original.durationMs};
     const target = b.targetLightId ?? 'key';
     let list = groups.get(target);
     if (!list) {

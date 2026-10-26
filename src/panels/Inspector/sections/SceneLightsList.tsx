@@ -28,7 +28,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
     selectedLightId,
     onSelectLight,
     className = '',
-    compact = false,
+    compact: _compact = false,
 }) => {
     const updateShot = useProjectStore((s) => s.updateShot);
     const [addMenuOpen, setAddMenuOpen] = useState(false);

@@ -64,6 +64,11 @@ describe('Export Pipeline: Cancellation, Format Respect, and GIF Resolution', ()
         (globalThis as unknown as { document: unknown }).document = {
             createElement: vi.fn((tag: string) => {
                 if (tag === 'canvas') return mockCanvas;
+                if (tag === 'video') {
+                    const video = { videoWidth: 1280, videoHeight: 720, onloadeddata: null as (() => void) | null,
+                      load: () => queueMicrotask(() => video.onloadeddata?.()), removeAttribute: vi.fn() };
+                    return video;
+                }
                 if (tag === 'a') {
                     const anchor = {
                         href: '',
@@ -180,8 +185,10 @@ describe('Export Pipeline: Cancellation, Format Respect, and GIF Resolution', ()
             mimeType = 'video/webm;codecs=vp9';
             ondataavailable: ((ev: { data: Blob }) => void) | null = null;
             onstop: (() => void) | null = null;
+            onstart: (() => void) | null = null;
             start() {
                 this.state = 'recording';
+                this.onstart?.();
             }
             stop() {
                 this.state = 'inactive';

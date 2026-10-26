@@ -15,6 +15,7 @@ import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { getViewportPixelRatio } from './viewportResolution';
+import { registerStageCapture } from '../../engine/stageCapture';
 
 
 interface ViewportCanvasProps {
@@ -76,6 +77,22 @@ const ViewportRenderBridge: React.FC<{
     useEffect(() => {
         invalidate();
     }, [frame, selectedLayerIds, background, invalidate]);
+
+    return null;
+};
+
+
+const StageCaptureBridge: React.FC = () => {
+    const { gl, invalidate } = useThree();
+
+    useEffect(() => {
+        const unregister = registerStageCapture(async (_timeMs: number, _width: number, _height: number) => {
+            invalidate();
+            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+            return gl.domElement;
+        });
+        return unregister;
+    }, [gl, invalidate]);
 
     return null;
 };
@@ -223,6 +240,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     background={activeBackground}
                 />
                 <WebGLContextGuard />
+                <StageCaptureBridge />
 
                 {/* Studio PBR Reflection Environment Map */}
                 <StudioEnvironment />

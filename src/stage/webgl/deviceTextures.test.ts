@@ -63,8 +63,8 @@ describe('deviceTextures resolution & filtering', () => {
       kind: 'gradient',
       gradientType: 'linear',
       stops: [
-        { offset: 0, color: '#ff0000' },
-        { offset: 1, color: '#0000ff' },
+        { at: 0, color: '#ff0000' },
+        { at: 1, color: '#0000ff' },
       ],
       angle: 45,
     });

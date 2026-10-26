@@ -18,9 +18,7 @@ export interface AndroidFlagshipFrameProps {
   rotation?: { x: number; y: number; z: number };
 }
 
-export function AndroidFlagshipFrame({ metrics, settings, rotation }: AndroidFlagshipFrameProps) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }: AndroidFlagshipFrameProps) {
   const shortSide = Math.min(metrics.screenWidth, metrics.screenHeight);
   const proud = shortSide * 0.001;
   const bodyZ = SCREEN_PLANE_Z - proud / 2 - metrics.bodyDepth;

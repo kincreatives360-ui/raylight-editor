@@ -8,6 +8,8 @@ import {
 } from './canvasRenderer';
 import { getExportDimensions } from './exportMetrics';
 import { decodeAudioFromDataUrl } from './audioEngine';
+import { captureStageFrame } from './stageCapture';
+import { validateRecordedVideo } from './recordingValidation';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
@@ -55,22 +57,6 @@ function downloadBlob(blob: Blob, filename: string): void {
     anchor.click();
     document.body.removeChild(anchor);
     setTimeout(() => URL.revokeObjectURL(url), 3000);
-}
-
-function projectUsesDeviceFrames(project: Project): boolean {
-    return project.shots.some((shot) =>
-        shot.layers.some((layer) =>
-            (layer.kind === 'image' || layer.kind === 'video') &&
-            (layer as { deviceFrame?: { enabled?: boolean } }).deviceFrame?.enabled
-        )
-    );
-}
-
-function getStageWebGLCanvas(): HTMLCanvasElement | null {
-    return (
-        (document.getElementById('raylight-stage-webgl-canvas') as HTMLCanvasElement | null) ||
-        (document.querySelector('div[class*="overflow-hidden"] canvas') as HTMLCanvasElement | null)
-    );
 }
 
 function drawStageCanvas(
@@ -255,7 +241,7 @@ export async function exportCurrentFrameAsPng(
 
     // Evaluate and render the exact requested timeMs frame to canvas
     const evaluated = evaluateProjectAtTime(project, timeMs);
-    const stageCanvas = projectUsesDeviceFrames(project) ? getStageWebGLCanvas() : null;
+    const stageCanvas = await captureStageFrame(timeMs, width, height);
     if (stageCanvas && stageCanvas.width > 0 && stageCanvas.height > 0) {
         drawStageCanvas(ctx, stageCanvas, width, height);
     } else {
@@ -315,7 +301,7 @@ export async function runVideoExportPipeline(
             settings.scope === 'shot' && targetShot ? targetShot.startMs : 0;
         if (settings.onSeekFrame) {
             await settings.onSeekFrame(targetTimeMs);
-            await new Promise((r) => requestAnimationFrame(r));
+            await nextFrame();
         }
         await exportCurrentFrameAsPng(
             project,
@@ -350,7 +336,7 @@ export async function runVideoExportPipeline(
 
     const totalProjectMs = project.shots.reduce(
         (max, s) => Math.max(max, s.startMs + s.durationMs),
-        4000
+        0
     );
     const targetShot =
         project.shots.find((s) => s.id === settings.selectedShotId) ||
@@ -408,13 +394,8 @@ export async function runVideoExportPipeline(
                 return;
             }
 
-            const webglCanvas = getStageWebGLCanvas();
-            const isNativeResolution =
-                webglCanvas &&
-                webglCanvas.width >= gifW * 0.75 &&
-                webglCanvas.height >= gifH * 0.75;
-
-            if (webglCanvas && (isNativeResolution || projectUsesDeviceFrames(project))) {
+            const webglCanvas = await captureStageFrame(t, gifW, gifH);
+            if (webglCanvas) {
                 drawStageCanvas(ctx, webglCanvas, gifW, gifH);
             } else {
                 const evaluated = evaluateProjectAtTime(project, t);
@@ -542,6 +523,12 @@ export async function runVideoExportPipeline(
         throw new Error('Video export is not supported by this browser.');
     }
 
+    // Prime a real frame before codec initialization to avoid an empty first capture.
+    if (settings.onSeekFrame) await settings.onSeekFrame(startMs);
+    await syncAndSeekAllProjectVideos(project, startMs);
+    const initialStage = await captureStageFrame(startMs, width, height);
+    if (initialStage) drawStageCanvas(ctx, initialStage, width, height);
+    else await renderProjectFrameToCanvas(ctx, project, evaluateProjectAtTime(project, startMs), width, height);
     const stream = canvas.captureStream(fps);
 
     // CRITICAL FIX: Mix down project audio tracks and attach to the recording stream
@@ -611,7 +598,7 @@ export async function runVideoExportPipeline(
                 finalizationReject(err);
             }
         };
-        recorder.onstop = () => {
+        recorder.onstop = async () => {
             if (hasStopped) return;
             hasStopped = true;
             stream.getTracks().forEach((track) => track.stop());
@@ -653,6 +640,8 @@ export async function runVideoExportPipeline(
                 const videoBlob = new Blob(chunks, {
                     type: actualMime,
                 });
+                await validateRecordedVideo(videoBlob);
+                if (abortSignal?.aborted) { finalizationResolve?.(); return; }
                 downloadBlob(
                     videoBlob,
                     `${cleanName}-${settings.resolution}-${fps}fps.${ext}`
@@ -670,11 +659,15 @@ export async function runVideoExportPipeline(
             }
         };
 
-        recorder.start();
+        await new Promise<void>((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Video recorder did not start.')), 10000);
+            recorder!.onstart = () => { clearTimeout(timeout); resolve(); };
+            recorder!.start(250);
+        });
 
         let baseAudioTime = 0;
 
-        for (let f = 0; f <= totalFrames; f++) {
+        for (let f = 0; f < totalFrames; f++) {
             if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
                 terminalStateRef.value = 'cancelled';
                 return;
@@ -684,6 +677,13 @@ export async function runVideoExportPipeline(
                 throw recordingError;
             }
 
+            // MediaRecorder uses wall-clock timestamps: skip overdue frames rather
+            // than accumulating render/seek overhead into the exported duration.
+            if (f > 0) {
+                const elapsed = (audioContext ? audioContext.currentTime : performance.now() / 1000) - baseAudioTime;
+                f = Math.max(f, Math.floor(elapsed * fps));
+                if (f >= totalFrames) break;
+            }
             const t = startMs + (f / fps) * 1000;
             if (settings.onSeekFrame) {
                 await settings.onSeekFrame(t);
@@ -697,13 +697,8 @@ export async function runVideoExportPipeline(
             }
 
             const evaluated = evaluateProjectAtTime(project, t);
-            const webglCanvas = getStageWebGLCanvas();
-            const isNativeResolution =
-                webglCanvas &&
-                webglCanvas.width >= width * 0.75 &&
-                webglCanvas.height >= height * 0.75;
-
-            if (webglCanvas && (isNativeResolution || projectUsesDeviceFrames(project))) {
+            const webglCanvas = await captureStageFrame(t, width, height);
+            if (webglCanvas) {
                 drawStageCanvas(ctx, webglCanvas, width, height);
             } else {
                 await renderProjectFrameToCanvas(ctx, project, evaluated, width, height);
