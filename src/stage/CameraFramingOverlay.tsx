@@ -7,12 +7,15 @@ import { useSelectionStore } from '../store/useSelectionStore';
 import { ScrubInput } from '../ui/ScrubInput';
 import {
     CAMERA_PRESETS,
+    CAMERA_MOVEMENT_PRESETS,
     calculateLayersBoundingFraming,
     detectMatchingPreset,
     applyCameraPreset,
+    applyCameraMovementPreset,
     focalLengthToFov,
     LENS_PRESETS,
     type CameraPreset,
+    type CameraMovementId,
 } from './webgl/cameraMath';
 
 interface CameraFramingOverlayProps {
@@ -47,6 +50,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     const scaleX = frameWidth / artboardWidth;
     const scaleY = frameHeight / artboardHeight;
     const [popoverEndpoint, setPopoverEndpoint] = useState<'from' | 'to' | null>(null);
+    const [movementMenuOpen, setMovementMenuOpen] = useState(false);
 
     const [activeDrag, setActiveDrag] = useState<{
         which: 'from' | 'to';
@@ -441,6 +445,51 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     </optgroup>
                 </select>
 
+                {/* Overall Camera Movement Preset */}
+                <div className="space-y-1 pt-1 border-t border-white/5">
+                    <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                        <span>Movement Preset</span>
+                        <span className="font-mono text-sky-400 font-semibold">{activeBlock.label || `${activeBlock.mode.toUpperCase()}`}</span>
+                    </div>
+                    <select
+                        aria-label="Movement preset"
+                        value={CAMERA_MOVEMENT_PRESETS.some((m) => m.name === activeBlock.label) ? CAMERA_MOVEMENT_PRESETS.find((m) => m.name === activeBlock.label)?.id : ''}
+                        onChange={(e) => {
+                            const moveId = e.target.value as CameraMovementId;
+                            if (!moveId) return;
+                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                            const updated = applyCameraMovementPreset(activeBlock, moveId, { artboardDimensions, preserveDuration: true });
+                            updateShot(shot.id, (s) => ({
+                                ...s,
+                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
+                            }));
+                        }}
+                        className="w-full px-2 py-1 rounded bg-[#1c1c21] border border-white/10 text-[11px] text-[#d4d4d8] hover:border-white/20 focus:outline-none cursor-pointer"
+                    >
+                        <option value="" disabled>Change Movement Preset…</option>
+                        <optgroup label="Zoom Moves">
+                            {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'zoom').map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Tripod Pan & Tilt">
+                            {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'rotation').map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Dolly, Truck & Pedestal">
+                            {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'track').map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </optgroup>
+                        <optgroup label="Special FX & Vertigo">
+                            {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'special').map((m) => (
+                                <option key={m.id} value={m.id}>{m.name}</option>
+                            ))}
+                        </optgroup>
+                    </select>
+                </div>
+
                 {/* Camera Parameters Grid */}
                 <div className="space-y-1.5 pt-1 border-t border-white/5">
                     {/* Anchor X, Y, Z */}
@@ -795,21 +844,168 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 )}
             </div>
 
-            {/* Move Info Chip in center connecting line */}
+            {/* Interactive Move Info Chip in center connecting line */}
             <div
                 style={{
                     left: `${(fromBox.cx + toBox.cx) / 2}px`,
                     top: `${(fromBox.cy + toBox.cy) / 2}px`,
                     transform: 'translate(-50%, -50%)',
                 }}
-                className="absolute px-2.5 py-0.5 rounded-full bg-[var(--bg-panel,#121216)]/95 border border-white/10 text-[10px] font-mono tabular-nums text-gray-300 shadow-xl flex items-center gap-1.5 pointer-events-none"
+                className="absolute z-35 pointer-events-auto"
             >
-                <Film className="w-2.5 h-2.5 text-sky-400" />
-                <span>{(activeBlock.durationMs / 1000).toFixed(1)}s</span>
-                <span className="text-gray-500">•</span>
-                <span className="capitalize">{activeBlock.easing.kind === 'preset' ? activeBlock.easing.name : activeBlock.easing.kind}</span>
-                <span className="text-gray-500">•</span>
-                <span className="text-sky-300 font-semibold">{cameraZoom.toFixed(2)}x</span>
+                <button
+                    type="button"
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        setMovementMenuOpen((v) => !v);
+                        setPopoverEndpoint(null);
+                    }}
+                    className={`px-2.5 py-1 rounded-full bg-[#121216]/95 backdrop-blur-md border text-[10px] font-mono tabular-nums shadow-xl flex items-center gap-1.5 cursor-pointer transition hover:bg-white/10 ${
+                        movementMenuOpen
+                            ? 'border-sky-400 text-sky-200 ring-2 ring-sky-400/30'
+                            : 'border-white/15 text-gray-200 hover:text-white'
+                    }`}
+                    title="Click to change Camera Movement Preset"
+                >
+                    <Film className="w-3 h-3 text-sky-400" />
+                    <span className="font-semibold text-white">
+                        {activeBlock.label || `${activeBlock.mode.toUpperCase()} MOVE`}
+                    </span>
+                    <span className="text-gray-500">•</span>
+                    <span>{(activeBlock.durationMs / 1000).toFixed(1)}s</span>
+                    <span className="text-gray-500">•</span>
+                    <span className="capitalize">
+                        {activeBlock.easing.kind === 'preset' ? activeBlock.easing.name : activeBlock.easing.kind}
+                    </span>
+                    <span className="text-gray-500">•</span>
+                    <span className="text-sky-300 font-semibold">{cameraZoom.toFixed(2)}x</span>
+                </button>
+
+                {/* Floating Movement Preset Popover */}
+                {movementMenuOpen && (
+                    <div
+                        onPointerDown={(e) => e.stopPropagation()}
+                        onClick={(e) => e.stopPropagation()}
+                        className="absolute left-1/2 -translate-x-1/2 top-full mt-2 w-80 bg-[#121216]/95 backdrop-blur-xl border border-sky-500/30 rounded-xl shadow-2xl p-3 z-40 space-y-2.5 text-xs text-[#e4e4e7] animate-in fade-in zoom-in-95 duration-100 select-none text-left"
+                    >
+                        <div className="flex items-center justify-between border-b border-white/10 pb-2">
+                            <div className="flex items-center gap-1.5">
+                                <Film className="w-3.5 h-3.5 text-sky-400" />
+                                <span className="font-semibold text-white">Camera Movement</span>
+                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setMovementMenuOpen(false)}
+                                className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
+                                title="Close"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+
+                        {/* Presets Select Dropdown */}
+                        <select
+                            value={CAMERA_MOVEMENT_PRESETS.some((m) => m.name === activeBlock.label) ? CAMERA_MOVEMENT_PRESETS.find((m) => m.name === activeBlock.label)?.id : ''}
+                            onChange={(e) => {
+                                const moveId = e.target.value as CameraMovementId;
+                                if (!moveId) return;
+                                const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                                const updated = applyCameraMovementPreset(activeBlock, moveId, { artboardDimensions, preserveDuration: true });
+                                updateShot(shot.id, (s) => ({
+                                    ...s,
+                                    cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
+                                }));
+                            }}
+                            className="w-full px-2 py-1 rounded bg-[#1c1c21] border border-white/10 text-[11px] text-[#d4d4d8] hover:border-white/20 focus:outline-none cursor-pointer"
+                        >
+                            <option value="" disabled>Choose Movement Preset…</option>
+                            <optgroup label="Zoom Moves">
+                                {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'zoom').map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Tripod Pan & Tilt">
+                                {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'rotation').map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Dolly, Truck & Pedestal (3D Space)">
+                                {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'track').map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </optgroup>
+                            <optgroup label="Special FX & Vertigo">
+                                {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'special').map((m) => (
+                                    <option key={m.id} value={m.id}>{m.name}</option>
+                                ))}
+                            </optgroup>
+                        </select>
+
+                        {/* Quick 1-Click Move Buttons */}
+                        <div className="space-y-1">
+                            <span className="text-[10px] text-zinc-400 font-medium">Quick Moves</span>
+                            <div className="grid grid-cols-4 gap-1">
+                                {[
+                                    { id: 'zoom-in', label: 'Zoom In' },
+                                    { id: 'zoom-out', label: 'Zoom Out' },
+                                    { id: 'pan-left', label: 'Pan L' },
+                                    { id: 'pan-right', label: 'Pan R' },
+                                    { id: 'tilt-up', label: 'Tilt Up' },
+                                    { id: 'tilt-down', label: 'Tilt Down' },
+                                    { id: 'dolly-in', label: 'Dolly In' },
+                                    { id: 'dolly-out', label: 'Dolly Out' },
+                                    { id: 'truck-left', label: 'Truck L' },
+                                    { id: 'truck-right', label: 'Truck R' },
+                                    { id: 'pedestal-up', label: 'Ped Up' },
+                                    { id: 'pedestal-down', label: 'Ped Down' },
+                                ].map((btn) => (
+                                    <button
+                                        key={btn.id}
+                                        type="button"
+                                        onClick={() => {
+                                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                                            const updated = applyCameraMovementPreset(activeBlock, btn.id as CameraMovementId, { artboardDimensions, preserveDuration: true });
+                                            updateShot(shot.id, (s) => ({
+                                                ...s,
+                                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
+                                            }));
+                                        }}
+                                        className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                            activeBlock.label === btn.label || (btn.id === 'pan-left' && activeBlock.label === 'Pan Left') || (btn.id === 'pan-right' && activeBlock.label === 'Pan Right') || (btn.id === 'tilt-up' && activeBlock.label === 'Tilt Up') || (btn.id === 'tilt-down' && activeBlock.label === 'Tilt Down') || (btn.id === 'dolly-in' && activeBlock.label === 'Dolly In') || (btn.id === 'dolly-out' && activeBlock.label === 'Dolly Out') || (btn.id === 'truck-left' && activeBlock.label === 'Truck Left') || (btn.id === 'truck-right' && activeBlock.label === 'Truck Right') || (btn.id === 'pedestal-up' && activeBlock.label === 'Pedestal Up') || (btn.id === 'pedestal-down' && activeBlock.label === 'Pedestal Down') || (btn.id === 'zoom-in' && activeBlock.label === 'Zoom In') || (btn.id === 'zoom-out' && activeBlock.label === 'Zoom Out')
+                                                ? 'bg-sky-500 text-black font-semibold'
+                                                : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                        }`}
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-1 pt-0.5">
+                                {[
+                                    { id: 'dolly-zoom-in', label: 'Vertigo (Dolly Zoom)' },
+                                    { id: 'handheld-sway', label: 'Handheld Sway' },
+                                ].map((btn) => (
+                                    <button
+                                        key={btn.id}
+                                        type="button"
+                                        onClick={() => {
+                                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                                            const updated = applyCameraMovementPreset(activeBlock, btn.id as CameraMovementId, { artboardDimensions, preserveDuration: true });
+                                            updateShot(shot.id, (s) => ({
+                                                ...s,
+                                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
+                                            }));
+                                        }}
+                                        className="py-1 px-1 rounded text-[10px] font-mono bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5 cursor-pointer text-center truncate"
+                                    >
+                                        {btn.label}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         </div>
     );

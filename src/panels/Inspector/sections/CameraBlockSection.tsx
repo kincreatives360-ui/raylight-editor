@@ -23,11 +23,14 @@ import { ScrubInput } from '../../../ui/ScrubInput';
 import { getArtboardDimensions } from '../../../stage/stageUtils';
 import {
     CAMERA_PRESETS,
+    CAMERA_MOVEMENT_PRESETS,
     calculateLayersBoundingFraming,
     detectMatchingPreset,
     applyCameraPreset,
+    applyCameraMovementPreset,
     focalLengthToFov,
     LENS_PRESETS,
+    type CameraMovementId,
 } from '../../../stage/webgl/cameraMath';
 
 interface CameraBlockSectionProps {
@@ -468,38 +471,178 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
             {/* 2. TO SECTION */}
             {renderCameraEndpoint('to', toCollapsed, () => setToCollapsed((v) => !v))}
 
-            {/* 3. MOVE SECTION: [ Dolly | Zoom | Warp ] */}
-            <div className="p-3.5 space-y-2.5">
-                <span className="text-[11px] font-medium text-[#e4e4e7] block">
-                    Move
-                </span>
-                <div className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]" role="radiogroup" aria-label="Camera move mode">
-                    {(
-                        [
-                            { id: 'dolly', label: 'Dolly' },
-                            { id: 'zoom', label: 'Zoom' },
-                            { id: 'dollyzoom', label: 'Warp' },
-                        ] as const
-                    ).map((m) => (
-                        <button
-                            key={m.id}
-                            type="button"
-                            role="radio"
-                            aria-checked={activeCameraBlock.mode === m.id}
-                            onClick={() =>
-                                updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                    ...cb,
-                                    mode: m.id,
-                                }))
-                            }
-                            className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${activeCameraBlock.mode === m.id
-                                ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
-                                : 'text-[#a1a1aa] hover:text-white'
+            {/* 3. MOVEMENT PRESETS & MOVE MODE */}
+            <div className="p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-semibold text-[#e4e4e7] block">
+                        Movement Preset
+                    </span>
+                    <span className="text-[9px] px-2 py-0.5 rounded-full font-mono border border-sky-500/30 text-sky-300 bg-sky-950/40">
+                        {activeCameraBlock.label || 'Custom Move'}
+                    </span>
+                </div>
+
+                {/* Dropdown for All 15 Movement Presets */}
+                <select
+                    value={CAMERA_MOVEMENT_PRESETS.some((m) => m.name === activeCameraBlock.label) ? CAMERA_MOVEMENT_PRESETS.find((m) => m.name === activeCameraBlock.label)?.id : ''}
+                    onChange={(e) => {
+                        const moveId = e.target.value as CameraMovementId;
+                        if (!moveId) return;
+                        const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                        updateCameraBlock(activeCameraBlock.id, (cb) =>
+                            applyCameraMovementPreset(cb, moveId, { artboardDimensions, preserveDuration: true })
+                        );
+                    }}
+                    className="w-full px-2 py-1.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-xs text-[#d4d4d8] hover:border-white/20 focus:border-[#0088ff] focus:outline-none cursor-pointer"
+                    aria-label="Select camera movement preset"
+                >
+                    <option value="" disabled>Choose Movement Preset…</option>
+                    <optgroup label="Zoom Moves (Lens Magnification)">
+                        {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'zoom').map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Pan & Tilt (Fixed Tripod Rotation)">
+                        {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'rotation').map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Dolly, Truck & Pedestal (3D Space Tracks)">
+                        {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'track').map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Special FX (Vertigo & Organic Sway)">
+                        {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'special').map((m) => (
+                            <option key={m.id} value={m.id}>{m.name}</option>
+                        ))}
+                    </optgroup>
+                </select>
+
+                {/* Quick Movement Buttons */}
+                <div className="space-y-1">
+                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Quick Moves</span>
+                    <div className="grid grid-cols-4 gap-1">
+                        {[
+                            { id: 'zoom-in', label: 'Zoom In' },
+                            { id: 'zoom-out', label: 'Zoom Out' },
+                            { id: 'pan-left', label: 'Pan L' },
+                            { id: 'pan-right', label: 'Pan R' },
+                            { id: 'tilt-up', label: 'Tilt Up' },
+                            { id: 'tilt-down', label: 'Tilt Down' },
+                            { id: 'dolly-in', label: 'Dolly In' },
+                            { id: 'dolly-out', label: 'Dolly Out' },
+                            { id: 'truck-left', label: 'Truck L' },
+                            { id: 'truck-right', label: 'Truck R' },
+                            { id: 'pedestal-up', label: 'Ped Up' },
+                            { id: 'pedestal-down', label: 'Ped Down' },
+                        ].map((btn) => {
+                            const isSelected =
+                                activeCameraBlock.label === btn.label ||
+                                (btn.id === 'zoom-in' && activeCameraBlock.label === 'Zoom In') ||
+                                (btn.id === 'zoom-out' && activeCameraBlock.label === 'Zoom Out') ||
+                                (btn.id === 'pan-left' && activeCameraBlock.label === 'Pan Left') ||
+                                (btn.id === 'pan-right' && activeCameraBlock.label === 'Pan Right') ||
+                                (btn.id === 'tilt-up' && activeCameraBlock.label === 'Tilt Up') ||
+                                (btn.id === 'tilt-down' && activeCameraBlock.label === 'Tilt Down') ||
+                                (btn.id === 'dolly-in' && activeCameraBlock.label === 'Dolly In') ||
+                                (btn.id === 'dolly-out' && activeCameraBlock.label === 'Dolly Out') ||
+                                (btn.id === 'truck-left' && activeCameraBlock.label === 'Truck Left') ||
+                                (btn.id === 'truck-right' && activeCameraBlock.label === 'Truck Right') ||
+                                (btn.id === 'pedestal-up' && activeCameraBlock.label === 'Pedestal Up') ||
+                                (btn.id === 'pedestal-down' && activeCameraBlock.label === 'Pedestal Down');
+                            return (
+                                <button
+                                    key={btn.id}
+                                    type="button"
+                                    onClick={() => {
+                                        const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                                        updateCameraBlock(activeCameraBlock.id, (cb) =>
+                                            applyCameraMovementPreset(cb, btn.id as CameraMovementId, {
+                                                artboardDimensions,
+                                                preserveDuration: true,
+                                            })
+                                        );
+                                    }}
+                                    className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                        isSelected
+                                            ? 'bg-sky-500 text-black font-semibold shadow-xs'
+                                            : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                    }`}
+                                    title={btn.label}
+                                >
+                                    {btn.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                    <div className="grid grid-cols-2 gap-1 pt-0.5">
+                        {[
+                            { id: 'dolly-zoom-in', label: 'Vertigo (Dolly Zoom)' },
+                            { id: 'handheld-sway', label: 'Handheld Sway' },
+                        ].map((btn) => {
+                            const isSelected =
+                                (btn.id === 'dolly-zoom-in' && (activeCameraBlock.label?.startsWith('Vertigo') || activeCameraBlock.mode === 'dollyzoom')) ||
+                                (btn.id === 'handheld-sway' && (activeCameraBlock.label === 'Handheld Organic Sway' || activeCameraBlock.mode === 'shake'));
+                            return (
+                                <button
+                                    key={btn.id}
+                                    type="button"
+                                    onClick={() => {
+                                        const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+                                        updateCameraBlock(activeCameraBlock.id, (cb) =>
+                                            applyCameraMovementPreset(cb, btn.id as CameraMovementId, {
+                                                artboardDimensions,
+                                                preserveDuration: true,
+                                            })
+                                        );
+                                    }}
+                                    className={`py-1 px-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                        isSelected
+                                            ? 'bg-sky-500 text-black font-semibold shadow-xs'
+                                            : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                    }`}
+                                    title={btn.label}
+                                >
+                                    {btn.label}
+                                </button>
+                            );
+                        })}
+                    </div>
+                </div>
+
+                {/* Physics / Projection Mode Toggle */}
+                <div className="space-y-1 pt-1 border-t border-white/5">
+                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Physics / Projection Mode</span>
+                    <div className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]" role="radiogroup" aria-label="Camera move mode">
+                        {(
+                            [
+                                { id: 'dolly', label: 'Dolly' },
+                                { id: 'zoom', label: 'Zoom' },
+                                { id: 'dollyzoom', label: 'Warp' },
+                            ] as const
+                        ).map((m) => (
+                            <button
+                                key={m.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={activeCameraBlock.mode === m.id}
+                                onClick={() =>
+                                    updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                        ...cb,
+                                        mode: m.id,
+                                    }))
+                                }
+                                className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${
+                                    activeCameraBlock.mode === m.id
+                                        ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
+                                        : 'text-[#a1a1aa] hover:text-white'
                                 }`}
-                        >
-                            {m.label}
-                        </button>
-                    ))}
+                            >
+                                {m.label}
+                            </button>
+                        ))}
+                    </div>
                 </div>
             </div>
 
