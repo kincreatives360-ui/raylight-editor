@@ -280,9 +280,14 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 className="w-full px-2 py-1.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-xs text-[#d4d4d8] hover:border-white/20 focus:border-[#0088ff] focus:outline-none cursor-pointer"
                             >
                                 <option value="" disabled>All Presets ({CAMERA_PRESETS.length})…</option>
-                                <optgroup label="Axial Views">
-                                    {CAMERA_PRESETS.filter((p) => p.category === 'axial').map((p) => (
-                                        <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
+                                <optgroup label="Shot Types">
+                                    {CAMERA_PRESETS.filter((p) => p.category === 'shot-type').map((p) => (
+                                        <option key={p.id} value={p.id}>{p.name} {p.zoom ? `(${p.zoom}x)` : ''} {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
+                                    ))}
+                                </optgroup>
+                                <optgroup label="Camera Angles">
+                                    {CAMERA_PRESETS.filter((p) => p.category === 'angle').map((p) => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°) {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
                                     ))}
                                 </optgroup>
                                 <optgroup label="Axonometric">
@@ -290,9 +295,9 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                         <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
                                     ))}
                                 </optgroup>
-                                <optgroup label="Cinematic">
-                                    {CAMERA_PRESETS.filter((p) => p.category === 'cinematic').map((p) => (
-                                        <option key={p.id} value={p.id}>{p.name} {p.zoom ? `(${p.zoom}x)` : ''} {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
+                                <optgroup label="Axial Views">
+                                    {CAMERA_PRESETS.filter((p) => p.category === 'axial').map((p) => (
+                                        <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
                                     ))}
                                 </optgroup>
                             </select>

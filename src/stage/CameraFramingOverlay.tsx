@@ -419,9 +419,14 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     className="w-full px-2 py-1 rounded bg-[#1c1c21] border border-white/10 text-[11px] text-[#d4d4d8] hover:border-white/20 focus:outline-none cursor-pointer"
                 >
                     <option value="" disabled>All Presets ({CAMERA_PRESETS.length})…</option>
-                    <optgroup label="Axial Views">
-                        {CAMERA_PRESETS.filter((p) => p.category === 'axial').map((p) => (
-                            <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
+                    <optgroup label="Shot Types">
+                        {CAMERA_PRESETS.filter((p) => p.category === 'shot-type').map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} {p.zoom ? `(${p.zoom}x)` : ''} {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
+                        ))}
+                    </optgroup>
+                    <optgroup label="Camera Angles">
+                        {CAMERA_PRESETS.filter((p) => p.category === 'angle').map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°) {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
                         ))}
                     </optgroup>
                     <optgroup label="Axonometric">
@@ -429,9 +434,9 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                             <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
                         ))}
                     </optgroup>
-                    <optgroup label="Cinematic">
-                        {CAMERA_PRESETS.filter((p) => p.category === 'cinematic').map((p) => (
-                            <option key={p.id} value={p.id}>{p.name} {p.zoom ? `(${p.zoom}x)` : ''} {p.focalLength ? `• ${p.focalLength}mm` : ''}</option>
+                    <optgroup label="Axial Views">
+                        {CAMERA_PRESETS.filter((p) => p.category === 'axial').map((p) => (
+                            <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
                         ))}
                     </optgroup>
                 </select>

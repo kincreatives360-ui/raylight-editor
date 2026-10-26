@@ -322,9 +322,14 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     className="flex flex-col gap-2 w-48 p-2 rounded-xl bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.1))] shadow-2xl z-40 text-left pointer-events-auto select-none"
                     onPointerDown={(e) => e.stopPropagation()}
                 >
-                    {(['axial', 'axonometric', 'cinematic'] as const).map((cat) => {
+                    {([
+                        { cat: 'shot-type', label: 'Shot Types' },
+                        { cat: 'angle', label: 'Camera Angles' },
+                        { cat: 'axonometric', label: 'Axonometric' },
+                        { cat: 'axial', label: 'Axial Views' },
+                    ] as const).map(({ cat, label: catLabel }) => {
                         const items = CAMERA_PRESETS.filter((p) => p.category === cat);
-                        const catLabel = cat === 'axial' ? 'Axial Views' : cat === 'axonometric' ? 'Axonometric' : 'Cinematic';
+                        if (items.length === 0) return null;
                         return (
                             <div key={cat} className="space-y-0.5">
                                 <div className="text-[9px] font-semibold tracking-wider uppercase text-[var(--text-muted,#71717a)] px-1.5 py-0.5">

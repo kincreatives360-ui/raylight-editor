@@ -2,7 +2,9 @@
 import { describe, it, expect } from 'vitest';
 import {
     CAMERA_PRESETS,
+    CAMERA_MOVEMENT_PRESETS,
     applyCameraPreset,
+    applyCameraMovementPreset,
     calculateLayersBoundingFraming,
     calculateLayerFraming,
     detectMatchingPreset,
@@ -10,11 +12,12 @@ import {
     focalLengthToFov,
     type FramableLayer,
 } from './cameraMath';
+import type { CameraBlock } from '../../model/types';
 
 describe('Unified Camera Presets & Framing System', () => {
     describe('CAMERA_PRESETS registry', () => {
         it('contains expected presets with no duplicate IDs', () => {
-            expect(CAMERA_PRESETS.length).toBeGreaterThanOrEqual(10);
+            expect(CAMERA_PRESETS.length).toBeGreaterThanOrEqual(16);
             const ids = CAMERA_PRESETS.map((p) => p.id);
             const uniqueIds = new Set(ids);
             expect(uniqueIds.size).toBe(ids.length);
@@ -42,18 +45,46 @@ describe('Unified Camera Presets & Framing System', () => {
             expect(right.orbit).toBe(90);
         });
 
-        it('includes axonometric and cinematic presets with correct properties', () => {
+        it('includes axonometric, shot-types and angle presets with correct properties', () => {
             const iso = CAMERA_PRESETS.find((p) => p.id === 'isometric')!;
             expect(iso.category).toBe('axonometric');
             expect(iso.orbit).toBe(45);
             expect(iso.tilt).toBeCloseTo(35.26, 1);
 
             const dutch = CAMERA_PRESETS.find((p) => p.id === 'dutch-tilt')!;
-            expect(dutch.category).toBe('cinematic');
+            expect(dutch.category).toBe('angle');
             expect(dutch.roll).toBe(-12);
 
             const closeUp = CAMERA_PRESETS.find((p) => p.id === 'close-up')!;
+            expect(closeUp.category).toBe('shot-type');
             expect(closeUp.zoom).toBe(1.8);
+            expect(closeUp.focalLength).toBe(85);
+
+            const establishing = CAMERA_PRESETS.find((p) => p.id === 'establishing')!;
+            expect(establishing.category).toBe('shot-type');
+            expect(establishing.zoom).toBe(0.65);
+            expect(establishing.focalLength).toBe(20);
+
+            const fullShot = CAMERA_PRESETS.find((p) => p.id === 'full-shot')!;
+            expect(fullShot.category).toBe('shot-type');
+            expect(fullShot.zoom).toBe(0.95);
+
+            const twoShot = CAMERA_PRESETS.find((p) => p.id === 'two-shot')!;
+            expect(twoShot.category).toBe('shot-type');
+            expect(twoShot.zoom).toBe(1.08);
+
+            const downShot = CAMERA_PRESETS.find((p) => p.id === 'down-shot')!;
+            expect(downShot.category).toBe('angle');
+            expect(downShot.tilt).toBe(25);
+            expect(downShot.anchorY).toBe(180);
+
+            const ots = CAMERA_PRESETS.find((p) => p.id === 'over-shoulder')!;
+            expect(ots.category).toBe('angle');
+            expect(ots.anchorX).toBe(-180);
+
+            const pov = CAMERA_PRESETS.find((p) => p.id === 'pov')!;
+            expect(pov.category).toBe('angle');
+            expect(pov.shake?.from).toBe(4);
         });
     });
 
@@ -263,6 +294,173 @@ describe('Unified Camera Presets & Framing System', () => {
 
             const fov85 = focalLengthToFov(85);
             expect(fov85).toBeLessThan(20); // ~16.1° telephoto FOV
+        });
+    });
+
+    describe('CAMERA_MOVEMENT_PRESETS registry', () => {
+        it('contains all 15 cinematic camera movements with no duplicate IDs', () => {
+            expect(CAMERA_MOVEMENT_PRESETS.length).toBe(15);
+            const ids = CAMERA_MOVEMENT_PRESETS.map((m) => m.id);
+            const unique = new Set(ids);
+            expect(unique.size).toBe(ids.length);
+        });
+
+        it('includes the 6 basic camera moves plus vertigo and handheld sway', () => {
+            const ids = CAMERA_MOVEMENT_PRESETS.map((m) => m.id);
+            expect(ids).toContain('zoom-in');
+            expect(ids).toContain('zoom-out');
+            expect(ids).toContain('pan-left');
+            expect(ids).toContain('pan-right');
+            expect(ids).toContain('tilt-up');
+            expect(ids).toContain('tilt-down');
+            expect(ids).toContain('dolly-in');
+            expect(ids).toContain('dolly-out');
+            expect(ids).toContain('truck-left');
+            expect(ids).toContain('truck-right');
+            expect(ids).toContain('pedestal-up');
+            expect(ids).toContain('pedestal-down');
+            expect(ids).toContain('dolly-zoom-in');
+            expect(ids).toContain('dolly-zoom-out');
+            expect(ids).toContain('handheld-sway');
+        });
+    });
+
+    describe('applyCameraMovementPreset generator', () => {
+        const createTestBlock = (): CameraBlock => ({
+            id: 'block-test-1',
+            label: 'Test Move',
+            startMs: 0,
+            durationMs: 2000,
+            fromFramingId: 'f1',
+            toFramingId: 'f2',
+            mode: 'dolly',
+            easing: { kind: 'preset', name: 'linear' },
+            from: {
+                anchorX: 120,
+                anchorY: -60,
+                anchorZ: 0,
+                zoom: 1.0,
+                roll: 0,
+                orbit: 10,
+                tilt: 5,
+                focalLength: 50,
+            },
+            to: {
+                anchorX: 120,
+                anchorY: -60,
+                anchorZ: 0,
+                zoom: 1.0,
+                roll: 0,
+                orbit: 10,
+                tilt: 5,
+                focalLength: 50,
+            },
+        });
+
+        it('generates Zoom In movement with mode zoom and increased magnification', () => {
+            const block = createTestBlock();
+            const updated = applyCameraMovementPreset(block, 'zoom-in');
+
+            expect(updated.mode).toBe('zoom');
+            expect(updated.label).toBe('Zoom In');
+            expect(updated.from?.zoom).toBe(1.0);
+            expect(updated.to?.zoom).toBeGreaterThan(1.4);
+            expect(updated.from?.anchorX).toBe(120); // Preserves initial anchor
+            expect(updated.from?.anchorY).toBe(-60);
+        });
+
+        it('generates Zoom Out movement with mode zoom and reduced magnification', () => {
+            const block = createTestBlock();
+            const updated = applyCameraMovementPreset(block, 'zoom-out');
+
+            expect(updated.mode).toBe('zoom');
+            expect(updated.label).toBe('Zoom Out');
+            expect(updated.to?.zoom).toBeLessThan(updated.from?.zoom ?? 1);
+        });
+
+        it('generates Pan Left and Pan Right rotating orbit yaw on stationary tripod', () => {
+            const block = createTestBlock();
+            const panL = applyCameraMovementPreset(block, 'pan-left');
+            expect(panL.mode).toBe('dolly');
+            expect(panL.to?.orbit).toBe(block.from!.orbit - 20);
+
+            const panR = applyCameraMovementPreset(block, 'pan-right');
+            expect(panR.to?.orbit).toBe(block.from!.orbit + 20);
+        });
+
+        it('generates Tilt Up and Tilt Down rotating tilt pitch on stationary tripod', () => {
+            const block = createTestBlock();
+            const tiltU = applyCameraMovementPreset(block, 'tilt-up');
+            expect(tiltU.mode).toBe('dolly');
+            expect(tiltU.to?.tilt).toBe(block.from!.tilt - 18);
+
+            const tiltD = applyCameraMovementPreset(block, 'tilt-down');
+            expect(tiltD.to?.tilt).toBe(block.from!.tilt + 18);
+        });
+
+        it('generates Dolly In and Dolly Out translating 3D depth anchorZ', () => {
+            const block = createTestBlock();
+            const dollyIn = applyCameraMovementPreset(block, 'dolly-in');
+            expect(dollyIn.mode).toBe('dolly');
+            expect(dollyIn.to?.anchorZ).toBeGreaterThan(dollyIn.from?.anchorZ ?? 0);
+
+            const dollyOut = applyCameraMovementPreset(block, 'dolly-out');
+            expect(dollyOut.mode).toBe('dolly');
+            expect(dollyOut.from?.anchorZ).toBeGreaterThan(dollyOut.to?.anchorZ ?? 0);
+        });
+
+        it('generates Truck Left and Truck Right lateral track translations', () => {
+            const block = createTestBlock();
+            const artboard = { width: 1920, height: 1080 };
+            const truckL = applyCameraMovementPreset(block, 'truck-left', { artboardDimensions: artboard });
+            expect(truckL.mode).toBe('dolly');
+            expect(truckL.to?.anchorX).toBeLessThan(block.from!.anchorX);
+
+            const truckR = applyCameraMovementPreset(block, 'truck-right', { artboardDimensions: artboard });
+            expect(truckR.to?.anchorX).toBeGreaterThan(block.from!.anchorX);
+        });
+
+        it('generates Pedestal Up and Pedestal Down physical crane height translations', () => {
+            const block = createTestBlock();
+            const artboard = { width: 1920, height: 1080 };
+            const pedUp = applyCameraMovementPreset(block, 'pedestal-up', { artboardDimensions: artboard });
+            expect(pedUp.mode).toBe('dolly');
+            expect(pedUp.to?.anchorY).toBeGreaterThan(block.from!.anchorY);
+
+            const pedDown = applyCameraMovementPreset(block, 'pedestal-down', { artboardDimensions: artboard });
+            expect(pedDown.to?.anchorY).toBeLessThan(block.from!.anchorY);
+        });
+
+        it('generates Vertigo Dolly Zoom with mode dollyzoom and counterbalancing push/pull', () => {
+            const block = createTestBlock();
+            const vertigoIn = applyCameraMovementPreset(block, 'dolly-zoom-in');
+            expect(vertigoIn.mode).toBe('dollyzoom');
+            expect(vertigoIn.to?.anchorZ).toBeGreaterThan(vertigoIn.from?.anchorZ ?? 0);
+            expect(vertigoIn.to?.zoom).toBeLessThan(vertigoIn.from?.zoom ?? 1);
+
+            const vertigoOut = applyCameraMovementPreset(block, 'dolly-zoom-out');
+            expect(vertigoOut.mode).toBe('dollyzoom');
+            expect(vertigoOut.from?.anchorZ).toBeGreaterThan(vertigoOut.to?.anchorZ ?? 0);
+            expect(vertigoOut.to?.zoom).toBeGreaterThan(vertigoOut.from?.zoom ?? 1);
+        });
+
+        it('generates Handheld Organic Sway with mode shake and realistic amplitude', () => {
+            const block = createTestBlock();
+            const sway = applyCameraMovementPreset(block, 'handheld-sway');
+            expect(sway.mode).toBe('shake');
+            expect(sway.shake?.from).toBe(15);
+            expect(sway.shake?.to).toBe(25);
+            expect(sway.shake?.frequency).toBe(1.0);
+        });
+
+        it('respects preserveDuration option when requested', () => {
+            const block = createTestBlock();
+            block.durationMs = 4500;
+            const preserved = applyCameraMovementPreset(block, 'pan-right', { preserveDuration: true });
+            expect(preserved.durationMs).toBe(4500);
+
+            const defaultDur = applyCameraMovementPreset(block, 'pan-right', { preserveDuration: false });
+            expect(defaultDur.durationMs).toBe(1800);
         });
     });
 });
