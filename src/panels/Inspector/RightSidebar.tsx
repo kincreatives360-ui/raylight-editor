@@ -56,6 +56,7 @@ import type {
     Easing,
     AspectRatio,
     CameraBlock,
+    LightAnimationBlock,
     BlendMode,
     Vec3,
     Background,
@@ -73,6 +74,7 @@ import { ScrubInput } from '../../ui/ScrubInput';
 import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { LightBlockInspector } from './sections/LightBlockInspector';
 import { DeviceFrameSection } from './sections/DeviceFrameSection';
 import { LightInspector } from './sections/LightInspector';
 import { SceneLightsList } from './sections/SceneLightsList';
@@ -1219,8 +1221,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const {
         selectedBlockId,
         selectedCameraBlockId,
+        selectedLightBlockId,
         selectedLightId,
         selectLight,
+        selectLightBlock,
         setTimelineView,
         setTimelineLayerExpanded,
         selectBlock,
@@ -1278,6 +1282,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const activeCameraBlock: CameraBlock | undefined =
         activeShot.cameraBlocks?.find((cb) => cb.id === selectedCameraBlockId);
+
+    const activeLightBlock: LightAnimationBlock | undefined =
+        activeShot.lightBlocks?.find((lb) => lb.id === selectedLightBlockId);
 
     const handleQuickAlign = (axis: 'x' | 'y', targetVal: number) => {
         updateShot(activeShot.id, (s) => ({
@@ -1564,6 +1571,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     activeShotId={activeShot.id}
                     activeCameraBlock={activeCameraBlock}
                     onDone={() => selectCameraBlock(null)}
+                />
+            ) : activeLightBlock ? (
+                <LightBlockInspector
+                    activeShotId={activeShot.id}
+                    activeLightBlock={activeLightBlock}
+                    onDone={() => selectLightBlock(null)}
                 />
             ) : selectedLayer ? (
                 <>

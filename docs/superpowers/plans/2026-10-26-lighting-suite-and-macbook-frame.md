@@ -87,20 +87,20 @@
 - Modify: `src/store/useProjectStore.ts`
 - Test: `src/panels/Inspector/sections/lightBlockInspector.test.tsx`
 
-- [ ] **Step 1: Write tests in `src/panels/Inspector/sections/lightBlockInspector.test.tsx`**
+- [x] **Step 1: Write tests in `src/panels/Inspector/sections/lightBlockInspector.test.tsx`**
   - Test adding a light transition block for `selectedLightId`.
   - Test rendering `LightBlockInspector` when `selectedLightBlockId` is set.
   - Test editing `fromIntensity`, `toIntensity`, `fromX/toX`, `fromY/toY`, `fromTemperature/toTemperature`.
-- [ ] **Step 2: Add "Animate Light" button in `LightInspector.tsx`**
+- [x] **Step 2: Add "Animate Light" button in `LightInspector.tsx`**
   - Clicking creates a `LightAnimationBlock` targeting the selected light ID across the current playhead or shot range.
   - Selects the newly created light block.
-- [ ] **Step 3: Implement `LightBlockInspector.tsx`**
+- [x] **Step 3: Implement `LightBlockInspector.tsx`**
   - Header with light block name, target light badge, and delete button.
   - Start Time & Duration scrub inputs.
   - From -> To value sliders/scrub inputs for Intensity, Position, Color/Temperature.
   - Easing selector (Spring, Ease Out, Bezier curve).
-- [ ] **Step 4: Mount `LightBlockInspector` in `RightSidebar.tsx` when `selectedLightBlockId` is active**
-- [ ] **Step 5: Run tests with `npx vitest run src/panels/Inspector/sections/lightBlockInspector.test.tsx`**
+- [x] **Step 4: Mount `LightBlockInspector` in `RightSidebar.tsx` when `selectedLightBlockId` is active**
+- [x] **Step 5: Run tests with `npx vitest run src/panels/Inspector/sections/lightBlockInspector.test.tsx`**
 
 ---
 

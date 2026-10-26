@@ -1,8 +1,8 @@
-// src/panels/Inspector/sections/LightInspector.tsx
 import React, { useCallback } from 'react';
-import { X, Sun, Thermometer } from 'lucide-react';
-import type { Shot, SceneLight, LightSourceType, Vec3 } from '../../../model/types';
+import { X, Sun, Thermometer, Sparkles } from 'lucide-react';
+import type { Shot, SceneLight, LightSourceType, Vec3, LightAnimationBlock } from '../../../model/types';
 import { radToDeg, degToRad } from '../../../model/defaults';
+import { generateId } from '../../../model/id';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { ColorPicker } from '../ColorPicker';
 import { useProjectStore } from '../../../store/useProjectStore';
@@ -22,6 +22,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
 }) => {
     const { updateShot } = useProjectStore();
     const selectLight = useSelectionStore((s) => s.selectLight);
+    const selectLightBlock = useSelectionStore((s) => s.selectLightBlock);
     const shotLight = activeShot.light;
 
     const isKey =
@@ -115,6 +116,37 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
 
     const target = currentLight.target || { x: 0, y: 0, z: 0 };
 
+    const handleAnimateLight = () => {
+        const id = generateId('light-blk');
+        const startMs = 0;
+        const durationMs = 1000;
+        const targetLightId = isKey ? 'key' : currentLight.id;
+        const newBlock: LightAnimationBlock = {
+            id,
+            label: `${currentLight.name || 'Light'} Move`,
+            targetLightId,
+            startMs,
+            durationMs,
+            fromX: currentLight.position.x,
+            fromY: currentLight.position.y,
+            fromZ: currentLight.position.z,
+            toX: Number((currentLight.position.x + 0.2).toFixed(2)),
+            toY: currentLight.position.y,
+            toZ: currentLight.position.z,
+            fromIntensity: currentLight.intensity,
+            toIntensity: Number((currentLight.intensity * 1.5).toFixed(2)),
+            fromTemperature: currentLight.temperature ?? 6500,
+            toTemperature: currentLight.temperature ?? 6500,
+            easing: { kind: 'preset', name: 'easeInOut' },
+        };
+
+        updateShot(activeShot.id, (s) => ({
+            ...s,
+            lightBlocks: [...(s.lightBlocks || []), newBlock],
+        }));
+        selectLightBlock(id);
+    };
+
     return (
         <div data-testid="light-inspector" className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
             {/* Header: Light Title + Close X */}
@@ -142,6 +174,19 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         else onClose();
                     }}
                 />
+            </div>
+
+            {/* Quick Actions: Animate Light */}
+            <div className="p-3.5">
+                <button
+                    type="button"
+                    data-testid="animate-light-btn"
+                    onClick={handleAnimateLight}
+                    className="w-full py-1.5 px-3 rounded-lg bg-[#0088ff]/15 hover:bg-[#0088ff]/25 text-[#0088ff] hover:text-[#38bdf8] border border-[#0088ff]/30 font-medium text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer"
+                >
+                    <Sparkles className="w-3.5 h-3.5" />
+                    <span>Animate Light</span>
+                </button>
             </div>
 
             {/* Type Dropdown */}
