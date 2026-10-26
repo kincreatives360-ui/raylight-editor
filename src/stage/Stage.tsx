@@ -19,6 +19,7 @@ import {
     Circle,
     Layers,
     Camera,
+    Focus,
 } from 'lucide-react';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
@@ -43,6 +44,7 @@ import {
     DEFAULT_FOCAL_LENGTH,
     evaluateCameraPose,
     getLayerProjectedCorners,
+    calculateLayersBoundingFraming,
 } from './webgl/cameraMath';
 
 interface StageProps {
@@ -169,7 +171,9 @@ const StageComponent: React.FC<StageProps> = ({
         return () => observer.disconnect();
     }, []);
 
-    // Track Spacebar hold for temporary Hand panning and C/V/H/Y tool shortcuts
+    const handleFrameSelectedLayersRef = useRef<() => void>(() => {});
+
+    // Track Spacebar hold for temporary Hand panning and C/V/H/Y/F tool shortcuts
     useEffect(() => {
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.defaultPrevented) return;
@@ -192,6 +196,10 @@ const StageComponent: React.FC<StageProps> = ({
                 if (e.key === 'v' || e.key === 'V') setActiveTool('select');
                 if (e.key === 'h' || e.key === 'H') setActiveTool('hand');
                 if (e.key === 'y' || e.key === 'Y') setActiveTool('tilt');
+                if (e.key === 'f' || e.key === 'F') {
+                    e.preventDefault();
+                    handleFrameSelectedLayersRef.current();
+                }
             }
         };
         const onKeyUp = (e: KeyboardEvent) => {
@@ -211,6 +219,7 @@ const StageComponent: React.FC<StageProps> = ({
     const updateActiveShotCamera = useCallback((patch: {
         orbit?: number;
         tilt?: number;
+        roll?: number;
         targetX?: number;
         targetY?: number;
         zoom?: number;
@@ -247,6 +256,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     zoom: patch.zoom !== undefined ? patch.zoom : ep.zoom,
                                     orbit: patch.orbit !== undefined ? patch.orbit : ep.orbit,
                                     tilt: patch.tilt !== undefined ? patch.tilt : ep.tilt,
+                                    roll: patch.roll !== undefined ? patch.roll : ep.roll,
                                 },
                             }
                             : cb
@@ -279,6 +289,7 @@ const StageComponent: React.FC<StageProps> = ({
                         zoom: patch.zoom !== undefined ? patch.zoom : baseF.zoom,
                         orbit: patch.orbit !== undefined ? patch.orbit : (baseF.orbit ?? 0),
                         tilt: patch.tilt !== undefined ? patch.tilt : (baseF.tilt ?? 0),
+                        roll: patch.roll !== undefined ? patch.roll : (baseF.roll ?? 0),
                     };
 
                     framings[0] = updatedF;
@@ -508,23 +519,64 @@ const StageComponent: React.FC<StageProps> = ({
         activeTool
     );
 
-    const handleSetOrientation = (orbitDeg: number, tiltDeg: number) => {
+    const handleSetOrientation = useCallback((
+        orbitDeg: number,
+        tiltDeg: number,
+        rollDeg: number = 0,
+        zoomVal?: number
+    ) => {
         beginDragTransaction();
-        updateActiveShotCamera({ orbit: orbitDeg, tilt: tiltDeg });
+        updateActiveShotCamera({
+            orbit: orbitDeg,
+            tilt: tiltDeg,
+            roll: rollDeg,
+            ...(zoomVal !== undefined ? { zoom: zoomVal } : {}),
+        });
         commitDragTransaction();
-    };
+    }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
 
-    const handleResetCamera = () => {
+    const handleResetCamera = useCallback(() => {
         beginDragTransaction();
         updateActiveShotCamera({
             orbit: 0,
             tilt: 0,
+            roll: 0,
             targetX: 0,
             targetY: 0,
             zoom: 1,
         });
         commitDragTransaction();
-    };
+    }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
+
+    const handleFrameSelectedLayers = useCallback(() => {
+        const selectedIds = useSelectionStore.getState().selectedLayerIds;
+        const selectedLayers = frame.layers.filter((l) => selectedIds.includes(l.id));
+        const targetLayers = selectedLayers.length > 0
+            ? selectedLayers
+            : frame.layers.filter((l) => l.visible !== false && (l.opacity ?? 1) > 0);
+
+        if (targetLayers.length === 0) {
+            handleResetCamera();
+            return;
+        }
+
+        const framing = calculateLayersBoundingFraming(
+            targetLayers,
+            { width: frameWidth, height: frameHeight }
+        );
+
+        beginDragTransaction();
+        updateActiveShotCamera({
+            targetX: framing.anchorX,
+            targetY: framing.anchorY,
+            zoom: framing.zoom,
+        });
+        commitDragTransaction();
+    }, [frame.layers, frameWidth, frameHeight, beginDragTransaction, updateActiveShotCamera, commitDragTransaction, handleResetCamera]);
+
+    useEffect(() => {
+        handleFrameSelectedLayersRef.current = handleFrameSelectedLayers;
+    }, [handleFrameSelectedLayers]);
 
     // ============================================================================
     // WORKSPACE MOUSE DOWN: Camera Orbit/Pan/Dolly, Hand Pan, Drawing, or Deselect
@@ -1322,6 +1374,7 @@ const StageComponent: React.FC<StageProps> = ({
             </div>
 
             {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
+            {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
             <OrientationGizmo
                 topInset={rightSidebarOpen ? 12 : 56}
                 cameraRotation={effectiveViewportFrame.camera.rotation}
@@ -1330,6 +1383,8 @@ const StageComponent: React.FC<StageProps> = ({
                 onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
                 onDragEnd={commitDragTransaction}
                 onResetCamera={handleResetCamera}
+                onFrameSelection={handleFrameSelectedLayers}
+                hasSelection={selectedLayerIds.length > 0}
                 currentZoom={effectiveViewportFrame.camera.zoom}
             />
 
@@ -1347,6 +1402,15 @@ const StageComponent: React.FC<StageProps> = ({
                         <span>•</span>
                         <span>Right: Dolly</span>
                     </div>
+                    <button
+                        type="button"
+                        onClick={handleFrameSelectedLayers}
+                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[10px] text-gray-200 cursor-pointer transition flex items-center gap-1"
+                        title={selectedLayerIds.length > 0 ? "Frame Selected Layer(s) [F]" : "Frame All Visible Content [F]"}
+                    >
+                        <Focus className="w-2.5 h-2.5 text-[var(--accent-primary,#0088ff)]" />
+                        <span>Frame [F]</span>
+                    </button>
                     <button
                         type="button"
                         onClick={handleResetCamera}

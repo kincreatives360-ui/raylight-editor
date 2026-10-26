@@ -2,9 +2,16 @@
 import * as THREE from 'three';
 import { getPhoneLocalBounds } from './phoneLayout';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
-import type { EvaluatedCamera } from '../../engine/evaluateCamera';
+import {
+    type EvaluatedCamera,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    focalLengthToFov,
+} from '../../engine/evaluateCamera';
 import type { Framing, ImageLayer, VideoLayer } from '../../model/types';
 import { getDeviceFrameMetrics, getDeviceFrameScale, resolveDeviceFrameSettings, SCREEN_PLANE_Z } from '../../model/deviceFrame';
+
+export { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM, focalLengthToFov };
 
 export interface DefaultCameraConfig {
     position: { x: number; y: number; z: number };
@@ -20,14 +27,312 @@ export interface EvaluatedCameraPose {
 }
 
 export const DEFAULT_CAMERA_Z = 2.65;
-export const DEFAULT_FOCAL_LENGTH = 50;
-export const SENSOR_HEIGHT_MM = 24;
 
-export function focalLengthToFov(focalLengthMm: number): number {
-    const safeFocal = Math.max(12, Math.min(200, focalLengthMm || DEFAULT_FOCAL_LENGTH));
-    return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
+export type CameraPresetCategory = 'axial' | 'axonometric' | 'cinematic';
+
+export interface CameraPreset {
+    id: string;
+    name: string;
+    category: CameraPresetCategory;
+    orbit: number; // Yaw degrees
+    tilt: number;  // Pitch degrees
+    roll: number;  // Roll degrees
+    zoom?: number; // Optional zoom factor
+    focalLength?: number; // Lens focal length in mm
+    description: string;
 }
 
+export const CAMERA_PRESETS: CameraPreset[] = [
+    // Axial / Orthogonal Views
+    {
+        id: 'front',
+        name: 'Front',
+        category: 'axial',
+        orbit: 0,
+        tilt: 0,
+        roll: 0,
+        focalLength: 50,
+        description: 'Direct frontal projection (0°, 0°)',
+    },
+    {
+        id: 'back',
+        name: 'Back',
+        category: 'axial',
+        orbit: 180,
+        tilt: 0,
+        roll: 0,
+        focalLength: 50,
+        description: 'Reverse rear perspective (180°, 0°)',
+    },
+    {
+        id: 'top',
+        name: 'Top',
+        category: 'axial',
+        orbit: 0,
+        tilt: -89,
+        roll: 0,
+        focalLength: 50,
+        description: 'Top-down bird’s-eye view (0°, -89°)',
+    },
+    {
+        id: 'bottom',
+        name: 'Bottom',
+        category: 'axial',
+        orbit: 0,
+        tilt: 89,
+        roll: 0,
+        focalLength: 50,
+        description: 'Worm’s-eye perspective looking up (0°, 89°)',
+    },
+    {
+        id: 'left',
+        name: 'Left',
+        category: 'axial',
+        orbit: -90,
+        tilt: 0,
+        roll: 0,
+        focalLength: 50,
+        description: 'Left lateral view (-90°, 0°)',
+    },
+    {
+        id: 'right',
+        name: 'Right',
+        category: 'axial',
+        orbit: 90,
+        tilt: 0,
+        roll: 0,
+        focalLength: 50,
+        description: 'Right lateral view (90°, 0°)',
+    },
+
+    // Axonometric / Spatial Views
+    {
+        id: 'isometric',
+        name: 'Isometric',
+        category: 'axonometric',
+        orbit: 45,
+        tilt: 35.26,
+        roll: 0,
+        focalLength: 50,
+        description: 'True 3D isometric projection (45°, 35°)',
+    },
+    {
+        id: 'dimetric',
+        name: '3/4 Studio',
+        category: 'axonometric',
+        orbit: 35,
+        tilt: 20,
+        roll: 0,
+        focalLength: 50,
+        description: 'Standard 3/4 showcase hero view (35°, 20°)',
+    },
+    {
+        id: 'high-angle-iso',
+        name: 'High-Angle Iso',
+        category: 'axonometric',
+        orbit: 45,
+        tilt: 55,
+        roll: 0,
+        focalLength: 50,
+        description: 'Elevated spatial layout view (45°, 55°)',
+    },
+
+    // Cinematic & Composition Angles
+    {
+        id: 'hero-low',
+        name: 'Hero Low-Angle',
+        category: 'cinematic',
+        orbit: 18,
+        tilt: -16,
+        roll: 0,
+        focalLength: 28,
+        description: 'Imposing upward cinematic shot (18°, -16°, 28mm)',
+    },
+    {
+        id: 'dutch-tilt',
+        name: 'Dutch Angle',
+        category: 'cinematic',
+        orbit: 20,
+        tilt: 8,
+        roll: -12,
+        focalLength: 35,
+        description: 'Stylized canted horizon tilt (20°, 8°, -12°, 35mm)',
+    },
+    {
+        id: 'close-up',
+        name: 'Close-Up',
+        category: 'cinematic',
+        orbit: 0,
+        tilt: 0,
+        roll: 0,
+        zoom: 1.8,
+        focalLength: 85,
+        description: 'Focused macro close-up framing (1.8x, 85mm)',
+    },
+    {
+        id: 'wide-angle',
+        name: 'Wide View',
+        category: 'cinematic',
+        orbit: 0,
+        tilt: 0,
+        roll: 0,
+        zoom: 0.75,
+        focalLength: 24,
+        description: 'Contextual wide establishing shot (0.75x, 24mm)',
+    },
+];
+
+export const LENS_PRESETS = [
+    { mm: 24, label: '24mm Wide' },
+    { mm: 35, label: '35mm Street' },
+    { mm: 50, label: '50mm Standard' },
+    { mm: 85, label: '85mm Portrait' },
+    { mm: 135, label: '135mm Tele' },
+] as const;
+
+export function applyCameraPreset<T extends {
+    orbit?: number;
+    tilt?: number;
+    roll?: number;
+    zoom?: number;
+    presetId?: string;
+    focalLength?: number;
+}>(
+    preset: CameraPreset,
+    current: T
+): T & { presetId: string; focalLength?: number; zoom?: number } {
+    return {
+        ...current,
+        presetId: preset.id,
+        orbit: preset.orbit,
+        tilt: preset.tilt,
+        roll: preset.roll,
+        ...(preset.zoom !== undefined ? { zoom: preset.zoom } : {}),
+        ...(preset.focalLength !== undefined ? { focalLength: preset.focalLength } : {}),
+    };
+}
+
+export function detectMatchingPreset(
+    endpoint: { presetId?: string; orbit?: number; tilt?: number; roll?: number; zoom?: number; focalLength?: number } | null | undefined,
+    tolerance: number = 0.5
+): CameraPreset | null {
+    if (!endpoint) return null;
+    if (endpoint.presetId) {
+        const found = CAMERA_PRESETS.find((p) => p.id === endpoint.presetId);
+        if (found) return found;
+    }
+    const epOrbit = endpoint.orbit ?? 0;
+    const epTilt = endpoint.tilt ?? 0;
+    const epRoll = endpoint.roll ?? 0;
+    const epZoom = endpoint.zoom;
+
+    // Check zoom-specific presets first if endpoint defines a distinct zoom
+    if (epZoom !== undefined) {
+        const zoomMatch = CAMERA_PRESETS.find((preset) => {
+            if (preset.zoom === undefined) return false;
+            const dOrbit = Math.abs(preset.orbit - epOrbit);
+            const dTilt = Math.abs(preset.tilt - epTilt);
+            const dRoll = Math.abs(preset.roll - epRoll);
+            const dZoom = Math.abs(preset.zoom - epZoom);
+            return dOrbit <= tolerance && dTilt <= tolerance && dRoll <= tolerance && dZoom <= 0.15;
+        });
+        if (zoomMatch) return zoomMatch;
+    }
+
+    // Otherwise match standard orientation presets without zoom requirement
+    for (const preset of CAMERA_PRESETS) {
+        if (preset.zoom !== undefined) continue;
+        const dOrbit = Math.abs(preset.orbit - epOrbit);
+        const dTilt = Math.abs(preset.tilt - epTilt);
+        const dRoll = Math.abs(preset.roll - epRoll);
+        if (dOrbit <= tolerance && dTilt <= tolerance && dRoll <= tolerance) {
+            return preset;
+        }
+    }
+    return null;
+}
+
+export interface CameraFramingTarget {
+    anchorX: number; // in artboard pixels (relative to artboard center)
+    anchorY: number; // in artboard pixels (relative to artboard center, +Y is up)
+    zoom: number;    // ideal zoom level
+}
+
+export type FramableLayer = {
+    position?: { x: number; y: number; z?: number };
+    size?: { width: number; height: number };
+    scale?: { x: number; y: number; z?: number };
+};
+
+/**
+ * Calculates ideal camera framing (anchorX, anchorY, zoom) to fit a layer or multiple layers into view.
+ * Works seamlessly for both 2D artboard framing and 3D camera pose.
+ */
+export function calculateLayersBoundingFraming(
+    layers: FramableLayer[],
+    artboardDimensions: { width: number; height: number } = { width: 1920, height: 1080 },
+    paddingRatio: number = 1.25
+): CameraFramingTarget {
+    if (!layers || layers.length === 0) {
+        return { anchorX: 0, anchorY: 0, zoom: 1 };
+    }
+
+    const { width: artboardW, height: artboardH } = artboardDimensions;
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (const el of layers) {
+        const pos = el.position;
+        const size = el.size;
+        const posX = pos && Number.isFinite(pos.x) ? pos.x : 0;
+        const posY = pos && Number.isFinite(pos.y) ? pos.y : 0;
+        const rawW = size && Number.isFinite(size.width) ? size.width : 0.4;
+        const rawH = size && Number.isFinite(size.height) ? size.height : 0.3;
+        const scaleX = Math.abs(el.scale?.x ?? 1);
+        const scaleY = Math.abs(el.scale?.y ?? 1);
+
+        const halfW = (rawW * scaleX) / 2;
+        const halfH = (rawH * scaleY) / 2;
+
+        minX = Math.min(minX, posX - halfW);
+        maxX = Math.max(maxX, posX + halfW);
+        minY = Math.min(minY, posY - halfH);
+        maxY = Math.max(maxY, posY + halfH);
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(maxX)) {
+        return { anchorX: 0, anchorY: 0, zoom: 1 };
+    }
+
+    const centerNormX = (minX + maxX) / 2;
+    const centerNormY = (minY + maxY) / 2;
+    const spanNormX = Math.max(0.01, maxX - minX);
+    const spanNormY = Math.max(0.01, maxY - minY);
+
+    // Convert normalized position to artboard coordinates:
+    // posX=0 is center. Model +Y is downward, while 3D world/anchor +Y is upward.
+    const anchorX = Math.round(centerNormX * artboardW) || 0;
+    const anchorY = Math.round(-centerNormY * artboardH) || 0;
+
+    // Calculate zoom needed to contain the bounds with comfortable padding
+    const safePadding = Math.max(1.05, paddingRatio);
+    const zoomX = 1 / (spanNormX * safePadding);
+    const zoomY = 1 / (spanNormY * safePadding);
+    const idealZoom = Math.min(zoomX, zoomY);
+    const zoom = Number(Math.max(0.2, Math.min(5.0, idealZoom)).toFixed(2));
+
+    return { anchorX, anchorY, zoom };
+}
+
+export function calculateLayerFraming(
+    layer: FramableLayer,
+    artboardDimensions?: { width: number; height: number },
+    paddingRatio: number = 1.25
+): CameraFramingTarget {
+    return calculateLayersBoundingFraming([layer], artboardDimensions, paddingRatio);
+}
 export function getReferencePlaneDimensions(
     aspect: number,
     cameraZ: number = DEFAULT_CAMERA_Z,

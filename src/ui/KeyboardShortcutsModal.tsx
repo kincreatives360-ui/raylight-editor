@@ -22,6 +22,7 @@ const SHORTCUTS: ShortcutItem[] = [
   { keys: ['L'], description: 'Line Tool (Draw straight line)', category: 'Tools' },
   { keys: ['A'], description: 'Arrow Tool (Draw direction arrow)', category: 'Tools' },
   { keys: ['P'], description: 'Pen Tool (Vector path creation)', category: 'Tools' },
+  { keys: ['C'], description: 'Camera Navigation Tool (Orbit, Pan, Dolly)', category: 'Tools' },
 
   // Playback & Animation
   { keys: ['Space'], description: 'Play / Pause timeline playback', category: 'Playback & Animation' },
@@ -46,6 +47,7 @@ const SHORTCUTS: ShortcutItem[] = [
   { keys: ['⌘/Ctrl', 'Shift', 'Z'], description: 'Redo previously undone change', category: 'Layers & Editing' },
 
   // View & Navigation
+  { keys: ['F'], description: 'Frame Selection (Fit camera to selected layer/scene)', category: 'View & Navigation' },
   { keys: ["'"], description: "Toggle Safe Zones & Rule of Thirds grid", category: 'View & Navigation' },
   { keys: ['\\'], description: 'Zen Mode (Toggle both left & right sidebars)', category: 'View & Navigation' },
   { keys: ['['], description: 'Toggle Left Sidebar (Panels & Audio)', category: 'View & Navigation' },

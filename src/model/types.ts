@@ -379,12 +379,16 @@ export interface Framing {
 }
 
 export interface CameraKeyframeEndpoint {
-  anchorX: number; // fractional X (-1 to 1, shown as px in UI)
-  anchorY: number; // fractional Y (-1 to 1, shown as px in UI)
+  presetId?: string; // id of active CameraPreset (e.g. 'front', 'isometric', 'hero-low')
+  anchorX: number; // artboard pixels relative to center
+  anchorY: number; // artboard pixels relative to center (+Y up)
+  anchorZ?: number; // 3D elevation / depth offset
   zoom: number;    // e.g. 1.0x, 1.1x
-  roll: number;    // degrees
-  orbit: number;   // degrees
-  tilt: number;    // degrees
+  roll: number;    // degrees (-180 to 180)
+  orbit: number;   // degrees (-360 to 360)
+  tilt: number;    // degrees (-89 to 89)
+  focalLength?: number; // lens focal length in mm (e.g. 24, 35, 50, 85, 135)
+  fov?: number;    // field of view in degrees
 }
 
 export interface CameraBlock {
@@ -401,6 +405,7 @@ export interface CameraBlock {
   shake?: {
     from: number; // 0 to 100%
     to: number;   // 0 to 100%
+    frequency?: number; // speed multiplier (default 1.0)
   };
 }
 

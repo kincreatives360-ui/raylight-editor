@@ -425,12 +425,16 @@ export const FramingSchema = z.object({
 });
 
 export const CameraKeyframeEndpointSchema = z.object({
+  presetId: z.string().optional(),
   anchorX: z.number(),
   anchorY: z.number(),
+  anchorZ: z.number().optional(),
   zoom: z.number().min(0.1).max(10),
   roll: z.number(),
   orbit: z.number(),
   tilt: z.number(),
+  focalLength: z.number().min(10).max(300).optional(),
+  fov: z.number().min(5).max(160).optional(),
 });
 
 export const CameraBlockSchema = z.object({
@@ -448,6 +452,7 @@ export const CameraBlockSchema = z.object({
     .object({
       from: z.number().min(0).max(100),
       to: z.number().min(0).max(100),
+      frequency: z.number().min(0.1).max(10).optional(),
     })
     .optional(),
 });

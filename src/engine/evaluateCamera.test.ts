@@ -208,4 +208,91 @@ describe('evaluateShotCameraAtTime', () => {
     const end = evaluateShotCameraAtTime(shot, 1000);
     expect(end.target.z).toBeCloseTo(50, 2);
   });
+
+  it('8. Smoothly interpolates anchorZ defined directly on keyframe endpoints', () => {
+    const shot = createDefaultShot({
+      cameraBlocks: [
+        {
+          id: 'cam-anchor-z',
+          label: 'Endpoint Depth',
+          mode: 'dolly',
+          fromFramingId: 'f1',
+          toFramingId: 'f1',
+          startMs: 0,
+          durationMs: 1000,
+          easing: { kind: 'preset', name: 'linear' },
+          from: { anchorX: 0, anchorY: 0, anchorZ: -100, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+          to: { anchorX: 0, anchorY: 0, anchorZ: 300, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+        },
+      ],
+    });
+
+    const mid = evaluateShotCameraAtTime(shot, 500);
+    expect(mid.target.z).toBeCloseTo(100, 2);
+
+    const end = evaluateShotCameraAtTime(shot, 1000);
+    expect(end.target.z).toBe(300);
+  });
+
+  it('9. Smoothly interpolates focalLength and updates fovDegrees dynamically', () => {
+    const shot = createDefaultShot({
+      cameraBlocks: [
+        {
+          id: 'cam-lens-pull',
+          label: 'Lens Focal Length Pull',
+          mode: 'dolly',
+          fromFramingId: 'f1',
+          toFramingId: 'f1',
+          startMs: 0,
+          durationMs: 1000,
+          easing: { kind: 'preset', name: 'linear' },
+          from: { anchorX: 0, anchorY: 0, zoom: 1, tilt: 0, orbit: 0, roll: 0, focalLength: 24 },
+          to: { anchorX: 0, anchorY: 0, zoom: 1, tilt: 0, orbit: 0, roll: 0, focalLength: 85 },
+        },
+      ],
+    });
+
+    const start = evaluateShotCameraAtTime(shot, 0);
+    expect(start.focalLength).toBe(24);
+    expect(start.fovDegrees).toBeGreaterThan(50); // ~53.1° wide lens
+
+    const mid = evaluateShotCameraAtTime(shot, 500);
+    expect(mid.focalLength).toBeCloseTo(54.5, 1);
+
+    const end = evaluateShotCameraAtTime(shot, 1000);
+    expect(end.focalLength).toBe(85);
+    expect(end.fovDegrees).toBeLessThan(20); // ~16.1° portrait lens
+  });
+
+  it('10. Applies shake frequency multiplier to oscillation rate', () => {
+    const createShakeShot = (frequency: number): Shot =>
+      createDefaultShot({
+        cameraBlocks: [
+          {
+            id: 'cam-shake',
+            label: 'Handheld Shake',
+            mode: 'dolly',
+            fromFramingId: 'f1',
+            toFramingId: 'f1',
+            startMs: 0,
+            durationMs: 2000,
+            easing: { kind: 'preset', name: 'linear' },
+            shake: { from: 50, to: 50, frequency },
+            from: { anchorX: 0, anchorY: 0, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+            to: { anchorX: 0, anchorY: 0, zoom: 1, tilt: 0, orbit: 0, roll: 0 },
+          },
+        ],
+      });
+
+    const shotNormal = createShakeShot(1.0);
+    const shotFast = createShakeShot(2.5);
+
+    const evalNormal = evaluateShotCameraAtTime(shotNormal, 250);
+    const evalFast = evaluateShotCameraAtTime(shotFast, 250);
+
+    // Fast frequency shifts phase/amplitude at t=250ms differently than 1.0x normal
+    expect(evalNormal.target.x).not.toBe(0);
+    expect(evalFast.target.x).not.toBe(0);
+    expect(evalFast.target.x).not.toBeCloseTo(evalNormal.target.x, 3);
+  });
 });

@@ -1,6 +1,5 @@
-// src/App.tsx
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Download, PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { Sparkles, Download, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -743,6 +742,10 @@ export default function App() {
           setActiveTool('select');
           return;
         }
+        if (key === 'c') {
+          setActiveTool('camera');
+          return;
+        }
         if (key === 'g') {
           setActiveTool('move');
           return;
@@ -1258,6 +1261,15 @@ export default function App() {
       action: () => addLayerToShot(activeShot.id, 'shape'),
     },
     {
+      id: 'tool-camera',
+      title: 'Camera Navigation Tool',
+      subtitle: 'Orbit, pan, and dolly 3D scene camera',
+      category: 'Tools',
+      icon: Camera,
+      shortcut: ['C'],
+      action: () => setActiveTool('camera'),
+    },
+    {
       id: 'export-video',
       title: 'Export Video / GIF / Frame',
       subtitle: 'Render and save project to disk',
@@ -1338,7 +1350,7 @@ export default function App() {
       shortcut: ['?'],
       action: () => setShortcutsModalOpen(true),
     },
-  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, toggleLeftPanel, toggleRightSidebar, handleOpenExportModal, setShortcutsModalOpen]);
+  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, setActiveTool, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, toggleLeftPanel, toggleRightSidebar, handleOpenExportModal, setShortcutsModalOpen]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">

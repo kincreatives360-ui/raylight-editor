@@ -12,6 +12,14 @@ export interface EvaluatedCamera {
     activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom' | 'shake';
 }
 
+export const DEFAULT_FOCAL_LENGTH = 50;
+export const SENSOR_HEIGHT_MM = 24;
+
+export function focalLengthToFov(focalLengthMm: number): number {
+    const safeFocal = Math.max(12, Math.min(200, focalLengthMm || DEFAULT_FOCAL_LENGTH));
+    return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
+}
+
 const BASE_FOV_DEGREES = 27.0006;
 
 function lerp(a: number, b: number, t: number): number {
@@ -41,7 +49,7 @@ export function evaluateShotCameraAtTime(
     let rotY = degToRad(defaultFraming.orbit ?? 0);
     let rotZ = degToRad(defaultFraming.roll ?? 0);
     let fovDegrees = BASE_FOV_DEGREES;
-    let focalLength = 50;
+    let focalLength = DEFAULT_FOCAL_LENGTH;
     let activeMode: EvaluatedCamera['activeMode'] = 'static';
 
     const sortedBlocks = [...(shot.cameraBlocks || [])].sort(
@@ -60,35 +68,40 @@ export function evaluateShotCameraAtTime(
         const fromEndpoint = block.from || {
             anchorX: fromFraming.target.x,
             anchorY: fromFraming.target.y,
+            anchorZ: fromFraming.target.z,
             zoom: fromFraming.zoom,
             roll: fromFraming.roll ?? 0,
             orbit: fromFraming.orbit ?? 0,
             tilt: fromFraming.tilt ?? 0,
+            focalLength: DEFAULT_FOCAL_LENGTH,
         };
 
         const toEndpoint = block.to || {
             anchorX: toFraming.target.x,
             anchorY: toFraming.target.y,
+            anchorZ: toFraming.target.z,
             zoom: toFraming.zoom,
             roll: toFraming.roll ?? 0,
             orbit: toFraming.orbit ?? 0,
             tilt: toFraming.tilt ?? 0,
+            focalLength: DEFAULT_FOCAL_LENGTH,
         };
 
         if (shotLocalTimeMs < block.startMs) {
             if (i === 0) {
                 targetX = fromEndpoint.anchorX;
                 targetY = fromEndpoint.anchorY;
-                targetZ = fromFraming.target.z;
+                targetZ = fromEndpoint.anchorZ ?? fromFraming.target.z ?? 0;
                 const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
                 zoom = Math.max(0.15, safeFromZoom);
                 rotX = degToRad(fromEndpoint.tilt);
                 rotY = degToRad(fromEndpoint.orbit);
                 rotZ = degToRad(fromEndpoint.roll);
                 activeMode = block.mode;
+                const baseFocal = fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH;
                 if (block.mode === 'zoom') {
                     fovDegrees = BASE_FOV_DEGREES / zoom;
-                    focalLength = 50 * zoom;
+                    focalLength = baseFocal * zoom;
                 } else if (block.mode === 'dollyzoom') {
                     const fromBaseZoom = Math.max(0.2, safeFromZoom);
                     fovDegrees = Math.max(
@@ -97,8 +110,8 @@ export function evaluateShotCameraAtTime(
                     );
                     focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
                 } else {
-                    fovDegrees = BASE_FOV_DEGREES;
-                    focalLength = 50;
+                    focalLength = baseFocal;
+                    fovDegrees = focalLengthToFov(focalLength);
                 }
             }
             break;
@@ -116,9 +129,11 @@ export function evaluateShotCameraAtTime(
 
         targetX = lerp(fromEndpoint.anchorX, toEndpoint.anchorX, eased);
         targetY = lerp(fromEndpoint.anchorY, toEndpoint.anchorY, eased);
+        const fromZ = fromEndpoint.anchorZ ?? fromFraming.target.z ?? 0;
+        const toZ = toEndpoint.anchorZ ?? toFraming.target.z ?? 0;
         targetZ = block.mode === 'zoom'
-            ? fromFraming.target.z
-            : lerp(fromFraming.target.z, toFraming.target.z, eased);
+            ? fromZ
+            : lerp(fromZ, toZ, eased);
         const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
         const safeToZoom = Number.isFinite(toEndpoint.zoom) && toEndpoint.zoom > 0 ? toEndpoint.zoom : safeFromZoom;
         const targetZoom = lerp(safeFromZoom, safeToZoom, eased);
@@ -129,10 +144,13 @@ export function evaluateShotCameraAtTime(
         rotZ = degToRad(lerp(fromEndpoint.roll, toEndpoint.roll, eased));
         activeMode = block.mode;
 
+        const fromFocal = fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH;
+        const toFocal = toEndpoint.focalLength ?? fromFocal;
+
         if (block.mode === 'zoom') {
             // Lens Zoom: changes focal length without 3D parallax shift
             fovDegrees = BASE_FOV_DEGREES / zoom;
-            focalLength = 50 * zoom;
+            focalLength = fromFocal * zoom;
         } else if (block.mode === 'dollyzoom') {
             // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
             const fromBaseZoom = Math.max(0.2, Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1);
@@ -142,9 +160,9 @@ export function evaluateShotCameraAtTime(
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
         } else {
-            // Dolly: physical 3D camera push with constant 50mm lens
-            fovDegrees = BASE_FOV_DEGREES;
-            focalLength = 50;
+            // Dolly: physical 3D camera push with configured focal length (e.g. 50mm or custom lens)
+            focalLength = lerp(fromFocal, toFocal, eased);
+            fovDegrees = focalLengthToFov(focalLength);
         }
 
         // Apply deterministic handheld Camera Shake if configured on the block
@@ -153,7 +171,8 @@ export function evaluateShotCameraAtTime(
         const currentShakePct = lerp(shakeFrom, shakeTo, eased);
         if (currentShakePct > 0) {
             const amp = (currentShakePct / 100) * 0.045;
-            const tSec = shotLocalTimeMs * 0.001;
+            const freq = block.shake?.frequency ?? 1.0;
+            const tSec = shotLocalTimeMs * 0.001 * freq;
             targetX +=
                 (Math.sin(tSec * 17.3) * 0.6 + Math.cos(tSec * 31.7) * 0.4) * amp;
             targetY +=
