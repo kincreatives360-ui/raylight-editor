@@ -16,8 +16,9 @@ import type {
 import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout } from './cameraMath';
 import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
-import { SCREEN_PLANE_Z } from '../../model/deviceFrame';
+import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
+import { MacBookProDeviceFrame } from './MacBookProDeviceFrame';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -605,11 +606,19 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (
-                <PhoneDeviceFrame
-                    metrics={deviceFrameMetrics}
-                    settings={deviceFrameSettings}
-                    rotation={rot}
-                />
+                getDeviceSpec(deviceFrameSettings.deviceId).family === 'laptop' ? (
+                    <MacBookProDeviceFrame
+                        metrics={deviceFrameMetrics}
+                        settings={deviceFrameSettings}
+                        rotation={rot}
+                    />
+                ) : (
+                    <PhoneDeviceFrame
+                        metrics={deviceFrameMetrics}
+                        settings={deviceFrameSettings}
+                        rotation={rot}
+                    />
+                )
             )}
     </>;
 

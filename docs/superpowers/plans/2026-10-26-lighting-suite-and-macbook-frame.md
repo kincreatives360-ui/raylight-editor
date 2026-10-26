@@ -112,19 +112,19 @@
 - Modify: `src/panels/Inspector/sections/DeviceFrameSection.tsx`
 - Test: `src/stage/webgl/macBookProLayout.test.ts`
 
-- [ ] **Step 1: Write layout and geometry tests in `src/stage/webgl/macBookProLayout.test.ts`**
+- [x] **Step 1: Write layout and geometry tests in `src/stage/webgl/macBookProLayout.test.ts`**
   - Test MacBook Pro 16" screen and chassis bounds, notch cutout coordinates, and keyboard base depth.
-- [ ] **Step 2: Implement `macBookProLayout.ts`**
+- [x] **Step 2: Implement `macBookProLayout.ts`**
   - Calibrated dimensions: display lid thickness, display notch, keyboard base angle, trackpad, and screen placement.
-- [ ] **Step 3: Implement `MacBookProDeviceFrame.tsx`**
+- [x] **Step 3: Implement `MacBookProDeviceFrame.tsx`**
   - Procedural Three.js geometry:
     - Display lid with rounded corners and dark bezel with top notch.
     - Keyboard base extruded slab with recessed keyboard well and trackpad outline.
     - Realistic aluminum materials matching finish presets (`space-black`, `silver`).
-- [ ] **Step 4: Wire `MacBookProDeviceFrame` into `ThreeLayerObject.tsx`**
+- [x] **Step 4: Wire `MacBookProDeviceFrame` into `ThreeLayerObject.tsx`**
   - Check `deviceSpec.family`: if `laptop`, mount `<MacBookProDeviceFrame />`; if `phone`, mount `<PhoneDeviceFrame />`.
-- [ ] **Step 5: Update `DeviceFrameSection.tsx` to enable selecting `macbook-pro-16`**
-- [ ] **Step 6: Run tests with `npx vitest run src/stage/webgl/macBookProLayout.test.ts`**
+- [x] **Step 5: Update `DeviceFrameSection.tsx` to enable selecting `macbook-pro-16`**
+- [x] **Step 6: Run tests with `npx vitest run src/stage/webgl/macBookProLayout.test.ts`**
 
 ---
 
