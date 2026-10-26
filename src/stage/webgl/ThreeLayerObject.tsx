@@ -280,7 +280,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         const targetSec = Math.max(0, (currentTimeMs - layer.inMs) / 1000);
         if (Number.isFinite(targetSec)) {
             if (Math.abs(vid.currentTime - targetSec) > 0.04) {
-                // eslint-disable-next-line react-hooks/immutability
                 vid.currentTime = targetSec;
             }
         }
@@ -698,6 +697,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
 function markTextureUpdated(texture: THREE.Texture) { texture.needsUpdate = true; }
  
+// eslint-disable-next-line react-refresh/only-export-components
 export function configureLayerTexture(tex: THREE.Texture, maxAnisotropy = 16): THREE.Texture {
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.generateMipmaps = true;

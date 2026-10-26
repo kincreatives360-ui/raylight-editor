@@ -4,6 +4,7 @@ import { LightingOverlay } from './LightingOverlay';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { createDefaultProject, createDefaultShot } from '../model/defaults';
+import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
 
 // SSR uses Zustand's initial snapshot. Read real loaded state for rendering.
 vi.mock('../store/useProjectStore', async (importOriginal) => {
@@ -76,21 +77,8 @@ describe('LightingOverlay Component', () => {
         useSelectionStore.getState().selectLight(null);
     });
 
-    const createDummyFrame = (): any => {
-        const shot = useProjectStore.getState().project.shots[0];
-        return {
-            activeShot: shot,
-            layers: [],
-            camera: {
-                target: { x: 0, y: 0, z: 0 },
-                zoom: 1,
-                rotation: { x: 0, y: 0, z: 0 },
-                position: { x: 0, y: 0, z: 2.65 },
-                fovDegrees: 50,
-            },
-            shotLocalTimeMs: 0,
-            progress01: 0,
-        };
+    const createDummyFrame = (): EvaluatedProjectFrame => {
+        return evaluateProjectAtTime(useProjectStore.getState().project, 0);
     };
 
     it('renders unselected light badges when gizmos are enabled', () => {

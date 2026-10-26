@@ -10,6 +10,7 @@ import { getExportDimensions } from './exportMetrics';
 import { decodeAudioFromDataUrl } from './audioEngine';
 import { captureStageFrame } from './stageCapture';
 import { validateRecordedVideo } from './recordingValidation';
+import { IncrementalGifEncoder, gifFrameDelayCentiseconds } from './gifEncoder';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
@@ -73,149 +74,6 @@ function drawStageCanvas(
 // ============================================================================
 // SELF-CONTAINED BINARY GIF89a LZW ENCODER (For Looping Animated GIF Exports)
 // ============================================================================
-function encodeLzwClearCodeStream(indices: Uint8Array): Uint8Array {
-    // Uses 8-bit color indices with periodic Clear Codes (256) every 120 pixels
-    // so 9-bit LZW codes never overflow the dictionary—100% GIF89a compliant & fast!
-    const CLEAR_CODE = 256;
-    const EOI_CODE = 257;
-    const subBlockBytes: number[] = [];
-
-    let bitBuffer = 0;
-    let bitCount = 0;
-
-    const write9BitCode = (code: number) => {
-        bitBuffer |= code << bitCount;
-        bitCount += 9;
-        while (bitCount >= 8) {
-            subBlockBytes.push(bitBuffer & 0xff);
-            bitBuffer >>= 8;
-            bitCount -= 8;
-        }
-    };
-
-    write9BitCode(CLEAR_CODE);
-    for (let i = 0; i < indices.length; i++) {
-        if (i > 0 && i % 120 === 0) {
-            write9BitCode(CLEAR_CODE);
-        }
-        write9BitCode(indices[i]);
-    }
-    write9BitCode(EOI_CODE);
-
-    if (bitCount > 0) {
-        subBlockBytes.push(bitBuffer & 0xff);
-    }
-
-    // Packetize into 255-byte GIF sub-blocks
-    const numBlocks = Math.ceil(subBlockBytes.length / 255);
-    const totalLen = 1 + subBlockBytes.length + numBlocks + 1;
-    const output = new Uint8Array(totalLen);
-    let ptr = 0;
-    output[ptr++] = 8; // LZW Minimum Code Size = 8
-
-    for (let offset = 0; offset < subBlockBytes.length; offset += 255) {
-        const chunkSize = Math.min(255, subBlockBytes.length - offset);
-        output[ptr++] = chunkSize;
-        for (let j = 0; j < chunkSize; j++) {
-            output[ptr++] = subBlockBytes[offset + j];
-        }
-    }
-    output[ptr++] = 0; // Block Terminator
-    return output.slice(0, ptr);
-}
-
-function buildAnimatedGifBlob(
-    framesData: ImageData[],
-    width: number,
-    height: number,
-    delayCentiseconds: number
-): Blob {
-    const chunks: Uint8Array[] = [];
-
-    // Header buffer (Header, LSD, GCT, Netscape extension)
-    const header = new Uint8Array(800);
-    let hPtr = 0;
-    const writeAscii = (str: string) => {
-        for (let i = 0; i < str.length; i++) header[hPtr++] = str.charCodeAt(i);
-    };
-    const writeShort = (s: number) => {
-        header[hPtr++] = s & 0xff;
-        header[hPtr++] = (s >> 8) & 0xff;
-    };
-
-    writeAscii('GIF89a');
-    writeShort(width);
-    writeShort(height);
-    header[hPtr++] = 0xf7;
-    header[hPtr++] = 0;
-    header[hPtr++] = 0;
-
-    // 2. Global 256-Color RGB332 Palette
-    for (let i = 0; i < 256; i++) {
-        header[hPtr++] = ((i >> 5) & 0x07) * 36;
-        header[hPtr++] = ((i >> 2) & 0x07) * 36;
-        header[hPtr++] = (i & 0x03) * 85;
-    }
-
-    // 3. Netscape 2.0 Infinite Loop Application Extension
-    header[hPtr++] = 0x21;
-    header[hPtr++] = 0xff;
-    header[hPtr++] = 11;
-    writeAscii('NETSCAPE2.0');
-    header[hPtr++] = 3;
-    header[hPtr++] = 1;
-    writeShort(0);
-    header[hPtr++] = 0;
-
-    chunks.push(header.slice(0, hPtr));
-
-    // 4. Encode Each Frame
-    for (const frame of framesData) {
-        const frameHeader = new Uint8Array(18);
-        let fPtr = 0;
-        // Graphic Control Extension
-        frameHeader[fPtr++] = 0x21;
-        frameHeader[fPtr++] = 0xf9;
-        frameHeader[fPtr++] = 4;
-        frameHeader[fPtr++] = 0x00;
-        frameHeader[fPtr++] = delayCentiseconds & 0xff;
-        frameHeader[fPtr++] = (delayCentiseconds >> 8) & 0xff;
-        frameHeader[fPtr++] = 0;
-        frameHeader[fPtr++] = 0;
-
-        // Image Descriptor
-        frameHeader[fPtr++] = 0x2c;
-        frameHeader[fPtr++] = 0;
-        frameHeader[fPtr++] = 0;
-        frameHeader[fPtr++] = 0;
-        frameHeader[fPtr++] = 0;
-        frameHeader[fPtr++] = width & 0xff;
-        frameHeader[fPtr++] = (width >> 8) & 0xff;
-        frameHeader[fPtr++] = height & 0xff;
-        frameHeader[fPtr++] = (height >> 8) & 0xff;
-        frameHeader[fPtr] = 0x00;
-
-        chunks.push(frameHeader);
-
-        const rgba = frame.data;
-        const pixelCount = width * height;
-        const indexed = new Uint8Array(pixelCount);
-        for (let p = 0; p < pixelCount; p++) {
-            const r = rgba[p * 4] >> 5;
-            const g = rgba[p * 4 + 1] >> 5;
-            const b = rgba[p * 4 + 2] >> 6;
-            indexed[p] = (r << 5) | (g << 2) | b;
-        }
-
-        const compressed = encodeLzwClearCodeStream(indexed);
-        chunks.push(compressed);
-    }
-
-    // 5. GIF Trailer
-    chunks.push(new Uint8Array([0x3b]));
-    return new Blob(chunks as BlobPart[], { type: 'image/gif' });
-}
-
 // ============================================================================
 // EXPORT 1: HIGH-RES PNG STILL OF CURRENT FRAME
 // ============================================================================
@@ -375,7 +233,7 @@ export async function runVideoExportPipeline(
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        const framesData: ImageData[] = [];
+        const gifEncoder = new IncrementalGifEncoder(gifW, gifH);
 
         for (let f = 0; f < totalFrames; f++) {
             if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
@@ -401,7 +259,7 @@ export async function runVideoExportPipeline(
                 const evaluated = evaluateProjectAtTime(project, t);
                 await renderProjectFrameToCanvas(ctx, project, evaluated, gifW, gifH);
             }
-            framesData.push(ctx.getImageData(0, 0, gifW, gifH));
+            gifEncoder.addFrame(ctx.getImageData(0, 0, gifW, gifH), gifFrameDelayCentiseconds(f, gifFps));
 
             const percent = Math.round(((f + 1) / totalFrames) * 90);
             onProgress({
@@ -431,12 +289,7 @@ export async function runVideoExportPipeline(
             return;
         }
 
-        const gifBlob = buildAnimatedGifBlob(
-            framesData,
-            gifW,
-            gifH,
-            Math.round(100 / gifFps)
-        );
+        const gifBlob = gifEncoder.finish();
 
         if (abortSignal?.aborted || getTerminalState() === 'cancelled') {
             terminalStateRef.value = 'cancelled';

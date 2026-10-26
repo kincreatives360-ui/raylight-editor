@@ -584,7 +584,7 @@ export default function App() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [toggleLeftPanel, toggleRightSidebar]);
+  }, [setLeftPanelOpen, setRightSidebarOpen]);
 
   // Global Studio Keyboard Shortcuts
   useEffect(() => {
@@ -1283,7 +1283,7 @@ export default function App() {
       shortcut: ['?'],
       action: () => setShortcutsModalOpen(true),
     },
-  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, handleOpenExportModal]);
+  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, toggleLeftPanel, toggleRightSidebar, handleOpenExportModal, setShortcutsModalOpen]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">

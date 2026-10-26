@@ -50,7 +50,7 @@ export function isEditableElement(el: { tagName?: string; isContentEditable?: bo
   if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') {
     return true;
   }
-  if (Boolean(el.isContentEditable)) return true;
+  if (el.isContentEditable) return true;
   const role = typeof el.getAttribute === 'function' ? el.getAttribute('role') : null;
   return role === 'textbox' || role === 'spinbutton';
 }

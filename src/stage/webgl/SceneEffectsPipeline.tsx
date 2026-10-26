@@ -23,6 +23,7 @@ interface SceneEffectsPipelineProps {
  * Reduces or disables samples for oversized buffers (e.g. 4K / high-DPI displays)
  * to respect GPU memory budgets, while relying on the downstream FXAA pass for anti-aliasing.
  */
+// eslint-disable-next-line react-refresh/only-export-components
 export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, maxSamples = 4): number {
     const hwCap = Math.max(0, Math.min(4, Number.isFinite(maxSamples) ? maxSamples : 4));
     if (hwCap === 0) return 0;
@@ -64,11 +65,12 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         encodingPassRef.current = encodingPass;
         fxaaPassRef.current = fxaaPass;
 
+        const passMap = passMapRef.current;
         return () => {
             fxaaPass.material.dispose();
             encodingPass.material.dispose();
-            passMapRef.current.forEach((p) => p.material.dispose());
-            passMapRef.current.clear();
+            passMap.forEach((p) => p.material.dispose());
+            passMap.clear();
             composer.dispose();
             composerRef.current = null;
             renderPassRef.current = null;

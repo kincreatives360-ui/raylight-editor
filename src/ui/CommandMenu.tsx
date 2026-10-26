@@ -42,22 +42,26 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   }, [commands, query]);
 
   // Reset state on open
-  useEffect(() => {
+  const [prevIsOpen, setPrevIsOpen] = useState(isOpen);
+  if (prevIsOpen !== isOpen) {
+    setPrevIsOpen(isOpen);
     if (isOpen) {
       setQuery('');
       setSelectedIndex(0);
+    }
+  }
+
+  // Derive clamped active index without setState effect
+  const activeIndex = Math.min(selectedIndex, Math.max(0, filteredCommands.length - 1));
+
+  // Focus input when opened
+  useEffect(() => {
+    if (isOpen) {
       requestAnimationFrame(() => {
         inputRef.current?.focus();
       });
     }
   }, [isOpen]);
-
-  // Adjust selectedIndex if bounds change
-  useEffect(() => {
-    if (selectedIndex >= filteredCommands.length) {
-      setSelectedIndex(Math.max(0, filteredCommands.length - 1));
-    }
-  }, [filteredCommands.length, selectedIndex]);
 
   // Scroll active item into view
   useEffect(() => {
@@ -66,19 +70,19 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
     if (activeEl) {
       activeEl.scrollIntoView({ block: 'nearest' });
     }
-  }, [selectedIndex]);
+  }, [activeIndex]);
 
   // Key navigation
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev + 1) % Math.max(1, filteredCommands.length));
+      setSelectedIndex((prev) => (Math.min(prev, Math.max(0, filteredCommands.length - 1)) + 1) % Math.max(1, filteredCommands.length));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIndex((prev) => (prev - 1 + filteredCommands.length) % Math.max(1, filteredCommands.length));
+      setSelectedIndex((prev) => (Math.min(prev, Math.max(0, filteredCommands.length - 1)) - 1 + filteredCommands.length) % Math.max(1, filteredCommands.length));
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const current = filteredCommands[selectedIndex];
+      const current = filteredCommands[activeIndex];
       if (current) {
         onClose();
         current.action();
@@ -139,7 +143,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
           ) : (
             filteredCommands.map((cmd, idx) => {
               const Icon = cmd.icon;
-              const isSelected = idx === selectedIndex;
+              const isSelected = idx === activeIndex;
               return (
                 <div
                   key={cmd.id}

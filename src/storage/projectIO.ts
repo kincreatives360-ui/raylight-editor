@@ -61,23 +61,21 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
         const lightweightAssets: Record<string, AssetRecord> = {};
         const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
-        // 1. Gather all OPFS write/delete operations for this save
-        const opfsOperations: Promise<unknown>[] = [];
+        // Media absent from the in-memory document is NOT evidence of deletion.
+        // Never delete a blob simply because a metadata-only asset has an empty dataUrl.
         for (const [id, asset] of Object.entries(project.assets || {})) {
-            if (asset) {
-                if (asset.dataUrl) {
-                    opfsOperations.push(saveMediaToOPFS(id, asset.dataUrl));
-                } else {
-                    opfsOperations.push(deleteMediaFromOPFS(id));
+            if (!asset) continue;
+            const { dataUrl: _drop, ...meta } = asset;
+            lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
+            if (asset.dataUrl) {
+                // OPFS is a supplementary copy; IDB stores the full asset in the
+                // same transaction as the project metadata below.
+                const written = await saveMediaToOPFS(id, asset.dataUrl);
+                if (!written && isOpfsSupported()) {
+                    console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
                 }
-                const { dataUrl: _drop, ...meta } = asset;
-                lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
             }
         }
-
-        // 2. Await all OPFS writes for this save and only THEN prune unreferenced assets
-        await Promise.all(opfsOperations);
-        await pruneOPFSAssets(currentAssetIds);
 
         // 3. Persist to IndexedDB
         return new Promise((resolve) => {
@@ -97,12 +95,10 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                     }
                 };
 
-                for (const [id, asset] of Object.entries(project.assets || {})) {
+                for (const asset of Object.values(project.assets || {})) {
                     if (asset) {
                         if (asset.dataUrl) {
                             assetStore.put(asset);
-                        } else {
-                            assetStore.delete(id);
                         }
                     }
                 }
@@ -118,9 +114,14 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
 
                 projectStore.put(record);
 
-                tx.oncomplete = () => resolve(true);
+                tx.oncomplete = () => {
+                    db.close();
+                    resolve(true);
+                };
+                tx.onabort = () => { db.close(); resolve(false); };
                 tx.onerror = () => {
                     console.warn('[Raylight Storage] IndexedDB transaction failed');
+                    db.close();
                     resolve(false);
                 };
             } catch (err) {
@@ -130,7 +131,10 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
         });
     };
 
-    const next = saveQueue.then(execute, execute);
+    const next = saveQueue.then(execute, execute).catch((error: unknown) => {
+        console.error('[Raylight Storage] Project save failed:', error);
+        return false;
+    });
     saveQueue = next;
     return next;
 }
@@ -236,7 +240,11 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
 export function saveProjectToBrowser(project: Project): void {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
     // 1. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
-    void saveProjectToIndexedDB(project);
+    void saveProjectToIndexedDB(project).then(saved => {
+        if (!saved && window.indexedDB) {
+            console.error('[Raylight Storage] IndexedDB project save failed. Local backup may not contain media.');
+        }
+    });
 
     // 2. Synchronous LocalStorage save with payload truncation guard
     try {
@@ -358,4 +366,4 @@ export {
     loadMediaDataUrlFromOPFS,
     deleteMediaFromOPFS,
     pruneOPFSAssets,
-};
+};

@@ -265,7 +265,7 @@ describe('Project IO Storage & File Operations', () => {
     expect(loaded?.assets['legacy-asset'].dataUrl).toBe('');
   });
 
-  it('10. saveProjectToIndexedDB deletes from assetStore when dataUrl is empty, preventing restoration of stale data', async () => {
+  it('10. metadata-only saves preserve previously persisted media', async () => {
     const projectStoreMap: Record<string, unknown> = {};
     const assetStoreMap: Record<string, unknown> = {
       'asset-stale': {
@@ -273,6 +273,8 @@ describe('Project IO Storage & File Operations', () => {
         name: 'stale.png',
         mimeType: 'image/png',
         dataUrl: 'data:image/png;base64,staleData',
+        width: 100,
+        height: 100,
       },
     };
 
@@ -311,7 +313,7 @@ describe('Project IO Storage & File Operations', () => {
 
     const mockTx = {
       objectStore: vi.fn((name: string) =>
-        name === 'raylight_projects' ? mockProjectStore : mockAssetStore
+        name === 'projects' ? mockProjectStore : mockAssetStore
       ),
       set oncomplete(cb: () => void) {
         cb();
@@ -324,6 +326,7 @@ describe('Project IO Storage & File Operations', () => {
       objectStoreNames: {
         contains: () => true,
       },
+      close: vi.fn(),
     };
 
     const mockIdb = {
@@ -358,15 +361,15 @@ describe('Project IO Storage & File Operations', () => {
 
     const saved = await saveProjectToIndexedDB(project);
     expect(saved).toBe(true);
-    // Verify assetStore.delete was called for the empty dataUrl asset
-    expect(mockAssetStore.delete).toHaveBeenCalledWith('asset-stale');
-    expect(assetStoreMap['asset-stale']).toBeUndefined();
+    // A metadata-only save must never erase a media blob which was already persisted.
+    expect(mockAssetStore.delete).not.toHaveBeenCalledWith('asset-stale');
+    expect(assetStoreMap['asset-stale']).toBeDefined();
 
-    // Verify loading from IndexedDB returns asset with empty dataUrl, without stale data
+    // Verify the loader can still restore that previously persisted media
     const loaded = await loadProjectFromIndexedDB();
     expect(loaded).not.toBeNull();
     expect(loaded?.assets['asset-stale']).toBeDefined();
-    expect(loaded?.assets['asset-stale'].dataUrl).toBe('');
+    expect(loaded?.assets['asset-stale'].dataUrl).toBe('data:image/png;base64,staleData');
   });
 });
 

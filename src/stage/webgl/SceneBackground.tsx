@@ -92,6 +92,7 @@ const CANVAS_TEX_FRAGMENT_SHADER = `
 `;
 
 // Helper to render gradient to an offscreen canvas
+// eslint-disable-next-line react-refresh/only-export-components
 export function createGradientTexture(bg: Extract<Background, { kind: 'gradient' }>): THREE.CanvasTexture {
   const canvas = typeof document !== 'undefined'
     ? document.createElement('canvas')
