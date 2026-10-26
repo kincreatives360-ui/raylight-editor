@@ -1,6 +1,7 @@
 // src/ui/KeyboardShortcutsModal.tsx
 import React, { useState, useMemo } from 'react';
 import { X, Search, Command, Keyboard } from 'lucide-react';
+import { getModifierKey } from '../utils/shortcuts';
 
 export interface ShortcutItem {
   keys: string[];
@@ -189,7 +190,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                         key={`${k}-${kidx}`}
                         className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[10px] font-semibold tracking-tight shadow-xs select-none"
                       >
-                        {k}
+                        {k === '⌘/Ctrl' ? getModifierKey() : k}
                       </kbd>
                     ))}
                   </div>

@@ -34,6 +34,11 @@ import { isMediaRecorderMp4Supported } from './engine/exportCapabilities';
 import { estimateExportMetrics } from './engine/exportMetrics';
 import { preloadProjectFonts } from './engine/fontLoader';
 import { KeyboardShortcutsModal } from './ui/KeyboardShortcutsModal';
+import { CommandMenu, type CommandItem } from './ui/CommandMenu';
+import { UndoToast } from './ui/UndoToast';
+import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
+import { isEditableElement } from './utils/shortcuts';
+import { withViewTransition } from './utils/viewTransitions';
 
 interface StageErrorBoundaryProps {
   children: React.ReactNode;
@@ -97,6 +102,7 @@ export default function App() {
     splitAtPlayhead,
     undo,
     redo,
+    toggleProjectAudioMuted,
     isHydrating,
     setHydrated,
   } = useProjectStore();
@@ -138,6 +144,8 @@ export default function App() {
   const [audioLabel, setAudioLabel] = useState<string>('');
   const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
+  const [commandMenuOpen, setCommandMenuOpen] = useState<boolean>(false);
+  const [undoToast, setUndoToast] = useState<{ message: string; isOpen: boolean }>({ message: '', isOpen: false });
   const [exportModalOpen, setExportModalOpen] = useState<boolean>(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(() => ({
     format: isMediaRecorderMp4Supported() ? 'mp4' : 'webm',
@@ -550,27 +558,23 @@ export default function App() {
     handleResize();
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-  }, [setLeftPanelOpen, setRightSidebarOpen]);
+  }, [toggleLeftPanel, toggleRightSidebar]);
 
   // Global Studio Keyboard Shortcuts
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
       const el = document.activeElement as HTMLElement | null;
-      if (
-        el &&
-        (el.tagName === 'INPUT' ||
-          el.tagName === 'TEXTAREA' ||
-          el.tagName === 'SELECT' ||
-          el.isContentEditable ||
-          el.getAttribute('role') === 'spinbutton' ||
-          el.getAttribute('role') === 'textbox')
-      ) {
+      if (isEditableElement(el)) {
         return;
       }
 
       // Escape: Close shortcuts modal or reset tools/selection
       if (e.key === 'Escape') {
+        if (commandMenuOpen) {
+          setCommandMenuOpen(false);
+          return;
+        }
         if (shortcutsModalOpen) {
           setShortcutsModalOpen(false);
           return;
@@ -591,11 +595,18 @@ export default function App() {
       }
 
       // Suppress all other shortcuts while shortcuts modal is open
-      if (shortcutsModalOpen) {
+      if (shortcutsModalOpen || commandMenuOpen) {
         return;
       }
 
       const key = e.key.toLowerCase();
+
+      // Cmd/Ctrl + K: Open Command Menu (Detail 3)
+      if ((e.metaKey || e.ctrlKey) && key === 'k') {
+        e.preventDefault();
+        setCommandMenuOpen((prev) => !prev);
+        return;
+      }
 
       // Cmd/Ctrl + A: Select All Layers in Active Shot
       if ((e.metaKey || e.ctrlKey) && key === 'a') {
@@ -780,9 +791,14 @@ export default function App() {
         selectedLayerIds.length > 0
       ) {
         e.preventDefault();
+        const count = selectedLayerIds.length;
         deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
         clearLayerSelection();
         setInspectorTab('shot');
+        setUndoToast({
+          message: count === 1 ? 'Deleted layer' : `Deleted ${count} layers`,
+          isOpen: true,
+        });
         return;
       }
 
@@ -1103,6 +1119,122 @@ export default function App() {
     }
   };
 
+
+  const commandList: CommandItem[] = useMemo(() => [
+    {
+      id: 'play-pause',
+      title: isPlaying ? 'Pause Playback' : 'Play Timeline',
+      subtitle: 'Toggle real-time viewport playback',
+      category: 'Playback',
+      icon: Sparkles,
+      shortcut: ['Space'],
+      action: togglePlay,
+    },
+    {
+      id: 'split-clip',
+      title: 'Split Clip at Playhead',
+      subtitle: 'Cut current active shot into two clips',
+      category: 'Editing',
+      icon: Download,
+      shortcut: ['S'],
+      action: () => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs),
+    },
+    {
+      id: 'add-text',
+      title: 'Add Text Layer',
+      subtitle: 'Create new 3D typography layer',
+      category: 'Tools',
+      icon: Sparkles,
+      shortcut: ['T'],
+      action: () => addLayerToShot(activeShot.id, 'text'),
+    },
+    {
+      id: 'add-rect',
+      title: 'Add Rectangle Shape',
+      subtitle: 'Draw rectangular vector geometry',
+      category: 'Tools',
+      icon: Sparkles,
+      shortcut: ['R'],
+      action: () => addLayerToShot(activeShot.id, 'shape'),
+    },
+    {
+      id: 'export-video',
+      title: 'Export Video / GIF / Frame',
+      subtitle: 'Render and save project to disk',
+      category: 'Project',
+      icon: Download,
+      shortcut: ['Mod', 'E'],
+      action: () => setExportModalOpen(true),
+    },
+    {
+      id: 'toggle-zen',
+      title: 'Toggle Zen Mode',
+      subtitle: 'Maximize viewport workspace',
+      category: 'View',
+      icon: Sparkles,
+      shortcut: ['\\'],
+      action: () => {
+        withViewTransition(() => {
+          toggleLeftPanel();
+          toggleRightSidebar();
+        });
+      },
+    },
+    {
+      id: 'toggle-left-panel',
+      title: 'Toggle Left Sidebar',
+      subtitle: 'Show/hide layers and audio assets',
+      category: 'View',
+      icon: PanelLeftOpen,
+      shortcut: ['['],
+      action: toggleLeftPanel,
+    },
+    {
+      id: 'toggle-right-sidebar',
+      title: 'Toggle Right Inspector',
+      subtitle: 'Show/hide scene and layer properties',
+      category: 'View',
+      icon: PanelRightOpen,
+      shortcut: [']'],
+      action: toggleRightSidebar,
+    },
+    {
+      id: 'undo',
+      title: 'Undo Last Action',
+      subtitle: 'Revert previous project edit',
+      category: 'Editing',
+      icon: Sparkles,
+      shortcut: ['Mod', 'Z'],
+      action: undo,
+    },
+    {
+      id: 'redo',
+      title: 'Redo Action',
+      subtitle: 'Re-apply previously undone edit',
+      category: 'Editing',
+      icon: Sparkles,
+      shortcut: ['Mod', 'Shift', 'Z'],
+      action: redo,
+    },
+    {
+      id: 'toggle-audio-mute',
+      title: project.audio?.muted ? 'Unmute Audio' : 'Mute Audio',
+      subtitle: 'Toggle master audio volume',
+      category: 'Project',
+      icon: Sparkles,
+      action: toggleProjectAudioMuted,
+    },
+    {
+      id: 'keyboard-shortcuts',
+      title: 'Keyboard Shortcuts Guide',
+      subtitle: 'View cheat sheet of all keybindings',
+      category: 'Project',
+      icon: Sparkles,
+      shortcut: ['?'],
+      action: () => setShortcutsModalOpen(true),
+    },
+  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, undo, redo, project.audio?.muted, toggleProjectAudioMuted, setLeftPanelOpen, setRightSidebarOpen]);
+
   return (
     <div className="flex h-screen w-screen flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
@@ -1231,7 +1363,7 @@ export default function App() {
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
         <main className="flex-1 flex flex-col min-w-0 h-full bg-[#111114]">
           <StageErrorBoundary>
-            <Suspense fallback={<div className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />}>
+            <Suspense fallback={<StageSkeletonLoader />}>
               <Stage
                 project={project}
                 frame={frame}
@@ -1558,6 +1690,13 @@ export default function App() {
       )}
 
       {/* KEYBOARD SHORTCUTS MODAL */}
+      <UndoToast
+        message={undoToast.message}
+        isOpen={undoToast.isOpen}
+        onUndo={undo}
+        onDismiss={() => setUndoToast((prev) => ({ ...prev, isOpen: false }))}
+      />
+      <CommandMenu isOpen={commandMenuOpen} onClose={() => setCommandMenuOpen(false)} commands={commandList} />
       <KeyboardShortcutsModal
         isOpen={shortcutsModalOpen}
         onClose={() => setShortcutsModalOpen(false)}
