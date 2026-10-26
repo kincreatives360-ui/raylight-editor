@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useCallback } from 'react';
 import type { Shot, CameraKeyframeEndpoint, CameraBlock } from '../model/types';
 import { Film, Focus, SlidersHorizontal, X } from 'lucide-react';
 import { getArtboardDimensions, computeFramingBox } from './stageUtils';
@@ -12,6 +12,7 @@ import {
     detectMatchingPreset,
     applyCameraPreset,
     applyCameraMovementPreset,
+    getMovementPresetIdByLabel,
     focalLengthToFov,
     LENS_PRESETS,
     type CameraPreset,
@@ -51,6 +52,21 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     const scaleY = frameHeight / artboardHeight;
     const [popoverEndpoint, setPopoverEndpoint] = useState<'from' | 'to' | null>(null);
     const [movementMenuOpen, setMovementMenuOpen] = useState(false);
+
+    const handleApplyMovement = useCallback(
+        (moveId: CameraMovementId) => {
+            if (!moveId || !selectedCameraBlockId) return;
+            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
+            updateShot(shot.id, (s) => ({
+                ...s,
+                cameraBlocks: (s.cameraBlocks || []).map((b) => {
+                    if (b.id !== selectedCameraBlockId) return b;
+                    return applyCameraMovementPreset(b, moveId, { artboardDimensions, preserveDuration: true });
+                }),
+            }));
+        },
+        [artboardWidth, artboardHeight, selectedCameraBlockId, shot.id, updateShot]
+    );
 
     const [activeDrag, setActiveDrag] = useState<{
         which: 'from' | 'to';
@@ -110,6 +126,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
     const activeFromPreset = detectMatchingPreset(fromEp);
     const activeToPreset = detectMatchingPreset(toEp);
+    const selectedMovementId = getMovementPresetIdByLabel(activeBlock.label);
 
     const patchEndpoint = (
         which: 'from' | 'to',
@@ -453,16 +470,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     </div>
                     <select
                         aria-label="Movement preset"
-                        value={CAMERA_MOVEMENT_PRESETS.some((m) => m.name === activeBlock.label) ? CAMERA_MOVEMENT_PRESETS.find((m) => m.name === activeBlock.label)?.id : ''}
+                        value={selectedMovementId ?? ''}
                         onChange={(e) => {
                             const moveId = e.target.value as CameraMovementId;
-                            if (!moveId) return;
-                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                            const updated = applyCameraMovementPreset(activeBlock, moveId, { artboardDimensions, preserveDuration: true });
-                            updateShot(shot.id, (s) => ({
-                                ...s,
-                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
-                            }));
+                            if (moveId) handleApplyMovement(moveId);
                         }}
                         className="w-full px-2 py-1 rounded bg-[#1c1c21] border border-white/10 text-[11px] text-[#d4d4d8] hover:border-white/20 focus:outline-none cursor-pointer"
                     >
@@ -897,6 +908,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                             <button
                                 type="button"
                                 onClick={() => setMovementMenuOpen(false)}
+                                aria-label="Close"
                                 className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
                                 title="Close"
                             >
@@ -906,16 +918,11 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                         {/* Presets Select Dropdown */}
                         <select
-                            value={CAMERA_MOVEMENT_PRESETS.some((m) => m.name === activeBlock.label) ? CAMERA_MOVEMENT_PRESETS.find((m) => m.name === activeBlock.label)?.id : ''}
+                            aria-label="Select camera movement preset"
+                            value={selectedMovementId ?? ''}
                             onChange={(e) => {
                                 const moveId = e.target.value as CameraMovementId;
-                                if (!moveId) return;
-                                const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                const updated = applyCameraMovementPreset(activeBlock, moveId, { artboardDimensions, preserveDuration: true });
-                                updateShot(shot.id, (s) => ({
-                                    ...s,
-                                    cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
-                                }));
+                                if (moveId) handleApplyMovement(moveId);
                             }}
                             className="w-full px-2 py-1 rounded bg-[#1c1c21] border border-white/10 text-[11px] text-[#d4d4d8] hover:border-white/20 focus:outline-none cursor-pointer"
                         >
@@ -959,49 +966,45 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                                     { id: 'truck-right', label: 'Truck R' },
                                     { id: 'pedestal-up', label: 'Ped Up' },
                                     { id: 'pedestal-down', label: 'Ped Down' },
-                                ].map((btn) => (
-                                    <button
-                                        key={btn.id}
-                                        type="button"
-                                        onClick={() => {
-                                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                            const updated = applyCameraMovementPreset(activeBlock, btn.id as CameraMovementId, { artboardDimensions, preserveDuration: true });
-                                            updateShot(shot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
-                                            }));
-                                        }}
-                                        className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
-                                            activeBlock.label === btn.label || (btn.id === 'pan-left' && activeBlock.label === 'Pan Left') || (btn.id === 'pan-right' && activeBlock.label === 'Pan Right') || (btn.id === 'tilt-up' && activeBlock.label === 'Tilt Up') || (btn.id === 'tilt-down' && activeBlock.label === 'Tilt Down') || (btn.id === 'dolly-in' && activeBlock.label === 'Dolly In') || (btn.id === 'dolly-out' && activeBlock.label === 'Dolly Out') || (btn.id === 'truck-left' && activeBlock.label === 'Truck Left') || (btn.id === 'truck-right' && activeBlock.label === 'Truck Right') || (btn.id === 'pedestal-up' && activeBlock.label === 'Pedestal Up') || (btn.id === 'pedestal-down' && activeBlock.label === 'Pedestal Down') || (btn.id === 'zoom-in' && activeBlock.label === 'Zoom In') || (btn.id === 'zoom-out' && activeBlock.label === 'Zoom Out')
-                                                ? 'bg-sky-500 text-black font-semibold'
-                                                : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
-                                        }`}
-                                    >
-                                        {btn.label}
-                                    </button>
-                                ))}
+                                ].map((btn) => {
+                                    const isSelected = selectedMovementId === btn.id;
+                                    return (
+                                        <button
+                                            key={btn.id}
+                                            type="button"
+                                            onClick={() => handleApplyMovement(btn.id as CameraMovementId)}
+                                            className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                                isSelected
+                                                    ? 'bg-sky-500 text-black font-semibold'
+                                                    : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                            }`}
+                                        >
+                                            {btn.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                             <div className="grid grid-cols-2 gap-1 pt-0.5">
                                 {[
                                     { id: 'dolly-zoom-in', label: 'Vertigo (Dolly Zoom)' },
                                     { id: 'handheld-sway', label: 'Handheld Sway' },
-                                ].map((btn) => (
-                                    <button
-                                        key={btn.id}
-                                        type="button"
-                                        onClick={() => {
-                                            const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                            const updated = applyCameraMovementPreset(activeBlock, btn.id as CameraMovementId, { artboardDimensions, preserveDuration: true });
-                                            updateShot(shot.id, (s) => ({
-                                                ...s,
-                                                cameraBlocks: (s.cameraBlocks || []).map((b) => (b.id === activeBlock.id ? updated : b)),
-                                            }));
-                                        }}
-                                        className="py-1 px-1 rounded text-[10px] font-mono bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5 cursor-pointer text-center truncate"
-                                    >
-                                        {btn.label}
-                                    </button>
-                                ))}
+                                ].map((btn) => {
+                                    const isSelected = selectedMovementId === btn.id;
+                                    return (
+                                        <button
+                                            key={btn.id}
+                                            type="button"
+                                            onClick={() => handleApplyMovement(btn.id as CameraMovementId)}
+                                            className={`py-1 px-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
+                                                isSelected
+                                                    ? 'bg-sky-500 text-black font-semibold'
+                                                    : 'bg-[#1c1c21] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                            }`}
+                                        >
+                                            {btn.label}
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </div>

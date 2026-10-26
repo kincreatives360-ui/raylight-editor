@@ -4,6 +4,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { CameraBlockSection } from './CameraBlockSection';
 import { createDefaultCameraBlock } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
+import {
+    applyCameraMovementPreset,
+    getMovementPresetIdByLabel,
+} from '../../../stage/webgl/cameraMath';
 
 describe('CameraBlockSection Inspector UI', () => {
     it('renders Movement Preset section with dropdown categories and quick moves', () => {
@@ -41,11 +45,89 @@ describe('CameraBlockSection Inspector UI', () => {
         expect(html).toContain('Vertigo (Dolly Zoom)');
         expect(html).toContain('Handheld Sway');
 
-        // Physics mode
+        // Physics mode radiogroup uniquely identified by role and label
         expect(html).toContain('Physics / Projection Mode');
-        expect(html).toContain('Dolly');
-        expect(html).toContain('Zoom');
-        expect(html).toContain('Warp');
+        expect(html).toContain('role="radiogroup" aria-label="Camera move mode"');
+        expect(html).toContain('role="radio" aria-checked="true"');
+        expect(html).toMatch(/role="radio"[^>]*>Dolly<\/button>/);
+        expect(html).toMatch(/role="radio"[^>]*>Zoom<\/button>/);
+        expect(html).toMatch(/role="radio"[^>]*>Warp<\/button>/);
+    });
+
+    it('applies movement preset via applyCameraMovementPreset updating block framing, mode, and label', () => {
+        const block = createDefaultCameraBlock('block-interactive', 0, 2000);
+        const artboardDimensions = { width: 1920, height: 1080 };
+
+        // 1. Select Dolly In (physical forward translation)
+        const updatedDolly = applyCameraMovementPreset(block, 'dolly-in', {
+            artboardDimensions,
+            preserveDuration: true,
+        });
+
+        expect(updatedDolly.label).toBe('Dolly In');
+        expect(updatedDolly.mode).toBe('dolly');
+        expect(updatedDolly.to?.anchorZ).toBeGreaterThan(updatedDolly.from?.anchorZ ?? 0);
+        expect(getMovementPresetIdByLabel(updatedDolly.label)).toBe('dolly-in');
+
+        // 2. Select Zoom In (optical FOV zoom)
+        const updatedZoom = applyCameraMovementPreset(block, 'zoom-in', {
+            artboardDimensions,
+            preserveDuration: true,
+        });
+        expect(updatedZoom.label).toBe('Zoom In');
+        expect(updatedZoom.mode).toBe('zoom');
+        expect(updatedZoom.to?.zoom).toBeGreaterThan(updatedZoom.from?.zoom ?? 1);
+        expect(getMovementPresetIdByLabel(updatedZoom.label)).toBe('zoom-in');
+
+        // Render Inspector with the updated Dolly In block and verify it highlights the Dolly In quick button
+        const dollyHtml = renderToStaticMarkup(
+            <CameraBlockSection
+                activeShotId="shot-1"
+                activeCameraBlock={updatedDolly}
+                onDone={() => {}}
+            />
+        );
+        expect(dollyHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Dolly In">Dolly In</button>');
+
+        // 2. Select Pan Left
+        const updatedPan = applyCameraMovementPreset(block, 'pan-left', {
+            artboardDimensions,
+            preserveDuration: true,
+        });
+
+        expect(updatedPan.label).toBe('Pan Left');
+        expect(updatedPan.mode).toBe('dolly');
+        expect(updatedPan.to?.orbit).toBeLessThan(updatedPan.from?.orbit ?? 0);
+        expect(getMovementPresetIdByLabel(updatedPan.label)).toBe('pan-left');
+
+        // Render Inspector with Pan Left block and verify it highlights the Pan L quick button
+        const panHtml = renderToStaticMarkup(
+            <CameraBlockSection
+                activeShotId="shot-1"
+                activeCameraBlock={updatedPan}
+                onDone={() => {}}
+            />
+        );
+        expect(panHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Pan L">Pan L</button>');
+
+        // 3. Select Vertigo (Dolly Zoom In)
+        const updatedVertigo = applyCameraMovementPreset(block, 'dolly-zoom-in', {
+            artboardDimensions,
+            preserveDuration: true,
+        });
+
+        expect(updatedVertigo.label).toBe('Vertigo (Dolly In / Zoom Out)');
+        expect(updatedVertigo.mode).toBe('dollyzoom');
+        expect(getMovementPresetIdByLabel(updatedVertigo.label)).toBe('dolly-zoom-in');
+
+        const vertigoHtml = renderToStaticMarkup(
+            <CameraBlockSection
+                activeShotId="shot-1"
+                activeCameraBlock={updatedVertigo}
+                onDone={() => {}}
+            />
+        );
+        expect(vertigoHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Vertigo (Dolly Zoom)">Vertigo (Dolly Zoom)</button>');
     });
 
     it('renders all 4 visual preset optgroups in From and To endpoint selectors', () => {

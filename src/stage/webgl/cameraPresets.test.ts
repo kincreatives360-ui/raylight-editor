@@ -5,6 +5,7 @@ import {
     CAMERA_MOVEMENT_PRESETS,
     applyCameraPreset,
     applyCameraMovementPreset,
+    getMovementPresetIdByLabel,
     calculateLayersBoundingFraming,
     calculateLayerFraming,
     detectMatchingPreset,
@@ -461,6 +462,40 @@ describe('Unified Camera Presets & Framing System', () => {
 
             const defaultDur = applyCameraMovementPreset(block, 'pan-right', { preserveDuration: false });
             expect(defaultDur.durationMs).toBe(1800);
+        });
+
+        it('resolves preset IDs from labels and aliases with getMovementPresetIdByLabel', () => {
+            // Exact preset names
+            expect(getMovementPresetIdByLabel('Zoom In')).toBe('zoom-in');
+            expect(getMovementPresetIdByLabel('Zoom Out')).toBe('zoom-out');
+            expect(getMovementPresetIdByLabel('Pan Left')).toBe('pan-left');
+            expect(getMovementPresetIdByLabel('Pan Right')).toBe('pan-right');
+            expect(getMovementPresetIdByLabel('Tilt Up')).toBe('tilt-up');
+            expect(getMovementPresetIdByLabel('Tilt Down')).toBe('tilt-down');
+            expect(getMovementPresetIdByLabel('Dolly In')).toBe('dolly-in');
+            expect(getMovementPresetIdByLabel('Dolly Out')).toBe('dolly-out');
+            expect(getMovementPresetIdByLabel('Truck Left')).toBe('truck-left');
+            expect(getMovementPresetIdByLabel('Truck Right')).toBe('truck-right');
+            expect(getMovementPresetIdByLabel('Pedestal Up')).toBe('pedestal-up');
+            expect(getMovementPresetIdByLabel('Pedestal Down')).toBe('pedestal-down');
+            expect(getMovementPresetIdByLabel('Vertigo (Dolly In / Zoom Out)')).toBe('dolly-zoom-in');
+            expect(getMovementPresetIdByLabel('Vertigo (Dolly Out / Zoom In)')).toBe('dolly-zoom-out');
+            expect(getMovementPresetIdByLabel('Handheld Organic Sway')).toBe('handheld-sway');
+
+            // Quick button labels & aliases
+            expect(getMovementPresetIdByLabel('Pan L')).toBe('pan-left');
+            expect(getMovementPresetIdByLabel('Pan R')).toBe('pan-right');
+            expect(getMovementPresetIdByLabel('Truck L')).toBe('truck-left');
+            expect(getMovementPresetIdByLabel('Truck R')).toBe('truck-right');
+            expect(getMovementPresetIdByLabel('Ped Up')).toBe('pedestal-up');
+            expect(getMovementPresetIdByLabel('Ped Down')).toBe('pedestal-down');
+            expect(getMovementPresetIdByLabel('Vertigo (Dolly Zoom)')).toBe('dolly-zoom-in');
+            expect(getMovementPresetIdByLabel('Handheld Sway')).toBe('handheld-sway');
+
+            // Unknown or undefined
+            expect(getMovementPresetIdByLabel(undefined)).toBeUndefined();
+            expect(getMovementPresetIdByLabel('')).toBeUndefined();
+            expect(getMovementPresetIdByLabel('Custom Camera Move')).toBeUndefined();
         });
     });
 });

@@ -573,6 +573,49 @@ export const CAMERA_MOVEMENT_PRESETS: CameraMovementPreset[] = [
     },
 ];
 
+/**
+ * Resolves a CameraMovementId from a movement label or preset name.
+ * Handles exact preset name matches, prefix matching (e.g. Vertigo variants),
+ * and common aliases (e.g. Handheld Sway, abbreviated button labels).
+ */
+export function getMovementPresetIdByLabel(label?: string): CameraMovementId | undefined {
+    if (!label) return undefined;
+    const exact = CAMERA_MOVEMENT_PRESETS.find((m) => m.name === label);
+    if (exact) return exact.id;
+
+    if (label.startsWith('Vertigo (Dolly Out') || label.includes('Dolly Out / Zoom In')) {
+        return 'dolly-zoom-out';
+    }
+    if (label.startsWith('Vertigo') || label.includes('Dolly Zoom')) {
+        return 'dolly-zoom-in';
+    }
+    if (label === 'Handheld Sway' || label === 'Handheld Organic Sway') {
+        return 'handheld-sway';
+    }
+
+    const aliasMap: Record<string, CameraMovementId> = {
+        'Zoom In': 'zoom-in',
+        'Zoom Out': 'zoom-out',
+        'Pan L': 'pan-left',
+        'Pan Left': 'pan-left',
+        'Pan R': 'pan-right',
+        'Pan Right': 'pan-right',
+        'Tilt Up': 'tilt-up',
+        'Tilt Down': 'tilt-down',
+        'Dolly In': 'dolly-in',
+        'Dolly Out': 'dolly-out',
+        'Truck L': 'truck-left',
+        'Truck Left': 'truck-left',
+        'Truck R': 'truck-right',
+        'Truck Right': 'truck-right',
+        'Ped Up': 'pedestal-up',
+        'Pedestal Up': 'pedestal-up',
+        'Ped Down': 'pedestal-down',
+        'Pedestal Down': 'pedestal-down',
+    };
+    return aliasMap[label];
+}
+
 export interface ApplyCameraMovementOptions {
     artboardDimensions?: { width: number; height: number };
     preserveDuration?: boolean;
