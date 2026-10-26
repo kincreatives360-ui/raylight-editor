@@ -10,6 +10,7 @@ import {
 } from './projectIO';
 import { DEFAULT_PROJECT, createDefaultShot } from '../model/defaults';
 import type { Project } from '../model/types';
+import * as opfsStorage from './opfsStorage';
 
 describe('Project IO Storage & File Operations', () => {
   const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
@@ -370,6 +371,86 @@ describe('Project IO Storage & File Operations', () => {
     expect(loaded).not.toBeNull();
     expect(loaded?.assets['asset-stale']).toBeDefined();
     expect(loaded?.assets['asset-stale'].dataUrl).toBe('data:image/png;base64,staleData');
+  });
+
+  it('11. saveProjectToIndexedDB waits for OPFS operations to settle even if one rejects', async () => {
+    const saveOpfsSpy = vi.spyOn(opfsStorage, 'saveMediaToOPFS').mockRejectedValue(new Error('Disk full'));
+
+    const projectStoreMap: Record<string, unknown> = {};
+    const assetStoreMap: Record<string, unknown> = {};
+
+    const mockProjectStore = {
+      put: vi.fn((rec: { id: string; project: unknown }) => {
+        projectStoreMap[rec.id] = rec;
+      }),
+    };
+
+    const mockAssetStore = {
+      put: vi.fn((asset: { id: string }) => {
+        assetStoreMap[asset.id] = asset;
+      }),
+      delete: vi.fn(),
+      getAllKeys: vi.fn(() => ({
+        result: [],
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    const mockTx = {
+      objectStore: vi.fn((name: string) =>
+        name === 'projects' ? mockProjectStore : mockAssetStore
+      ),
+      set oncomplete(cb: () => void) {
+        cb();
+      },
+      onerror: null,
+    };
+
+    const mockDb = {
+      transaction: vi.fn(() => mockTx),
+      objectStoreNames: {
+        contains: () => true,
+      },
+      close: vi.fn(),
+    };
+
+    const mockIdb = {
+      open: vi.fn(() => ({
+        result: mockDb,
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: mockLocalStorage,
+      indexedDB: mockIdb,
+    };
+
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-error-test',
+      assets: {
+        'asset-fail': {
+          id: 'asset-fail',
+          name: 'fail.png',
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,failData',
+          width: 100,
+          height: 100,
+        },
+      },
+    };
+
+    const saved = await saveProjectToIndexedDB(project);
+    expect(saved).toBe(true);
+    expect(saveOpfsSpy).toHaveBeenCalledWith('asset-fail', 'data:image/png;base64,failData');
+    expect(mockAssetStore.put).toHaveBeenCalledWith(project.assets['asset-fail']);
+
+    saveOpfsSpy.mockRestore();
   });
 });
 

@@ -174,6 +174,15 @@ describe('Audio Engine Waveform Generation & Peak Clamping', () => {
         // LRU Cache returns identical array reference on repeated queries
         expect(peaks1).toBe(peaks2);
 
+        // Renaming a clip produces a different waveform contour and cache entry
+        const clipRenamed: AudioClip = {
+            ...clipA,
+            name: 'Ambient Groove Remastered',
+        };
+        const peaksRenamed = generateWaveformPeaks(clipRenamed, 32);
+        expect(peaksRenamed).not.toEqual(peaks1);
+        expect(peaksRenamed).not.toBe(peaks1);
+
         // After clearing cache, new instance is returned but with identical values
         clearWaveformCache();
         const peaksFresh = generateWaveformPeaks(clipA, 32);

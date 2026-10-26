@@ -86,6 +86,54 @@ class StageErrorBoundary extends React.Component<StageErrorBoundaryProps, StageE
   }
 }
 
+interface ModalErrorBoundaryProps {
+  onClose: () => void;
+  title: string;
+  children: React.ReactNode;
+}
+
+interface ModalErrorBoundaryState {
+  hasError: boolean;
+  error?: Error;
+}
+
+class ModalErrorBoundary extends React.Component<ModalErrorBoundaryProps, ModalErrorBoundaryState> {
+  constructor(props: ModalErrorBoundaryProps) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error): ModalErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-sm rounded-2xl bg-[#121216] border border-red-500/30 p-5 space-y-3 text-center text-xs">
+            <div className="text-sm font-semibold text-white">Failed to load {this.props.title}</div>
+            <p className="text-zinc-400 text-[11px]">
+              {this.state.error?.message || 'A network error occurred while loading this dialog.'}
+            </p>
+            <button
+              type="button"
+              onClick={() => {
+                this.setState({ hasError: false });
+                this.props.onClose();
+              }}
+              className="px-4 py-1.5 rounded-lg bg-[#27272a] hover:bg-[#3f3f46] text-white text-xs font-medium transition cursor-pointer"
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 export default function App() {
   const {
     project,
@@ -1497,23 +1545,25 @@ export default function App() {
 
       {/* EXPORT / SHARE MODAL */}
       {exportModalOpen && (
-        <Suspense fallback={null}>
-          <ExportModal
-            isOpen={exportModalOpen}
-            onClose={() => setExportModalOpen(false)}
-            exportSettings={exportSettings}
-            setExportSettings={setExportSettings}
-            exportMetrics={exportMetrics}
-            project={project}
-            activeShot={activeShot}
-            exporting={exporting}
-            exportProgressText={exportProgressText}
-            exportPercent={exportPercent}
-            exportError={exportError}
-            onStartExport={handleStartExport}
-            onCancelExport={() => exportAbortRef.current?.abort()}
-          />
-        </Suspense>
+        <ModalErrorBoundary title="Export Dialog" onClose={() => setExportModalOpen(false)}>
+          <Suspense fallback={null}>
+            <ExportModal
+              isOpen={exportModalOpen}
+              onClose={() => setExportModalOpen(false)}
+              exportSettings={exportSettings}
+              setExportSettings={setExportSettings}
+              exportMetrics={exportMetrics}
+              project={project}
+              activeShot={activeShot}
+              exporting={exporting}
+              exportProgressText={exportProgressText}
+              exportPercent={exportPercent}
+              exportError={exportError}
+              onStartExport={handleStartExport}
+              onCancelExport={() => exportAbortRef.current?.abort()}
+            />
+          </Suspense>
+        </ModalErrorBoundary>
       )}
 
       {/* KEYBOARD SHORTCUTS MODAL */}
@@ -1525,12 +1575,14 @@ export default function App() {
       />
       <CommandMenu isOpen={commandMenuOpen} onClose={() => setCommandMenuOpen(false)} commands={commandList} />
       {shortcutsModalOpen && (
-        <Suspense fallback={null}>
-          <KeyboardShortcutsModal
-            isOpen={shortcutsModalOpen}
-            onClose={() => setShortcutsModalOpen(false)}
-          />
-        </Suspense>
+        <ModalErrorBoundary title="Shortcuts Guide" onClose={() => setShortcutsModalOpen(false)}>
+          <Suspense fallback={null}>
+            <KeyboardShortcutsModal
+              isOpen={shortcutsModalOpen}
+              onClose={() => setShortcutsModalOpen(false)}
+            />
+          </Suspense>
+        </ModalErrorBoundary>
       )}
     </div>
   );

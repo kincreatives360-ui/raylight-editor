@@ -61,6 +61,18 @@ interface ColorPickerProps {
     disabled?: boolean;
 }
 
+const stopIdMap = new WeakMap<GradientStop, string>();
+let nextStopId = 1;
+
+function getStopId(stop: GradientStop): string {
+    let id = stopIdMap.get(stop);
+    if (!id) {
+        id = `stop-id-${nextStopId++}`;
+        stopIdMap.set(stop, id);
+    }
+    return id;
+}
+
 export const ColorPicker: React.FC<ColorPickerProps> = ({
     color,
     onChange,
@@ -201,6 +213,50 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         draggingSquareRef.current = false;
     };
 
+    const handleSquareKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
+        let deltaS = 0;
+        let deltaV = 0;
+        const step = event.shiftKey ? 0.05 : 0.01;
+
+        switch (event.key) {
+            case 'ArrowLeft':
+                deltaS = -step;
+                break;
+            case 'ArrowRight':
+                deltaS = step;
+                break;
+            case 'ArrowUp':
+                deltaV = step;
+                break;
+            case 'ArrowDown':
+                deltaV = -step;
+                break;
+            case 'PageUp':
+                deltaV = 0.1;
+                break;
+            case 'PageDown':
+                deltaV = -0.1;
+                break;
+            case 'Home':
+                deltaS = -hsvRef.current.s;
+                break;
+            case 'End':
+                deltaS = 1 - hsvRef.current.s;
+                break;
+            default:
+                return;
+        }
+
+        event.preventDefault();
+        const nextS = Math.max(0, Math.min(1, Math.round((hsvRef.current.s + deltaS) * 100) / 100));
+        const nextV = Math.max(0, Math.min(1, Math.round((hsvRef.current.v + deltaV) * 100) / 100));
+        const next = { ...hsvRef.current, s: nextS, v: nextV };
+        setHsv(next);
+        const nextColor = hsvToHex(next);
+        setHexDraft(nextColor);
+        onChange(nextColor);
+    };
+
     const handleHuePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
         event.stopPropagation();
@@ -256,7 +312,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
     const updateGradient = (next: GradientValue) => onGradientChange?.(next);
     const updateStop = (index: number, patch: Partial<GradientStop>) => {
-        const stops = gradient.stops.map((stop, stopIndex) => stopIndex === index ? { ...stop, ...patch } : stop);
+        const oldStop = gradient.stops[index];
+        const stableId = oldStop ? getStopId(oldStop) : `stop-id-${nextStopId++}`;
+        const newStop = { ...oldStop, ...patch };
+        stopIdMap.set(newStop, stableId);
+        const stops = gradient.stops.map((stop, stopIndex) => (stopIndex === index ? newStop : stop));
         updateGradient({ ...gradient, stops });
     };
     const enterGradientMode = () => {
@@ -369,6 +429,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             aria-valuenow={Math.round(hsv.v * 100)}
                             aria-valuetext={hexDraft}
                             tabIndex={0}
+                            onKeyDown={handleSquareKeyDown}
                             onPointerDown={handleSquarePointerDown}
                             onPointerMove={handleSquarePointerMove}
                             onPointerUp={handleSquarePointerUp}
@@ -498,11 +559,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             onPointerCancel={(event) => { delete event.currentTarget.dataset.dragStop; }}
                             onLostPointerCapture={(event) => { delete (event.currentTarget as SVGSVGElement).dataset.dragStop; }}
                         >
-                            {gradient.stops.map((stop, index) => {
+                            {gradient.stops.map((stop) => {
                                 const cx = 12 + stop.at * (300 - 24);
                                 return (
                                     <circle
-                                        key={`gradient-stop-${index}`}
+                                        key={`gradient-circle-${getStopId(stop)}`}
                                         cx={cx}
                                         cy="18"
                                         r="7.5"
@@ -528,7 +589,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                     const gap = sorted[index + 1].at - sorted[index].at;
                                     if (gap > 0.01) { at = sorted[index].at + gap / 2; break; }
                                 }
-                                updateGradient({ ...gradient, stops: [...gradient.stops, { at, color: '#ffffff', opacity: 1 }].sort((a, b) => a.at - b.at) });
+                                const newStop: GradientStop = { at, color: '#ffffff', opacity: 1 };
+                                const newId = `stop-id-${nextStopId++}`;
+                                stopIdMap.set(newStop, newId);
+                                updateGradient({ ...gradient, stops: [...gradient.stops, newStop].sort((a, b) => a.at - b.at) });
                             }}
                             className="grid h-7 w-7 place-items-center rounded-md bg-[var(--bg-subtle,#1c1c1f)] text-white hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100"
                         >
@@ -537,7 +601,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     </div>
                     <div className="max-h-[180px] space-y-1 overflow-y-auto">
                         {gradient.stops.map((stop, index) => (
-                            <div key={`stop-${stop.at.toFixed(3)}-${stop.color.replace('#', '')}-${index}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
+                            <div key={getStopId(stop)} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
                                 <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
                                     <input
                                         aria-label={`Stop ${index + 1} position`}

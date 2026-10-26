@@ -36,8 +36,24 @@ let isCurrentlyPlaying = false;
 const waveformPeakCache = new Map<string, number[]>();
 const MAX_WAVEFORM_CACHE_ENTRIES = 512;
 
+// Compact identity mapping for data URLs to avoid embedding massive base64 strings into cache keys
+const urlIdMap = new Map<string, number>();
+let nextUrlId = 1;
+
+function getUrlCompactId(url: string | undefined): string {
+  if (!url) return '';
+  let id = urlIdMap.get(url);
+  if (!id) {
+    id = nextUrlId++;
+    urlIdMap.set(url, id);
+  }
+  return `u${id}`;
+}
+
 export function clearWaveformCache(): void {
   waveformPeakCache.clear();
+  urlIdMap.clear();
+  nextUrlId = 1;
 }
 
 /**
@@ -49,7 +65,8 @@ export function generateWaveformPeaks(clip: AudioClip, count: number): number[] 
   const barsCount = Math.max(16, count);
   const cachedBuffer = clip.dataUrl ? audioBufferCache.get(clip.dataUrl) : null;
   const hasBuffer = Boolean(cachedBuffer);
-  const cacheKey = `${clip.id}:${clip.offsetMs}:${clip.durationMs}:${clip.dataUrl || ''}:${hasBuffer ? 'buf' : 'proc'}:${barsCount}`;
+  const urlId = getUrlCompactId(clip.dataUrl);
+  const cacheKey = `${clip.id}:${clip.name}:${clip.offsetMs}:${clip.durationMs}:${urlId}:${hasBuffer ? 'buf' : 'proc'}:${barsCount}`;
 
   const cachedPeaks = waveformPeakCache.get(cacheKey);
   if (cachedPeaks) {
@@ -127,9 +144,13 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     audioBufferCache.set(dataUrl, audioBuffer);
     // Invalidate any procedural peak entries for this dataUrl so the newly decoded buffer is used
-    for (const key of Array.from(waveformPeakCache.keys())) {
-      if (key.includes(dataUrl) && key.includes(':proc:')) {
-        waveformPeakCache.delete(key);
+    const compactId = urlIdMap.get(dataUrl);
+    if (compactId) {
+      const matchPattern = `:u${compactId}:proc:`;
+      for (const key of Array.from(waveformPeakCache.keys())) {
+        if (key.includes(matchPattern)) {
+          waveformPeakCache.delete(key);
+        }
       }
     }
     return audioBuffer;

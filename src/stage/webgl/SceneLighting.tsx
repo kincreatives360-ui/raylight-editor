@@ -121,7 +121,7 @@ const SpotGizmoLine: React.FC<{
     );
 };
 
-const AreaGizmo: React.FC<{
+export const AreaGizmo: React.FC<{
     position: [number, number, number];
     width: number;
     height: number;
