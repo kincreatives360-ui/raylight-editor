@@ -43,4 +43,12 @@ describe('useSelectionStore - Light Selection', () => {
         expect(useSelectionStore.getState().selectedLightId).toBeNull();
         expect(useSelectionStore.getState().selectedLayerIds).toEqual(['layer-2']);
     });
+
+    it('clears selectedLightId when clearLayerSelection is called', () => {
+        useSelectionStore.getState().selectLight('spot-2');
+        expect(useSelectionStore.getState().selectedLightId).toBe('spot-2');
+
+        useSelectionStore.getState().clearLayerSelection();
+        expect(useSelectionStore.getState().selectedLightId).toBeNull();
+    });
 });

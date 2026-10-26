@@ -1230,6 +1230,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const fontInputRef = useRef<HTMLInputElement>(null);
 
+    const isSelectedLightValid = Boolean(
+        selectedLightId && (
+            selectedLightId === 'sun-key' ||
+            selectedLightId === 'key' ||
+            selectedLightId === 'sun' ||
+            activeShot?.light?.sources?.some((s) => s.id === selectedLightId)
+        )
+    );
+
+    useEffect(() => {
+        if (selectedLightId && !isSelectedLightValid) {
+            selectLight(null);
+        }
+    }, [selectedLightId, isSelectedLightValid, selectLight]);
+
     const refStageW = 1920;
     const refStageH = 1080;
     const aspectSpec = ASPECT_RATIO_CONFIG[project.aspectRatio];
@@ -3586,7 +3601,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         </div>
                     )}
                 </>
-            ) : selectedLightId ? (
+            ) : selectedLightId && isSelectedLightValid ? (
                 <LightInspector
                     activeShot={activeShot}
                     selectedLightId={selectedLightId}

@@ -145,4 +145,55 @@ describe('LightInspector Component', () => {
         expect(html).toContain('data-testid="light-inspector"');
         expect(html).toContain('Cast shadows');
     });
+
+    it('disables Type and Color controls when selected light is Sun', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const html = renderToStaticMarkup(
+            <LightInspector activeShot={shot} selectedLightId="sun-key" onClose={() => {}} />
+        );
+
+        // Type select should have disabled attribute and not allow changing light type for Sun
+        expect(html).toMatch(/<select[^>]*disabled/);
+        // ColorPicker trigger button should have disabled attribute for Sun
+        expect(html).toMatch(/<button[^>]*aria-label="Color: #ffffff"[^>]*disabled/);
+    });
+
+    it('removes inert Strength and Soft controls from Shadows section', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const html = renderToStaticMarkup(
+            <LightInspector activeShot={shot} selectedLightId="spot-1" onClose={() => {}} />
+        );
+
+        expect(html).toContain('Cast shadows');
+        // Shadows section should only contain Cast shadows toggle, not inert inputs
+        expect(html).not.toContain('label="Strength"');
+    });
+
+    it('returns null when selectedLightId is not found', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const html = renderToStaticMarkup(
+            <LightInspector activeShot={shot} selectedLightId="missing-light" onClose={() => {}} />
+        );
+
+        expect(html).toBe('');
+    });
+
+    it('RightSidebar falls through to ProjectSettingsPanel when selectedLightId is invalid', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        useSelectionStore.getState().selectLight('non-existent-source');
+
+        const html = renderToStaticMarkup(
+            <RightSidebar
+                activeShot={shot}
+                selectedLayer={undefined}
+                selectedLayerIds={[]}
+                onSwapImageClick={() => {}}
+                onOpenExportModal={() => {}}
+            />
+        );
+
+        expect(html).not.toContain('data-testid="light-inspector"');
+        expect(html).toContain('Background');
+        expect(html).toContain('Landscape 16:9');
+    });
 });

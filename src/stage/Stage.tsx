@@ -867,10 +867,7 @@ const StageComponent: React.FC<StageProps> = ({
                         ) {
                             return;
                         }
-                        if (!isMulti) {
-                            clearLayerSelection();
-                            useSelectionStore.getState().selectLight(null);
-                        }
+                        if (!isMulti) clearLayerSelection();
                         return;
                     }
 

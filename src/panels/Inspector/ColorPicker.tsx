@@ -58,6 +58,7 @@ interface ColorPickerProps {
     showGradientMode?: boolean;
     className?: string;
     children?: React.ReactNode;
+    disabled?: boolean;
 }
 
 export const ColorPicker: React.FC<ColorPickerProps> = ({
@@ -72,6 +73,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     showGradientMode = true,
     className = '',
     children,
+    disabled = false,
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
@@ -611,7 +613,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
 
     const triggerLabel = gradientValue ? 'Gradient' : `${label}: ${color}`;
     return <>
-        <button ref={anchorRef} type="button" aria-label={triggerLabel} aria-expanded={open} onClick={() => {
+        <button ref={anchorRef} type="button" aria-label={triggerLabel} aria-expanded={open} disabled={disabled} onClick={() => {
+            if (disabled) return;
             if (open) {
                 setOpen(false);
                 onExitGradient?.();
@@ -620,7 +623,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 setOpen(true);
                 if (gradientValue) onEnterGradient?.();
             }
-        }} className={children ? className : `${compact ? 'h-full w-full min-h-[18px] min-w-[18px] rounded border border-white/20' : 'flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-left hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100'} ${className}`}>
+        }} className={children ? `${className} ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''}` : `${compact ? 'h-full w-full min-h-[18px] min-w-[18px] rounded border border-white/20' : 'flex h-8 w-full items-center gap-2 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-left hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100'} ${disabled ? 'opacity-50 cursor-not-allowed pointer-events-none' : ''} ${className}`}>
             {children ? (
                 children
             ) : (

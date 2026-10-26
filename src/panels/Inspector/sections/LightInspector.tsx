@@ -27,7 +27,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         selectedLightId === 'sun';
 
     // Find the current light model
-    const currentLight: SceneLight = isKey
+    const currentLight: SceneLight | null = isKey
         ? {
             id: 'sun-key',
             name: 'Sun',
@@ -40,18 +40,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             temperature: shotLight?.temperature ?? 6500,
             castShadow: shotLight?.castShadow !== false,
         }
-        : (shotLight?.sources || []).find((s) => s.id === selectedLightId) || {
-            id: selectedLightId,
-            name: 'Spot',
-            type: 'spot',
-            enabled: true,
-            position: { x: 0, y: 0.4, z: 1 },
-            target: { x: 0, y: 0, z: 0 },
-            intensity: 1.2,
-            color: '#ffffff',
-            temperature: 6500,
-            castShadow: true,
-        };
+        : ((shotLight?.sources || []).find((s) => s.id === selectedLightId) ?? null);
 
     const updateLight = useCallback(
         (patch: Partial<SceneLight>) => {
@@ -63,10 +52,11 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             };
 
             if (isKey) {
+                const { type: _ignoredType, color: _ignoredColor, ...validKeyPatch } = patch;
                 updateShot(activeShot.id, {
                     light: {
                         ...currentRig,
-                        ...patch,
+                        ...validKeyPatch,
                         position: patch.position
                             ? { ...currentRig.position, ...patch.position }
                             : currentRig.position,
@@ -102,6 +92,10 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         },
         [activeShot.id, activeShot.light, isKey, selectedLightId, updateShot]
     );
+
+    if (!currentLight) {
+        return null;
+    }
 
     const typeDisplayNames: Record<LightSourceType, string> = {
         directional: 'Sun',
@@ -140,8 +134,11 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Type</span>
                 <select
                     value={currentLight.type}
+                    disabled={isKey}
                     onChange={(e) => updateLight({ type: e.target.value as LightSourceType })}
-                    className="w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition"
+                    className={`w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none transition ${
+                        isKey ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer hover:border-white/20'
+                    }`}
                 >
                     <option value="directional">Sun</option>
                     <option value="spot">Spot</option>
@@ -252,6 +249,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     label="Color"
                     compact={false}
                     showGradientMode={false}
+                    disabled={isKey}
                     onChange={(color) => updateLight({ color })}
                 />
             </div>
@@ -338,26 +336,6 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         />
                     </label>
                 </div>
-                {currentLight.castShadow !== false && (
-                    <div className="grid grid-cols-2 gap-2">
-                        <ScrubInput
-                            label="Strength"
-                            value={70}
-                            min={0}
-                            max={100}
-                            unit="%"
-                            onChange={() => {}}
-                        />
-                        <ScrubInput
-                            label="Soft"
-                            value={50}
-                            min={0}
-                            max={100}
-                            unit="%"
-                            onChange={() => {}}
-                        />
-                    </div>
-                )}
             </div>
         </div>
     );

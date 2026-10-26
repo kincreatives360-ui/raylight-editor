@@ -251,6 +251,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedBlockId: null,
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
+            selectedLightId: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',

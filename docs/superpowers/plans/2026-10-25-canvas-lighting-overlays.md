@@ -42,8 +42,8 @@
 
 ### Task 1: Extend Selection Store & Model Types for Light Selection
 **Files:**
-- Modify: [src/store/useSelectionStore.ts](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/store/useSelectionStore.ts)
-- Test: [src/store/lightSelection.test.ts](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/store/lightSelection.test.ts)
+- Modify: [src/store/useSelectionStore.ts](src/store/useSelectionStore.ts)
+- Test: [src/store/lightSelection.test.ts](src/store/lightSelection.test.ts)
 
 - [x] **Step 1: Write unit test for light selection state in `src/store/lightSelection.test.ts`**
 - [x] **Step 2: Add `selectedLightId: string | null` and `setSelectedLightId: (id: string | null) => void` to `useSelectionStore`**
@@ -53,8 +53,8 @@
 
 ### Task 2: Build Projection & Raycasting Math Helpers for 3D Lights
 **Files:**
-- Create: [src/stage/lightingMath.ts](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/lightingMath.ts)
-- Test: [src/stage/lightingMath.test.ts](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/lightingMath.test.ts)
+- Create: [src/stage/lightingMath.ts](src/stage/lightingMath.ts)
+- Test: [src/stage/lightingMath.test.ts](src/stage/lightingMath.test.ts)
 
 - [x] **Step 1: Write tests for projecting light 3D coordinates `(X*6, Y*6, Z*5)` to screen pixels `(sx, sy)` and inverse screen delta to 3D delta**
 - [x] **Step 2: Implement `projectLightToScreen(pos, cameraPose, frameW, frameH, aspect)` and `unprojectScreenDeltaToLightDelta` in `src/stage/lightingMath.ts`**
@@ -64,9 +64,9 @@
 
 ### Task 3: Build the On-Canvas Interactive Overlay (`LightingOverlay.tsx`)
 **Files:**
-- Create: [src/stage/LightingOverlay.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/LightingOverlay.tsx)
-- Modify: [src/stage/Stage.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/Stage.tsx)
-- Test: [src/stage/lightingOverlay.test.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/lightingOverlay.test.tsx)
+- Create: [src/stage/LightingOverlay.tsx](src/stage/LightingOverlay.tsx)
+- Modify: [src/stage/Stage.tsx](src/stage/Stage.tsx)
+- Test: [src/stage/lightingOverlay.test.tsx](src/stage/lightingOverlay.test.tsx)
 
 - [x] **Step 1: Write component tests for `LightingOverlay` rendering position gizmo, aim dashed line, target handle, and type-specific handles**
 - [x] **Step 2: Implement `LightingOverlay.tsx` with:**
@@ -82,9 +82,9 @@
 
 ### Task 4: Build Dedicated `LightInspector.tsx` in RightSidebar
 **Files:**
-- Create: [src/panels/Inspector/sections/LightInspector.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LightInspector.tsx)
-- Modify: [src/panels/Inspector/RightSidebar.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/RightSidebar.tsx)
-- Test: [src/panels/Inspector/sections/lightInspector.test.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/lightInspector.test.tsx)
+- Create: [src/panels/Inspector/sections/LightInspector.tsx](src/panels/Inspector/sections/LightInspector.tsx)
+- Modify: [src/panels/Inspector/RightSidebar.tsx](src/panels/Inspector/RightSidebar.tsx)
+- Test: [src/panels/Inspector/sections/lightInspector.test.tsx](src/panels/Inspector/sections/lightInspector.test.tsx)
 
 - [x] **Step 1: Write test verifying that selecting a light renders the LightInspector with Raylight-matched controls**
 - [x] **Step 2: Implement `LightInspector.tsx` with:**
@@ -104,8 +104,8 @@
 
 ### Task 5: Enhance Bottom Toolbar with Light Tools Menu
 **Files:**
-- Modify: [src/stage/CanvasToolbar.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/CanvasToolbar.tsx)
-- Test: [src/stage/canvasToolbarLight.test.tsx](file:///c:/Users/Sam%20Akinkunmi/Downloads/Ray_New/raylight-editor/src/stage/canvasToolbarLight.test.tsx)
+- Modify: [src/stage/CanvasToolbar.tsx](src/stage/CanvasToolbar.tsx)
+- Test: [src/stage/canvasToolbarLight.test.tsx](src/stage/canvasToolbarLight.test.tsx)
 
 - [x] **Step 1: Add light tools dropdown menu (`Spot`, `Point`, `Area`, `Sun`) to the toolbar lighting button**
 - [x] **Step 2: Wire menu item clicks to create/select that light type and activate `selectedLightId`**
