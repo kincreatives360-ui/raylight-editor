@@ -32,13 +32,31 @@ let masterGainNode: GainNode | null = null;
 let lastSyncedTimeMs = -1;
 let isCurrentlyPlaying = false;
 
+// Waveform Peak Amplitudes LRU Cache
+const waveformPeakCache = new Map<string, number[]>();
+const MAX_WAVEFORM_CACHE_ENTRIES = 512;
+
+export function clearWaveformCache(): void {
+  waveformPeakCache.clear();
+}
+
 /**
  * Procedurally generates realistic waveform peak amplitudes for rendering SVG waveform bars.
  * If audio buffer data exists for the clip, extracts true RMS peaks.
+ * Caches calculated peak arrays by clip properties and bar count to eliminate repeated PCM scans.
  */
 export function generateWaveformPeaks(clip: AudioClip, count: number): number[] {
   const barsCount = Math.max(16, count);
   const cachedBuffer = clip.dataUrl ? audioBufferCache.get(clip.dataUrl) : null;
+  const hasBuffer = Boolean(cachedBuffer);
+  const cacheKey = `${clip.id}:${clip.offsetMs}:${clip.durationMs}:${clip.dataUrl || ''}:${hasBuffer ? 'buf' : 'proc'}:${barsCount}`;
+
+  const cachedPeaks = waveformPeakCache.get(cacheKey);
+  if (cachedPeaks) {
+    return cachedPeaks;
+  }
+
+  let peaks: number[];
 
   if (cachedBuffer) {
     const pcm = cachedBuffer.getChannelData(0);
@@ -47,7 +65,7 @@ export function generateWaveformPeaks(clip: AudioClip, count: number): number[] 
     const clipDurationSamples = Math.floor((clip.durationMs / 1000) * cachedBuffer.sampleRate);
     const step = Math.max(1, Math.floor(clipDurationSamples / barsCount));
 
-    const peaks: number[] = [];
+    peaks = [];
     for (let i = 0; i < barsCount; i++) {
       const start = clipStartSample + i * step;
       if (start >= totalSamples) {
@@ -62,25 +80,31 @@ export function generateWaveformPeaks(clip: AudioClip, count: number): number[] 
       }
       peaks.push(Math.max(0.08, Math.min(1.0, maxVal * 1.4)));
     }
-    return peaks;
+  } else {
+    // Procedural musical waveform for default/preset clips (seed based on clip.id & clip.name)
+    let seed = 0;
+    const str = clip.id + clip.name;
+    for (let i = 0; i < str.length; i++) {
+      seed = (seed * 31 + str.charCodeAt(i)) & 0xffffff;
+    }
+
+    peaks = [];
+    const beatPattern = [0.95, 0.35, 0.75, 0.45, 0.9, 0.38, 0.8, 0.42]; // Kick/Snare rhythm
+    for (let i = 0; i < barsCount; i++) {
+      const beatIndex = i % beatPattern.length;
+      const baseAmp = beatPattern[beatIndex];
+      const pseudoRand = Math.sin(seed + i * 0.4) * 0.22 + Math.cos(i * 0.17) * 0.15;
+      const peak = Math.max(0.12, Math.min(0.98, baseAmp + pseudoRand));
+      peaks.push(peak);
+    }
   }
 
-  // Procedural musical waveform for default/preset clips (seed based on clip.id & clip.name)
-  let seed = 0;
-  const str = clip.id + clip.name;
-  for (let i = 0; i < str.length; i++) {
-    seed = (seed * 31 + str.charCodeAt(i)) & 0xffffff;
+  if (waveformPeakCache.size >= MAX_WAVEFORM_CACHE_ENTRIES) {
+    const oldestKey = waveformPeakCache.keys().next().value;
+    if (oldestKey) waveformPeakCache.delete(oldestKey);
   }
+  waveformPeakCache.set(cacheKey, peaks);
 
-  const peaks: number[] = [];
-  const beatPattern = [0.95, 0.35, 0.75, 0.45, 0.9, 0.38, 0.8, 0.42]; // Kick/Snare rhythm
-  for (let i = 0; i < barsCount; i++) {
-    const beatIndex = i % beatPattern.length;
-    const baseAmp = beatPattern[beatIndex];
-    const pseudoRand = Math.sin(seed + i * 0.4) * 0.22 + Math.cos(i * 0.17) * 0.15;
-    const peak = Math.max(0.12, Math.min(0.98, baseAmp + pseudoRand));
-    peaks.push(peak);
-  }
   return peaks;
 }
 
@@ -102,6 +126,12 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
     audioBufferCache.set(dataUrl, audioBuffer);
+    // Invalidate any procedural peak entries for this dataUrl so the newly decoded buffer is used
+    for (const key of Array.from(waveformPeakCache.keys())) {
+      if (key.includes(dataUrl) && key.includes(':proc:')) {
+        waveformPeakCache.delete(key);
+      }
+    }
     return audioBuffer;
   } catch (err) {
     console.warn('Failed to decode audio file data URL', err);

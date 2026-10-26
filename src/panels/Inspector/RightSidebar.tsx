@@ -1289,10 +1289,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         activeShot.lightBlocks?.find((lb) => lb.id === selectedLightBlockId);
 
     const handleQuickAlign = (axis: 'x' | 'y', targetVal: number) => {
+        const idSet = new Set(selectedLayerIds);
         updateShot(activeShot.id, (s) => ({
             ...s,
             layers: s.layers.map((l) =>
-                selectedLayerIds.includes(l.id) && !isLayerEffectivelyLocked(l, s.groups)
+                idSet.has(l.id) && !isLayerEffectivelyLocked(l, s.groups)
                     ? { ...l, position: { ...l.position, [axis]: targetVal } }
                     : l
             ),

@@ -1,5 +1,5 @@
 // src/stage/SelectionOverlay.tsx
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Move, RotateCw, Compass, Lock, Crop, Type, Sparkles } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
@@ -65,8 +65,9 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
 
     const activeShot: Shot = frame.activeShot;
+    const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
     const selectedEvalLayers: EvaluatedLayerWithEffects[] = frame.layers.filter(
-        (l) => selectedLayerIds.includes(l.id)
+        (l) => selectedLayerSet.has(l.id)
     );
 
     if (selectedEvalLayers.length === 0) return null;
@@ -121,7 +122,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const startPositions: Record<string, { x: number; y: number; z: number }> =
             {};
         for (const item of activeShot.layers) {
-            if (selectedLayerIds.includes(item.id)) {
+            if (selectedLayerSet.has(item.id)) {
                 startPositions[item.id] = {
                     x: item.position.x,
                     y: item.position.y,
@@ -137,7 +138,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         };
 
         const otherUnselectedLayers = frame.layers.filter(
-            (l) => !selectedLayerIds.includes(l.id) && l.visible
+            (l) => !selectedLayerSet.has(l.id) && l.visible
         );
 
         let lastDxFrac = 0;

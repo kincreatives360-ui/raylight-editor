@@ -127,6 +127,11 @@ const StageComponent: React.FC<StageProps> = ({
         currentY: number;
     } | null>(null);
 
+    const selectedLayerSet = useMemo(
+        () => new Set(selectedLayerIds),
+        [selectedLayerIds]
+    );
+
     // Dismiss context menu on click outside or Escape
     useEffect(() => {
         if (!contextMenu) return;
@@ -940,8 +945,12 @@ const StageComponent: React.FC<StageProps> = ({
         onSelectLayer(clickedLayerId, multiSelect);
     };
 
-    const selectedLayer = frame.activeShot.layers.find((l) =>
-        selectedLayerIds.includes(l.id)
+    const selectedLayer = useMemo(
+        () =>
+            selectedLayerIds.length > 0
+                ? frame.activeShot.layers.find((l) => selectedLayerSet.has(l.id))
+                : undefined,
+        [frame.activeShot.layers, selectedLayerIds.length, selectedLayerSet]
     );
 
     // ============================================================================
@@ -1083,7 +1092,7 @@ const StageComponent: React.FC<StageProps> = ({
         const clickedLayerId = layerEl?.getAttribute('data-layer-id');
 
         if (clickedLayerId) {
-            if (!selectedLayerIds.includes(clickedLayerId)) {
+            if (!selectedLayerSet.has(clickedLayerId)) {
                 selectLayer(clickedLayerId, false);
             }
             setContextMenu({
@@ -1398,7 +1407,7 @@ const StageComponent: React.FC<StageProps> = ({
                             </button>
                             <button
                                 onClick={() => {
-                                    const idsToGroup = selectedLayerIds.includes(
+                                    const idsToGroup = selectedLayerSet.has(
                                         contextMenuLayer.id
                                     )
                                         ? selectedLayerIds

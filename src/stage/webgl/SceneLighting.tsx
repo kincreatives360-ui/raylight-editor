@@ -121,6 +121,34 @@ const SpotGizmoLine: React.FC<{
     );
 };
 
+const AreaGizmo: React.FC<{
+    position: [number, number, number];
+    width: number;
+    height: number;
+    colorHex: string;
+}> = ({ position, width, height, colorHex }) => {
+    const geometry = useMemo(() => {
+        const plane = new THREE.PlaneGeometry(width, height);
+        const edges = new THREE.EdgesGeometry(plane);
+        plane.dispose();
+        return edges;
+    }, [width, height]);
+
+    useEffect(() => {
+        return () => {
+            geometry.dispose();
+        };
+    }, [geometry]);
+
+    return (
+        <group position={position}>
+            <lineSegments geometry={geometry}>
+                <lineBasicMaterial color={colorHex} />
+            </lineSegments>
+        </group>
+    );
+};
+
 /** Lightweight 3D wireframe helper gizmo showing light positions and orientations */
 const LightGizmo: React.FC<{
     source: SceneLight;
@@ -167,12 +195,12 @@ const LightGizmo: React.FC<{
         const w = source.width ?? 3;
         const h = source.height ?? 3;
         return (
-            <group position={position}>
-                <lineSegments>
-                    <edgesGeometry args={[new THREE.PlaneGeometry(w, h)]} />
-                    <lineBasicMaterial color={colorHex} />
-                </lineSegments>
-            </group>
+            <AreaGizmo
+                position={position}
+                width={w}
+                height={h}
+                colorHex={colorHex}
+            />
         );
     }
 

@@ -16,37 +16,49 @@ const AudioWaveform: React.FC<{
     clip: AudioClip;
     width: number;
     muted?: boolean;
-}> = React.memo(({ clip, width, muted }) => {
-    const barCount = Math.max(12, Math.min(96, Math.floor(width / 5)));
-    const peaks = useMemo(
-        () => generateWaveformPeaks(clip, barCount),
-        [clip, barCount]
-    );
+}> = React.memo(
+    ({ clip, width, muted }) => {
+        const barCount = Math.max(12, Math.min(96, Math.floor(width / 5)));
+        const peaks = useMemo(
+            () => generateWaveformPeaks(clip, barCount),
+            [clip, barCount]
+        );
 
-    return (
-        <svg
-            className="absolute inset-0 w-full h-full pointer-events-none opacity-40 overflow-hidden"
-            preserveAspectRatio="none"
-            viewBox={`0 0 ${barCount * 4} 24`}
-        >
-            {peaks.map((p, idx) => {
-                const barHeight = Math.max(2, p * 20);
-                const y = (24 - barHeight) / 2;
-                return (
-                    <rect
-                        key={idx}
-                        x={idx * 4 + 1}
-                        y={y}
-                        width={2.2}
-                        height={barHeight}
-                        rx={1}
-                        fill={muted ? '#94a3b8' : '#38bdf8'}
-                    />
-                );
-            })}
-        </svg>
-    );
-});
+        return (
+            <svg
+                className="absolute inset-0 w-full h-full pointer-events-none opacity-40 overflow-hidden"
+                preserveAspectRatio="none"
+                viewBox={`0 0 ${barCount * 4} 24`}
+            >
+                {peaks.map((p, idx) => {
+                    const barHeight = Math.max(2, p * 20);
+                    const y = (24 - barHeight) / 2;
+                    return (
+                        <rect
+                            key={idx}
+                            x={idx * 4 + 1}
+                            y={y}
+                            width={2.2}
+                            height={barHeight}
+                            rx={1}
+                            fill={muted ? '#94a3b8' : '#38bdf8'}
+                        />
+                    );
+                })}
+            </svg>
+        );
+    },
+    (prev, next) => {
+        if (prev.muted !== next.muted) return false;
+        if (prev.clip.id !== next.clip.id) return false;
+        if (prev.clip.durationMs !== next.clip.durationMs) return false;
+        if (prev.clip.offsetMs !== next.clip.offsetMs) return false;
+        if (prev.clip.dataUrl !== next.clip.dataUrl) return false;
+        const prevBars = Math.max(12, Math.min(96, Math.floor(prev.width / 5)));
+        const nextBars = Math.max(12, Math.min(96, Math.floor(next.width / 5)));
+        return prevBars === nextBars;
+    }
+);
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -112,6 +124,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         setTimelineHeightPx,
         setTimelineScrollTop,
     } = useSelectionStore();
+
+    const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
+    const expandedTimelineLayerSet = useMemo(
+        () => new Set(expandedTimelineLayerIds),
+        [expandedTimelineLayerIds]
+    );
 
     const trackRef = useRef<HTMLDivElement | null>(null);
     const timelineZoomRef = useRef(timelineZoom);
@@ -1609,8 +1627,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             }}
                                             onDoubleClick={(e) => {
                                                 e.stopPropagation();
-                                                const hasSelectedLayer = selectedLayerIds.some((id) =>
-                                                    shot.layers.some((layer) => layer.id === id)
+                                                const hasSelectedLayer = shot.layers.some((layer) =>
+                                                    selectedLayerSet.has(layer.id)
                                                 );
                                                 selectShot(shot.id);
                                                 setTimelineView('scene');
@@ -1803,13 +1821,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 .slice()
                                 .sort((a, b) => b.order - a.order)
                                 .map((layer) => {
-                                    const isSelected = selectedLayerIds.includes(layer.id);
+                                    const isSelected = selectedLayerSet.has(layer.id);
                                     const hasAnimations =
                                         layer.blocks.length > 0 ||
                                         layer.entrance.type !== 'none' ||
                                         layer.exit.type !== 'none';
                                     const isExpanded =
-                                        expandedTimelineLayerIds.includes(layer.id) ||
+                                        expandedTimelineLayerSet.has(layer.id) ||
                                         (isSelected && hasAnimations);
 
                                     const left = layer.inMs * pxPerMs;

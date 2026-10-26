@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getExportDimensions, estimateExportMetrics } from './exportMetrics';
-import { generateWaveformPeaks, decodeAudioFromDataUrl } from './audioEngine';
+import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache } from './audioEngine';
 import { runVideoExportPipeline } from './exporter';
 import type { Project, AudioClip } from '../model/types';
 import { createDefaultProject } from '../model/defaults';
@@ -170,6 +170,15 @@ describe('Audio Engine Waveform Generation & Peak Clamping', () => {
         // Enforces minimum count of 16 bars
         const minPeaks = generateWaveformPeaks(clipA, 4);
         expect(minPeaks.length).toBe(16);
+
+        // LRU Cache returns identical array reference on repeated queries
+        expect(peaks1).toBe(peaks2);
+
+        // After clearing cache, new instance is returned but with identical values
+        clearWaveformCache();
+        const peaksFresh = generateWaveformPeaks(clipA, 32);
+        expect(peaksFresh).toEqual(peaks1);
+        expect(peaksFresh).not.toBe(peaks1);
     });
 
     it('clamps true PCM waveform buffer peaks between [0.08, 1.0] even with extreme amplitudes', async () => {

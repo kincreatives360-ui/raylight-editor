@@ -672,11 +672,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
             locked: false,
         };
 
+        const idSet = new Set(layerIds);
         get().updateShot(shotId, (s) => ({
             ...s,
             groups: [...s.groups, newGroup],
             layers: s.layers.map((l) =>
-                layerIds.includes(l.id) ? { ...l, groupId: newGroup.id } : l
+                idSet.has(l.id) ? { ...l, groupId: newGroup.id } : l
             ),
         }));
 

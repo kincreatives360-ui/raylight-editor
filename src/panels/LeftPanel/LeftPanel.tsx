@@ -94,6 +94,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         leftPanelWidth,
     } = useSelectionStore();
 
+    const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
+    const expandedTimelineLayerSet = useMemo(
+        () => new Set(expandedTimelineLayerIds),
+        [expandedTimelineLayerIds]
+    );
+
     const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
     const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
@@ -340,7 +346,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         }
 
         const isSelected =
-            shot.id === activeShot.id && selectedLayerIds.includes(layer.id);
+            shot.id === activeShot.id && selectedLayerSet.has(layer.id);
         const isEditing = editingId === layer.id;
         const isDragTarget = dragOverId === layer.id;
 
@@ -502,7 +508,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         const isGroupSelected =
             shot.id === activeShot.id &&
             childLayers.length > 0 &&
-            childLayers.every((l) => selectedLayerIds.includes(l.id));
+            childLayers.every((l) => selectedLayerSet.has(l.id));
         const isEditing = editingId === group.id;
 
         return (
@@ -1023,13 +1029,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     .slice()
                                     .sort((a, b) => b.order - a.order)
                                     .map((layer) => {
-                                        const isSelected = selectedLayerIds.includes(layer.id);
+                                        const isSelected = selectedLayerSet.has(layer.id);
                                         const hasAnimItems =
                                             layer.entrance.type !== 'none' ||
                                             layer.exit.type !== 'none' ||
                                             layer.blocks.length > 0;
                                         const isExpanded =
-                                            expandedTimelineLayerIds.includes(layer.id) ||
+                                            expandedTimelineLayerSet.has(layer.id) ||
                                             (isSelected && hasAnimItems);
 
                                         return (

@@ -86,11 +86,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const [hexDraft, setHexDraft] = useState(color);
     const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color));
     const [position, setPosition] = useState({ left: 0, top: 0 });
-    const [draggingSquare, setDraggingSquare] = useState(false);
-    const [draggingHue, setDraggingHue] = useState(false);
-    const [isHexFocused, setIsHexFocused] = useState(false);
-    const [prevColor, setPrevColor] = useState(color);
-
+    const draggingSquareRef = useRef(false);
+    const draggingHueRef = useRef(false);
+    const isHexFocusedRef = useRef(false);
     const hsvRef = useRef<Hsv>(hsv);
     const onExitGradientRef = useRef(onExitGradient);
 
@@ -109,13 +107,14 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         onExitGradientRef.current = onExitGradient;
     }, [onExitGradient]);
 
-    if (color !== prevColor && !draggingSquare && !draggingHue) {
-        setPrevColor(color);
-        if (!isHexFocused) {
-            setHexDraft(color);
+    useEffect(() => {
+        if (!draggingSquareRef.current && !draggingHueRef.current) {
+            if (!isHexFocusedRef.current) {
+                setHexDraft(color);
+            }
+            setHsv(hexToHsv(color));
         }
-        setHsv(hexToHsv(color));
-    }
+    }, [color]);
 
     useEffect(() => {
         if (!open) return;
@@ -159,7 +158,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         } catch {
             // ignore
         }
-        setDraggingSquare(true);
+        draggingSquareRef.current = true;
         const rect = event.currentTarget.getBoundingClientRect();
         const next = {
             ...hsvRef.current,
@@ -173,7 +172,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleSquarePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!draggingSquare) return;
+        if (!draggingSquareRef.current) return;
         event.preventDefault();
         const rect = event.currentTarget.getBoundingClientRect();
         const next = {
@@ -188,7 +187,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleSquarePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        setDraggingSquare(false);
+        draggingSquareRef.current = false;
         try {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
@@ -199,7 +198,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleSquareLostPointerCapture = (_event: React.PointerEvent<HTMLDivElement>) => {
-        setDraggingSquare(false);
+        draggingSquareRef.current = false;
     };
 
     const handleHuePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -210,7 +209,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         } catch {
             // ignore
         }
-        setDraggingHue(true);
+        draggingHueRef.current = true;
         const rect = event.currentTarget.getBoundingClientRect();
         if (!rect.height) return;
         const ratio = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
@@ -223,7 +222,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleHuePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (!draggingHue) return;
+        if (!draggingHueRef.current) return;
         event.preventDefault();
         const rect = event.currentTarget.getBoundingClientRect();
         if (!rect.height) return;
@@ -237,7 +236,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const handleHuePointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-        setDraggingHue(false);
+        draggingHueRef.current = false;
         try {
             if (event.currentTarget.hasPointerCapture(event.pointerId)) {
                 event.currentTarget.releasePointerCapture(event.pointerId);
@@ -333,9 +332,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 setHexDraft(`#${raw}`);
                                 if (raw.length === 3 || raw.length === 6) commitHex(raw);
                             }}
-                            onFocus={() => setIsHexFocused(true)}
+                            onFocus={() => {
+                                isHexFocusedRef.current = true;
+                            }}
                             onBlur={() => {
-                                setIsHexFocused(false);
+                                isHexFocusedRef.current = false;
                                 commitHex(hexDraft);
                                 setHexDraft(normalizeHex(hexDraft) || color);
                             }}
@@ -363,7 +364,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             ref={squareRef}
                             role="slider"
                             aria-label="Saturation and brightness"
+                            aria-valuemin={0}
+                            aria-valuemax={100}
+                            aria-valuenow={Math.round(hsv.v * 100)}
                             aria-valuetext={hexDraft}
+                            tabIndex={0}
                             onPointerDown={handleSquarePointerDown}
                             onPointerMove={handleSquarePointerMove}
                             onPointerUp={handleSquarePointerUp}
@@ -406,7 +411,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             onPointerMove={handleHuePointerMove}
                             onPointerUp={handleHuePointerUp}
                             onPointerCancel={handleHuePointerUp}
-                            onLostPointerCapture={() => setDraggingHue(false)}
+                            onLostPointerCapture={() => {
+                                draggingHueRef.current = false;
+                            }}
                             className="relative h-full w-[17px] shrink-0 rounded-full select-none cursor-pointer touch-none shadow-inner"
                             style={{ background: 'linear-gradient(to bottom, #ff0000 0%, #ffff00 17%, #00ff00 33%, #00ffff 50%, #0000ff 67%, #ff00ff 83%, #ff0000 100%)' }}
                         >
@@ -530,7 +537,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     </div>
                     <div className="max-h-[180px] space-y-1 overflow-y-auto">
                         {gradient.stops.map((stop, index) => (
-                            <div key={`stop-${index}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
+                            <div key={`stop-${stop.at.toFixed(3)}-${stop.color.replace('#', '')}-${index}`} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
                                 <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
                                     <input
                                         aria-label={`Stop ${index + 1} position`}

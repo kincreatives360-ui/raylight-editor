@@ -63,19 +63,21 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
 
         // Media absent from the in-memory document is NOT evidence of deletion.
         // Never delete a blob simply because a metadata-only asset has an empty dataUrl.
-        for (const [id, asset] of Object.entries(project.assets || {})) {
-            if (!asset) continue;
-            const { dataUrl: _drop, ...meta } = asset;
-            lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
-            if (asset.dataUrl) {
-                // OPFS is a supplementary copy; IDB stores the full asset in the
-                // same transaction as the project metadata below.
-                const written = await saveMediaToOPFS(id, asset.dataUrl);
-                if (!written && isOpfsSupported()) {
-                    console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
+        await Promise.all(
+            Object.entries(project.assets || {}).map(async ([id, asset]) => {
+                if (!asset) return;
+                const { dataUrl: _drop, ...meta } = asset;
+                lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
+                if (asset.dataUrl) {
+                    // OPFS is a supplementary copy; IDB stores the full asset in the
+                    // same transaction as the project metadata below.
+                    const written = await saveMediaToOPFS(id, asset.dataUrl);
+                    if (!written && isOpfsSupported()) {
+                        console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
+                    }
                 }
-            }
-        }
+            })
+        );
 
         // 3. Persist to IndexedDB
         return new Promise((resolve) => {
