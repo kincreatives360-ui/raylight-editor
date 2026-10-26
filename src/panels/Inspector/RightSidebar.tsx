@@ -74,6 +74,7 @@ import { TypographySection } from './sections/TypographySection';
 import { ShapeSection } from './sections/ShapeSection';
 import { CameraBlockSection } from './sections/CameraBlockSection';
 import { DeviceFrameSection } from './sections/DeviceFrameSection';
+import { LightInspector } from './sections/LightInspector';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDevicePlacement } from '../../model/deviceFrame';
 import { ASPECT_RATIO_CONFIG, getArtboardDimensions } from '../../stage/stageUtils';
 import { EasingPopover } from '../Timeline/EasingPopover';
@@ -1202,6 +1203,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const {
         selectedBlockId,
         selectedCameraBlockId,
+        selectedLightId,
+        selectLight,
         setTimelineView,
         setTimelineLayerExpanded,
         selectBlock,
@@ -3583,6 +3586,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         </div>
                     )}
                 </>
+            ) : selectedLightId ? (
+                <LightInspector
+                    activeShot={activeShot}
+                    selectedLightId={selectedLightId}
+                    onClose={() => selectLight(null)}
+                />
             ) : (
                 <ProjectSettingsPanel
                     onSwapImageClick={onSwapImageClick}
