@@ -25,14 +25,18 @@ import {
     Crop,
     Sparkles,
     Activity,
+    Flashlight,
+    Lightbulb,
 } from 'lucide-react';
-import type { Layer } from '../model/types';
+import type { Layer, SceneLight } from '../model/types';
+import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
 
 interface CanvasToolbarProps {
     selectedLayer: Layer | undefined;
+    defaultOpenMenu?: MenuKey;
     onOpenSceneEffects?: () => void;
     onToggleLightRig?: () => void;
     showSafeArea?: boolean;
@@ -100,6 +104,7 @@ const MenuItem: React.FC<{
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     selectedLayer,
+    defaultOpenMenu,
     onOpenSceneEffects: _onOpenSceneEffects,
     onToggleLightRig,
     showSafeArea = false,
@@ -112,6 +117,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         isAnimateMode,
         isCropping,
         selectedShotId,
+        selectedLightId,
+        selectLight,
         setActiveTool,
         toggleAnimateMode,
         setIsCropping,
@@ -119,9 +126,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     } = useSelectionStore();
 
     const { currentTimeMs } = usePlayheadStore();
-    const { project, addCameraBlockToShot, updateLayer, splitShotAtPlayhead } = useProjectStore();
+    const { project, addCameraBlockToShot, updateLayer, updateShot, splitShotAtPlayhead } = useProjectStore();
 
-    const [openMenu, setOpenMenu] = useState<MenuKey>(null);
+    const [openMenu, setOpenMenu] = useState<MenuKey>(defaultOpenMenu ?? null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const menuRef = useRef<HTMLDivElement>(null);
 
@@ -281,6 +288,73 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         if (selectedLayer) {
             setInspectorTab('layer');
         }
+    };
+
+    const handleToggleLightButton = () => {
+        if (selectedLightId) {
+            selectLight(null);
+        } else {
+            selectLight('sun-key');
+        }
+        if (onToggleLightRig) onToggleLightRig();
+    };
+
+    const handleSelectOrCreateLight = (type: 'directional' | 'spot' | 'point' | 'area') => {
+        if (!activeShot) return;
+        if (type === 'directional') {
+            selectLight('sun-key');
+            setOpenMenu(null);
+            return;
+        }
+
+        const currentRig = activeShot.light || {
+            position: { x: -0.28, y: 0.36, z: 0.9 },
+            intensity: 1.2,
+            temperature: 6500,
+            ambience: 0.45,
+            sources: [],
+        };
+
+        const existing = (currentRig.sources || []).find((s) => s.type === type);
+        if (existing) {
+            selectLight(existing.id);
+            setOpenMenu(null);
+            return;
+        }
+
+        const newId = generateId(type);
+        const newSource: SceneLight = {
+            id: newId,
+            name: type === 'spot' ? 'Spot Light' : type === 'point' ? 'Point Light' : 'Area Light',
+            type,
+            enabled: true,
+            position:
+                type === 'spot'
+                    ? { x: 0.2, y: 0.5, z: 1.2 }
+                    : type === 'area'
+                    ? { x: -0.4, y: 0.3, z: 0.8 }
+                    : { x: 0, y: 0.3, z: 0.6 },
+            target: { x: 0, y: 0, z: 0 },
+            intensity: 1.2,
+            color: '#ffffff',
+            temperature: 6500,
+            angle: Math.PI / 5,
+            penumbra: 0.25,
+            width: 3.0,
+            height: 2.5,
+            distance: 6.0,
+            castShadow: true,
+        };
+
+        updateShot(activeShot.id, {
+            light: {
+                ...currentRig,
+                sources: [...(currentRig.sources || []), newSource],
+            },
+        });
+
+        selectLight(newId);
+        setOpenMenu(null);
     };
 
     /* ── Preset Data & Handlers ── */
@@ -568,17 +642,55 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     <LayoutGrid className="w-3.5 h-3.5" />
                 </button>
 
-                {/* 7 ─ Lighting */}
+                {/* 7 ─ Lighting ▼ */}
                 <div className="relative flex items-center">
                     <button
                         type="button"
-                        onClick={onToggleLightRig}
+                        onClick={handleToggleLightButton}
                         aria-label="Lighting Rig"
                         title="Scene Lighting Rig & Reflections"
-                        className={toolBtn(false)}
+                        className={toolBtn(selectedLightId !== null || openMenu === 'light')}
                     >
                         <Sun className="w-3.5 h-3.5" />
                     </button>
+                    <button
+                        type="button"
+                        aria-label="Lighting options"
+                        aria-expanded={openMenu === 'light'}
+                        onClick={() => toggleMenu('light')}
+                        className={chevronBtn}
+                    >
+                        <ChevronDown className="w-3 h-3" />
+                    </button>
+
+                    {openMenu === 'light' && (
+                        <DropdownMenu>
+                            <MenuItem
+                                icon={Sun}
+                                label="Sun Light"
+                                active={selectedLightId === 'sun-key'}
+                                onClick={() => handleSelectOrCreateLight('directional')}
+                            />
+                            <MenuItem
+                                icon={Flashlight}
+                                label="Spot Light"
+                                active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'spot'))}
+                                onClick={() => handleSelectOrCreateLight('spot')}
+                            />
+                            <MenuItem
+                                icon={Lightbulb}
+                                label="Point Light"
+                                active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'point'))}
+                                onClick={() => handleSelectOrCreateLight('point')}
+                            />
+                            <MenuItem
+                                icon={Square}
+                                label="Area Light"
+                                active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'area'))}
+                                onClick={() => handleSelectOrCreateLight('area')}
+                            />
+                        </DropdownMenu>
+                    )}
                 </div>
 
                 {/* 8 ─ Components & Motion Presets ▼ */}
