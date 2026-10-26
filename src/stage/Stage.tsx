@@ -29,6 +29,7 @@ import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
 import { SelectionOverlay } from './SelectionOverlay';
+import { LightingOverlay } from './LightingOverlay';
 import { Guides } from './Guides';
 import { OrientationGizmo } from './OrientationGizmo';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
@@ -866,7 +867,10 @@ const StageComponent: React.FC<StageProps> = ({
                         ) {
                             return;
                         }
-                        if (!isMulti) clearLayerSelection();
+                        if (!isMulti) {
+                            clearLayerSelection();
+                            useSelectionStore.getState().selectLight(null);
+                        }
                         return;
                     }
 
@@ -1355,6 +1359,13 @@ const StageComponent: React.FC<StageProps> = ({
                         onUpdateGuides={setActiveGuides}
                         onSelectLayer={handleSelectLayerWithDeepSelect}
                         cameraRef={cameraRef}
+                    />
+
+                    {/* 3D Lighting Gizmo & Interactive Controls Overlay */}
+                    <LightingOverlay
+                        frame={effectiveViewportFrame}
+                        frameWidth={frameWidth}
+                        frameHeight={frameHeight}
                     />
                 </div>
             </div>

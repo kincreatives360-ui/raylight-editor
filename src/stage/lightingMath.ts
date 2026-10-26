@@ -92,11 +92,28 @@ export function projectWorldToScreen(
     frameHeight: number
 ): ScreenPoint {
     const pt = new THREE.Vector3(worldPos.x, worldPos.y, worldPos.z);
+    const camSpace = pt.clone().applyMatrix4(camera.matrixWorldInverse);
+    const inFront = camSpace.z < -camera.near;
+
+    if (!inFront) {
+        // Project onto the camera's forward view boundary to preserve screen direction without division inversion
+        const scale = (-camera.near * 1.5) / (camSpace.z || 0.001);
+        camSpace.x *= Math.abs(scale);
+        camSpace.y *= Math.abs(scale);
+        camSpace.z = -camera.near * 1.5;
+        camSpace.applyMatrix4(camera.projectionMatrix);
+        return {
+            x: (camSpace.x * 0.5 + 0.5) * frameWidth,
+            y: (-camSpace.y * 0.5 + 0.5) * frameHeight,
+            inFront: false,
+        };
+    }
+
     pt.project(camera);
     return {
         x: (pt.x * 0.5 + 0.5) * frameWidth,
         y: (-pt.y * 0.5 + 0.5) * frameHeight,
-        inFront: pt.z < 1,
+        inFront: true,
     };
 }
 
