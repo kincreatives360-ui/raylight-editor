@@ -124,7 +124,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             aria-autocomplete="list"
             aria-controls="command-list"
           />
-          <kbd className="px-1.5 py-0.5 text-[10px] font-mono text-zinc-500 bg-white/[0.06] rounded border border-white/10">
+          <kbd className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
             Esc
           </kbd>
         </div>
@@ -157,7 +157,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-xs select-none transition-colors ${
                     isSelected
-                      ? 'bg-[#0088ff] text-white shadow-sm'
+                      ? 'bg-[#0070e0] text-white shadow-sm'
                       : 'text-zinc-300 hover:bg-white/[0.05]'
                   }`}
                 >
@@ -173,8 +173,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                       <div className="font-medium truncate">{cmd.title}</div>
                       {cmd.subtitle && (
                         <div
-                          className={`text-[10px] truncate ${
-                            isSelected ? 'text-white/80' : 'text-zinc-500'
+                          className={`text-[11px] truncate ${
+                            isSelected ? 'text-white/90' : 'text-zinc-400'
                           }`}
                         >
                           {cmd.subtitle}
@@ -185,17 +185,17 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
                   <div className="flex items-center gap-2 shrink-0 ml-3">
                     <span
-                      className={`text-[9.5px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded ${
+                      className={`text-[11px] uppercase tracking-wider font-medium px-1.5 py-0.5 rounded ${
                         isSelected
                           ? 'bg-white/20 text-white'
-                          : 'bg-white/[0.04] text-zinc-500'
+                          : 'bg-white/[0.04] text-zinc-400'
                       }`}
                     >
                       {cmd.category}
                     </span>
                     {cmd.shortcut && cmd.shortcut.length > 0 && (
                       <kbd
-                        className={`font-mono text-[10px] px-1.5 py-0.5 rounded border ${
+                        className={`font-mono text-[11px] px-1.5 py-0.5 rounded border ${
                           isSelected
                             ? 'bg-white/20 text-white border-white/30'
                             : 'bg-black/30 text-zinc-400 border-white/10'
@@ -212,15 +212,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#121216] text-[10.5px] text-zinc-500">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#121216] text-[11px] text-zinc-400">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
-            <kbd className="px-1 py-0.5 bg-white/[0.06] rounded border border-white/10">↑</kbd>
-            <kbd className="px-1 py-0.5 bg-white/[0.06] rounded border border-white/10">↓</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↓</kbd>
             <span>Execute:</span>
-            <kbd className="px-1 py-0.5 bg-white/[0.06] rounded border border-white/10">Enter</kbd>
+            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">Enter</kbd>
           </div>
-          <span className="font-mono text-[10px]">
+          <span className="font-mono text-[11px] tabular-nums">
             {filteredCommands.length} command{filteredCommands.length === 1 ? '' : 's'}
           </span>
         </div>

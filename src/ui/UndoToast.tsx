@@ -54,11 +54,11 @@ export const UndoToast: React.FC<UndoToastProps> = ({
             onUndo();
             onDismiss();
           }}
-          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0088ff] hover:bg-[#1d9bff] text-white text-xs font-medium transition cursor-pointer active:scale-95"
+          className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white text-xs font-medium transition cursor-pointer active:scale-95"
         >
           <Undo2 className="w-3.5 h-3.5" />
           <span>Undo</span>
-          <kbd className="text-[10px] font-mono text-white/80 bg-black/20 px-1 py-0.5 rounded">
+          <kbd className="text-[11px] font-mono text-white/90 bg-black/25 px-1 py-0.5 rounded">
             {getModifierKey()}Z
           </kbd>
         </button>

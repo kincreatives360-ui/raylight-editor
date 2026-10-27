@@ -98,7 +98,7 @@ const MenuItem: React.FC<{
             <Icon className={`w-3.5 h-3.5 ${accent ?? 'opacity-80'}`} />
             <span>{label}</span>
         </div>
-        {shortcut && <span className="text-[10px] font-mono opacity-60">{shortcut}</span>}
+        {shortcut && <span className="text-[11px] font-mono opacity-70">{shortcut}</span>}
     </button>
 );
 
@@ -725,7 +725,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             </div>
 
                             <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
-                                    <div className="text-[10px] uppercase font-mono tracking-wider text-[#71717a] px-1 py-0.5">
+                                    <div className="text-[11px] uppercase font-mono tracking-wider text-[#a1a1aa] px-1 py-0.5">
                                         Active Layer Presets
                                     </div>
                                     {motionPresets.map((preset) => {
@@ -748,12 +748,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                                         <div className="font-medium text-white text-[11px] group-hover:text-[var(--accent-primary,#0088ff)] transition-colors">
                                                             {preset.label}
                                                         </div>
-                                                        <div className="text-[10px] text-[#8e8e93] leading-tight">
+                                                        <div className="text-[11px] text-[#a1a1aa] leading-tight">
                                                             {preset.desc}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <span className="text-[9px] font-mono px-1.5 py-0.5 rounded bg-white/[0.06] text-[#a1a1aa] group-hover:text-white group-hover:bg-[var(--accent-primary,#0088ff)] transition">
+                                                <span className="text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-white/[0.06] text-[#a1a1aa] group-hover:text-white group-hover:bg-[var(--accent-primary,#0070e0)] transition">
                                                     Apply
                                                 </span>
                                             </button>
@@ -769,7 +769,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     type="button"
                     onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium assets')}
                     aria-label="Upgrade to Pro"
-                    className="ml-1 px-3 py-1 rounded-lg text-[var(--accent-primary,#0088ff)] text-[11px] font-semibold hover:bg-[var(--accent-primary,#0088ff)]/10 transition cursor-pointer"
+                    className="ml-1 px-3 py-1 rounded-lg text-sky-400 text-[11px] font-semibold hover:bg-sky-400/10 transition cursor-pointer"
                 >
                     Upgrade
                 </button>

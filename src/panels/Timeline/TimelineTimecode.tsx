@@ -34,7 +34,7 @@ export const TimelineTimecode: React.FC<TimelineTimecodeProps> = React.memo(({ t
     const totalFormatted = (totalDurationMs / 1000).toFixed(2);
 
     return (
-        <div className="flex items-center gap-1 font-mono text-[10px] text-[#a1a1aa] tracking-tight tabular-nums select-none">
+        <div className="flex items-center gap-1 font-mono text-[11px] text-[#a1a1aa] tracking-tight tabular-nums select-none">
             <span ref={currentSpanRef} className="text-white font-medium">
                 {initialFormatted}s
             </span>

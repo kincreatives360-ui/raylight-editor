@@ -68,7 +68,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <h3 className="text-sm font-bold text-white">
                 Export &amp; Share Video
               </h3>
-              <p className="text-[11px] text-[#a1a1aa]">
+              <p className="text-xs text-[#a1a1aa]">
                 Render MP4, Looping GIF, or High-Res PNG
               </p>
             </div>

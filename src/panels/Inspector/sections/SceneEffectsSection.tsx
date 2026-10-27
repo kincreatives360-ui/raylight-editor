@@ -61,7 +61,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
         <h3 className="text-[12px] font-semibold text-white tracking-wide">Scene Effects</h3>
         <span className="text-[11px] text-[#a1a1aa] font-mono tabular-nums">1920×1080 Ref</span>
       </div>
-      <p className="text-[11px] text-zinc-400">
+      <p className="text-xs text-zinc-400">
         Shader post-processing passes evaluated in visual order. Use arrows to reorder.
       </p>
 
@@ -90,7 +90,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                 <span className={`flex-1 font-medium text-[11px] ${effect.enabled ? 'text-white' : 'text-zinc-400'}`}>
                   {names[key]}
                 </span>
-                <span className="text-[10px] font-mono text-zinc-600 mr-1">#{index + 1}</span>
+                <span className="text-[11px] font-mono tabular-nums text-zinc-400 mr-1">#{index + 1}</span>
                 <div className="flex items-center gap-0.5">
                   <button
                     type="button"

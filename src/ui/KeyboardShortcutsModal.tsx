@@ -123,7 +123,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
               <h2 id="shortcuts-title" className="text-sm font-semibold text-white">
                 Studio Keyboard Shortcuts
               </h2>
-              <p className="text-[11px] text-[#a1a1aa]">
+              <p className="text-xs text-[#a1a1aa]">
                 Master speed editing with professional hotkeys &amp; controls
               </p>
             </div>
@@ -190,7 +190,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                     {sc.keys.map((k, kidx) => (
                       <kbd
                         key={`${k}-${kidx}`}
-                        className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[10px] font-semibold tracking-tight shadow-xs select-none"
+                        className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[11px] font-semibold tracking-tight shadow-xs select-none"
                       >
                         {k === '⌘/Ctrl' ? getModifierKey() : k}
                       </kbd>
@@ -203,10 +203,10 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-white/[0.08] bg-[#16161b] flex items-center justify-between text-[11px] text-[#71717a]">
+        <div className="px-6 py-3 border-t border-white/[0.08] bg-[#16161b] flex items-center justify-between text-[11px] text-[#8e8e96]">
           <div className="flex items-center gap-1.5">
-            <Command className="w-3.5 h-3.5 text-[#0088ff]" />
-            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] text-white text-[10px]">?</kbd> anywhere to toggle this guide</span>
+            <Command className="w-3.5 h-3.5 text-[#0070e0]" />
+            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] text-white text-[11px]">?</kbd> anywhere to toggle this guide</span>
           </div>
           <button
             type="button"
