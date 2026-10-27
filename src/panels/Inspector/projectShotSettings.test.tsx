@@ -4,7 +4,6 @@ import { RightSidebar } from './RightSidebar';
 import { createDefaultProject, createDefaultTextLayer } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import type { TextLayer } from '../../model/types';
 
 vi.mock('../../store/useProjectStore', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../store/useProjectStore')>();

@@ -200,7 +200,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     const [addMenuOpen, setAddMenuOpen] = useState(false);
 
     const rowRefs = useRef<Record<string, HTMLDivElement | null>>({});
-    const mirrorScrollRef = useRef<HTMLDivElement | null>(null);
     const dimensionRepairsInFlight = useRef(new Set<string>());
 
     // Repair dimensions for assets imported by older builds, which stored 0×0.
@@ -244,14 +243,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
             }
         });
     }, [project.assets, updateProject]);
-
-    // Keep Left Panel mirror rack scrollTop synced with Timeline scrollTop!
-    useEffect(() => {
-        const el = mirrorScrollRef.current;
-        if (el && Math.abs(el.scrollTop - timelineScrollTop) > 1) {
-            el.scrollTop = timelineScrollTop;
-        }
-    }, [timelineScrollTop]);
 
     useEffect(() => {
         const primaryId = selectedLayerIds[0];
@@ -946,14 +937,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 <span className="truncate">{activeShot.name} TRACKS</span>
                             </div>
 
-                            {/* Scroll-Synced Track Labels (1-to-1 with Timeline Bars on the Right!) */}
+                            {/* Track labels move with the main timeline scroll; only the timeline owns a scrollbar. */}
                             <div
-                                ref={mirrorScrollRef}
-                                onScroll={(e) =>
-                                    setTimelineScrollTop(e.currentTarget.scrollTop)
-                                }
-                                className="flex-1 overflow-y-auto px-1.5 py-2 flex flex-col gap-0.5"
+                                className="flex-1 overflow-hidden"
+                                onWheel={(event) => {
+                                    event.preventDefault();
+                                    setTimelineScrollTop(Math.max(0, timelineScrollTop + event.deltaY));
+                                }}
                             >
+                                <div
+                                    style={{ transform: `translate3d(0, -${timelineScrollTop}px, 0)` }}
+                                    className="px-1.5 py-2 flex flex-col gap-0.5"
+                                >
                                 {/* 0. Media Track Row (Matching Timeline Media row when audio/video clips exist!) */}
                                 {(project.audio?.clips?.length || 0) > 0 && (
                                     <div
@@ -1131,6 +1126,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         );
                                     })}
 
+                                </div>
                             </div>
                         </div>
                     )}
