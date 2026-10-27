@@ -1,3 +1,4 @@
+import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Play, Pause, Volume2, VolumeX, Scissors } from 'lucide-react';
@@ -420,15 +421,15 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 targets.add(l.inMs);
                 targets.add(l.outMs);
             }
-            if (l.entrance.type !== 'none' && `${l.id}-entrance` !== excludeId && l.id !== excludeId) {
-                const entStart = l.inMs + (l.entrance.delayMs || 0);
-                const entDur = Math.max(80, l.entrance.durationMs || 500);
+            if (getTimelineTransition(l, 'entrance').type !== 'none' && `${l.id}-entrance` !== excludeId && l.id !== excludeId) {
+                const entStart = l.inMs + (getTimelineTransition(l, 'entrance').delayMs || 0);
+                const entDur = Math.max(80, getTimelineTransition(l, 'entrance').durationMs || 500);
                 targets.add(entStart);
                 targets.add(entStart + entDur);
             }
-            if (l.exit.type !== 'none' && `${l.id}-exit` !== excludeId && l.id !== excludeId) {
-                const extDur = Math.max(80, l.exit.durationMs || 500);
-                const extEnd = l.outMs - (l.exit.delayMs || 0);
+            if (getTimelineTransition(l, 'exit').type !== 'none' && `${l.id}-exit` !== excludeId && l.id !== excludeId) {
+                const extDur = Math.max(80, getTimelineTransition(l, 'exit').durationMs || 500);
+                const extEnd = l.outMs - (getTimelineTransition(l, 'exit').delayMs || 0);
                 targets.add(Math.max(l.inMs, extEnd - extDur));
                 targets.add(extEnd);
             }
@@ -586,7 +587,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectPreset(which, layer.id);
 
         const startX = e.clientX;
-        const preset = layer[which];
+        const preset = getTimelineTransition(layer, which);
         const origDelay = preset.delayMs || 0;
         const origDur = Math.max(100, preset.durationMs || 500);
         const layerSpan = Math.max(200, layer.outMs - layer.inMs);
@@ -638,7 +639,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'entrance',
                         startMs: layer.inMs + nextDelay,
                         durationMs: nextDur,
-                        label: `In: ${layer.entrance.type}`,
+                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
                         snapped,
                     });
                 } else if (mode === 'left') {
@@ -654,7 +655,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'entrance',
                         startMs: layer.inMs + nextDelay,
                         durationMs: nextDur,
-                        label: `In: ${layer.entrance.type}`,
+                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
                         trimEdge: 'left',
                         snapped: snap.snapped,
                     });
@@ -670,7 +671,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'entrance',
                         startMs: layer.inMs + nextDelay,
                         durationMs: nextDur,
-                        label: `In: ${layer.entrance.type}`,
+                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
                         trimEdge: 'right',
                         snapped: snap.snapped,
                     });
@@ -678,14 +679,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 updateLayer(
                     shot.id,
                     layer.id,
-                    (l) => ({
-                        ...l,
-                        entrance: {
-                            ...l.entrance,
+                    (l) => updateTimelineTransition(l, 'entrance', {
                             delayMs: nextDelay,
                             durationMs: nextDur,
-                        },
-                    }),
+                        }),
                     { skipHistory: true }
                 );
             } else {
@@ -715,7 +712,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'exit',
                         startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
                         durationMs: nextDur,
-                        label: `Out: ${layer.exit.type}`,
+                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
                         snapped,
                     });
                 } else if (mode === 'left') {
@@ -730,7 +727,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'exit',
                         startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
                         durationMs: nextDur,
-                        label: `Out: ${layer.exit.type}`,
+                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
                         trimEdge: 'left',
                         snapped: snap.snapped,
                     });
@@ -747,7 +744,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type: 'exit',
                         startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
                         durationMs: nextDur,
-                        label: `Out: ${layer.exit.type}`,
+                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
                         trimEdge: 'right',
                         snapped: snap.snapped,
                     });
@@ -755,14 +752,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 updateLayer(
                     shot.id,
                     layer.id,
-                    (l) => ({
-                        ...l,
-                        exit: {
-                            ...l.exit,
+                    (l) => updateTimelineTransition(l, 'exit', {
                             delayMs: nextDelay,
                             durationMs: nextDur,
-                        },
-                    }),
+                        }),
                     { skipHistory: true }
                 );
             }
@@ -1824,8 +1817,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                     const isSelected = selectedLayerSet.has(layer.id);
                                     const hasAnimations =
                                         layer.blocks.length > 0 ||
-                                        layer.entrance.type !== 'none' ||
-                                        layer.exit.type !== 'none';
+                                        getTimelineTransition(layer, 'entrance').type !== 'none' ||
+                                        getTimelineTransition(layer, 'exit').type !== 'none';
                                     const isExpanded =
                                         expandedTimelineLayerSet.has(layer.id) ||
                                         (isSelected && hasAnimations);
@@ -1845,11 +1838,11 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 : 'border-[1.5px] border-[#1d4ed8]/70 bg-gradient-to-r from-[#112236]/90 to-[#0d1929]/90';
 
                                     const entStartMs =
-                                        layer.inMs + (layer.entrance.delayMs || 0);
-                                    const entDurMs = Math.max(80, layer.entrance.durationMs || 500);
+                                        layer.inMs + (getTimelineTransition(layer, 'entrance').delayMs || 0);
+                                    const entDurMs = Math.max(80, getTimelineTransition(layer, 'entrance').durationMs || 500);
 
-                                    const extDurMs = Math.max(80, layer.exit.durationMs || 500);
-                                    const extEndMs = layer.outMs - (layer.exit.delayMs || 0);
+                                    const extDurMs = Math.max(80, getTimelineTransition(layer, 'exit').durationMs || 500);
+                                    const extEndMs = layer.outMs - (getTimelineTransition(layer, 'exit').delayMs || 0);
                                     const extStartMs = Math.max(layer.inMs, extEndMs - extDurMs);
 
                                     return (
@@ -1919,32 +1912,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             const clickMs = clientXToLocalMs(e.clientX);
                                                             const midMs = (layer.inMs + layer.outMs) / 2;
                                                             if (clickMs <= midMs) {
-                                                                updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                    ...l,
-                                                                    entrance: {
-                                                                        ...l.entrance,
+                                                                updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'entrance', {
                                                                         type:
-                                                                            l.entrance.type === 'none'
+                                                                            getTimelineTransition(l, 'entrance').type === 'none'
                                                                                 ? 'fade'
-                                                                                : l.entrance.type,
+                                                                                : getTimelineTransition(l, 'entrance').type,
                                                                         delayMs: Math.max(0, clickMs - l.inMs),
                                                                         durationMs: 600,
-                                                                    },
-                                                                }));
+                                                                    }));
                                                                 selectPreset('entrance', layer.id);
                                                             } else {
-                                                                updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                    ...l,
-                                                                    exit: {
-                                                                        ...l.exit,
+                                                                updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'exit', {
                                                                         type:
-                                                                            l.exit.type === 'none'
+                                                                            getTimelineTransition(l, 'exit').type === 'none'
                                                                                 ? 'fade'
-                                                                                : l.exit.type,
+                                                                                : getTimelineTransition(l, 'exit').type,
                                                                         delayMs: Math.max(0, l.outMs - clickMs),
                                                                         durationMs: 550,
-                                                                    },
-                                                                }));
+                                                                    }));
                                                                 selectPreset('exit', layer.id);
                                                             }
                                                         }}
@@ -1952,7 +1937,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         className="h-6 relative flex items-center group"
                                                     >
                                                         {/* Movable & Resizable IN Pill */}
-                                                        {layer.entrance.type !== 'none' && (
+                                                        {getTimelineTransition(layer, 'entrance').type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="in"
                                                                 onClick={(e) => {
@@ -1963,12 +1948,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     }
                                                                     selectPreset('entrance', layer.id);
                                                                     setEasingPopoverTarget({
-                                                                        easing: layer.entrance.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        easing: getTimelineTransition(layer, 'entrance').easing || { kind: 'preset', name: 'ease-out' },
                                                                         onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                ...l,
-                                                                                entrance: { ...l.entrance, easing },
-                                                                            }));
+                                                                            updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'entrance', { easing }));
                                                                         },
                                                                         anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
                                                                     });
@@ -1993,7 +1975,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     } ${ghostDragPreview?.id === `${layer.id}-entrance` ? 'opacity-40' : ''}`}
                                                             >
                                                                 <span className="truncate pointer-events-none">
-                                                                    In: {layer.entrance.type}
+                                                                    In: {getTimelineTransition(layer, 'entrance').type}
                                                                 </span>
                                                                 <span
                                                                     onPointerDown={(e) =>
@@ -2025,7 +2007,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         )}
 
                                                         {/* Movable & Resizable OUT Pill */}
-                                                        {layer.exit.type !== 'none' && (
+                                                        {getTimelineTransition(layer, 'exit').type !== 'none' && (
                                                             <div
                                                                 data-preset-pill="out"
                                                                 onClick={(e) => {
@@ -2036,12 +2018,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     }
                                                                     selectPreset('exit', layer.id);
                                                                     setEasingPopoverTarget({
-                                                                        easing: layer.exit.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        easing: getTimelineTransition(layer, 'exit').easing || { kind: 'preset', name: 'ease-out' },
                                                                         onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                ...l,
-                                                                                exit: { ...l.exit, easing },
-                                                                            }));
+                                                                            updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'exit', { easing }));
                                                                         },
                                                                         anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
                                                                     });
@@ -2065,7 +2044,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     } ${ghostDragPreview?.id === `${layer.id}-exit` ? 'opacity-40' : ''}`}
                                                             >
                                                                 <span className="truncate pointer-events-none">
-                                                                    Out: {layer.exit.type}
+                                                                    Out: {getTimelineTransition(layer, 'exit').type}
                                                                 </span>
                                                                 <span
                                                                     onPointerDown={(e) =>

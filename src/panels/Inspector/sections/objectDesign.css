@@ -1,0 +1,101 @@
+.object-design-inspector {
+    --object-surface: #111111;
+    --object-field: #202020;
+    --object-divider: #252525;
+    background: var(--object-surface);
+    color: #b8b8b8;
+    font-size: 12px;
+}
+.object-design-section, .object-design-inspector [role="region"], .object-design-inspector > section {
+    min-width: 0;
+    border-bottom: 1px solid var(--object-divider);
+}
+.object-design-heading {
+    height: 52px;
+    padding: 12px 14px;
+    border: 0;
+    font-size: 12px;
+    font-weight: 500;
+    color: #b8b8b8;
+    letter-spacing: .01em;
+}
+.object-design-fields { display: flex; flex-direction: column; gap: 14px; padding: 0 14px 22px; }
+.object-design-fields:empty { display: none; }
+.object-design-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
+.object-design-triple { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.object-design-field-action { display: flex; align-items: center; gap: 8px; }
+.object-design-field-action > :first-child { flex: 1; min-width: 0; }
+.object-design-field-action > button { flex: none; width: 24px; height: 28px; }
+.object-design-action-space { margin-right: 32px; }
+.object-design-inspector [role="spinbutton"], .object-design-input, .object-design-inspector .figma-select {
+    min-width: 0;
+    height: 28px;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    background: var(--object-field);
+    padding: 0 8px;
+    color: #ededed;
+    font-size: 12px;
+    box-shadow: none;
+}
+.object-design-inspector [role="spinbutton"] > span { font-size: 12px; font-weight: 400; }
+.object-design-inspector [role="spinbutton"] > span:first-child { color: #a5a5a5; }
+.object-design-inspector [role="spinbutton"]:hover, .object-design-inspector .figma-select:hover { background: #292929; }
+.object-design-inspector [role="spinbutton"]:focus-visible, .object-design-input:focus-visible { outline: 1px solid #0088ff; }
+.object-design-input { width: 100%; outline: none; }
+.object-design-inspector svg { width: 14px; height: 14px; stroke-width: 1.65; flex: none; }
+.object-design-fields > .flex-col > .flex:first-child > span { font-weight: 400; color: #a5a5a5; font-size: 11px; }
+.object-design-action-strip { display: flex; align-items: center; border-radius: 8px; background: var(--object-field); padding: 1px 3px; }
+.object-design-action-strip > div { flex: 1; min-width: 0; }
+.object-design-action-strip > div > button { width: 100%; height: 26px; }
+.object-design-field-action > .inline-flex { flex: none; width: 24px; height: 28px; }
+.object-design-alignment { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); margin-right: 32px; }
+.object-design-alignment > div > button { width: 100%; border-radius: 0; height: 28px; background: var(--object-field); }
+.object-design-alignment > div:nth-child(1) > button, .object-design-alignment > div:nth-child(4) > button { border-radius: 8px 0 0 8px; }
+.object-design-alignment > div:nth-child(3) > button, .object-design-alignment > div:nth-child(6) > button { border-radius: 0 8px 8px 0; }
+.object-design-alignment > div:nth-child(3) { padding-right: 6px; }
+.object-design-alignment button:hover, .object-design-action-strip button:hover { background: #303030; }
+.object-design-content { width: 100%; min-height: 52px; resize: vertical; border: 1px solid transparent; border-radius: 18px; background: #1c1c1c; padding: 10px 12px; color: #f2f2f2; font-size: 12px; outline: none; }
+.object-design-content:focus { border-color: #0088ff; }
+.object-design-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; }
+.object-design-thumbnail { display: flex; align-items: center; width: 38px; height: 48px; }
+.object-design-thumbnail img, .object-design-thumbnail video { width: 100%; height: 100%; object-fit: contain; }
+.object-design-swap { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #393939; border-radius: 8px; background: var(--object-field); color: #eee; cursor: pointer; white-space: nowrap; }
+.object-design-swap > span { height: 16px; border-left: 1px solid #393939; margin-left: 4px; }
+.object-design-inspector [role="region"] { padding: 18px 14px; }
+.object-design-inspector [role="region"] > div:first-child { margin-bottom: 18px; }
+.object-design-inspector [role="region"] > div:first-child > span,
+.object-design-inspector > section > div > div:first-child > span { font-size: 12px; font-weight: 500; color: #b8b8b8; }
+.object-design-inspector > .divide-y { display: contents; }
+.object-design-inspector [role="region"] button[aria-expanded] { outline-offset: 2px; }
+.object-design-frame { border-top: 0; padding-top: 18px; padding-bottom: 18px; }
+.object-design-frame-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 14px; min-height: 28px; }
+.object-design-frame-fields { display: flex; flex-direction: column; gap: 16px; padding: 16px 14px 4px; }
+.object-design-frame .device-model-field { min-width: 0; }
+.object-design-frame .device-model-field > .figma-select { width: 100%; }
+.object-design-frame-fields .object-design-screen { border: 1px solid #292929; border-radius: 6px; }
+.object-design-screen > summary { list-style: none; display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 4px 8px; cursor: pointer; color: #ddd; }
+.object-design-screen > summary::-webkit-details-marker { display: none; }
+.object-design-screen .screen-fit-value { margin-left: auto; color: #a5a5a5; }
+.object-design-screen-fields { padding: 10px 8px; display: flex; flex-direction: column; gap: 12px; }
+.object-design-frame-fields > details:not(.object-design-screen) { background: transparent; border: 0; }
+.object-design-effect { padding: 0; background: transparent; border: 0; }
+.object-design-effect > summary { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; padding: 6px 0; }
+.object-design-effect > summary::-webkit-details-marker { display: none; }
+.object-design-effect > summary > div { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
+.object-design-effect > summary > div > span { border-radius: 18px; background: var(--object-field); padding: 6px 10px; flex: 1; color: #eee; font-size: 12px; }
+.object-design-effect > summary > div > span::after { content: ''; float: right; width: 6px; height: 6px; margin: 4px 0 0 8px; border-right: 1px solid #888; border-bottom: 1px solid #888; transform: rotate(45deg); }
+.object-design-effect > div { margin: 8px 0; }
+.object-design-inspector .object-design-effect-add { background: transparent; border: 0; width: 24px; height: 24px; padding: 4px; }
+.object-design-effect-add > svg { display: none; }
+.object-design-inspector [role="radiogroup"] { border: 0; border-radius: 7px; background: var(--object-field); }
+.object-design-inspector [role="radiogroup"] button { padding: 4px; }
+.object-design-inspector [role="radiogroup"] button[aria-checked="true"] { border: 1px solid #666; background: #363636; box-shadow: none; }
+.object-design-inspector > section[aria-label="Layer effects"] > div { padding: 18px 14px; }
+.object-design-inspector > section[aria-label="Layer effects"] > div > div:first-child { margin-bottom: 14px; }
+.object-design-inspector .object-design-fields .border-t { border-color: var(--object-divider); }
+.object-design-label { font-size: 11px; color: #a5a5a5; }
+.object-design-color-row { display: flex; align-items: center; gap: 6px; min-width: 0; border-radius: 8px; background: var(--object-field); padding-right: 6px; }
+.object-design-color-row > button:first-child { flex: 1; min-width: 0; border: 0; background: transparent; }
+.object-design-color-row > button:last-child { flex: none; width: 20px; }
+@media (max-width: 700px) { .object-design-fields { padding-left: 12px; padding-right: 12px; } }

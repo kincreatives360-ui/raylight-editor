@@ -5,6 +5,7 @@ import { useProjectStore } from '../store/useProjectStore';
 const DRAG_THRESHOLD = 3;
 
 interface ScrubInputProps {
+    'aria-label'?: string;
     label: React.ReactNode;
     value: number;
     min?: number;
@@ -32,6 +33,7 @@ function inferStepDecimals(stepValue: number): number {
 }
 
 export const ScrubInput: React.FC<ScrubInputProps> = ({
+    'aria-label': ariaLabel,
     label,
     value,
     min = -Infinity,
@@ -257,7 +259,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             ref={containerRef}
             role="spinbutton"
             tabIndex={isEditing ? -1 : 0}
-            aria-label={labelString}
+            aria-label={ariaLabel ?? labelString}
             aria-valuenow={safeValue}
             aria-valuemin={Number.isFinite(min) ? min : undefined}
             aria-valuemax={Number.isFinite(max) ? max : undefined}

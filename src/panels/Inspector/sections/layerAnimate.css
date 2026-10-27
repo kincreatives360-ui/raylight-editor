@@ -1,0 +1,67 @@
+.layer-animate-inspector, .animate-flyout {
+    --animate-surface: #111;
+    --animate-field: #202020;
+    --animate-border: #272727;
+    color: #b8b8b8;
+    font-size: 12px;
+    background: var(--animate-surface);
+}
+.layer-animate-inspector svg.lucide, .animate-flyout svg.lucide {width:16px;height:16px;stroke-width:1.6;flex:none;}
+.animate-overview, .animate-block {border-bottom:1px solid var(--animate-border);}
+.animate-overview > header, .animate-block > header {display:flex;align-items:center;gap:10px;min-height:64px;padding:16px 14px;font-weight:500;}
+.animate-overview > header > span {flex:1;}
+.animate-overview > header svg {width:18px;height:18px;}
+.animate-preset-row {display:flex;align-items:center;gap:6px;padding:0 14px 22px;}
+.animate-preset-pill {display:flex;align-items:center;gap:10px;flex:1;min-width:0;height:32px;padding:0 10px;border:1px solid var(--animate-border);border-radius:8px;background:#1c1c1c;color:#eee;cursor:pointer;text-align:left;}
+.animate-preset-pill > span {overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.animate-out .animate-preset-pill {background:transparent;}
+.animate-preset-pill:hover {background:#252525;}
+.animate-preset-pill[aria-expanded="true"] {background:#0b354c;border-color:#00aaff;box-shadow:0 0 0 1px #00aaff;}
+.animate-preset-row > .inline-flex {flex:none;}
+.animate-block > header > span {flex:1;min-width:0;}
+.animate-block-actions {display:flex;align-items:center;gap:4px;}
+.animate-block-actions > .inline-flex:first-child {opacity:0;}
+.animate-block:hover .animate-block-actions > .inline-flex:first-child, .animate-block:focus-within .animate-block-actions > .inline-flex:first-child, .animate-block[data-muted="true"] .animate-block-actions > .inline-flex:first-child {opacity:1;}
+.animate-block-fields, .animate-settings-fields {display:flex;flex-direction:column;gap:18px;}
+.animate-block-fields {padding:0 14px 24px;}
+.animate-block fieldset {border:0;padding:0;min-width:0;}
+.animate-block fieldset:disabled {opacity:.55;}
+.animate-pair {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
+.animate-pair > :only-child {grid-column:1/-1;}
+.animate-field-action {display:flex;align-items:center;gap:10px;}
+.animate-field-action > :first-child {flex:1;min-width:0;}
+.layer-animate-inspector [role="spinbutton"], .animate-flyout [role="spinbutton"], .layer-animate-inspector .figma-select, .animate-flyout .figma-select {height:28px;min-width:0;width:100%;background:var(--animate-field);border:1px solid transparent;border-radius:8px;padding:0 9px;color:#eee;font-size:12px;box-shadow:none;}
+.layer-animate-inspector [role="spinbutton"] > span, .animate-flyout [role="spinbutton"] > span {font-size:12px;font-weight:400;}
+.layer-animate-inspector [role="spinbutton"] > span:first-child, .animate-flyout [role="spinbutton"] > span:first-child {color:#aaa;}
+.layer-animate-inspector .figma-select, .animate-flyout .figma-select {border-color:#363636;}
+.layer-animate-inspector [role="spinbutton"]:hover, .animate-flyout [role="spinbutton"]:hover, .layer-animate-inspector .figma-select:hover, .animate-flyout .figma-select:hover {background:#292929;}
+.layer-animate-inspector .flex-col > .flex:first-child > span, .animate-flyout .flex-col > .flex:first-child > span {font-size:11px;font-weight:400;color:#b8b8b8;}
+.animate-directions {display:flex;background:var(--animate-field);border-radius:8px;padding:1px;}
+.animate-directions > button {display:flex;align-items:center;justify-content:center;flex:1;height:28px;min-width:0;border:1px solid transparent;border-radius:7px;color:#aaa;cursor:pointer;}
+.animate-directions > button[aria-pressed="true"] {background:#363636;border-color:#666;color:#eee;}
+.animate-directions > button:hover {color:#fff;}
+.animate-toggle-row {display:flex;align-items:center;justify-content:space-between;gap:12px;}
+.animate-switch {position:relative;width:36px;height:20px;border-radius:20px;background:#404040;border:0;cursor:pointer;}
+.animate-switch > span {position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:white;}
+.animate-switch[aria-checked="true"] {background:#00aaff;}
+.animate-switch[aria-checked="true"] > span {left:19px;}
+.animate-flyout {position:fixed;z-index:125;width:264px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;border:1px solid #333;border-radius:16px;box-shadow:0 8px 24px #0005;font-family:inherit;}
+.animate-menu {width:224px;padding:6px;background:#242424;border-radius:10px;}
+.animate-menu-label {font-size:11px;color:#b5b5b5;padding:8px 10px 6px;}
+.animate-menu > button {display:flex;align-items:center;gap:10px;width:100%;min-height:30px;padding:5px 10px;background:transparent;border:0;border-radius:5px;color:#eee;text-align:left;cursor:pointer;font-size:12px;}
+.animate-menu > button:hover, .animate-menu > button:focus-visible {background:#0088ff;outline:0;color:white;}
+.animate-menu > button > span {flex:1;min-width:0;overflow-wrap:anywhere;}
+.animate-menu-chevron {margin-left:auto;width:12px!important;}
+.animate-menu-divider {height:1px;background:#3a3a3a;margin:6px -6px;}
+.animate-settings {padding:20px 16px;}
+.animate-timing {color:#a8a8a8;font-size:11px;}
+.animate-timing > summary {cursor:pointer;list-style:none;}
+.animate-timing > summary::after {content:'⌄';float:right;}
+.animate-timing[open] > summary {margin-bottom:12px;}
+.animate-timing[open] > summary::after {content:'⌃';}
+.animate-text {display:block;width:100%;resize:vertical;background:var(--animate-field);border:1px solid #333;border-radius:8px;padding:8px;color:#eee;outline:none;font-size:12px;}
+.animate-note {font-size:11px;line-height:1.5;color:#aaa;margin:0;}
+.animate-preset-row[data-muted="true"] > .animate-preset-pill, .animate-block[data-muted="true"] > fieldset {opacity:.5;}
+.layer-animate-inspector :focus-visible, .animate-flyout :focus-visible {outline:1px solid #00aaff;outline-offset:2px;}
+.layer-animate-inspector button:disabled {cursor:default;}
+@media(max-width:600px) {.animate-flyout{max-height:calc(100dvh - 16px);}.animate-settings {width:248px;}}

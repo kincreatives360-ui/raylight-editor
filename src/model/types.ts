@@ -202,9 +202,17 @@ export type TransitionType =
   | 'slide-right'
   | 'float-out'
   | 'scale-out'
-  | 'mask-sweep';
+  | 'mask-sweep'
+  | 'blur'
+  | 'focus'
+  | 'rack-focus'
+  | 'typewriter';
 
 export interface Transitionish {
+  enabled?: boolean;
+  blur?: number;
+  fade?: boolean;
+  stagger?: 'none' | 'letter' | 'word' | 'line';
   type: TransitionType;
   durationMs: number;
   delayMs: number;
@@ -213,7 +221,20 @@ export interface Transitionish {
 }
 
 
+export interface AnimationBlockSettings {
+  targetPosition?: Vec3;
+  targetScale?: Vec3;
+  targetSize?: Size2D;
+  color?: string;
+  intensity?: number;
+  width?: number;
+  direction?: 'left' | 'right' | 'up' | 'down';
+  text?: string;
+}
+
 export interface AnimationBlock {
+  enabled?: boolean;
+  settings?: AnimationBlockSettings;
   id: string;
   label: string;
   property: AnimationBlockProperty;
@@ -344,6 +365,7 @@ export interface TextLayer extends LayerBase {
     color: string;
     align: 'left' | 'center' | 'right';
     letterSpacing: number;
+    lineHeight?: number;
   };
 }
 

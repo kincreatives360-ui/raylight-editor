@@ -1,20 +1,24 @@
-import type { Layer, Project } from '../../model/types';
+import type { Layer, Project, AnimationBlockSettings } from '../../model/types';
 
-export function drawMediaShimmer(ctx: CanvasRenderingContext2D, canvasW: number, canvasH: number, progress: number) {
-            if (progress > 0 && progress < 1) {
-                const shimX = progress * canvasW;
-                const shimGrad = ctx.createLinearGradient(
-                    shimX - canvasW * 0.25,
-                    0,
-                    shimX + canvasW * 0.25,
-                    canvasH
-                );
-                shimGrad.addColorStop(0, 'rgba(255,255,255,0)');
-                shimGrad.addColorStop(0.5, 'rgba(255,255,255,0.35)');
-                shimGrad.addColorStop(1, 'rgba(255,255,255,0)');
-                ctx.fillStyle = shimGrad;
-                ctx.fillRect(0, 0, canvasW, canvasH);
-            }
+/** The caller draws into an isolated layer surface; source-atop preserves glyph/shape alpha. */
+export function drawMediaShimmer(ctx: CanvasRenderingContext2D, canvasW: number, canvasH: number, progress: number, settings?: AnimationBlockSettings) {
+    if (!(progress > 0 && progress < 1)) return;
+    const direction = settings?.direction ?? 'right';
+    const vertical = direction === 'up' || direction === 'down';
+    const reverse = direction === 'left' || direction === 'up';
+    const length = vertical ? canvasH : canvasW;
+    const halfWidth = Math.max(.001, settings?.width ?? .18) * length / 2;
+    const center = (reverse ? 1 - progress : progress) * (length + halfWidth * 2) - halfWidth;
+    const gradient = ctx.createLinearGradient(vertical ? 0 : center - halfWidth, vertical ? center - halfWidth : 0, vertical ? 0 : center + halfWidth, vertical ? center + halfWidth : 0);
+    gradient.addColorStop(0, 'transparent');
+    gradient.addColorStop(.5, settings?.color ?? '#ffffff');
+    gradient.addColorStop(1, 'transparent');
+    ctx.save();
+    ctx.globalCompositeOperation = 'source-atop';
+    ctx.globalAlpha = Math.max(0, Math.min(1, (settings?.intensity ?? 1) * .35));
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
 }
 
 export function applyTextureMask(ctx: CanvasRenderingContext2D, canvasW: number, canvasH: number, layer: Layer, project: Project) {

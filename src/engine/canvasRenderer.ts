@@ -1,3 +1,4 @@
+import { drawMediaShimmer } from '../stage/webgl/mediaDecorations';
 // src/engine/canvasRenderer.ts
 import type {
   Project,
@@ -514,7 +515,7 @@ async function drawLayerOnCanvas(
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
 ): Promise<void> {
   const effects = layer.layer.effects;
-  if (!effects?.warp?.enabled && !effects?.liquidGlass?.enabled && !(effects?.backdropBlur && effects.backdropBlur > 0)) {
+  if (!(layer.shimmerProgress > 0 && layer.shimmerProgress < 1) && !effects?.warp?.enabled && !effects?.liquidGlass?.enabled && !(effects?.backdropBlur && effects.backdropBlur > 0)) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }
   const make = () => { const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; return canvas; };
@@ -794,10 +795,21 @@ async function drawLayerContentOnCanvas(
         : txtLayer.font.align === 'right'
           ? baseW / 2
           : 0;
-    ctx.fillText(evalLayer.textContentOverride ?? txtLayer.content, alignX, 0);
+    const lines = (evalLayer.textContentOverride ?? txtLayer.content).split('\n');
+    const lineHeight = fontSizePx * (txtLayer.font.lineHeight ?? 1.22);
+    const startY = txtLayer.verticalAlign === 'top' ? -baseH / 2 + fontSizePx / 2 : txtLayer.verticalAlign === 'bottom' ? baseH / 2 - fontSizePx / 2 - (lines.length - 1) * lineHeight : -((lines.length - 1) * lineHeight) / 2;
+    ctx.letterSpacing = ((txtLayer.font.letterSpacing || 0) * canvasH / 1080) + 'px';
+    lines.forEach((line, index) => ctx.fillText(line, alignX, startY + index * lineHeight));
     clearShadow(ctx);
   }
 
+  if (evalLayer.shimmerProgress > 0 && evalLayer.shimmerProgress < 1) {
+    ctx.save();
+    ctx.filter = 'none';
+    ctx.translate(-baseW / 2, -baseH / 2);
+    drawMediaShimmer(ctx, baseW, baseH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
+    ctx.restore();
+  }
   ctx.restore();
 }
 

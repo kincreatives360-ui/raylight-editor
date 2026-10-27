@@ -1,5 +1,5 @@
 // src/engine/evaluateLayer.ts
-import type { Layer, Vec3, Size2D } from '../model/types';
+import type { Layer, Vec3, Size2D, AnimationBlockSettings, Transitionish } from '../model/types';
 import { evaluateEasing } from './easing';
 
 export interface EvaluatedLayer {
@@ -17,11 +17,19 @@ export interface EvaluatedLayer {
     extraLayerBlur: number;
     maskSweepProgress: number;
     shimmerProgress: number;
+    shimmerSettings?: AnimationBlockSettings;
     pathRevealProgress: number;
     glowIntensityOffset: number;
     glowRadiusOffset: number;
     textContentOverride?: string;
     layer: Layer;
+}
+
+/** Keep whitespace attached to the preceding word/line and never split a Unicode code point. */
+export function revealText(content: string, progress: number, unit: Transitionish['stagger'] = 'letter'): string {
+    const parts = unit === 'word' ? content.match(/\S+\s*|\s+/g) ?? []
+        : unit === 'line' ? content.match(/[^\n]*\n|[^\n]+$/g) ?? [] : Array.from(content);
+    return parts.slice(0, Math.floor(Math.max(0, Math.min(1, progress)) * parts.length)).join('');
 }
 
 function evaluateSplineOffset(amount: Vec3 | number, u: number): Vec3 {
@@ -64,7 +72,7 @@ export function evaluateLayerAtTime(
     const scale: Vec3 = { ...layer.scale };
     const size: Size2D =
         layer.kind === 'text'
-            ? { width: layer.maxWidth, height: layer.font.size * 2.5 }
+            ? { width: layer.maxWidth, height: layer.font.size * Math.max(2.5, (layer.content.split('\n').length - 1) * (layer.font.lineHeight ?? 1.22) + 1.5) }
             : { ...layer.size };
 
     let opacity = layer.opacity;
@@ -72,6 +80,7 @@ export function evaluateLayerAtTime(
     let extraLayerBlur = 0;
     let maskSweepProgress = 1;
     let shimmerProgress = 0;
+    let shimmerSettings: AnimationBlockSettings | undefined;
     let pathRevealProgress = 1;
     let glowIntensityOffset = 0;
     let glowRadiusOffset = 0;
@@ -86,7 +95,7 @@ export function evaluateLayerAtTime(
                 : [];
 
     for (const ent of entranceList) {
-        if (ent && ent.type !== 'none' && ent.durationMs > 0) {
+        if (ent && ent.enabled !== false && ent.type !== 'none' && ent.durationMs > 0) {
             const entStart = layer.inMs + (ent.delayMs || 0);
             const rawP = (shotLocalTimeMs - entStart) / ent.durationMs;
             if (rawP < 1) {
@@ -94,24 +103,34 @@ export function evaluateLayerAtTime(
                 const inv = 1 - p;
                 const dist = ent.distance ?? 0.18;
 
-                if (ent.type === 'fade') opacity *= p;
+                if (layer.kind === 'text' && (ent.type === 'typewriter' || (ent.stagger && ent.stagger !== 'none'))) {
+                    textContentOverride = revealText(textContentOverride ?? layer.content, p, ent.stagger);
+                }
+                if (ent.type === 'blur' || ent.type === 'focus' || ent.type === 'rack-focus') {
+                    const blur = Math.max(0, ent.blur ?? 40);
+                    const unfocused = Math.max(0, Math.min(1, inv));
+                    extraLayerBlur += blur * (ent.type === 'focus' ? unfocused * unfocused : ent.type === 'rack-focus' ? Math.sqrt(unfocused) : unfocused);
+                    if (ent.fade !== false) opacity *= p;
+                    if (ent.type === 'focus') { scale.x *= 1 + .06 * inv; scale.y *= 1 + .06 * inv; }
+                    if (ent.type === 'rack-focus') position.z -= dist * inv;
+                } else if (ent.type === 'fade') opacity *= p;
                 else if (ent.type === 'slide-up') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     position.y += dist * inv;
                 } else if (ent.type === 'slide-down') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     position.y -= dist * inv;
                 } else if (ent.type === 'slide-left') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     position.x += dist * inv;
                 } else if (ent.type === 'slide-right') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     position.x -= dist * inv;
                 } else if (ent.type === 'float-out') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     position.z -= dist * inv;
                 } else if (ent.type === 'scale-out') {
-                    opacity *= p;
+                    if (ent.fade !== false) opacity *= p;
                     scale.x *= 0.7 + 0.3 * p;
                     scale.y *= 0.7 + 0.3 * p;
                 } else if (ent.type === 'mask-sweep') {
@@ -130,7 +149,7 @@ export function evaluateLayerAtTime(
                 : [];
 
     for (const ext of exitList) {
-        if (ext && ext.type !== 'none' && ext.durationMs > 0) {
+        if (ext && ext.enabled !== false && ext.type !== 'none' && ext.durationMs > 0) {
             const extEnd = layer.outMs - (ext.delayMs || 0);
             const extStart = extEnd - ext.durationMs;
             if (shotLocalTimeMs > extStart) {
@@ -138,24 +157,34 @@ export function evaluateLayerAtTime(
                 const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ext.easing);
                 const dist = ext.distance ?? 0.16;
 
-                if (ext.type === 'fade') opacity *= 1 - p;
+                if (layer.kind === 'text' && (ext.type === 'typewriter' || (ext.stagger && ext.stagger !== 'none'))) {
+                    textContentOverride = revealText(textContentOverride ?? layer.content, 1 - p, ext.stagger);
+                }
+                if (ext.type === 'blur' || ext.type === 'focus' || ext.type === 'rack-focus') {
+                    const blur = Math.max(0, ext.blur ?? 40);
+                    const unfocused = Math.max(0, Math.min(1, p));
+                    extraLayerBlur += blur * (ext.type === 'focus' ? unfocused * unfocused : ext.type === 'rack-focus' ? Math.sqrt(unfocused) : unfocused);
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    if (ext.type === 'focus') { scale.x *= 1 + .06 * p; scale.y *= 1 + .06 * p; }
+                    if (ext.type === 'rack-focus') position.z += dist * p;
+                } else if (ext.type === 'fade') opacity *= 1 - p;
                 else if (ext.type === 'slide-up') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     position.y -= dist * p;
                 } else if (ext.type === 'slide-down') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     position.y += dist * p;
                 } else if (ext.type === 'slide-left') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     position.x -= dist * p;
                 } else if (ext.type === 'slide-right') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     position.x += dist * p;
                 } else if (ext.type === 'float-out') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     position.z += dist * p;
                 } else if (ext.type === 'scale-out') {
-                    opacity *= 1 - p;
+                    if (ext.fade !== false) opacity *= 1 - p;
                     scale.x *= 1 - 0.3 * p;
                     scale.y *= 1 - 0.3 * p;
                 } else if (ext.type === 'mask-sweep') {
@@ -167,14 +196,41 @@ export function evaluateLayerAtTime(
 
     // 3. Evaluate Relative Animation Blocks (During)
     for (const blk of layer.blocks || []) {
-        if (shotLocalTimeMs < blk.startMs) continue;
+        if (blk.enabled === false || shotLocalTimeMs < blk.startMs) continue;
         const rawP =
             blk.durationMs > 0
                 ? Math.max(0, Math.min(1, (shotLocalTimeMs - blk.startMs) / blk.durationMs))
                 : 1;
         const eased = evaluateEasing(rawP, blk.easing);
 
-        if (blk.property === 'followPath') {
+        if (blk.property === 'morph') {
+            const targets = blk.settings;
+            for (const axis of ['x', 'y', 'z'] as const) {
+                if (targets?.targetPosition) position[axis] += (targets.targetPosition[axis] - position[axis]) * eased;
+                if (targets?.targetScale) scale[axis] += (targets.targetScale[axis] - scale[axis]) * eased;
+            }
+            if (targets?.targetSize) {
+                size.width += (targets.targetSize.width - size.width) * eased;
+                size.height += (targets.targetSize.height - size.height) * eased;
+            }
+        } else if (blk.property === 'wiggle') {
+            if (rawP < 1) {
+                // Amount is a normalized stage distance, matching the Inspector's pixel offset control.
+                const amplitude = typeof blk.amount === 'number' ? { x: blk.amount, y: blk.amount * .65, z: 0 } : blk.amount;
+                const decay = (1 - rawP) * (1 - rawP);
+                position.x += Math.sin(rawP * Math.PI * 8) * decay * amplitude.x;
+                position.y += Math.sin(rawP * Math.PI * 11) * decay * amplitude.y;
+                position.z += Math.sin(rawP * Math.PI * 6) * decay * amplitude.z;
+            }
+        } else if (blk.property === 'emphasis') {
+            const strength = typeof blk.amount === 'number' ? blk.amount : blk.amount.x;
+            const pulse = rawP < 1 ? Math.sin(eased * Math.PI) * strength : 0;
+            scale.x *= 1 + pulse; scale.y *= 1 + pulse;
+        } else if (blk.property === 'changeText' && layer.kind === 'text' && blk.settings?.text !== undefined) {
+            // Replace progressively: erase the current string, then type the replacement.
+            textContentOverride = eased < .5 ? revealText(textContentOverride ?? layer.content, 1 - eased * 2)
+                : revealText(blk.settings.text, (eased - .5) * 2);
+        } else if (blk.property === 'followPath') {
             const splineOffset = evaluateSplineOffset(blk.amount, eased);
             position.x += splineOffset.x;
             position.y += splineOffset.y;
@@ -217,6 +273,7 @@ export function evaluateLayerAtTime(
             maskSweepProgress = Math.max(0, Math.min(1, eased * blk.amount));
         } else if (blk.property === 'shimmer') {
             shimmerProgress = rawP < 1 ? eased : 0;
+            shimmerSettings = rawP < 1 ? blk.settings : undefined;
         } else if (blk.property === 'pathReveal') {
             const maxVal = typeof blk.amount === 'number' ? blk.amount : 1;
             pathRevealProgress = Math.max(0, Math.min(1, maxVal * eased));
@@ -263,6 +320,7 @@ export function evaluateLayerAtTime(
         extraLayerBlur,
         maskSweepProgress,
         shimmerProgress,
+        shimmerSettings,
         pathRevealProgress,
         glowIntensityOffset,
         glowRadiusOffset,

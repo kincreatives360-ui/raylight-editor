@@ -371,7 +371,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 drawStudioPlaceholder(ctx, canvasW, canvasH, imgL.name, totalBlurPx, texturePixelRatio);
             }
 
-            drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
         } else if (layer.kind === 'text') {
             const textL = layer as TextLayer;
             ctx.clearRect(0, 0, canvasW, canvasH);
@@ -404,8 +403,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
             const rawContent = evalLayer.textContentOverride ?? (textL.content || 'Headline Title');
             const lines = rawContent.split('\n');
-            const lineHeight = fontSize * 1.22;
-            const startY = cy - ((lines.length - 1) * lineHeight) / 2;
+            const lineHeight = fontSize * (textL.font.lineHeight ?? 1.22);
+            const startY = textL.verticalAlign === 'top' ? fontSize / 2 : textL.verticalAlign === 'bottom' ? canvasH - fontSize / 2 - (lines.length - 1) * lineHeight : cy - ((lines.length - 1) * lineHeight) / 2;
+            ctx.letterSpacing = ((textL.font.letterSpacing || 0) * fontSize / Math.max(.01, textL.font.size * 1080)) + 'px';
 
             lines.forEach((line, idx) => {
                 ctx.fillText(line, cx, startY + idx * lineHeight);
@@ -538,6 +538,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             ctx.restore();
         }
 
+        drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
         applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
         if (evalLayer.motionBlur) {
             applyMotionBlur(
@@ -576,6 +577,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         paddedTextureH,
         gl,
         evalLayer.shimmerProgress,
+        evalLayer.shimmerSettings,
         evalLayer.textContentOverride,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
@@ -640,7 +642,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 canvasH,
                 options
             );
-            drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress);
+            drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
             applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
             if (evalLayer.motionBlur) {
                 applyMotionBlur(
@@ -684,6 +686,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         screenPan,
         screenZoom,
         evalLayer.shimmerProgress,
+        evalLayer.shimmerSettings,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
         dofBlurPx,

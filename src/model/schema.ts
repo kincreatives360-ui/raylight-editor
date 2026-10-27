@@ -211,9 +211,17 @@ export const TransitionTypeSchema = z.enum([
   'float-out',
   'scale-out',
   'mask-sweep',
+  'blur',
+  'focus',
+  'rack-focus',
+  'typewriter',
 ]);
 
 export const TransitionishSchema = z.object({
+  enabled: z.boolean().optional(),
+  blur: z.number().min(0).optional(),
+  fade: z.boolean().optional(),
+  stagger: z.enum(['none', 'letter', 'word', 'line']).optional(),
   type: TransitionTypeSchema,
   durationMs: z.number().min(0),
   delayMs: z.number().min(0),
@@ -236,11 +244,26 @@ export const AnimationBlockPropertySchema = z.enum([
   'counter',
   'glow',
   'pathReveal',
+  'wiggle',
+  'emphasis',
+  'changeText',
+  'morph',
 ]);
 
 export type AnimationBlockProperty = z.infer<typeof AnimationBlockPropertySchema>;
 
 export const AnimationBlockSchema = z.object({
+  enabled: z.boolean().optional(),
+  settings: z.object({
+    targetPosition: Vec3Schema.optional(),
+    targetScale: Vec3Schema.optional(),
+    targetSize: z.object({ width: z.number().min(0), height: z.number().min(0) }).optional(),
+    color: z.string().optional(),
+    intensity: z.number().min(0).optional(),
+    width: z.number().min(0).max(1).optional(),
+    direction: z.enum(['left', 'right', 'up', 'down']).optional(),
+    text: z.string().optional(),
+  }).optional(),
   id: z.string(),
   label: z.string(),
   property: AnimationBlockPropertySchema,
@@ -391,6 +414,7 @@ export const TextLayerSchema = LayerBaseSchema.extend({
     color: z.string(),
     align: z.enum(['left', 'center', 'right']),
     letterSpacing: z.number(),
+    lineHeight: z.number().min(0.5).max(4).optional(),
   }),
 });
 
