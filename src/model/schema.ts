@@ -487,7 +487,7 @@ export const LightAnimationBlockSchema = z.object({
   id: z.string(),
   label: z.string(),
   targetLightId: z.string().optional(),
-  property: z.enum(['position', 'intensity', 'temperature', 'ambience']).optional(),
+  property: z.enum(['position', 'intensity', 'temperature', 'ambience', 'color', 'angle', 'penumbra']).optional(),
   startMs: z.number().min(0),
   durationMs: z.number().min(50),
   fromX: z.number(),
@@ -566,6 +566,7 @@ export const ShotSchema = z.object({
   effectBlocks: z.array(SceneEffectAnimationBlockSchema).optional(),
   light: z.object({
     position: Vec3Schema,
+    target: Vec3Schema.optional(),
     intensity: z.number().min(0),
     temperature: z.number().min(1000).max(15000),
     ambience: z.number().min(0).max(1),
@@ -886,3 +887,8 @@ export function validateProject(raw: unknown): ValidationResult {
   );
   return { success: false, errors };
 }
+
+
+
+
+

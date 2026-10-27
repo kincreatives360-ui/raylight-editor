@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RightSidebar } from './RightSidebar';
-import { createDefaultProject } from '../../model/defaults';
+import { createDefaultProject, createDefaultTextLayer } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import type { TextLayer } from '../../model/types';
@@ -102,8 +102,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
 
     it('keeps shot settings separate from the selected layer inspector', () => {
         const shot = useProjectStore.getState().project.shots[0];
-        const textLayer = shot.layers.find((l) => l.kind === 'text') as TextLayer;
-        expect(textLayer).toBeDefined();
+        const textLayer = createDefaultTextLayer();
+        shot.layers = [textLayer];
 
         useSelectionStore.setState({
             selectedLayerIds: [textLayer.id],

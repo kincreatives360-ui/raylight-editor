@@ -25,7 +25,7 @@ import {
     Pause,
     Upload,
 } from 'lucide-react';
-import type { Shot, Layer, Group, AudioClip } from '../../model/types';
+import { isBlankProjectState, type Shot, type Layer, type Group, type AudioClip } from '../../model/types';
 import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -791,7 +791,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             }
                         }}
                     >
-                        {project.shots.map((shot) => {
+                        {project.shots.filter((shot) => !(isBlankProjectState(project) && shot.id === project.shots[0]?.id)).map((shot) => {
                             const isShotSelected = shot.id === activeShot.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
@@ -988,7 +988,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         selectLayer(layer.id);
                                         setInspectorTab('layer');
                                     }}
-                                    className="order-0 h-7 rounded-md border border-dashed border-sky-500/30 px-2 flex items-center gap-1.5 text-[10px] text-[#8495a8] hover:border-sky-400/70 hover:bg-sky-500/[0.07] hover:text-sky-200 cursor-pointer transition"
+                                    className="order-0 h-10 rounded-lg border border-[#087fad] px-2 flex items-center gap-1.5 text-[10px] text-[#91a9b5] hover:border-[#12b8f5] hover:bg-sky-500/[0.07] hover:text-sky-100 cursor-pointer transition"
                                 >
                                     <Plus className="w-3 h-3 text-sky-400" />
                                     <span>Add layer</span>
@@ -1005,7 +1005,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         }
                                     }}
                                     style={{ order: 30 }}
-                                    className={`h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] cursor-pointer transition ${selectedCameraBlockId
+                                    className={`h-10 px-2 rounded-md flex items-center gap-1.5 text-[11px] cursor-pointer transition ${selectedCameraBlockId
                                         ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
                                         : hasCameraBlocks
                                             ? 'text-emerald-400 hover:bg-white/[0.04]'
@@ -1018,7 +1018,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
                                 {/* 2. Light Track Row (ONLY shown when Light animation is added) */}
                                 {hasLightBlocks && (
-                                    <div style={{ order: 20 }} className="h-7 px-2 rounded-md flex items-center gap-1.5 text-[11px] text-amber-300 hover:bg-white/[0.04] cursor-pointer">
+                                    <div style={{ order: 20 }} className="h-10 px-2 rounded-md flex items-center gap-1.5 text-[11px] text-red-300 hover:bg-white/[0.04] cursor-pointer">
                                         <Sun className="w-3.5 h-3.5 shrink-0 text-amber-400" />
                                         <span className="truncate">Lighting Rig</span>
                                     </div>
@@ -1046,7 +1046,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         setInspectorTab('layer');
                                                         selectLayer(layer.id, false);
                                                     }}
-                                                    className={`h-7 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected
+                                                    className={`h-10 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected
                                                         ? 'bg-[#0088ff] text-white font-semibold'
                                                         : 'text-[#d4d4d8] hover:bg-white/[0.04]'
                                                         }`}
@@ -1093,7 +1093,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                             onClick={() =>
                                                                 selectPreset('entrance', layer.id)
                                                             }
-                                                            className={`h-6 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer ${isSelected && selectedPresetType
+                                                            className={`h-9 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer ${isSelected && selectedPresetType
                                                                 ? 'bg-purple-500/20 text-purple-200 font-medium'
                                                                 : 'text-[#a1a1aa] hover:text-white'
                                                                 }`}
@@ -1112,7 +1112,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                             <div
                                                                 key={blk.id}
                                                                 onClick={() => selectBlock(blk.id, layer.id)}
-                                                                className={`h-6 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer capitalize ${selectedBlockId === blk.id
+                                                                className={`h-9 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer capitalize ${selectedBlockId === blk.id
                                                                     ? 'bg-purple-500/25 text-white font-medium'
                                                                     : 'text-[#a1a1aa] hover:text-white'
                                                                     }`}

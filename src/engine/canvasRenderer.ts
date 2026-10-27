@@ -19,9 +19,9 @@ import type {
 } from './evaluateShot';
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
-import { kelvinToRgb, getArtboardDimensions } from '../stage/stageUtils';
+import { getArtboardDimensions } from '../stage/stageUtils';
+import { resolveLighting } from './lightingSystem';
 import { getShaderColors } from '../model/backgroundPresets';
-import { resolveKeyIntensity } from './lightMath';
 import { applyCanvasSceneEffects } from './canvasSceneEffects';
 
 const MAX_IMAGE_CACHE_SIZE = 100;
@@ -813,7 +813,7 @@ async function drawLayerContentOnCanvas(
   ctx.restore();
 }
 
-function renderSceneLightSources(
+export function renderSceneLightSources(
   ctx: CanvasRenderingContext2D,
   light: LightRig | undefined,
   camera: EvaluatedCamera,
@@ -822,118 +822,108 @@ function renderSceneLightSources(
   aspectRatio?: Project['aspectRatio']
 ): void {
   if (!light) return;
-
+  const resolved = resolveLighting(light);
   const artboard = getArtboardDimensions(aspectRatio);
-  const normTargetX = (camera.target?.x ?? 0) / artboard.width;
-  const normTargetY = (camera.target?.y ?? 0) / artboard.height;
+  const targetX = (camera.target?.x ?? 0) / artboard.width;
+  const targetY = (camera.target?.y ?? 0) / artboard.height;
+  const cameraZoom = Math.max(0.15, camera.zoom);
+  const projectPosition = (x: number, y: number) => ({
+    x: canvasW / 2 + (x - targetX) * canvasW * cameraZoom,
+    y: canvasH / 2 - (y - targetY) * canvasH * cameraZoom,
+  });
+  const drawWash = (color: string, intensity: number, dx: number, dy: number) => {
+    if (intensity <= 0.001) return;
+    const length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length;
+    const uy = dy / length;
+    const startX = canvasW / 2 + ux * canvasW * 0.58;
+    const startY = canvasH / 2 - uy * canvasH * 0.58;
+    const endX = canvasW / 2 - ux * canvasW * 0.42;
+    const endY = canvasH / 2 + uy * canvasH * 0.42;
+    const gradient = ctx.createLinearGradient(startX, startY, endX, endY);
+    gradient.addColorStop(0, hexToRgba(color, Math.min(0.38, intensity * 0.12)));
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.fillStyle = gradient;
+    ctx.fillRect(0, 0, canvasW, canvasH);
+    ctx.restore();
+  };
 
   ctx.save();
-
-  // 1. Scene Ambient Shadow Floor
-  const ambience = light.ambience ?? 0.45;
-  const ambientColor = light.ambientColor || '#f8fafc';
-  if (ambience > 0.05) {
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = hexToRgba(ambientColor, Math.min(0.2, ambience * 0.08));
-    ctx.fillRect(0, 0, canvasW, canvasH);
-    ctx.restore();
-  }
-
-  // 2. Key Directional Light Wash (if enabled)
-  if (light.keyLightEnabled !== false) {
-    const keyInt = resolveKeyIntensity(light) * 0.14;
-    const dirX = light.position?.x ?? -0.28;
-    const dirY = light.position?.y ?? 0.36;
-    const grad = ctx.createLinearGradient(
-      canvasW / 2 + dirX * canvasW * 0.5,
-      canvasH / 2 + dirY * canvasH * 0.5,
-      canvasW / 2 - dirX * canvasW * 0.5,
-      canvasH / 2 - dirY * canvasH * 0.5
-    );
-    const keyColor = kelvinToRgb(light.temperature ?? 6100, Math.min(0.35, keyInt)).css;
-    grad.addColorStop(0, keyColor);
-    grad.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 0, canvasW, canvasH);
-    ctx.restore();
-  }
-
-  const sources = (light.sources || []).filter((s) => s.enabled);
-  for (const src of sources) {
-    const intensity = (src.intensity ?? 1) * (light.intensity ?? 1);
-    if (intensity <= 0.001) continue;
-
-    const baseColor = src.color || '#ffffff';
-
-    if (src.type === 'ambient') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = hexToRgba(baseColor, Math.min(0.25, intensity * 0.06));
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      ctx.restore();
-    } else if (src.type === 'directional') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const dirX = src.position?.x ?? -0.28;
-      const dirY = src.position?.y ?? 0.36;
-      const startX = canvasW / 2 + dirX * canvasW * 0.6;
-      const startY = canvasH / 2 + dirY * canvasH * 0.6;
-      const endX = canvasW / 2 - dirX * canvasW * 0.4;
-      const endY = canvasH / 2 - dirY * canvasH * 0.4;
-      const grad = ctx.createLinearGradient(startX, startY, endX, endY);
-      grad.addColorStop(0, hexToRgba(baseColor, Math.min(0.35, intensity * 0.12)));
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      ctx.restore();
-    } else if (src.type === 'point') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const px = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
-      const py = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
-      const radius = Math.max(30, (src.distance ?? 8) * (canvasW * 0.07) * camera.zoom);
-      const radGrad = ctx.createRadialGradient(px, py, 0, px, py, radius);
-      radGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.45, intensity * 0.2)));
-      radGrad.addColorStop(0.5, hexToRgba(baseColor, Math.min(0.18, intensity * 0.07)));
-      radGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = radGrad;
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      ctx.restore();
-    } else if (src.type === 'spot') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const sx = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
-      const sy = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
-      const radius = Math.max(40, (src.distance ?? 8) * (canvasW * 0.09) * camera.zoom);
-      const spotGrad = ctx.createRadialGradient(sx, sy, 0, sx, sy, radius);
-      spotGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.5, intensity * 0.24)));
-      spotGrad.addColorStop(0.6, hexToRgba(baseColor, Math.min(0.2, intensity * 0.08)));
-      spotGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = spotGrad;
-      ctx.fillRect(0, 0, canvasW, canvasH);
-      ctx.restore();
-    } else if (src.type === 'area') {
-      ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
-      const ax = canvasW / 2 + ((src.position?.x ?? 0) - normTargetX) * canvasW * camera.zoom;
-      const ay = canvasH / 2 + ((src.position?.y ?? 0) - normTargetY) * canvasH * camera.zoom;
-      const areaW = Math.max(20, (src.width ?? 2) * (canvasW * 0.1) * camera.zoom);
-      const areaH = Math.max(20, (src.height ?? 2) * (canvasH * 0.1) * camera.zoom);
-      const areaGrad = ctx.createRadialGradient(ax, ay, 0, ax, ay, Math.max(areaW, areaH));
-      areaGrad.addColorStop(0, hexToRgba(baseColor, Math.min(0.4, intensity * 0.16)));
-      areaGrad.addColorStop(0.7, hexToRgba(baseColor, Math.min(0.12, intensity * 0.04)));
-      areaGrad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = areaGrad;
-      ctx.fillRect(ax - areaW, ay - areaH, areaW * 2, areaH * 2);
-      ctx.restore();
-    }
-  }
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.fillStyle = hexToRgba(resolved.room.environmentTint, Math.min(0.22, resolved.room.intensity * 0.08));
+  ctx.fillRect(0, 0, canvasW, canvasH);
   ctx.restore();
-}
 
+  const keyPosition = projectPosition(light.position?.x ?? -0.28, light.position?.y ?? 0.36);
+  const keyTarget = projectPosition(light.target?.x ?? 0, light.target?.y ?? 0);
+  if (resolved.key.enabled) {
+    drawWash(resolved.key.color, resolved.key.intensity, keyTarget.x - keyPosition.x, keyTarget.y - keyPosition.y);
+  }
+  if (resolved.fill.enabled) {
+    drawWash(resolved.fill.color, resolved.fill.intensity, -keyTarget.x + keyPosition.x, -keyTarget.y + keyPosition.y);
+  }
+
+  const sourceById = new Map((light.sources ?? []).map((source) => [source.id, source]));
+  for (const source of resolved.sources) {
+    const model = sourceById.get(source.id);
+    if (!model) continue;
+    const position = projectPosition(model.position.x, model.position.y);
+    const target = projectPosition(model.target?.x ?? 0, model.target?.y ?? 0);
+    const baseIntensity = source.type === 'ambient' ? source.intensity * 0.5 : source.intensity;
+    if (baseIntensity <= 0.001) continue;
+
+    if (source.type === 'ambient') {
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = hexToRgba(source.color, Math.min(0.25, baseIntensity * 0.06));
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.restore();
+      continue;
+    }
+    if (source.type === 'directional') {
+      drawWash(source.color, source.intensity, target.x - position.x, target.y - position.y);
+      continue;
+    }
+
+    const radius = source.distance > 0
+      ? Math.max(24, source.distance * canvasW * 0.07 * cameraZoom)
+      : Math.max(canvasW, canvasH);
+    const centerAlpha = Math.min(0.45, baseIntensity * 0.2);
+    const halfDistanceFalloff = Math.pow(0.5, source.decay);
+    const gradient = ctx.createRadialGradient(position.x, position.y, 0, position.x, position.y, radius);
+    gradient.addColorStop(0, hexToRgba(source.color, centerAlpha));
+    gradient.addColorStop(source.type === 'spot' ? 0.62 : 0.5, hexToRgba(source.color, Math.min(0.2, centerAlpha * halfDistanceFalloff)));
+    gradient.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    if (source.type === 'spot') {
+      const direction = Math.atan2(target.y - position.y, target.x - position.x);
+      ctx.translate(position.x, position.y);
+      ctx.rotate(direction);
+      ctx.beginPath();
+      ctx.moveTo(0, 0);
+      ctx.arc(0, 0, radius, -source.angle, source.angle);
+      ctx.closePath();
+      ctx.clip();
+      ctx.fillStyle = gradient;
+      ctx.fillRect(-radius, -radius, radius * 2, radius * 2);
+    } else if (source.type === 'area') {
+      const width = Math.max(24, source.width * canvasW * 0.1 * cameraZoom);
+      const height = Math.max(24, source.height * canvasH * 0.1 * cameraZoom);
+      const direction = Math.atan2(target.y - position.y, target.x - position.x);
+      ctx.translate(position.x, position.y);
+      ctx.rotate(direction);
+      ctx.fillStyle = gradient;
+      ctx.fillRect(-width / 2, -height / 2, width, height);
+    } else {
+      ctx.fillStyle = gradient;
+      ctx.fillRect(position.x - radius, position.y - radius, radius * 2, radius * 2);
+    }
+    ctx.restore();
+  }
+}
 function renderSingleBackground(
   ctx: CanvasRenderingContext2D,
   project: Project,
@@ -1185,4 +1175,8 @@ export async function renderProjectFrameToCanvas(
 
   ctx.restore();
 }
+
+
+
+
 

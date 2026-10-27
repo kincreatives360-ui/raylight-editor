@@ -75,6 +75,16 @@ describe('Project IO Storage & File Operations', () => {
     expect(loaded?.name).toBe('Saved Project Beta');
   });
 
+  it('round-trips the Sun target added to the lighting rig schema', () => {
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      shots: DEFAULT_PROJECT.shots.map((shot, index) => index === 0
+        ? { ...shot, light: { ...shot.light, target: { x: 1, y: -0.5, z: 0.25 } } }
+        : shot),
+    };
+    saveProjectToBrowser(project);
+    expect(loadProjectFromBrowser()?.shots[0]?.light.target).toEqual({ x: 1, y: -0.5, z: 0.25 });
+  });
   it('3. loadProjectFromBrowser migrates legacy blank project with legacy #111114 canvas background', () => {
     const legacyBlank = {
       ...DEFAULT_PROJECT,
@@ -453,4 +463,5 @@ describe('Project IO Storage & File Operations', () => {
     saveOpfsSpy.mockRestore();
   });
 });
+
 

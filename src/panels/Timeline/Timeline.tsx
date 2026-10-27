@@ -7,10 +7,11 @@ import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { evaluateEasing } from '../../engine/easing';
 import { TimelineTimecode } from './TimelineTimecode';
 import { PlayheadOverlay } from './PlayheadOverlay';
 import { EasingPopover } from './EasingPopover';
+import { TimelineEasingCurve } from './TimelineEasingCurve';
+import { getShotTimelineWidth } from './timelineBarGeometry';
 import { generateWaveformPeaks } from '../../engine/audioEngine';
 
 const AudioWaveform: React.FC<{
@@ -182,6 +183,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     const suppressShotClickRef = useRef<string | null>(null);
     const suppressPillClickRef = useRef<string | null>(null);
     const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
+    const [addShotHoverX, setAddShotHoverX] = useState<number | null>(null);
+    const [addLayerHoverX, setAddLayerHoverX] = useState<number | null>(null);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
     const isDraggingPlayheadRef = useRef(false);
@@ -247,6 +250,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     const BASE_PX_PER_SECOND = 140;
     const pxPerSecond = BASE_PX_PER_SECOND * timelineZoom;
     const pxPerMs = pxPerSecond / 1000;
+    const addLayerLaneWidth = activeShot
+        ? getShotTimelineWidth(activeShot.durationMs, pxPerMs)
+        : 0;
+    const addLayerGhostWidth = Math.min(132, addLayerLaneWidth);
+    const addLayerGhostLeft = Math.max(
+        0,
+        Math.min(addLayerLaneWidth - addLayerGhostWidth, (addLayerHoverX ?? 0) - addLayerGhostWidth / 2)
+    );
     const timelineWidth = Math.max(
         1,
         timelineViewportWidth - 32,
@@ -1418,16 +1429,42 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 {isBlankState && timelineView === 'video' && (
                     <button
                         type="button"
+                        aria-label="Add shot"
                         onPointerDown={(event) => event.stopPropagation()}
+                        onPointerMove={(event) => {
+                            const bounds = event.currentTarget.getBoundingClientRect();
+                            setAddShotHoverX(event.clientX - bounds.left);
+                        }}
+                        onPointerLeave={() => setAddShotHoverX(null)}
                         onClick={(event) => {
                             event.stopPropagation();
                             const created = addShot();
                             selectShot(created.id);
                             setInspectorTab('shot');
                         }}
-                        className="absolute left-2 right-2 top-[38px] z-10 h-9 rounded-lg border border-[#142b37] bg-[#0e191e] text-[11px] text-[#9aaaba] hover:border-[#0088ff]/50 hover:bg-[#11212a] transition"
+                        className="absolute left-2 right-2 top-[38px] z-10 h-9 overflow-hidden rounded-lg border border-dashed border-[#263946] bg-[#0e191e] text-[11px] text-[#9aaaba] hover:border-[#0088ff]/50 hover:bg-[#11212a] transition"
                     >
-                        Click to add shot
+                        {addShotHoverX !== null && (
+                            <span
+                                aria-hidden="true"
+                                className="absolute inset-y-0 pointer-events-none"
+                                style={{ left: `${addShotHoverX}px`, transform: 'translateX(-50%)' }}
+                            >
+                                <span
+                                    className="absolute h-4 w-10 -translate-x-1/2 -translate-y-1/2 rounded border border-dashed border-sky-400/35 bg-sky-400/[0.03]"
+                                    style={{ left: -58, top: '50%' }}
+                                />
+                                <span
+                                    className="absolute h-6 w-14 -translate-x-1/2 -translate-y-1/2 rounded-md border border-dashed border-sky-300/75 bg-sky-400/[0.08]"
+                                    style={{ left: 0, top: '50%' }}
+                                />
+                                <span
+                                    className="absolute h-4 w-10 -translate-x-1/2 -translate-y-1/2 rounded border border-dashed border-sky-400/35 bg-sky-400/[0.03]"
+                                    style={{ left: 58, top: '50%' }}
+                                />
+                            </span>
+                        )}
+                        <span className={addShotHoverX === null ? '' : 'opacity-50'}>Add shot</span>
                     </button>
                 )}
                 <div
@@ -1656,8 +1693,15 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     {timelineView === 'scene' && activeShot && (
                         <div className="relative flex flex-col gap-0.5">
                             {/* Raylight exposes the add-layer lane before the layer rows. */}
-                            <div
+                            <button
+                                type="button"
+                                aria-label="Add layer to the open shot"
                                 onPointerDown={(e) => e.stopPropagation()}
+                                onPointerMove={(event) => {
+                                    const bounds = event.currentTarget.getBoundingClientRect();
+                                    setAddLayerHoverX(Math.max(0, Math.min(addLayerLaneWidth, event.clientX - bounds.left)));
+                                }}
+                                onPointerLeave={() => setAddLayerHoverX(null)}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     const created = addLayerToShot(activeShot.id, 'shape', {
@@ -1668,10 +1712,24 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                     selectLayer(created.id, false);
                                 }}
                                 title="Add a layer to this shot"
-                                className="order-0 h-7 relative flex items-center justify-center rounded-md border border-dashed border-sky-500/30 bg-sky-500/[0.025] text-[10px] text-[#8495a8] hover:border-sky-400/70 hover:bg-sky-500/[0.07] hover:text-sky-200 cursor-pointer transition"
+                                style={{ order: 0, width: `${addLayerLaneWidth}px` }}
+                                className="h-10 shrink-0 relative overflow-hidden flex items-center justify-center rounded-lg border border-transparent bg-transparent text-[10px] text-[#8495a8] hover:text-sky-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-700 cursor-pointer"
                             >
-                                <span>+ Add layer</span>
-                            </div>
+                                {addLayerHoverX === null ? (
+                                    <span>+ Add layer</span>
+                                ) : (
+                                    <span
+                                        aria-hidden="true"
+                                        className="absolute left-0 top-1/2 h-8 rounded-md border border-dotted border-sky-400/80 bg-sky-400/[0.06] text-sky-100 flex items-center justify-center pointer-events-none"
+                                        style={{
+                                            width: `${addLayerGhostWidth}px`,
+                                            transform: `translate3d(${addLayerGhostLeft}px, -50%, 0)`,
+                                        }}
+                                    >
+                                        + Add layer
+                                    </span>
+                                )}
+                            </button>
 
                             {/* Camera track: always present, with a hover preview in empty space. */}
                             <div
@@ -1688,7 +1746,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 title="Hover to preview a camera move; click to add it"
                                 aria-label="Camera track"
                                 style={{ order: 30 }}
-                                className="h-7 relative flex items-center cursor-pointer"
+                                className="h-10 relative flex items-center cursor-pointer"
                             >
                                     {hoverCameraTimeMs !== null && !activeShot.cameraBlocks.some((block) =>
                                         hoverCameraTimeMs >= block.startMs &&
@@ -1719,15 +1777,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     startCameraBlockDrag(e, activeShot, cb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
-                                                className={`absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
-                                                        ? 'border-emerald-300 bg-emerald-700/80 text-white shadow'
-                                                        : 'border-emerald-500/70 bg-emerald-950/80 text-emerald-200 hover:border-emerald-400'
+                                                title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
+                                                className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
+                                                        ? 'border-emerald-300 bg-gradient-to-b from-[#073b28]/95 to-[#061b13]/95 text-emerald-100 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]'
+                                                        : 'border-emerald-600/90 bg-gradient-to-b from-[#08281d]/90 to-[#06160f]/95 text-emerald-200 hover:border-emerald-400'
                                                     }`}
                                             >
-                                                <span className="truncate pointer-events-none">
-                                                    {modeLabel} · {cb.from?.zoom ?? 1}x &rarr;{' '}
-                                                    {cb.to?.zoom ?? 1.1}x
-                                                </span>
+                                                <TimelineEasingCurve easing={cb.easing} color="#18c988" />
                                                 <span
                                                     onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'left')
@@ -1747,7 +1803,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
                             {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
                             {hasLightBlocks && (
-                                <div style={{ order: 20 }} className="h-7 relative flex items-center">
+                                <div style={{ order: 20 }} className="h-10 relative flex items-center">
                                     {(activeShot.lightBlocks || []).map((lb) => {
                                         const isLightSelected = selectedLightBlockId === lb.id;
                                         const left = lb.startMs * pxPerMs;
@@ -1765,14 +1821,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     startLightBlockDrag(e, activeShot, lb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
-                                                className={`group/light absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
-                                                        ? 'border-amber-300 bg-amber-600/80 text-white shadow'
-                                                        : 'border-amber-500/70 bg-amber-950/80 text-amber-200 hover:border-amber-400'
+                                                title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
+                                                className={`group/light absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
+                                                        ? 'border-[#ff402f] bg-gradient-to-b from-[#3a1713]/95 to-[#1e0e0c]/95 text-red-100 shadow-[inset_0_0_20px_rgba(248,62,43,0.12)]'
+                                                        : 'border-[#ff3829] bg-gradient-to-b from-[#321410]/90 to-[#1c0c0a]/95 text-red-200 hover:border-[#ff6b5c]'
                                                     }`}
                                             >
-                                                <span className="truncate pointer-events-none">
-                                                    {lb.label || 'Light Sweep'}
-                                                </span>
+                                                <TimelineEasingCurve easing={lb.easing} color="#ff493b" />
                                                 <button
                                                     onClick={(e) => {
                                                         e.stopPropagation();
@@ -1829,13 +1884,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         (layer.outMs - layer.inMs) * pxPerMs
                                     );
 
-                                    const barStyle = isSelected
-                                        ? 'border-[1.5px] border-dashed border-[#38bdf8] bg-gradient-to-r from-[#073b63]/90 via-[#0a4f82]/90 to-[#073b63]/90'
-                                        : layer.kind === 'text'
-                                            ? 'border-[1.5px] border-[#ec4899] bg-gradient-to-r from-[#70153c]/90 via-[#9d174d]/90 to-[#70153c]/90'
-                                            : layer.kind === 'shape'
-                                                ? 'border-[1.5px] border-[#6d28d9] bg-gradient-to-r from-[#261447]/90 to-[#1b0e36]/90'
-                                                : 'border-[1.5px] border-[#1d4ed8]/70 bg-gradient-to-r from-[#112236]/90 to-[#0d1929]/90';
+                                    const barStyle = layer.kind === 'shape'
+                                        ? isSelected
+                                            ? 'border-[#7773ff] bg-gradient-to-b from-[#1b1b3c]/95 to-[#0c1023]/95 shadow-[inset_0_0_20px_rgba(99,102,241,0.12)]'
+                                            : 'border-[#4b4bc3] bg-gradient-to-b from-[#17172e]/90 to-[#0b1020]/95 hover:border-[#7773ff]'
+                                        : isSelected
+                                            ? 'border-[#16b8f4] bg-gradient-to-b from-[#0b2938]/95 to-[#08151e]/95 shadow-[inset_0_0_20px_rgba(14,165,233,0.12)]'
+                                            : 'border-[#087fad] bg-gradient-to-b from-[#0a222e]/90 to-[#07141d]/95 hover:border-[#16b8f4]';
 
                                     const entStartMs =
                                         layer.inMs + (getTimelineTransition(layer, 'entrance').delayMs || 0);
@@ -1847,20 +1902,19 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
                                     return (
                                         <div key={layer.id} style={{ order: 10 }} className="space-y-0.5">
-                                            {/* Main Layer Bar Row (h-7 = 28px — NO duplicate text header above it!) */}
-                                            <div className="h-7 relative flex items-center">
+                                            {/* Main layer bars use the same 40px track height as the reference. */}
+                                            <div className="h-10 relative flex items-center">
                                                 <div
                                                     onPointerDown={(e) =>
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
                                                     style={{ left: `${left}px`, width: `${width}px` }}
-                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle} ${
+                                                    aria-label={`${layer.name} layer bar`}
+                                                    title={`${layer.name} · ${(layer.outMs - layer.inMs) / 1000}s`}
+                                                    className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border cursor-grab active:cursor-grabbing transition ${barStyle} ${
                                                         ghostDragPreview?.id === layer.id ? 'opacity-40' : ''
                                                     }`}
                                                 >
-                                                    <span className="absolute inset-0 flex items-center justify-center px-3 text-[10px] font-medium text-white/80 truncate pointer-events-none">
-                                                        {layer.name}
-                                                    </span>
                                                     <span
                                                         onPointerDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'in')
@@ -1934,7 +1988,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             }
                                                         }}
                                                         title="Click anywhere on this row to place an In or Out transition"
-                                                        className="h-6 relative flex items-center group"
+                                                        className="h-9 relative flex items-center group"
                                                     >
                                                         {/* Movable & Resizable IN Pill */}
                                                         {getTimelineTransition(layer, 'entrance').type !== 'none' && (
@@ -1968,15 +2022,16 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     left: `${entStartMs * pxPerMs}px`,
                                                                     width: `${Math.max(28, entDurMs * pxPerMs)}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected &&
+                                                            className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected &&
                                                                         selectedPresetType === 'entrance'
-                                                                        ? 'border-purple-300 bg-purple-700 text-white shadow'
-                                                                        : 'border-[#8b5cf6] bg-[#341a63]/90 text-purple-200 hover:border-purple-400'
+                                                                    ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
+                                                                    : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
                                                                     } ${ghostDragPreview?.id === `${layer.id}-entrance` ? 'opacity-40' : ''}`}
                                                             >
-                                                                <span className="truncate pointer-events-none">
-                                                                    In: {getTimelineTransition(layer, 'entrance').type}
-                                                                </span>
+                                                                <TimelineEasingCurve
+                                                                    easing={getTimelineTransition(layer, 'entrance').easing || { kind: 'preset', name: 'ease-out' }}
+                                                                    color="#bd70ff"
+                                                                />
                                                                 <span
                                                                     onPointerDown={(e) =>
                                                                         startPresetDrag(
@@ -2038,14 +2093,15 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     left: `${extStartMs * pxPerMs}px`,
                                                                     width: `${Math.max(28, extDurMs * pxPerMs)}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
-                                                                        ? 'border-pink-300 bg-pink-700 text-white shadow'
-                                                                        : 'border-[#ec4899] bg-[#591636]/90 text-pink-200 hover:border-pink-400'
+                                                            className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
+                                                                    ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
+                                                                    : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
                                                                     } ${ghostDragPreview?.id === `${layer.id}-exit` ? 'opacity-40' : ''}`}
                                                             >
-                                                                <span className="truncate pointer-events-none">
-                                                                    Out: {getTimelineTransition(layer, 'exit').type}
-                                                                </span>
+                                                                <TimelineEasingCurve
+                                                                    easing={getTimelineTransition(layer, 'exit').easing || { kind: 'preset', name: 'ease-in' }}
+                                                                    color="#bd70ff"
+                                                                />
                                                                 <span
                                                                     onPointerDown={(e) =>
                                                                         startPresetDrag(
@@ -2092,11 +2148,11 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         )}
                                                     </div>
 
-                                                    {/* ♦ Property Block Sub-rows (h-6 = 24px each) */}
+                                                    {/* ♦ Property blocks use 36px rows; bars are 90% of the main layer bar. */}
                                                     {layer.blocks.map((blk) => (
                                                         <div
                                                             key={blk.id}
-                                                            className="h-6 relative flex items-center"
+                                                            className="h-9 relative flex items-center"
                                                         >
                                                             <div
                                                                 onClick={(e) => {
@@ -2135,33 +2191,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                         blk.durationMs * pxPerMs
                                                                     )}px`,
                                                                 }}
-                                                                className={`absolute h-4 rounded-full border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition relative ${selectedBlockId === blk.id
-                                                                        ? 'border-[#c084fc] bg-[#581c87] text-white shadow'
-                                                                        : 'border-[#7c3aed] bg-[#2a1452]/90 text-purple-200 hover:border-[#a855f7]'
+                                                                title={`${blk.label} · ${(blk.durationMs / 1000).toFixed(2)}s · Click to edit easing`}
+                                                                aria-label={`${blk.label} animation bar`}
+                                                                className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition ${selectedBlockId === blk.id
+                                                                        ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
+                                                                        : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
                                                                     } ${ghostDragPreview?.id === blk.id ? 'opacity-40' : ''}`}
                                                             >
-                                                                <svg
-                                                                    aria-hidden="true"
-                                                                    viewBox="0 0 100 16"
-                                                                    preserveAspectRatio="none"
-                                                                    className="absolute inset-0 h-full w-full rounded-full opacity-50 pointer-events-none"
-                                                                >
-                                                                    <polyline
-                                                                        fill="none"
-                                                                        stroke="currentColor"
-                                                                        strokeWidth="1.25"
-                                                                        strokeLinecap="round"
-                                                                        strokeLinejoin="round"
-                                                                        points={Array.from({ length: 25 }, (_, index) => {
-                                                                            const progress = index / 24;
-                                                                            const eased = Math.max(0, Math.min(1, evaluateEasing(progress, blk.easing)));
-                                                                            return `${(progress * 100).toFixed(2)},${(14 - eased * 12).toFixed(2)}`;
-                                                                        }).join(' ')}
-                                                                    />
-                                                                </svg>
-                                                                <span className="truncate pointer-events-none">
-                                                                    {blk.label}
-                                                                </span>
+                                                                <TimelineEasingCurve easing={blk.easing} color="#bd70ff" />
                                                                 <span
                                                                     onPointerDown={(e) =>
                                                                         startBlockDrag(

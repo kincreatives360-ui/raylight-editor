@@ -16,6 +16,7 @@ import type {
     CameraKeyframeEndpoint,
     Easing,
 } from '../model/types';
+import { isBlankProjectState } from '../model/types';
 import {
     DEFAULT_PROJECT,
     createDefaultProject,
@@ -732,7 +733,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
         let addedShot = newShot;
         get().updateProject((proj) => {
-            const nextShots = recalculateShotStartTimes([...proj.shots, newShot]);
+            const nextShots = recalculateShotStartTimes(
+                isBlankProjectState(proj) ? [newShot] : [...proj.shots, newShot]
+            );
             addedShot = nextShots.find((s) => s.id === newShot.id) || nextShots[nextShots.length - 1];
             return {
                 ...proj,

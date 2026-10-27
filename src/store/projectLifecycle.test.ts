@@ -42,7 +42,7 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     expect(p1.shots).not.toBe(p2.shots);
   });
 
-  it('2. addShot() appends a second shot and recalculates startMs correctly on blank/empty project', () => {
+  it('2. addShot() replaces the implicit blank placeholder instead of retaining an unrequested shot', () => {
     const store = useProjectStore.getState();
 
     // Set project to a blank single shot
@@ -68,12 +68,10 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     const newShot = store.addShot();
     const shotsAfter = useProjectStore.getState().project.shots;
 
-    expect(shotsAfter.length).toBe(2);
-    expect(shotsAfter[0].id).toBe('shot-blank');
-    expect(shotsAfter[1].id).toBe(newShot.id);
+    expect(shotsAfter).toHaveLength(1);
+    expect(shotsAfter[0].id).toBe(newShot.id);
     expect(shotsAfter[0].startMs).toBe(0);
-    expect(shotsAfter[1].startMs).toBe(3000);
-    expect(newShot.startMs).toBe(3000);
+    expect(newShot.startMs).toBe(0);
   });
 
   it('3. splitShotAtPlayhead recalculates startMs for newly created and all subsequent shots', () => {

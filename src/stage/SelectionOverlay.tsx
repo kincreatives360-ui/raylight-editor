@@ -1,7 +1,7 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Move, RotateCw, Compass, Lock, Crop, Type, Sparkles } from 'lucide-react';
+import { Move, RotateCw, Compass, Lock, Crop, Type } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import {
@@ -731,29 +731,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             {/* 8 RESIZE / CROP HANDLES */}
             {!isLocked &&
                 !isEditingInlineText &&
-                handleItems.map((h) =>
-                    h.dir === 'ne' ? (
-                        <div
-                            key={h.dir}
-                            onMouseDown={(e) => handleStartResize(e, h.dir)}
-                            style={{
-                                left: `${h.pos.x}px`,
-                                top: `${h.pos.y}px`,
-                                transform: 'translate(-50%, -50%)',
-                                cursor: h.cursor,
-                            }}
-                            title={isCropping ? "Crop handle" : "Scale handle"}
-                            className={`w-5 h-5 rounded-full ${
-                                isCropping
-                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
-                                    : isAnimateMode
-                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
-                                        : 'bg-[#0088ff] border-white'
-                            } border-2 shadow-xl flex items-center justify-center absolute pointer-events-auto hover:scale-125 transition-transform duration-100 ease-out z-20`}
-                        >
-                            <Sparkles className="w-2.5 h-2.5 text-white" />
-                        </div>
-                    ) : (
+                handleItems.map((h) => (
                         <div
                             key={h.dir}
                             onMouseDown={(e) => handleStartResize(e, h.dir)}
@@ -770,8 +748,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                         : 'bg-white border-[var(--accent-primary,#0088ff)]'
                                 } hover:scale-125 transition-transform duration-100 ease-out`}
                         />
-                    )
-                )}
+                ))}
 
             {/* INLINE TEXT EDITOR OR CENTER PILLS */}
             <div

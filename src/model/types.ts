@@ -439,7 +439,7 @@ export interface LightAnimationBlock {
   label: string;
   /** 'key' for primary directional light, or specific source id */
   targetLightId?: string;
-  property?: 'position' | 'intensity' | 'temperature' | 'ambience';
+  property?: 'position' | 'intensity' | 'temperature' | 'ambience' | 'color' | 'angle' | 'penumbra';
   startMs: number;
   durationMs: number;
   fromX: number;
@@ -511,6 +511,8 @@ export interface SceneLight {
 
 export interface LightRig {
   position: Vec3;
+  /** Aim target for the primary Sun/directional light. */
+  target?: Vec3;
   intensity: number;
   temperature: number;
   /** Ambient light intensity / shadow floor (0 - 1) */
@@ -731,4 +733,8 @@ export function resolveShotBackground(project: Project, shot?: Shot): Background
   }
   return shot.background ?? project?.background ?? { kind: 'solid', color: '#0c0e17' };
 }
+
+
+
+
 

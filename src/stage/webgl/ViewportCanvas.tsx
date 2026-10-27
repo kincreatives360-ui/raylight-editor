@@ -1,7 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Project, Background } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
 import type {
@@ -47,26 +46,6 @@ function useDevicePixelRatio() {
     return deviceDpr;
 }
 
-const StudioEnvironment: React.FC = () => {
-    const { gl } = useThree();
-
-    const envTexture = useMemo(() => {
-        const pmrem = new THREE.PMREMGenerator(gl);
-        pmrem.compileEquirectangularShader();
-        const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-        pmrem.dispose();
-        return texture;
-    }, [gl]);
-
-    useEffect(() => {
-        return () => {
-            envTexture.dispose();
-        };
-    }, [envTexture]);
-
-    return <primitive object={envTexture} attach="environment" />;
-};
-
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
@@ -82,21 +61,54 @@ const ViewportRenderBridge: React.FC<{
 };
 
 
-const StageCaptureBridge: React.FC = () => {
+const StageCaptureBridge: React.FC<{ frame: EvaluatedProjectFrame }> = ({ frame }) => {
     const { gl, invalidate } = useThree();
+    const frameRef = useRef(frame);
+    useEffect(() => {
+        frameRef.current = frame;
+    }, [frame]);
 
     useEffect(() => {
-        const unregister = registerStageCapture(async (_timeMs: number, _width: number, _height: number) => {
-            invalidate();
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-            return gl.domElement;
+        const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+        const unregister = registerStageCapture(async (timeMs, width, height) => {
+            let attempts = 0;
+            while (Math.abs(frameRef.current.globalTimeMs - timeMs) > 0.75 && attempts < 30) {
+                await nextFrame();
+                attempts += 1;
+            }
+            if (Math.abs(frameRef.current.globalTimeMs - timeMs) > 0.75) return null;
+            if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
+
+            const size = gl.getSize(new THREE.Vector2());
+            const pixelRatio = gl.getPixelRatio();
+            const renderTarget = gl.getRenderTarget();
+            try {
+                gl.setRenderTarget(null);
+                gl.setPixelRatio(1);
+                gl.setSize(width, height, false);
+                invalidate();
+                await nextFrame();
+                await nextFrame();
+                const captured = document.createElement('canvas');
+                captured.width = width;
+                captured.height = height;
+                const context = captured.getContext('2d');
+                if (!context) return null;
+                context.drawImage(gl.domElement, 0, 0, width, height);
+                return captured;
+            } finally {
+                gl.setRenderTarget(null);
+                gl.setPixelRatio(pixelRatio);
+                gl.setSize(size.x, size.y, false);
+                gl.setRenderTarget(renderTarget);
+                invalidate();
+            }
         });
         return unregister;
     }, [gl, invalidate]);
 
     return null;
 };
-
 const WebGLContextGuard: React.FC = () => {
     const { gl, invalidate, scene, size } = useThree();
 
@@ -240,10 +252,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     background={activeBackground}
                 />
                 <WebGLContextGuard />
-                <StageCaptureBridge />
-
-                {/* Studio PBR Reflection Environment Map */}
-                <StudioEnvironment />
+                <StageCaptureBridge frame={frame} />
 
                 {/* 1. Time-Evaluated 3D Camera (Supports Dolly, Zoom & Dolly-Zoom!) */}
                 <ViewportCamera
@@ -286,3 +295,6 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     </div>
 );
 };
+
+
+

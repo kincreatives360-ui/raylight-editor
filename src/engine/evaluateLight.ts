@@ -1,6 +1,6 @@
 import type { LightRig, LightAnimationBlock } from '../model/types';
 import { evaluateEasing } from './easing';
-import { lerp, lerpHex } from './lightMath';
+import { lerp, lerpHex } from './lightingSystem';
 
 /** Deep clone of a rig (position, target, rotation and every source). */
 export function cloneLightRig(rig: LightRig): LightRig {
@@ -26,7 +26,8 @@ type PropertyName =
   | 'color'
   | 'temperature'
   | 'angle'
-  | 'penumbra';
+  | 'penumbra'
+  | 'ambience';
 
 interface ResolvedValue<T> {
   from: T;
@@ -38,6 +39,10 @@ function getPropertyEndpoints(
   prop: PropertyName,
   baseVal: number | string
 ): ResolvedValue<number | string> | null {
+  if (b.property !== undefined) {
+    const expected = prop === 'x' || prop === 'y' || prop === 'z' ? 'position' : prop;
+    if (b.property !== expected) return null;
+  }
   switch (prop) {
     case 'x':
       if (b.fromX !== undefined && b.toX !== undefined) {
@@ -58,6 +63,7 @@ function getPropertyEndpoints(
       return null;
     }
     case 'intensity':
+    case 'ambience':
       if (b.fromIntensity !== undefined && b.toIntensity !== undefined) {
         return { from: b.fromIntensity, to: b.toIntensity };
       }
@@ -213,7 +219,7 @@ export function evaluateLightBlocks(
   for (const [targetId, targetBlocks] of groups.entries()) {
     if (targetId === 'room') {
       result.ambience = Math.max(0, Math.min(1, resolveProperty(
-        'intensity', targetBlocks, shotLocalTimeMs, result.ambience ?? 0.45
+        'ambience', targetBlocks, shotLocalTimeMs, result.ambience ?? 0.45
       )));
       continue;
     }
@@ -313,3 +319,7 @@ export function evaluateLightBlocks(
 
   return result;
 }
+
+
+
+
