@@ -242,6 +242,12 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
             </div>
 
             <div className="space-y-1">
+                <div data-testid="scene-light-item-room" data-selected={selectedLightId === 'room' ? 'true' : 'false'}
+                    onClick={() => onSelectLight('room')}
+                    className={`group px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] transition cursor-pointer ${selectedLightId === 'room' ? 'bg-[#0088ff]/15 border-[#0088ff]/40 text-white' : 'bg-[#18181b] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.04]'}`}>
+                    <div className="flex items-center gap-2 min-w-0"><Sun className="w-3.5 h-3.5 text-[#a1a1aa]" /><span className="truncate font-medium">Room</span></div>
+                    <span className="text-[10px] text-[#71717a]">Environment</span>
+                </div>
                 {/* 1. Primary Sun Key Light */}
                 <div
                     data-testid="scene-light-item-sun-key"

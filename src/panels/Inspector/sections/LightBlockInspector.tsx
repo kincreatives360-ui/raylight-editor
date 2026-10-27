@@ -51,6 +51,8 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
         activeLightBlock.easing.kind === 'bezier'
             ? 'bezier'
             : `${activeLightBlock.easing.kind}:${activeLightBlock.easing.name}`;
+    const blockProperty = activeLightBlock.property;
+    const isRoomAnimation = activeLightBlock.targetLightId === 'room';
 
     return (
         <div data-testid="light-block-inspector" className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
@@ -116,7 +118,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
             </div>
 
             {/* Position Section: From & To */}
-            <div className="p-3.5 space-y-3">
+            {(!blockProperty || blockProperty === 'position') && <div className="p-3.5 space-y-3">
                 <button
                     type="button"
                     onClick={() => setPosCollapsed(!posCollapsed)}
@@ -182,16 +184,16 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                         </div>
                     </div>
                 )}
-            </div>
+            </div>}
 
             {/* Intensity Section: From & To */}
-            <div className="p-3.5 space-y-3">
+            {(!blockProperty || blockProperty === 'intensity' || blockProperty === 'ambience') && <div className="p-3.5 space-y-3">
                 <button
                     type="button"
                     onClick={() => setIntensityCollapsed(!intensityCollapsed)}
                     className="flex items-center justify-between cursor-pointer w-full text-left"
                 >
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Intensity</span>
+                    <span className="text-[11px] font-medium text-[#e4e4e7]">{isRoomAnimation ? 'Ambience' : 'Intensity'}</span>
                     {intensityCollapsed ? (
                         <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa]" />
                     ) : (
@@ -201,29 +203,29 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                 {!intensityCollapsed && (
                     <div className="grid grid-cols-2 gap-2">
                         <ScrubInput
-                            label="From Int"
+                            label={isRoomAnimation ? 'From' : 'From Int'}
                             value={activeLightBlock.fromIntensity}
                             min={0}
-                            max={10}
+                            max={isRoomAnimation ? 1 : 10}
                             step={0.1}
                             decimals={2}
                             onChange={(val) => updateBlock((lb) => ({ ...lb, fromIntensity: Math.max(0, val) }))}
                         />
                         <ScrubInput
-                            label="To Int"
+                            label={isRoomAnimation ? 'To' : 'To Int'}
                             value={activeLightBlock.toIntensity}
                             min={0}
-                            max={10}
+                            max={isRoomAnimation ? 1 : 10}
                             step={0.1}
                             decimals={2}
                             onChange={(val) => updateBlock((lb) => ({ ...lb, toIntensity: Math.max(0, val) }))}
                         />
                     </div>
                 )}
-            </div>
+            </div>}
 
             {/* Temperature Section */}
-            <div className="p-3.5 space-y-3">
+            {(!blockProperty || blockProperty === 'temperature') && <div className="p-3.5 space-y-3">
                 <button
                     type="button"
                     onClick={() => setTempCollapsed(!tempCollapsed)}
@@ -258,7 +260,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                         />
                     </div>
                 )}
-            </div>
+            </div>}
 
             {/* Easing Selection */}
             <div className="p-3.5 space-y-2">

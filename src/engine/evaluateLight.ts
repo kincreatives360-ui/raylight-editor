@@ -211,6 +211,12 @@ export function evaluateLightBlocks(
   }
 
   for (const [targetId, targetBlocks] of groups.entries()) {
+    if (targetId === 'room') {
+      result.ambience = Math.max(0, Math.min(1, resolveProperty(
+        'intensity', targetBlocks, shotLocalTimeMs, result.ambience ?? 0.45
+      )));
+      continue;
+    }
     if (targetId === 'key') {
       // Key target
       const baseX = result.position.x;

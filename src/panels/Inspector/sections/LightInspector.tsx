@@ -1,7 +1,7 @@
 import { FigmaSelect } from '../../../ui/FigmaSelect';
-import React, { useCallback } from 'react';
-import { X, Sun, Thermometer, Sparkles } from 'lucide-react';
-import type { Shot, SceneLight, LightSourceType, Vec3, LightAnimationBlock } from '../../../model/types';
+import React, { useCallback, useState } from 'react';
+import { X, Sun, Thermometer, Sparkles, Plus, ChevronDown } from 'lucide-react';
+import type { Shot, SceneLight, LightSourceType, Vec3, LightAnimationBlock, LightRig } from '../../../model/types';
 import { radToDeg, degToRad } from '../../../model/defaults';
 import { generateId } from '../../../model/id';
 import { ScrubInput } from '../../../ui/ScrubInput';
@@ -25,6 +25,9 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
     const selectLight = useSelectionStore((s) => s.selectLight);
     const selectLightBlock = useSelectionStore((s) => s.selectLightBlock);
     const shotLight = activeShot.light;
+    const [activeTab, setActiveTab] = useState<'design' | 'animate'>('design');
+    const [addAnimationOpen, setAddAnimationOpen] = useState(false);
+    const isRoom = selectedLightId === 'room';
 
     const isKey =
         selectedLightId === 'sun-key' ||
@@ -32,7 +35,13 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         selectedLightId === 'sun';
 
     // Find the current light model
-    const currentLight: SceneLight | null = isKey
+    const currentLight: SceneLight | null = isRoom
+        ? {
+            id: 'room', name: 'Room', type: 'ambient', enabled: true,
+            position: { x: 0, y: 0, z: 0 }, intensity: shotLight?.ambience ?? 0.45,
+            color: shotLight?.ambientColor ?? '#f8fafc', temperature: shotLight?.temperature ?? 6500,
+        }
+        : isKey
         ? {
             id: 'sun-key',
             name: 'Sun',
@@ -40,7 +49,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             enabled: shotLight?.keyLightEnabled !== false,
             position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
             target: (shotLight as unknown as { target?: Vec3 })?.target || { x: 0, y: 0, z: 0 },
-            intensity: shotLight?.intensity ?? 1.2,
+            intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
             color: '#ffffff',
             temperature: shotLight?.temperature ?? 6500,
             castShadow: shotLight?.castShadow !== false,
@@ -48,7 +57,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         : ((shotLight?.sources || []).find((s) => s.id === selectedLightId) ?? null);
 
     const updateLight = useCallback(
-        (patch: Partial<SceneLight>) => {
+        (patch: Partial<SceneLight> & { environment?: LightRig['environment'] }) => {
             const currentRig = activeShot.light || {
                 position: { x: -0.28, y: 0.36, z: 0.9 },
                 intensity: 1.2,
@@ -56,12 +65,22 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 ambience: 0.45,
             };
 
-            if (isKey) {
-                const { type: _ignoredType, color: _ignoredColor, ...validKeyPatch } = patch;
+            if (isRoom) {
+                updateShot(activeShot.id, {
+                    light: {
+                        ...currentRig,
+                        ambience: patch.intensity ?? currentRig.ambience,
+                        ambientColor: patch.color ?? currentRig.ambientColor,
+                        environment: 'environment' in patch ? patch.environment : currentRig.environment,
+                    },
+                });
+            } else if (isKey) {
+                const { type: _ignoredType, color: _ignoredColor, intensity: requestedIntensity, ...validKeyPatch } = patch;
                 updateShot(activeShot.id, {
                     light: {
                         ...currentRig,
                         ...validKeyPatch,
+                        ...(requestedIntensity !== undefined ? { keyIntensity: requestedIntensity } : {}),
                         position: patch.position
                             ? { ...currentRig.position, ...patch.position }
                             : currentRig.position,
@@ -92,7 +111,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 });
             }
         },
-        [activeShot.id, activeShot.light, isKey, selectedLightId, updateShot]
+        [activeShot.id, activeShot.light, isKey, isRoom, selectedLightId, updateShot]
     );
 
     if (!currentLight) {
@@ -114,27 +133,32 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
 
     const target = currentLight.target || { x: 0, y: 0, z: 0 };
 
-    const handleAnimateLight = () => {
+    const handleAnimateLight = (property: NonNullable<LightAnimationBlock['property']>) => {
         const id = generateId('light-blk');
         const startMs = 0;
         const durationMs = 1000;
-        const targetLightId = isKey ? 'key' : currentLight.id;
+        const targetLightId = isRoom ? 'room' : isKey ? 'key' : currentLight.id;
+        const currentIntensity = isRoom ? (shotLight?.ambience ?? 0.45) : currentLight.intensity;
+        const currentTemperature = currentLight.temperature ?? 6500;
         const newBlock: LightAnimationBlock = {
             id,
-            label: `${currentLight.name || 'Light'} Move`,
+            label: property === 'position' ? 'Position' : property === 'intensity' ? 'Power' : property === 'temperature' ? 'Temp' : 'Ambience',
             targetLightId,
+            property,
             startMs,
             durationMs,
             fromX: currentLight.position.x,
             fromY: currentLight.position.y,
             fromZ: currentLight.position.z,
-            toX: Number((currentLight.position.x + 0.2).toFixed(2)),
+            toX: Number((currentLight.position.x + (property === 'position' ? 0.2 : 0)).toFixed(2)),
             toY: currentLight.position.y,
             toZ: currentLight.position.z,
-            fromIntensity: currentLight.intensity,
-            toIntensity: Number((currentLight.intensity * 1.5).toFixed(2)),
-            fromTemperature: currentLight.temperature ?? 6500,
-            toTemperature: currentLight.temperature ?? 6500,
+            fromIntensity: currentIntensity,
+            toIntensity: Number((property === 'intensity' || property === 'ambience'
+                ? Math.min(1, currentIntensity + (isRoom ? 0.15 : currentIntensity * 0.5))
+                : currentIntensity).toFixed(2)),
+            fromTemperature: currentTemperature,
+            toTemperature: property === 'temperature' ? Math.min(12000, currentTemperature + 500) : currentTemperature,
             easing: { kind: 'preset', name: 'ease-in-out' },
         };
 
@@ -143,50 +167,61 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             lightBlocks: [...(s.lightBlocks || []), newBlock],
         }));
         selectLightBlock(id);
+        setAddAnimationOpen(false);
     };
+
+    const animationTargetId = isRoom ? 'room' : isKey ? 'key' : currentLight.id;
+    const animations = (activeShot.lightBlocks || []).filter((block) => (block.targetLightId ?? 'key') === animationTargetId);
 
     return (
         <div data-testid="light-inspector" className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
+            <div className="sticky top-0 z-10 bg-[#0b0b0d] border-b border-white/[0.07]">
+                <div className="flex items-center gap-1 px-3 py-2" role="tablist" aria-label="Lighting settings">
+                    {(['design', 'animate'] as const).map((tab) => <button key={tab} type="button" role="tab" data-testid={tab === 'animate' ? 'animate-light-btn' : undefined} aria-selected={activeTab === tab}
+                        onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 rounded-md text-[11px] font-medium capitalize transition cursor-pointer ${activeTab === tab ? 'bg-[#222226] text-white' : 'text-[#8e8e93] hover:text-white'}`}>{tab}</button>)}
+                    <span className="flex-1" />
+                    <button type="button" onClick={onClose} aria-label="Close Inspector" title="Close Inspector" className="w-7 h-7 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"><X className="w-3.5 h-3.5" /></button>
+                </div>
+            </div>
+            {activeTab === 'animate' ? <div className="p-3.5 space-y-3">
+                <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-medium text-[#e4e4e7]">Animations</span>
+                    <div className="relative">
+                        <button type="button" aria-label="Add light animation" aria-expanded={addAnimationOpen} onClick={() => setAddAnimationOpen((open) => !open)} className="w-7 h-7 rounded-md bg-[#222226] hover:bg-[#303035] border border-white/10 text-white flex items-center justify-center cursor-pointer"><Plus className="w-4 h-4" /></button>
+                        {addAnimationOpen && <div className="absolute right-0 top-full mt-1 w-40 rounded-xl bg-[#222226] border border-white/10 shadow-xl p-1 z-30">
+                            <span className="block px-2.5 pt-1.5 pb-1 text-[10px] text-[#8e8e93]">Custom</span>
+                            {(isRoom ? [['ambience', 'Ambience']] : [['position', 'Position'], ['intensity', 'Power'], ['temperature', 'Temp']]).map(([property, label]) => <button key={property} type="button" onClick={() => handleAnimateLight(property as NonNullable<LightAnimationBlock['property']>)} className="w-full px-2.5 py-2 rounded-lg text-left text-[11px] text-white hover:bg-white/10 cursor-pointer">{label}</button>)}
+                        </div>}
+                    </div>
+                </div>
+                {animations.length ? <div className="divide-y divide-white/[0.07]">{animations.map((block) => <button key={block.id} type="button" onClick={() => selectLightBlock(block.id)} className="w-full py-3 flex items-center justify-between text-left text-[11px] text-white hover:text-[#38bdf8] cursor-pointer"><span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#a1a1aa]" />{block.label}</span><ChevronDown className="w-3.5 h-3.5 text-[#71717a] -rotate-90" /></button>)}</div> : <div className="py-5 text-center text-[11px] text-[#71717a]">No animations yet</div>}
+                <div className="pt-2 border-t border-white/[0.07]"><SceneLightsList activeShot={activeShot} selectedLightId={selectedLightId} onSelectLight={(id) => { if (id) selectLight(id); else onClose(); }} /></div>
+            </div> : <>
             {/* Header: Light Title + Close X */}
             <div className="p-3.5 flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-white tracking-wide">
-                    {typeDisplayNames[currentLight.type] || currentLight.name}
-                </span>
-                <button
-                    type="button"
-                    onClick={onClose}
-                    title="Close Inspector"
-                    className="w-6 h-6 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
+                <span className="text-[12px] font-semibold text-white tracking-wide">{isRoom ? 'Room' : isKey ? 'Light' : typeDisplayNames[currentLight.type] || currentLight.name}</span>
             </div>
 
-            {/* Scene Lights Navigator */}
-            <div className="p-3.5 bg-[#141416]/60">
-                <SceneLightsList
-                    activeShot={activeShot}
-                    selectedLightId={selectedLightId}
-                    onSelectLight={(id) => {
-                        if (id) selectLight(id);
-                        else onClose();
-                    }}
-                />
-            </div>
 
-            {/* Quick Actions: Animate Light */}
-            <div className="p-3.5">
-                <button
-                    type="button"
-                    data-testid="animate-light-btn"
-                    onClick={handleAnimateLight}
-                    className="w-full py-1.5 px-3 rounded-lg bg-[#0088ff]/15 hover:bg-[#0088ff]/25 text-[#0088ff] hover:text-[#38bdf8] border border-[#0088ff]/30 font-medium text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer"
-                >
-                    <Sparkles className="w-3.5 h-3.5" />
-                    <span>Animate Light</span>
-                </button>
-            </div>
-
+            {isRoom ? <div className="p-3.5 space-y-3">
+                <div className="space-y-2">
+                    <span className="text-[11px] font-medium text-[#e4e4e7]">Ambience</span>
+                    <ScrubInput label={<Sun className="w-3.5 h-3.5 text-[#e4e4e7]" />} value={Math.round(currentLight.intensity * 100)} min={0} max={100} step={1} unit="%"
+                        onChange={(intensity) => updateLight({ intensity: intensity / 100 })} />
+                </div>
+                <div className="space-y-2">
+                    <span className="text-[11px] font-medium text-[#e4e4e7]">Environment</span>
+                    <FigmaSelect value={shotLight?.environment ?? (shotLight?.ambientColor ? 'studio' : 'custom')} onChange={(event) => updateLight({ environment: event.target.value as LightRig['environment'] })}
+                        className="w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition">
+                        <option value="studio">Studio</option><option value="softbox">Softbox</option><option value="strip-light">Strip light</option><option value="daylight">Daylight</option><option value="night-city">Night city</option><option value="warehouse">Warehouse</option><option value="custom">Custom</option>
+                    </FigmaSelect>
+                </div>
+                <div className="space-y-2">
+                    <span className="text-[11px] font-medium text-[#e4e4e7]">Color</span>
+                    <ColorPicker color={currentLight.color} label="Room color" compact={false} showGradientMode={false}
+                        onChange={(color) => updateLight({ color, environment: 'custom' })} />
+                </div>
+            </div> : <>
             {/* Type Dropdown */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Type</span>
@@ -381,7 +416,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             )}
 
             {/* Shadows */}
-            <div className="p-3.5 space-y-3">
+            {currentLight.type !== 'area' && currentLight.type !== 'ambient' && <div className="p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Shadows</span>
                     <label className="flex items-center gap-2 cursor-pointer text-[10px] text-[#a1a1aa]">
@@ -394,7 +429,17 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         />
                     </label>
                 </div>
-            </div>
+                <div className="grid grid-cols-2 gap-2">
+                    <ScrubInput label="Strength" value={Math.round(((isKey ? shotLight?.shadowStrength : currentLight.shadowStrength) ?? 0.7) * 100)} min={0} max={100} unit="%"
+                        onChange={(value) => isKey ? updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, shadowStrength: value / 100 } })) : updateLight({ shadowStrength: value / 100 })} />
+                    <ScrubInput label="Soft" value={(isKey ? shotLight?.shadowSoftness : currentLight.shadowSoftness) ?? 50} min={0} max={100} unit="%"
+                        onChange={(value) => isKey ? updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, shadowSoftness: value } })) : updateLight({ shadowSoftness: value })} />
+                </div>
+            </div>}
+            </>}
+            <div className="p-3.5 border-t border-white/[0.06]"><SceneLightsList activeShot={activeShot} selectedLightId={selectedLightId}
+                onSelectLight={(id) => { if (id) selectLight(id); else onClose(); }} /></div>
+            </>}
         </div>
     );
 };

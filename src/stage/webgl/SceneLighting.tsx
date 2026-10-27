@@ -17,6 +17,15 @@ interface SceneLightingProps {
 }
 
 let uniformsLibInitialized = false;
+const ENVIRONMENT_TINTS: Record<NonNullable<LightRig['environment']>, string> = {
+    studio: '#f8fafc', softbox: '#e8f1ff', 'strip-light': '#e6eeff',
+    daylight: '#fff2d9', 'night-city': '#b8c9ff', warehouse: '#e9dfc8', custom: '#f8fafc',
+};
+
+function environmentColor(environment: LightRig['environment'], fallback: string): string {
+    return environment && environment !== 'custom' ? ENVIRONMENT_TINTS[environment] : fallback;
+}
+
 function initRectAreaLightUniforms() {
     if (!uniformsLibInitialized && typeof window !== 'undefined') {
         RectAreaLightUniformsLib.init();
@@ -62,7 +71,9 @@ const SpotLightItem: React.FC<{
     angle: number;
     penumbra: number;
     castShadow: boolean;
-}> = ({ position, targetPos, intensity, color, distance, decay, angle, penumbra, castShadow }) => {
+    shadowStrength: number;
+    shadowSoftness: number;
+}> = ({ position, targetPos, intensity, color, distance, decay, angle, penumbra, castShadow, shadowStrength, shadowSoftness }) => {
     const spotRef = useRef<THREE.SpotLight>(null);
     const targetRef = useRef<THREE.Object3D>(null);
 
@@ -85,6 +96,8 @@ const SpotLightItem: React.FC<{
                 angle={angle}
                 penumbra={penumbra}
                 castShadow={castShadow}
+                shadow-intensity={shadowStrength}
+                shadow-radius={Math.max(0, shadowSoftness / 10)}
                 shadow-bias={-0.0001}
                 shadow-normalBias={0.02}
                 shadow-mapSize-width={2048}
@@ -295,7 +308,7 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
     return (
         <group name="raylight_scene_lighting">
             {/* 1. SCENE AMBIENT (Shadow Floor): lights all surfaces equally, no direction or falloff */}
-            <ambientLight intensity={0.15 + ambience * 1.2} color={ambientColor} />
+            <ambientLight intensity={0.15 + ambience * 1.2} color={environmentColor(rig.environment, ambientColor)} />
 
             {/* 2. DIRECTIONAL KEY LIGHT (Sun): produces main shading gradient, specular streak, cast shadows */}
             {keyEnabled && (
@@ -304,6 +317,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                     intensity={keyIntensity * 2.2}
                     color={lightColor}
                     castShadow={keyShadow}
+                    shadow-intensity={rig.shadowStrength ?? 0.7}
+                    shadow-radius={Math.max(0, (rig.shadowSoftness ?? 50) / 10)}
                     shadow-mapSize-width={2048}
                     shadow-mapSize-height={2048}
                     shadow-camera-near={0.1}
@@ -352,6 +367,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                                 distance={source.distance ?? 10}
                                 decay={source.decay ?? 2}
                                 castShadow={castShadow}
+                                shadow-intensity={source.shadowStrength ?? rig.shadowStrength ?? 0.7}
+                                shadow-radius={Math.max(0, (source.shadowSoftness ?? rig.shadowSoftness ?? 50) / 10)}
                                 shadow-bias={-0.0001}
                                 shadow-normalBias={0.02}
                                 shadow-mapSize-width={castShadow ? 1024 : undefined}
@@ -377,6 +394,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                                 angle={source.angle ?? Math.PI / 5}
                                 penumbra={source.penumbra ?? 0.4}
                                 castShadow={castShadow}
+                                shadowStrength={source.shadowStrength ?? rig.shadowStrength ?? 0.7}
+                                shadowSoftness={source.shadowSoftness ?? rig.shadowSoftness ?? 50}
                             />
                             {showGizmos && <LightGizmo source={source} position={position} color={color} />}
                         </React.Fragment>
@@ -406,6 +425,8 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
                             intensity={sourceIntensity}
                             color={color}
                             castShadow={castShadow}
+                            shadow-intensity={source.shadowStrength ?? rig.shadowStrength ?? 0.7}
+                            shadow-radius={Math.max(0, (source.shadowSoftness ?? rig.shadowSoftness ?? 50) / 10)}
                             shadow-bias={-0.0001}
                             shadow-normalBias={0.02}
                             shadow-mapSize-width={2048}

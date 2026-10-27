@@ -1319,6 +1319,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             selectedLightId === 'sun-key' ||
             selectedLightId === 'key' ||
             selectedLightId === 'sun' ||
+            selectedLightId === 'room' ||
             activeShot?.light?.sources?.some((s) => s.id === selectedLightId)
         )
     );

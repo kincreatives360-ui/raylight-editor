@@ -105,13 +105,13 @@ describe('LightInspector Animate Light integration', () => {
         });
     });
 
-    it('renders Animate Light button in LightInspector', () => {
+    it('renders Animate Light tab in LightInspector', () => {
         const shot = useProjectStore.getState().project.shots[0];
         const html = renderToStaticMarkup(
             <LightInspector activeShot={shot} selectedLightId="sun-key" onClose={() => {}} />
         );
 
         expect(html).toContain('data-testid="animate-light-btn"');
-        expect(html).toContain('Animate Light');
+        expect(html).toContain('animate');
     });
 });

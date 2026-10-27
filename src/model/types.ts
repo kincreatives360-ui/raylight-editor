@@ -439,6 +439,7 @@ export interface LightAnimationBlock {
   label: string;
   /** 'key' for primary directional light, or specific source id */
   targetLightId?: string;
+  property?: 'position' | 'intensity' | 'temperature' | 'ambience';
   startMs: number;
   durationMs: number;
   fromX: number;
@@ -504,6 +505,8 @@ export interface SceneLight {
   height?: number;
   /** Whether this light casts shadows */
   castShadow?: boolean;
+  shadowStrength?: number;
+  shadowSoftness?: number;
 }
 
 export interface LightRig {
@@ -514,6 +517,9 @@ export interface LightRig {
   ambience: number;
   /** Scene-level ambient light tint color */
   ambientColor?: string;
+  environment?: 'studio' | 'softbox' | 'strip-light' | 'daylight' | 'night-city' | 'warehouse' | 'custom';
+  shadowStrength?: number;
+  shadowSoftness?: number;
   /** Toggle key light on/off */
   keyLightEnabled?: boolean;
   /** Key light only; intensity remains a master gain for additional sources. */

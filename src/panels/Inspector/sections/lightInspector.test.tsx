@@ -157,15 +157,15 @@ describe('LightInspector Component', () => {
         expect(html).toMatch(/<button[^>]*aria-label="Color: #ffffff"[^>]*disabled/);
     });
 
-    it('removes inert Strength and Soft controls from Shadows section', () => {
+    it('renders Strength and Soft controls in Shadows section', () => {
         const shot = useProjectStore.getState().project.shots[0];
         const html = renderToStaticMarkup(
             <LightInspector activeShot={shot} selectedLightId="spot-1" onClose={() => {}} />
         );
 
         expect(html).toContain('Cast shadows');
-        // Shadows section should only contain Cast shadows toggle, not inert inputs
-        expect(html).not.toContain('label="Strength"');
+        expect(html).toContain('Strength');
+        expect(html).toContain('Soft');
     });
 
     it('returns null when selectedLightId is not found', () => {
