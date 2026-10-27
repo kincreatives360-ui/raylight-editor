@@ -634,6 +634,7 @@ export const ShotSchema = z.object({
     }),
   }),
   effectsOrder: z.array(EffectKeySchema),
+  appliedEffects: z.array(EffectKeySchema).optional(),
   transition: z.object({
     type: z.enum(['cut', 'crossfade', 'push', 'slide']),
     durationMs: z.number().min(0),

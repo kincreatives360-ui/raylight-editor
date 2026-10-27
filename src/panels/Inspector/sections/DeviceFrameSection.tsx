@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../../ui/FigmaSelect';
 import React from 'react';
 import { ColorField } from '../ColorPicker';
 import { ScrubInput } from '../../../ui/ScrubInput';
@@ -71,7 +72,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
           <div className="grid grid-cols-[1fr_auto] gap-2 items-end">
             <label className="text-[10px] text-[#a1a1aa] space-y-1">
               <span className="block">Hardware Model</span>
-              <select
+              <FigmaSelect
                 aria-label="Device model"
                 value={fixed ? (settings.deviceId ?? 'iphone-15-pro') : settings.model}
                 onChange={(event) => {
@@ -114,7 +115,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                     <option value="iphone-classic">iPhone Classic (legacy)</option>
                   </>
                 )}
-              </select>
+              </FigmaSelect>
             </label>
             <div className="space-y-1">
               <span className="block text-[10px] text-[#a1a1aa]">Custom</span>
@@ -214,7 +215,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
           <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
             <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
               <span>Screen fit</span>
-              <select
+              <FigmaSelect
                 aria-label="Screen fit"
                 value={settings.screenFit}
                 onChange={(event) => update({ screenFit: event.target.value as DeviceFrameSettings['screenFit'] })}
@@ -223,7 +224,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                 <option value="contain">Fit (letterbox)</option>
                 <option value="cover">Fill (crop edges)</option>
                 <option value="stretch">Direct UV (stretch)</option>
-              </select>
+              </FigmaSelect>
             </label>
             <div className="space-y-0.5">
               <ColorField
@@ -338,7 +339,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
               {settings.deviceId === 'iphone-15-pro' && (
                 <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
                   <span>Cutout</span>
-                  <select
+                  <FigmaSelect
                     aria-label="Top cutout style"
                     value={settings.cutoutStyle}
                     onChange={(event) => update({ cutoutStyle: event.target.value as DeviceFrameSettings['cutoutStyle'] })}
@@ -347,7 +348,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                     <option value="dynamic-island">Dynamic Island</option>
                     <option value="notch">Notch</option>
                     <option value="none">No cutout</option>
-                  </select>
+                  </FigmaSelect>
                 </label>
               )}
 

@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../../ui/FigmaSelect';
 // src/panels/Inspector/sections/LightBlockInspector.tsx
 import React, { useState } from 'react';
 import {
@@ -262,7 +263,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
             {/* Easing Selection */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Transition Curve</span>
-                <select
+                <FigmaSelect
                     value={easingValue}
                     onChange={(e) => {
                         const parsed = easingFromSelection(e.target.value);
@@ -280,7 +281,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                     <option value="spring:bouncy">Spring: Bouncy</option>
                     <option value="spring:snappy">Spring: Snappy</option>
                     <option value="bezier">Custom Bezier</option>
-                </select>
+                </FigmaSelect>
             </div>
 
             {/* Delete Block */}

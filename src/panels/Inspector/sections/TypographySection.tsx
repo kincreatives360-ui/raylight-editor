@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../../ui/FigmaSelect';
 // src/panels/Inspector/sections/TypographySection.tsx
 import React from 'react';
 import { Type, Upload } from 'lucide-react';
@@ -62,7 +63,7 @@ export const TypographySection: React.FC<TypographySectionProps> = ({
             {/* Font Family */}
             <div className="space-y-1">
                 <span className="text-[10px] text-[#a1a1aa]">Font Family</span>
-                <select
+                <FigmaSelect
                     value={layer.font.family}
                     onChange={(e) => {
                         const nextFont = e.target.value;
@@ -81,7 +82,7 @@ export const TypographySection: React.FC<TypographySectionProps> = ({
                             {f}
                         </option>
                     ))}
-                </select>
+                </FigmaSelect>
             </div>
 
             {/* Color & Size */}
@@ -143,7 +144,7 @@ export const TypographySection: React.FC<TypographySectionProps> = ({
             <div className="grid grid-cols-2 gap-1.5">
                 <div className="space-y-1">
                     <span className="text-[10px] text-[#a1a1aa]">Weight</span>
-                    <select
+                    <FigmaSelect
                         value={layer.font.weight}
                         onChange={(e) => {
                             const weight = Number(e.target.value);
@@ -163,7 +164,7 @@ export const TypographySection: React.FC<TypographySectionProps> = ({
                         <option value={700}>700 Bold</option>
                         <option value={800}>800 ExtraBold</option>
                         <option value={900}>900 Black</option>
-                    </select>
+                    </FigmaSelect>
                 </div>
 
                 <div className="space-y-1">

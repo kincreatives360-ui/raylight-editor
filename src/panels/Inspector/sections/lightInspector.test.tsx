@@ -152,7 +152,7 @@ describe('LightInspector Component', () => {
         );
 
         // Type select should have disabled attribute and not allow changing light type for Sun
-        expect(html).toMatch(/<select[^>]*disabled/);
+        expect(html).toMatch(/<button[^>]*role="combobox"[^>]*disabled|<button[^>]*disabled[^>]*role="combobox"/);
         // ColorPicker trigger button should have disabled attribute for Sun
         expect(html).toMatch(/<button[^>]*aria-label="Color: #ffffff"[^>]*disabled/);
     });

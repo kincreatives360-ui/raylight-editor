@@ -612,6 +612,7 @@ export interface Shot {
   light: LightRig;
   effects: SceneEffects;
   effectsOrder: EffectKey[];
+  appliedEffects?: EffectKey[];
   transition: ShotTransition;
   focusBlocks?: FocusBlock[];
 }

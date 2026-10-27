@@ -1,3 +1,4 @@
+import type { SelectHTMLAttributes } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createDefaultImageLayer, createDefaultProject } from '../../model/defaults';
@@ -51,3 +52,8 @@ describe('fixed device inspector dimensions', () => {
     expect(html).not.toContain('This device is unavailable');
   });
 });
+
+// These fixtures inspect the configured option catalogs. Portal behavior is checked separately.
+vi.mock('../../ui/FigmaSelect', () => ({
+    FigmaSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} />,
+}));

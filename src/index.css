@@ -316,3 +316,24 @@ textarea,
     animation: none !important;
   }
 }
+
+/* Inspector controls follow the compact, dark reference screenshots. */
+.figma-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; cursor: pointer; }
+.figma-select:disabled { opacity: .45; cursor: not-allowed; }
+.figma-select:focus-visible { outline: 1px solid #0088ff; outline-offset: 1px; }
+.figma-select-menu { position: fixed; z-index: 10000; overflow-y: auto; padding: 4px; border: 1px solid #454545; border-radius: 8px; background: #282828; color: #fff; box-shadow: 0 8px 24px #0008; font: 11px var(--font-sans); outline: none; }
+.figma-select-option { display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.figma-select-option.is-active { background: #0088ff; }
+.figma-select-option[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
+.shot-settings-panel { background: #111; }
+.shot-settings-panel > .space-y-4 > .space-y-1\.5,
+.shot-settings-panel > .space-y-4 > .space-y-3 { margin-left: 14px; margin-right: 14px; }
+.shot-settings-panel > .space-y-4 > .space-y-1\.5 { margin-top: 14px; }
+.shot-settings-panel > .space-y-4 > div.space-y-2\.5,
+.shot-settings-panel > .space-y-4 > div.space-y-2 { margin-left: 14px; margin-right: 14px; }
+.shot-settings-panel section { padding: 0 14px; }
+.shot-settings-panel h3 { font-size: 12px; font-weight: 500; letter-spacing: normal; }
+.shot-settings-tabs button { flex: none; min-width: 70px; border: 0; box-shadow: none; padding: 6px 12px; }
+.shot-settings-tabs button[aria-selected="true"] { background: #222; }
+.shot-settings-panel [role="switch"] { width: 36px; height: 20px; }
+.shot-settings-panel [data-testid="shot-background-editor"] { padding-bottom: 8px; }

@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../../ui/FigmaSelect';
 // src/panels/Inspector/sections/CameraBlockSection.tsx
 import React, { useState } from 'react';
 import {
@@ -271,7 +272,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             </div>
 
                             {/* Full Preset Dropdown */}
-                            <select
+                            <FigmaSelect
                                 aria-label={`${which} camera preset`}
                                 value={activePreset?.id ?? ''}
                                 onChange={(e) => {
@@ -304,7 +305,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                         <option key={p.id} value={p.id}>{p.name} ({p.orbit}°, {p.tilt}°)</option>
                                     ))}
                                 </optgroup>
-                            </select>
+                            </FigmaSelect>
                         </div>
 
                         {/* Anchor & 3D Depth */}
@@ -488,7 +489,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                     const selectedMovementId = getMovementPresetIdByLabel(activeCameraBlock.label);
                     return (
                         <>
-                            <select
+                            <FigmaSelect
                                 value={selectedMovementId ?? ''}
                                 onChange={(e) => {
                                     const moveId = e.target.value as CameraMovementId;
@@ -522,7 +523,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                         <option key={m.id} value={m.id}>{m.name}</option>
                                     ))}
                                 </optgroup>
-                            </select>
+                            </FigmaSelect>
 
                             {/* Quick Movement Buttons */}
                             <div className="space-y-1">
@@ -749,7 +750,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                 <div className="space-y-1.5">
                     <span className="text-[10px] text-[#a1a1aa] block">Easing</span>
                     <div className="flex items-center gap-1.5">
-                        <select
+                        <FigmaSelect
                             aria-label="Camera move easing"
                             value={
                                 activeCameraBlock.easing.kind === 'bezier'
@@ -792,7 +793,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             <optgroup label="Custom Curves">
                                 <option value="bezier">Custom Cubic Bezier</option>
                             </optgroup>
-                        </select>
+                        </FigmaSelect>
                         <button
                             type="button"
                             onClick={() => {

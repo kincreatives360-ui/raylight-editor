@@ -3,7 +3,6 @@ import React, { useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { RotateCcw, Focus, ChevronDown, ChevronUp } from 'lucide-react';
 import { radToDeg } from '../model/defaults';
-import { CAMERA_PRESETS } from './webgl/cameraMath';
 
 interface OrientationGizmoProps {
     cameraRotation: { x: number; y: number; z: number };
@@ -156,40 +155,66 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             onMouseLeave={() => setIsHovered(false)}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="absolute right-3 z-35 flex flex-col items-end gap-1.5 select-none"
+            className="absolute right-3 z-35 flex flex-col items-center gap-1.5 select-none"
             style={{ top: topInset }}
         >
-            {/* Main Interactive Orbit Tripod Sphere (Drag to Orbit / Tilt) */}
+            {/* 3D Trackball Sphere (The Ball Method) */}
             <div
                 onPointerDown={handlePointerDown}
                 onPointerMove={handlePointerMove}
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 onLostPointerCapture={handleLostPointerCapture}
-                title="Drag to orbit 3D camera (Yaw & Pitch) • Click axis to snap"
-                className={`relative group flex items-center justify-center w-14 h-14 rounded-2xl bg-[var(--bg-surface,#161619)]/90 backdrop-blur-md border shadow-xl touch-none ${
+                title="Drag 3D trackball sphere to orbit camera"
+                className={`relative group flex items-center justify-center w-13 h-13 rounded-full border touch-none cursor-grab active:cursor-grabbing transition-[transform,border-color,box-shadow] duration-150 ${
                     isDragging
-                        ? 'cursor-grabbing border-[var(--border-focus,#0088ff)] ring-2 ring-[var(--accent-glow,rgba(0,136,255,0.25))] shadow-lg scale-105 transition-none'
-                        : 'cursor-grab border-[var(--border-subtle,rgba(255,255,255,0.07))] hover:border-[var(--border-medium,rgba(255,255,255,0.12))] hover:scale-102 transition-[transform,border-color,box-shadow] duration-100 ease-out'
+                        ? 'cursor-grabbing border-sky-400 ring-2 ring-sky-500/30 scale-105 shadow-2xl'
+                        : 'border-white/15 hover:border-white/30 hover:scale-105 shadow-xl'
                 }`}
+                style={{
+                    background: 'radial-gradient(circle at 35% 35%, rgba(255, 255, 255, 0.16) 0%, rgba(255, 255, 255, 0.05) 40%, rgba(0, 0, 0, 0.55) 85%, rgba(0, 0, 0, 0.85) 100%), #141418',
+                    boxShadow: isDragging
+                        ? 'inset 0 1px 2px rgba(255,255,255,0.35), inset 0 -3px 6px rgba(0,0,0,0.8), 0 8px 20px rgba(0,0,0,0.6)'
+                        : 'inset 0 1px 1px rgba(255,255,255,0.25), inset 0 -2px 4px rgba(0,0,0,0.7), 0 4px 14px rgba(0,0,0,0.5)',
+                }}
             >
                 <svg
-                    width="48"
-                    height="48"
-                    viewBox="-24 -24 48 48"
+                    width="44"
+                    height="44"
+                    viewBox="-22 -22 44 44"
                     className="overflow-visible pointer-events-none"
                 >
-                    {/* Background sphere grid / horizon circle */}
+                    {/* Equatorial & Meridian latitude circles on the sphere */}
                     <circle
                         cx="0"
                         cy="0"
-                        r="20"
-                        fill="rgba(255, 255, 255, 0.02)"
-                        stroke={isDragging ? 'var(--accent-primary, #0088ff)' : 'rgba(255, 255, 255, 0.08)'}
-                        strokeWidth={isDragging ? 1.5 : 1}
+                        r="18"
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.12)"
+                        strokeWidth="1"
+                    />
+                    <ellipse
+                        cx="0"
+                        cy="0"
+                        rx="18"
+                        ry={Math.max(1, 18 * Math.abs(Math.sin(cameraRotation.x)))}
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.1)"
+                        strokeWidth="0.75"
+                        strokeDasharray="2 2"
+                    />
+                    <ellipse
+                        cx="0"
+                        cy="0"
+                        rx={Math.max(1, 18 * Math.abs(Math.cos(cameraRotation.y)))}
+                        ry="18"
+                        fill="none"
+                        stroke="rgba(255, 255, 255, 0.1)"
+                        strokeWidth="0.75"
+                        strokeDasharray="2 2"
                     />
 
-                    {/* Axes drawn back-to-front by depth */}
+                    {/* Projected 3D Axes drawn back-to-front */}
                     {[axes.x, axes.y, axes.z]
                         .sort((a, b) => a.depth - b.depth)
                         .map((axis) => {
@@ -202,20 +227,20 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                                         x2={axis.px}
                                         y2={axis.py}
                                         stroke={axis.color}
-                                        strokeWidth={isPositive ? 2 : 1.25}
+                                        strokeWidth={isPositive ? 2 : 1}
                                         strokeDasharray={isPositive ? 'none' : '2 2'}
                                     />
                                     <circle
                                         cx={axis.px}
                                         cy={axis.py}
-                                        r={isPositive ? 3.5 : 2.5}
+                                        r={isPositive ? 3.5 : 2}
                                         fill={axis.color}
                                     />
                                     <text
                                         x={axis.px * 1.3}
                                         y={axis.py * 1.3 + 3}
                                         fill={axis.color}
-                                        fontSize="10.5"
+                                        fontSize="10"
                                         fontWeight="bold"
                                         textAnchor="middle"
                                         fontFamily="Inter, monospace"
@@ -227,138 +252,97 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                         })}
                 </svg>
 
-                {/* Subtle Center Pivot Point */}
+                {/* Subtle core jewel center */}
                 <div className={`absolute w-1.5 h-1.5 rounded-full pointer-events-none transition-colors ${
-                    isDragging ? 'bg-[var(--accent-primary,#0088ff)]' : 'bg-white/70'
+                    isDragging ? 'bg-sky-400 ring-2 ring-sky-400/40' : 'bg-white/80'
                 }`} />
             </div>
 
-            {/* Quick Snapping Perspective Presets & Framing (Shown on hover or when menu open) */}
-            <div
-                className={`flex items-center gap-1 bg-[var(--bg-muted,#242428)]/95 backdrop-blur-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] rounded-xl px-1.5 py-1 shadow-lg transition-[opacity,transform] duration-150 ease-out ${
-                    isHovered || menuOpen
-                        ? 'opacity-100 translate-y-0 pointer-events-auto'
-                        : 'opacity-0 -translate-y-1 pointer-events-none'
-                }`}
-            >
-                {/* Framing / Focus Button */}
-                {onFrameSelection && (
-                    <button
-                        type="button"
-                        onClick={onFrameSelection}
-                        title={hasSelection ? "Frame Selected Layer(s) [F]" : "Frame All Visible Content [F]"}
-                        className={`p-1 rounded cursor-pointer transition-colors ${
-                            hasSelection
-                                ? 'text-[var(--accent-primary,#0088ff)] hover:text-white hover:bg-white/10'
-                                : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-white/10'
-                        }`}
-                    >
-                        <Focus className="w-3 h-3" />
-                    </button>
-                )}
-
-                {onFrameSelection && <div className="w-px h-3 bg-white/15 mx-0.5" />}
-
-                {/* Primary Quick Snap Buttons */}
-                <button
-                    type="button"
-                    onClick={() => onSetOrientation(0, 0, 0)}
-                    title="Front View (0°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
-                >
-                    Front
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onSetOrientation(0, -89, 0)}
-                    title="Top View (0°, -89°)"
-                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
-                >
-                    Top
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onSetOrientation(90, 0, 0)}
-                    title="Right View (90°, 0°)"
-                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
-                >
-                    Right
-                </button>
-                <button
-                    type="button"
-                    onClick={() => onSetOrientation(45, 35.26, 0)}
-                    title="Isometric 3D View (45°, 35°)"
-                    className="px-1.5 py-0.5 rounded text-[11px] font-mono tabular-nums font-medium text-[var(--accent-primary,#0070e0)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
-                >
-                    Iso
-                </button>
-
-                {/* Dropdown toggle for full preset categories */}
-                <button
-                    type="button"
-                    onClick={() => setMenuOpen((prev) => !prev)}
-                    title="All Camera Presets (Axial, Axonometric, Cinematic)"
-                    className={`p-1 rounded cursor-pointer transition-colors ${
-                        menuOpen ? 'bg-white/15 text-white' : 'text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-white/10'
-                    }`}
-                >
-                    {menuOpen ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                </button>
-
-                <div className="w-px h-3 bg-white/15 mx-0.5" />
+            {/* Minimalist Controls Under the Ball: Single Reset Button & Settings toggle */}
+            <div className="flex items-center gap-1">
                 <button
                     type="button"
                     onClick={onResetCamera}
                     title="Reset Camera Pose to Default"
-                    className="p-1 rounded text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-white/10 cursor-pointer transition-colors"
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 hover:border-white/20 text-[#a1a1aa] hover:text-white text-[11px] font-mono cursor-pointer transition shadow-sm"
                 >
-                    <RotateCcw className="w-3 h-3" />
+                    <RotateCcw className="w-2.5 h-2.5" />
+                    <span>Reset</span>
+                </button>
+
+                {/* Screen settings trigger for presets and framing */}
+                <button
+                    type="button"
+                    onClick={() => setMenuOpen((prev) => !prev)}
+                    title="Camera angles and framing presets"
+                    className={`p-1 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition shadow-sm ${
+                        menuOpen ? 'bg-white/20 text-white' : ''
+                    }`}
+                >
+                    {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
                 </button>
             </div>
 
-            {/* Expanded Presets Popover Menu */}
-            {menuOpen && (
-                <div
-                    className="flex flex-col gap-2 w-48 p-2 rounded-xl bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.1))] shadow-2xl z-40 text-left pointer-events-auto select-none"
-                    onPointerDown={(e) => e.stopPropagation()}
-                >
-                    {([
-                        { cat: 'shot-type', label: 'Shot Types' },
-                        { cat: 'angle', label: 'Camera Angles' },
-                        { cat: 'axonometric', label: 'Axonometric' },
-                        { cat: 'axial', label: 'Axial Views' },
-                    ] as const).map(({ cat, label: catLabel }) => {
-                        const items = CAMERA_PRESETS.filter((p) => p.category === cat);
-                        if (items.length === 0) return null;
-                        return (
-                            <div key={cat} className="space-y-0.5">
-                                <div className="text-[11px] font-semibold tracking-wider uppercase text-[var(--text-muted,#a1a1aa)] px-1.5 py-0.5">
-                                    {catLabel}
-                                </div>
-                                <div className="grid grid-cols-2 gap-0.5">
-                                    {items.map((preset) => (
-                                        <button
-                                            key={preset.id}
-                                            type="button"
-                                            onClick={() => {
-                                                onSetOrientation(preset.orbit, preset.tilt, preset.roll, preset.zoom);
-                                                setMenuOpen(false);
-                                            }}
-                                            title={preset.description}
-                                            className="px-1.5 py-1 rounded text-[11px] font-mono tabular-nums text-left text-[var(--text-secondary,#d4d4d8)] hover:text-white hover:bg-white/10 truncate transition-colors cursor-pointer"
-                                        >
-                                            {preset.name}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        );
-                    })}
+            {/* Hidden-by-default Screen Settings Popover (Keeps canvas clean) */}
+            <div
+                className={`flex flex-col gap-1.5 w-44 p-2 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-40 text-left pointer-events-auto select-none transition-all duration-150 ${
+                    menuOpen ? 'opacity-100 translate-y-0 scale-100' : 'hidden'
+                }`}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <div className="text-[11px] font-semibold text-white/50 uppercase tracking-wider px-1">
+                    Quick Views
                 </div>
-            )}
+                <div className="grid grid-cols-2 gap-1">
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(0, 0, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                    >
+                        Front
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(0, -89, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                    >
+                        Top
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(90, 0, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                    >
+                        Right
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(45, 35.26, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-[11px] text-sky-400 hover:text-sky-300 font-mono cursor-pointer transition text-left"
+                    >
+                        Iso
+                    </button>
+                </div>
 
-            {/* Readout pill */}
-            <div className="px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-mono tabular-nums text-[#a1a1aa] tracking-tight pointer-events-none">
+                {onFrameSelection && (
+                    <button
+                        type="button"
+                        onClick={() => { onFrameSelection(); setMenuOpen(false); }}
+                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white cursor-pointer transition"
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <Focus className="w-3 h-3 text-sky-400" />
+                            <span>{hasSelection ? 'Frame Selection' : 'Frame Scene'}</span>
+                        </span>
+                        <kbd className="text-[10px] text-white/40 font-mono">F</kbd>
+                    </button>
+                )}
+            </div>
+
+            {/* Readout Pill (Visible on hover/drag to keep canvas clean) */}
+            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[11px] font-mono tabular-nums text-[#a1a1aa] tracking-tight pointer-events-none transition-opacity duration-150 ${
+                isHovered || isDragging ? 'opacity-100' : 'opacity-0'
+            }`}>
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x
             </div>
         </div>

@@ -1,5 +1,6 @@
+import type { SelectHTMLAttributes } from 'react';
 // src/panels/Inspector/sections/cameraBlockSection.test.tsx
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { CameraBlockSection } from './CameraBlockSection';
 import { createDefaultCameraBlock } from '../../../model/defaults';
@@ -183,3 +184,8 @@ describe('CameraBlockSection Inspector UI', () => {
         expect(html).toContain('Dolly In');
     });
 });
+
+// These fixtures inspect the configured option catalogs. Portal behavior is checked separately.
+vi.mock('../../../ui/FigmaSelect', () => ({
+    FigmaSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} />,
+}));

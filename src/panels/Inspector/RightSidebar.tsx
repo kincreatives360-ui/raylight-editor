@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../ui/FigmaSelect';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
 import { ColorField, ColorPicker } from './ColorPicker';
 import {
@@ -28,7 +29,6 @@ import {
     X,
     Eye,
     EyeOff,
-    Minus,
     ArrowLeft,
     ArrowRight,
     SlidersHorizontal,
@@ -36,7 +36,6 @@ import {
     Sparkles,
     CircleDot,
     Move,
-    Layers,
     Scan,
     Image as ImageIcon,
     Square,
@@ -52,6 +51,7 @@ import type {
     Shot,
     Layer,
     TransitionType,
+    Transitionish,
     AnimationBlock,
     AnimationBlockProperty,
     Easing,
@@ -78,7 +78,6 @@ import { CameraBlockSection } from './sections/CameraBlockSection';
 import { LightBlockInspector } from './sections/LightBlockInspector';
 import { DeviceFrameSection } from './sections/DeviceFrameSection';
 import { LightInspector } from './sections/LightInspector';
-import { SceneLightsList } from './sections/SceneLightsList';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDevicePlacement } from '../../model/deviceFrame';
 import { ASPECT_RATIO_CONFIG, getArtboardDimensions } from '../../stage/stageUtils';
 import { EasingPopover } from '../Timeline/EasingPopover';
@@ -520,28 +519,32 @@ const ShaderPreviewCanvas: React.FC<ShaderPreviewCanvasProps> = ({
 };
 
 interface ProjectSettingsPanelProps {
-    activeShot?: Shot;
+    backgroundOnly?: boolean;
+    background?: Background;
+    onBackgroundChange?: (background: Background) => void;
     onSwapImageClick?: () => void;
     onOpenShortcuts?: () => void;
+    onOpenExportModal?: () => void;
 }
 
 const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
-    activeShot: propsActiveShot,
+    backgroundOnly = false,
+    background,
+    onBackgroundChange,
     onSwapImageClick: _onSwapImageClick,
     onOpenShortcuts: _onOpenShortcuts,
+    onOpenExportModal: _onOpenExportModal,
 }) => {
     const { project, updateProject } = useProjectStore();
-    const { selectedLightId, selectLight } = useSelectionStore();
-    const activeShot = propsActiveShot || project.shots[0];
-    const [presetMenuOpen, setPresetMenuOpen] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
-    const bg = project.background;
+    const bg = background ?? project.background;
     const bgMode: 'color' | 'image' | 'shader' =
         bg.kind === 'shader' ? 'shader' : bg.kind === 'image' ? 'image' : 'color';
 
     // Synchronize project background changes to all shots that inherit project background
     const setProjectBackground = (newBg: Background) => {
+        if (onBackgroundChange) { onBackgroundChange(newBg); return; }
         updateProject((p) => ({
             ...p,
             background: newBg,
@@ -673,7 +676,6 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
             shine: cfg.shine ?? 1,
             angle: cfg.angle ?? 28,
         });
-        setPresetMenuOpen(false);
     };
 
     const handleFileInput = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -699,10 +701,11 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     };
 
     return (
-        <div className="flex-1 overflow-y-auto px-4 py-3.5 flex flex-col justify-between select-none">
+        <div className={backgroundOnly ? "min-w-0" : "flex-1 overflow-y-auto px-4 py-3.5 flex flex-col select-none"} data-testid={backgroundOnly ? "shot-background-editor" : "project-settings-section"}>
             <div className="space-y-4">
-                {/* Title */}
-                <h2 className="text-[13px] font-semibold text-white tracking-wide">Project</h2>
+                {!backgroundOnly && <>
+                {/* 1. PROJECT SETTINGS HEADER */}
+                <h2 className="text-[13px] font-semibold text-white tracking-wide">Project Settings</h2>
 
                 {/* Name */}
                 <div className="space-y-1.5">
@@ -720,7 +723,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 <div className="space-y-1.5">
                     <label className="text-[11px] text-[#8e8e93] block font-normal">Aspect Ratio</label>
                     <div className="relative">
-                        <select
+                        <FigmaSelect
                             value={project.aspectRatio}
                             onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
                             className="w-full h-8 px-3 pr-8 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none appearance-none cursor-pointer focus:border-white/20 transition"
@@ -732,8 +735,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                             <option value="3:2">Photo 3:2</option>
                             <option value="21:9">Cinema 21:9</option>
                             <option value="4:5">Social 4:5</option>
-                        </select>
-                        <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                        </FigmaSelect>
                     </div>
                 </div>
 
@@ -761,9 +763,10 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     />
                 </div>
 
+                </>}
                 {/* Background Section */}
                 <div className="space-y-2.5">
-                    <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>
+                    {!backgroundOnly && <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>}
                     {/* 3-segmented button */}
                     <div className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5">
                         <button
@@ -956,15 +959,14 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                     <div className="space-y-1.5">
                                         <label className="text-[11px] text-[#8e8e93] block font-normal">Fit</label>
                                         <div className="relative">
-                                            <select
+                                            <FigmaSelect
                                                 value={(bg.fit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
                                                 onChange={(e) => setProjectBackground({ ...bg, fit: e.target.value as 'cover' | 'contain' })}
                                                 className="w-full h-8 pl-3 pr-8 rounded-lg bg-[#141416] border border-white/[0.08] hover:border-white/20 text-[11px] text-white appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] transition"
                                             >
                                                 <option value="cover">Fill</option>
                                                 <option value="contain">Fit</option>
-                                            </select>
-                                            <ChevronDown className="w-3.5 h-3.5 text-[#8e8e93] absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                                            </FigmaSelect>
                                         </div>
                                     </div>
 
@@ -1016,7 +1018,6 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                     <span className="text-[#0088ff] font-medium">{currentMeta?.label || currentPreset}</span>
                                 </div>
                                 <div
-                                    onClick={() => setPresetMenuOpen((v) => !v)}
                                     className="h-20 rounded-xl border border-white/10 hover:border-white/25 overflow-hidden relative cursor-pointer group bg-[#060a14] transition shadow-inner"
                                 >
                                     {/* Dynamic Shader Swatch Representation */}
@@ -1032,45 +1033,17 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         glow={shaderBg?.glow ?? 1}
                                         shine={shaderBg?.shine ?? 1}
                                     />
-                                    <div className="absolute bottom-2 left-2 px-2.5 py-0.5 rounded-md bg-black/70 backdrop-blur-md border border-white/10 text-[11px] font-medium text-white shadow-sm flex items-center gap-1.5">
-                                        <span>{currentMeta?.label || currentPreset}</span>
-                                        <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
-                                    </div>
+                                    <FigmaSelect
+                                        aria-label="Shader preset"
+                                        value={currentPreset}
+                                        onChange={(event) => selectShaderPreset(event.target.value as ShaderPreset)}
+                                        className="absolute bottom-2 left-2 h-6 max-w-[calc(100%-16px)] px-2 rounded-md bg-black/70 border border-white/10 text-[11px] text-white"
+                                    >
+                                        {SHADER_PRESETS.map((preset) => <option key={preset} value={preset}>{SHADER_PRESET_METADATA[preset]?.label || preset}</option>)}
+                                    </FigmaSelect>
                                 </div>
 
-                                {/* Preset Selector Dropdown Grid */}
-                                {presetMenuOpen && (
-                                    <div className="grid grid-cols-2 gap-1.5 p-2 rounded-xl bg-[#18181b] border border-white/15 mt-1 max-h-56 overflow-y-auto shadow-2xl z-30">
-                                        {SHADER_PRESETS.map((p) => {
-                                            const meta = SHADER_PRESET_METADATA[p];
-                                            const cfg = DEFAULT_SHADER_CONFIGS[p];
-                                            const isSelected = currentPreset === p;
-                                            const pColors = cfg?.colors?.length ? cfg.colors : [cfg?.color || '#3b82f6', cfg?.backgroundColor || '#05050a'];
-                                            return (
-                                                <button
-                                                    key={p}
-                                                    type="button"
-                                                    onClick={() => selectShaderPreset(p)}
-                                                    className={`p-2 rounded-lg text-left transition cursor-pointer border flex flex-col gap-1 ${
-                                                        isSelected
-                                                            ? 'bg-[#0088ff]/15 border-[#0088ff] text-white shadow-xs'
-                                                            : 'bg-white/[0.03] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.08] hover:border-white/15'
-                                                    }`}
-                                                >
-                                                    <div className="flex items-center gap-1.5">
-                                                        <div
-                                                            className="w-3 h-3 rounded-full shrink-0 border border-white/20 shadow-xs"
-                                                            style={{
-                                                                background: `linear-gradient(135deg, ${pColors[0]} 0%, ${pColors[1] || pColors[0]} 100%)`,
-                                                            }}
-                                                        />
-                                                        <span className="text-[11px] font-medium truncate flex-1">{meta?.label || p}</span>
-                                                    </div>
-                                                </button>
-                                            );
-                                        })}
-                                    </div>
-                                )}
+
                             </div>
 
                             {/* Shader Colors matching Raylight: Color & Accent */}
@@ -1180,16 +1153,182 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                         </div>
                     )}
                 </div>
+            </div>
+        </div>
+    );
+};
 
-                {activeShot && <SceneEffectsSection shot={activeShot} />}
-                {/* Scene Lights */}
-                {activeShot && (
-                    <div className="pt-3 border-t border-white/[0.06]">
-                        <SceneLightsList
-                            activeShot={activeShot}
-                            selectedLightId={selectedLightId}
-                            onSelectLight={selectLight}
-                        />
+interface ShotSettingsPanelProps {
+    activeShot: Shot;
+    onOpenExportModal?: () => void;
+}
+
+const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
+    activeShot,
+    onOpenExportModal,
+}) => {
+    const { project, updateShot, addCameraBlockToShot } = useProjectStore();
+    const [shotTab, setShotTab] = useState<'design' | 'animate'>('design');
+
+    const isUsingProjectBg = activeShot.useProjectBackground !== false;
+
+    return (
+        <div className="shot-settings-panel flex-1 min-h-0 overflow-y-auto select-none" data-testid="shot-settings-section">
+            <div className="space-y-4">
+                {/* Header: Design / Animate tabs matching mockup */}
+                <div className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-white/[0.08]" role="tablist" aria-label="Shot settings">
+                    <button
+                        type="button"
+                        role="tab" aria-selected={shotTab === 'design'} onClick={() => setShotTab('design')}
+                        className={`flex-1 py-1 px-2.5 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
+                            shotTab === 'design'
+                                ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                : 'text-[#8e8e93] hover:text-white'
+                        }`}
+                    >
+                        Design
+                    </button>
+                    <button
+                        type="button"
+                        role="tab" aria-selected={shotTab === 'animate'} onClick={() => setShotTab('animate')}
+                        className={`flex-1 py-1 px-2.5 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
+                            shotTab === 'animate'
+                                ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                : 'text-[#8e8e93] hover:text-white'
+                        }`}
+                    >
+                        Animate
+                    </button>
+                </div>
+
+                {/* Shot Title & Duration */}
+                <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                        <label className="text-[11px] text-[#8e8e93] block font-normal">Shot Name</label>
+                        <span className="text-[11px] font-mono text-[#71717a]">
+                            {(activeShot.durationMs / 1000).toFixed(1)}s
+                        </span>
+                    </div>
+                    <input
+                        type="text"
+                        value={activeShot.name || ''}
+                        onChange={(e) => updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))}
+                        placeholder="Shot name"
+                        className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
+                    />
+                </div>
+
+                {shotTab === 'design' ? (
+                    <>
+                        {/* Background Section */}
+                        <div className="space-y-2.5">
+                            <h3 className="text-[12px] font-semibold text-white tracking-wide">Background</h3>
+
+                            {/* Use project toggle switch */}
+                            <div className="flex items-center justify-between py-2">
+                                <span className="text-[11px] font-medium text-white">Use project</span>
+                                <button
+                                    type="button"
+                                    role="switch"
+                                    aria-label="Use project background"
+                                    aria-checked={isUsingProjectBg}
+                                    onClick={() => {
+                                        const next = !isUsingProjectBg;
+                                        updateShot(activeShot.id, (s) => ({
+                                            ...s,
+                                            useProjectBackground: next,
+                                            background: s.background ?? structuredClone(project.background),
+                                        }));
+                                    }}
+                                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
+                                        isUsingProjectBg ? 'bg-[#0088ff]' : 'bg-[#27272a]'
+                                    }`}
+                                >
+                                    <span
+                                        className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-transform ${
+                                            isUsingProjectBg ? 'right-1' : 'left-1'
+                                        }`}
+                                    />
+                                </button>
+                            </div>
+
+                            {/* Inherited or override */}
+                            {isUsingProjectBg ? (
+                                <div className="sr-only">
+                                    <span>Inheriting project background</span>
+                                    <span
+                                        className="w-2.5 h-2.5 rounded-full border border-white/20"
+                                        style={{
+                                            backgroundColor:
+                                                project.background.kind === 'solid'
+                                                    ? project.background.color
+                                                    : '#0088ff',
+                                        }}
+                                    />
+                                </div>
+                            ) : (
+                                <ProjectSettingsPanel
+                                    backgroundOnly
+                                    background={activeShot.background ?? project.background}
+                                    onBackgroundChange={(background) => updateShot(activeShot.id, (shot) => ({ ...shot, background, useProjectBackground: false }))}
+                                />
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-white/[0.08]" />
+
+                        {/* Scene Effects in Figma Style (+) and (-) */}
+                        <SceneEffectsSection shot={activeShot} />
+
+                        {/* Divider */}
+                        <div className="border-t border-white/[0.08]" />
+
+                        {/* Export Section */}
+                        <div className="space-y-2">
+                            <span className="text-[11px] text-[#8e8e93] block font-normal">Export</span>
+                            {onOpenExportModal && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenExportModal}
+                                    className="w-full py-2 px-3 rounded-xl bg-[#222226] hover:bg-[#2a2a30] border border-white/10 text-white font-medium text-[12px] transition cursor-pointer text-center"
+                                >
+                                    Export shot
+                                </button>
+                            )}
+                        </div>
+
+
+                    </>
+                ) : (
+                    /* Animate Tab for Shot: Camera Animation / Controls */
+                    <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                            <h3 className="text-[12px] font-semibold text-white tracking-wide">Camera Motion</h3>
+                            <span className="text-[10px] text-[#71717a]">
+                                {activeShot.cameraBlocks?.length || 0} moves
+                            </span>
+                        </div>
+                        {activeShot.cameraBlocks && activeShot.cameraBlocks.length > 0 ? (
+                            <CameraBlockSection
+                                activeShotId={activeShot.id}
+                                activeCameraBlock={activeShot.cameraBlocks[0]}
+                                onDone={() => {}}
+                            />
+                        ) : (
+                            <div className="py-6 px-3 rounded-xl border border-dashed border-white/10 bg-[#141416]/40 text-center space-y-2">
+                                <span className="text-[11px] text-[#71717a] block">No camera animation in this shot</span>
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        addCameraBlockToShot(activeShot.id);
+                                    }}
+                                    className="py-1 px-3 rounded-lg bg-white/10 hover:bg-white/20 text-white text-[11px] font-medium transition cursor-pointer"
+                                >
+                                    + Add Camera Move
+                                </button>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
@@ -1235,6 +1374,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         clearLayerSelection,
         toggleRightSidebar,
         rightSidebarWidth,
+        inspectorTab,
     } = useSelectionStore();
 
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
@@ -1242,6 +1382,8 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const [addAnimMenuOpen, setAddAnimMenuOpen] = useState(false);
     const [inMenuOpen, setInMenuOpen] = useState(false);
     const [outMenuOpen, setOutMenuOpen] = useState(false);
+    const [selectedInPresetIndex, setSelectedInPresetIndex] = useState<number | null>(null);
+    const [selectedOutPresetIndex, setSelectedOutPresetIndex] = useState<number | null>(null);
     const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
     const [easingPopoverConfig, setEasingPopoverConfig] = useState<{
@@ -1260,12 +1402,28 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             activeShot?.light?.sources?.some((s) => s.id === selectedLightId)
         )
     );
+    const effectiveInspectorTab = (selectedLightId && !isSelectedLightValid) ? 'project' : inspectorTab;
 
     useEffect(() => {
         if (selectedLightId && !isSelectedLightValid) {
             selectLight(null);
         }
     }, [selectedLightId, isSelectedLightValid, selectLight]);
+
+    useEffect(() => {
+        if (!addAnimMenuOpen && !inMenuOpen && !outMenuOpen && selectedInPresetIndex === null && selectedOutPresetIndex === null) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape') {
+                setAddAnimMenuOpen(false);
+                setInMenuOpen(false);
+                setOutMenuOpen(false);
+                setSelectedInPresetIndex(null);
+                setSelectedOutPresetIndex(null);
+            }
+        };
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [addAnimMenuOpen, inMenuOpen, outMenuOpen, selectedInPresetIndex, selectedOutPresetIndex]);
 
     const refStageW = 1920;
     const refStageH = 1080;
@@ -1369,7 +1527,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const handleAddPreset = (
         which: 'in' | 'out',
-        presetType: 'fade' | 'slide' | 'float' | 'wipe'
+        presetType: 'fade' | 'blur' | 'slide' | 'focus' | 'rack-focus' | 'wipe' | 'typewriter' | string
     ) => {
         if (!selectedLayer) return;
         setTimelineView('scene');
@@ -1386,14 +1544,13 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             mappedType = which === 'in' ? 'slide-up' : 'slide-down';
             distance = 0.25;
             durationMs = 500;
-        } else if (presetType === 'float') {
-            mappedType = 'float-out';
-            distance = 0.15;
-            durationMs = 650;
-        } else if (presetType === 'wipe') {
+        } else if (presetType === 'blur' || presetType === 'wipe') {
             mappedType = 'mask-sweep';
             distance = 0.5;
             durationMs = 500;
+        } else if (presetType === 'focus' || presetType === 'rack-focus' || presetType === 'typewriter') {
+            mappedType = 'fade';
+            durationMs = 600;
         }
 
         const newPreset = {
@@ -1402,7 +1559,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             durationMs,
             delayMs: 0,
             distance,
-            easing: { kind: 'preset' as const, name: 'ease-in-out' as const },
+            easing: { kind: 'preset', name: which === 'in' ? 'ease-out' : 'ease-in' } as Easing,
         };
 
         updateLayer(activeShot.id, selectedLayer.id, (l) => {
@@ -1429,8 +1586,71 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             }
         });
 
-        if (which === 'in') setInMenuOpen(false);
-        else setOutMenuOpen(false);
+        if (which === 'in') {
+            setInMenuOpen(false);
+            const currLen = (selectedLayer.entrances?.length || (selectedLayer.entrance.type !== 'none' ? 1 : 0));
+            setSelectedInPresetIndex(currLen);
+        } else {
+            setOutMenuOpen(false);
+            const currLen = (selectedLayer.exits?.length || (selectedLayer.exit.type !== 'none' ? 1 : 0));
+            setSelectedOutPresetIndex(currLen);
+        }
+    };
+
+    const handleUpdateInPreset = (idx: number, patch: Partial<Transitionish>) => {
+        if (!selectedLayer) return;
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            const list = l.entrances && l.entrances.length > 0 ? [...l.entrances] : [{ ...l.entrance }];
+            if (!list[idx]) return l;
+            list[idx] = { ...list[idx], ...patch };
+            return {
+                ...l,
+                entrances: list,
+                entrance: list[0],
+            };
+        });
+    };
+
+    const handleRemoveInPreset = (idx: number) => {
+        if (!selectedLayer) return;
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            const list = l.entrances && l.entrances.length > 0 ? [...l.entrances] : [{ ...l.entrance }];
+            const next = list.filter((_, i) => i !== idx);
+            return {
+                ...l,
+                entrances: next.length > 0 ? next : undefined,
+                entrance: next[0] || { type: 'none', durationMs: 0, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'ease-out' } },
+            };
+        });
+        if (selectedInPresetIndex === idx) setSelectedInPresetIndex(null);
+    };
+
+    const handleUpdateOutPreset = (idx: number, patch: Partial<Transitionish>) => {
+        if (!selectedLayer) return;
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            const list = l.exits && l.exits.length > 0 ? [...l.exits] : [{ ...l.exit }];
+            if (!list[idx]) return l;
+            list[idx] = { ...list[idx], ...patch };
+            return {
+                ...l,
+                exits: list,
+                exit: list[0],
+            };
+        });
+    };
+
+    const handleRemoveOutPreset = (idx: number) => {
+        if (!selectedLayer) return;
+        updateLayer(activeShot.id, selectedLayer.id, (l) => {
+            const list = l.exits && l.exits.length > 0 ? [...l.exits] : [{ ...l.exit }];
+            const next = list.filter((_, i) => i !== idx);
+            return {
+                ...l,
+                exits: next.length > 0 ? next : undefined,
+                exit: next[0] || { type: 'none', durationMs: 0, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'ease-in' } },
+            };
+        });
+        if (selectedOutPresetIndex === idx) setSelectedOutPresetIndex(null);
     };
 
     const handleUpdateBlock = (
@@ -2326,7 +2546,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 {/* Blend Mode */}
                                 <div className="space-y-1">
                                     <span className="text-[10px] text-[#a1a1aa]">Blend Mode</span>
-                                    <select
+                                    <FigmaSelect
                                         value={selectedLayer.blendMode}
                                         onChange={(e) =>
                                             updateLayer(activeShot.id, selectedLayer.id, (l) => ({
@@ -2341,7 +2561,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 {bm}
                                             </option>
                                         ))}
-                                    </select>
+                                    </FigmaSelect>
                                 </div>
 
                                 {/* 3D Lighting & Material Response */}
@@ -2594,7 +2814,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                 {/* Layer Masking */}
                                 <div className="space-y-1 pt-1 border-t border-white/[0.06]">
                                     <span className="text-[10px] text-[#a1a1aa]">Alpha Mask</span>
-                                    <select
+                                    <FigmaSelect
                                         value={selectedLayer.maskLayerId || ''}
                                         onChange={(e) =>
                                             updateLayer(activeShot.id, selectedLayer.id, (l) => ({
@@ -2616,57 +2836,715 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                     Mask with: {l.name}
                                                 </option>
                                             ))}
-                                    </select>
+                                    </FigmaSelect>
                                 </div>
                             </div>
                         </>
                     )}
-                    </div>
-                )}
+
+
+                </div>
+            )}
 
                     {/* =============================================================== */}
                     {/* TAB 2: ANIMATE (WHEN A LAYER IS SELECTED)                       */}
                     {/* =============================================================== */}
-                    {effectiveMainTab === 'animate' && (
-                        <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
-                            <div className="p-3.5 relative">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Animations{selectedLayer.blocks.length > 0 ? ` (${selectedLayer.blocks.length})` : ''}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            setAddAnimMenuOpen((v) => !v);
-                                            setInMenuOpen(false);
-                                            setOutMenuOpen(false);
-                                        }}
-                                        title="Add Animation Block"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                    </button>
+                    {effectiveMainTab === 'animate' && selectedLayer && (() => {
+                        const inPresets: Transitionish[] = (selectedLayer.entrances && selectedLayer.entrances.length > 0)
+                            ? selectedLayer.entrances
+                            : (selectedLayer.entrance && selectedLayer.entrance.type !== 'none' ? [selectedLayer.entrance] : []);
+
+                        const outPresets: Transitionish[] = (selectedLayer.exits && selectedLayer.exits.length > 0)
+                            ? selectedLayer.exits
+                            : (selectedLayer.exit && selectedLayer.exit.type !== 'none' ? [selectedLayer.exit] : []);
+
+                        const getBlockIcon = (prop: AnimationBlockProperty) => {
+                            switch (prop) {
+                                case 'tilt': return <Compass className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'position': return <Move className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'rotation': return <RotateCw className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'scale': return <Maximize2 className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'opacity': return <Eye className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'size': return <Square className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'layerBlur': return <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'maskSweep': return <Scan className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'shimmer': return <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />;
+                                case 'glow': return <Sparkles className="w-3.5 h-3.5 text-amber-400" />;
+                                case 'cornerRadius': return <Square className="w-3.5 h-3.5 text-emerald-400" />;
+                                default: return <CircleDot className="w-3.5 h-3.5 text-[#0088ff]" />;
+                            }
+                        };
+
+                        return (
+                            <>
+                                <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
+                                    {/* 1. ANIMATIONS SECTION */}
+                                    <div className="p-3.5 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-medium text-[#e4e4e7]">
+                                                Animations{selectedLayer.blocks.length > 0 ? ` (${selectedLayer.blocks.length})` : ''}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setAddAnimMenuOpen((v) => !v);
+                                                    setInMenuOpen(false);
+                                                    setOutMenuOpen(false);
+                                                    setSelectedInPresetIndex(null);
+                                                    setSelectedOutPresetIndex(null);
+                                                }}
+                                                title="Add Animation Block"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    {/* ANIMATION BLOCKS LIST */}
+                                    {selectedLayer.blocks.map((blk) => {
+                                        const isSelectedBlock = selectedBlockId === blk.id;
+                                        const isMuted = blk.durationMs === 0;
+                                        const isNegDirection = typeof blk.amount === 'object'
+                                            ? (blk.property === 'tilt' ? ((blk.amount as Vec3).y || 0) < 0 : (blk.property === 'rotation' ? ((blk.amount as Vec3).z || 0) < 0 : ((blk.amount as Vec3).x || 0) < 0))
+                                            : (Number(blk.amount) < 0);
+
+                                        return (
+                                            <div
+                                                key={blk.id}
+                                                onClick={() => selectBlock(blk.id, selectedLayer.id)}
+                                                className={`p-3.5 space-y-3 transition cursor-pointer border-b border-white/[0.06] ${
+                                                    isSelectedBlock
+                                                        ? 'bg-[#0088ff]/5 border-l-2 border-l-[#0088ff]'
+                                                        : 'hover:bg-white/[0.01]'
+                                                }`}
+                                            >
+                                                {/* Header: Icon + Title + Mute + Delete */}
+                                                <div className="flex items-center justify-between">
+                                                    <span className="text-[12px] font-medium text-white capitalize flex items-center gap-2">
+                                                        {getBlockIcon(blk.property)}
+                                                        <span>{blk.label || (blk.property === 'tilt' ? 'Tilt' : blk.property === 'maskSweep' ? 'Mask Sweep' : blk.property)}</span>
+                                                    </span>
+                                                    <div className="flex items-center gap-1">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleUpdateBlock(blk.id, { durationMs: isMuted ? 1200 : 0 });
+                                                            }}
+                                                            className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer transition"
+                                                            title={isMuted ? 'Enable Animation Block' : 'Mute Animation Block'}
+                                                        >
+                                                            {isMuted ? (
+                                                                <EyeOff className="w-3.5 h-3.5 text-amber-400" />
+                                                            ) : (
+                                                                <Eye className="w-3.5 h-3.5" />
+                                                            )}
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                handleDeleteBlock(blk.id);
+                                                            }}
+                                                            className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer transition"
+                                                            title="Delete Animation Block"
+                                                        >
+                                                            <X className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Property-Specific Inputs */}
+                                                {blk.property === 'shimmer' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Intensity</label>
+                                                        <ScrubInput
+                                                            label="Δ"
+                                                            value={Math.round(Number(blk.amount || 1) * 100)}
+                                                            min={0}
+                                                            max={200}
+                                                            step={5}
+                                                            unit="%"
+                                                            onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'tilt' && typeof blk.amount === 'object' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Tilt</label>
+                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                            <ScrubInput
+                                                                label="X"
+                                                                value={Math.round(radToDeg((blk.amount as Vec3).x || 0))}
+                                                                min={-360}
+                                                                max={360}
+                                                                step={1}
+                                                                unit="°"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), x: degToRad(v) }
+                                                                })}
+                                                            />
+                                                            <ScrubInput
+                                                                label="Y"
+                                                                value={Math.round(radToDeg((blk.amount as Vec3).y || 0))}
+                                                                min={-360}
+                                                                max={360}
+                                                                step={1}
+                                                                unit="°"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), y: degToRad(v) }
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'position' && typeof blk.amount === 'object' && (
+                                                    <div className="space-y-2.5">
+                                                        <div className="space-y-1.5">
+                                                            <div className="flex items-center justify-between">
+                                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Position</label>
+                                                                <Crosshair className="w-3 h-3 text-[#71717a]" />
+                                                            </div>
+                                                            <div className="grid grid-cols-2 gap-1.5">
+                                                                <ScrubInput
+                                                                    label="X"
+                                                                    value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                                    min={-3000}
+                                                                    max={3000}
+                                                                    step={10}
+                                                                    onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                        amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                                    })}
+                                                                />
+                                                                <ScrubInput
+                                                                    label="Y"
+                                                                    value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                                    min={-3000}
+                                                                    max={3000}
+                                                                    step={10}
+                                                                    onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                        amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                                    })}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label className="text-[11px] text-[#8e8e93] block font-normal">Depth</label>
+                                                            <ScrubInput
+                                                                label="Z"
+                                                                value={Math.round((blk.amount as Vec3).z * 500)}
+                                                                min={-1500}
+                                                                max={1500}
+                                                                step={10}
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), z: Number((v / 500).toFixed(4)) }
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'rotation' && typeof blk.amount === 'object' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Rotation</label>
+                                                        <ScrubInput
+                                                            label="Roll"
+                                                            value={Math.round(radToDeg((blk.amount as Vec3).z || 0))}
+                                                            min={-360}
+                                                            max={360}
+                                                            step={1}
+                                                            unit="°"
+                                                            onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                amount: { ...(blk.amount as Vec3), z: degToRad(v) }
+                                                            })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'scale' && typeof blk.amount === 'number' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
+                                                        <ScrubInput
+                                                            label="Δ"
+                                                            value={Math.round(Number(blk.amount || 1) * 100)}
+                                                            min={10}
+                                                            max={500}
+                                                            step={5}
+                                                            unit="%"
+                                                            onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'scale' && typeof blk.amount === 'object' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
+                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                            <ScrubInput
+                                                                label="X"
+                                                                value={Math.round(((blk.amount as Vec3).x || 1) * 100)}
+                                                                min={10}
+                                                                max={500}
+                                                                step={5}
+                                                                unit="%"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), x: v / 100 }
+                                                                })}
+                                                            />
+                                                            <ScrubInput
+                                                                label="Y"
+                                                                value={Math.round(((blk.amount as Vec3).y || 1) * 100)}
+                                                                min={10}
+                                                                max={500}
+                                                                step={5}
+                                                                unit="%"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), y: v / 100 }
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'opacity' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Opacity</label>
+                                                        <ScrubInput
+                                                            label="Δ"
+                                                            value={Math.round(Number(blk.amount || 1) * 100)}
+                                                            min={-100}
+                                                            max={100}
+                                                            step={5}
+                                                            unit="%"
+                                                            onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'size' && typeof blk.amount === 'object' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Size</label>
+                                                        <div className="grid grid-cols-2 gap-1.5">
+                                                            <ScrubInput
+                                                                label="ΔW"
+                                                                value={Math.round((blk.amount as Vec3).x * refStageW)}
+                                                                min={-2000}
+                                                                max={2000}
+                                                                step={10}
+                                                                unit="px"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
+                                                                })}
+                                                            />
+                                                            <ScrubInput
+                                                                label="ΔH"
+                                                                value={Math.round((blk.amount as Vec3).y * refStageH)}
+                                                                min={-2000}
+                                                                max={2000}
+                                                                step={10}
+                                                                unit="px"
+                                                                onChange={(v) => handleUpdateBlock(blk.id, {
+                                                                    amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {blk.property === 'layerBlur' && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Blur</label>
+                                                        <ScrubInput
+                                                            label="Radius"
+                                                            value={Math.round(Number(blk.amount || 0) * 100)}
+                                                            min={0}
+                                                            max={100}
+                                                            step={1}
+                                                            unit="%"
+                                                            onChange={(amount) => handleUpdateBlock(blk.id, { amount: amount / 100 })}
+                                                        />
+                                                    </div>
+                                                )}
+
+                                                {/* DIRECTION BUTTONS (Segmented ← / →) */}
+                                                {['position', 'tilt', 'rotation', 'scale', 'maskSweep', 'shimmer'].includes(blk.property) && (
+                                                    <div className="space-y-1.5">
+                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Direction</label>
+                                                        <div className="grid grid-cols-2 gap-1 bg-[#141416] p-0.5 rounded-lg border border-white/[0.06]">
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSetBlockDirection(blk, -1);
+                                                                }}
+                                                                className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${
+                                                                    isNegDirection
+                                                                        ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                                        : 'text-[#71717a] hover:text-white'
+                                                                }`}
+                                                                title="Left / In to rest"
+                                                            >
+                                                                <ArrowLeft className="w-3.5 h-3.5" />
+                                                            </button>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleSetBlockDirection(blk, 1);
+                                                                }}
+                                                                className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${
+                                                                    !isNegDirection
+                                                                        ? 'bg-[#222226] text-white shadow-xs border border-white/20'
+                                                                        : 'text-[#71717a] hover:text-white'
+                                                                }`}
+                                                                title="Right / Out from rest"
+                                                            >
+                                                                <ArrowRight className="w-3.5 h-3.5" />
+                                                            </button>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Easing (Dropdown + Sliders Bezier Popover Button) */}
+                                                <div className="space-y-1.5">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
+                                                    <div className="flex items-center gap-1.5">
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEasingPopoverConfig({
+                                                                    easing: blk.easing,
+                                                                    onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                                    anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                });
+                                                            }}
+                                                            className="flex-1 h-8 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 px-2.5 flex items-center justify-between text-[11px] text-white transition cursor-pointer"
+                                                        >
+                                                            <span className="flex items-center gap-2 truncate">
+                                                                <Spline className="w-3 h-3 text-[#0088ff] shrink-0" />
+                                                                <span className="capitalize">{getEasingDisplayLabel(blk.easing)}</span>
+                                                            </span>
+                                                            <ChevronDown className="w-3.5 h-3.5 text-[#71717a] shrink-0" />
+                                                        </button>
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setEasingPopoverConfig({
+                                                                    easing: blk.easing,
+                                                                    onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
+                                                                    anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                });
+                                                            }}
+                                                            title="Open interactive 2D Bezier curve editor"
+                                                            className={`w-8 h-8 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
+                                                                blk.easing.kind === 'bezier'
+                                                                    ? 'bg-[#0088ff] text-white border-[#0088ff]'
+                                                                    : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.08] hover:text-white hover:border-white/20'
+                                                            }`}
+                                                        >
+                                                            <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                        </button>
+                                                    </div>
+                                                </div>
+
+                                                {/* Timing (Start & Duration) */}
+                                                <div className="grid grid-cols-2 gap-1.5 pt-0.5">
+                                                    <ScrubInput
+                                                        label="🕒"
+                                                        value={blk.startMs}
+                                                        min={0}
+                                                        max={Math.max(0, activeShot.durationMs - 80)}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(startMs) => handleUpdateBlock(blk.id, { startMs })}
+                                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                                    />
+                                                    <ScrubInput
+                                                        label="⏱"
+                                                        value={blk.durationMs}
+                                                        min={80}
+                                                        max={activeShot.durationMs}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(durationMs) => handleUpdateBlock(blk.id, { durationMs })}
+                                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+
+                                    {/* 2. IN SECTION (Entrance Transitions — with Pill Chips) */}
+                                    <div className="p-3.5 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-medium text-[#e4e4e7]">
+                                                In{inPresets.length > 1 ? ` (${inPresets.length})` : ''}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setInMenuOpen((v) => !v);
+                                                    setOutMenuOpen(false);
+                                                    setAddAnimMenuOpen(false);
+                                                    setSelectedInPresetIndex(null);
+                                                    setSelectedOutPresetIndex(null);
+                                                }}
+                                                title="Add In Preset"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        {inPresets.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                {inPresets.map((ent, idx) => {
+                                                    const isSelected = selectedInPresetIndex === idx;
+                                                    const isMuted = ent.durationMs === 0;
+                                                    return (
+                                                        <div
+                                                            key={(ent as Transitionish & { id?: string }).id || `in-${ent.type}-${idx}`}
+                                                            onClick={() => {
+                                                                setSelectedInPresetIndex(isSelected ? null : idx);
+                                                                setSelectedOutPresetIndex(null);
+                                                                setInMenuOpen(false);
+                                                                setOutMenuOpen(false);
+                                                                setAddAnimMenuOpen(false);
+                                                            }}
+                                                            className={`h-7 pl-2 pr-1.5 rounded-full border text-[11px] flex items-center gap-1.5 cursor-pointer transition shadow-xs ${
+                                                                isSelected
+                                                                    ? 'bg-[#0088ff]/20 border-[#0088ff] text-white font-medium'
+                                                                    : 'bg-[#18181c] border-white/10 hover:border-white/20 text-[#d4d4d8] hover:text-white'
+                                                            }`}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateInPreset(idx, {
+                                                                        durationMs: isMuted ? 500 : 0,
+                                                                    });
+                                                                }}
+                                                                title={isMuted ? 'Enable' : 'Disable'}
+                                                                className="text-[#a1a1aa] hover:text-white cursor-pointer"
+                                                            >
+                                                                {isMuted ? (
+                                                                    <EyeOff className="w-3 h-3 text-amber-400" />
+                                                                ) : (
+                                                                    <Eye className="w-3 h-3" />
+                                                                )}
+                                                            </button>
+                                                            <span className="capitalize">{ent.type} ({Math.round(ent.durationMs / 100) / 10}s)</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleRemoveInPreset(idx);
+                                                                }}
+                                                                title="Remove In Preset"
+                                                                className="p-0.5 rounded-full hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* 3. OUT SECTION (Exit Transitions — with Pill Chips) */}
+                                    <div className="p-3.5 space-y-2.5">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-[11px] font-medium text-[#e4e4e7]">
+                                                Out{outPresets.length > 1 ? ` (${outPresets.length})` : ''}
+                                            </span>
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    setOutMenuOpen((v) => !v);
+                                                    setInMenuOpen(false);
+                                                    setAddAnimMenuOpen(false);
+                                                    setSelectedInPresetIndex(null);
+                                                    setSelectedOutPresetIndex(null);
+                                                }}
+                                                title="Add Out Preset"
+                                                className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                                            >
+                                                <Plus className="w-3.5 h-3.5" />
+                                            </button>
+                                        </div>
+
+                                        {outPresets.length > 0 && (
+                                            <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                                                {outPresets.map((ext, idx) => {
+                                                    const isSelected = selectedOutPresetIndex === idx;
+                                                    const isMuted = ext.durationMs === 0;
+                                                    return (
+                                                        <div
+                                                            key={(ext as Transitionish & { id?: string }).id || `out-${ext.type}-${idx}`}
+                                                            onClick={() => {
+                                                                setSelectedOutPresetIndex(isSelected ? null : idx);
+                                                                setSelectedInPresetIndex(null);
+                                                                setInMenuOpen(false);
+                                                                setOutMenuOpen(false);
+                                                                setAddAnimMenuOpen(false);
+                                                            }}
+                                                            className={`h-7 pl-2 pr-1.5 rounded-full border text-[11px] flex items-center gap-1.5 cursor-pointer transition shadow-xs ${
+                                                                isSelected
+                                                                    ? 'bg-[#0088ff]/20 border-[#0088ff] text-white font-medium'
+                                                                    : 'bg-[#18181c] border-white/10 hover:border-white/20 text-[#d4d4d8] hover:text-white'
+                                                            }`}
+                                                        >
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleUpdateOutPreset(idx, {
+                                                                        durationMs: isMuted ? 500 : 0,
+                                                                    });
+                                                                }}
+                                                                title={isMuted ? 'Enable' : 'Disable'}
+                                                                className="text-[#a1a1aa] hover:text-white cursor-pointer"
+                                                            >
+                                                                {isMuted ? (
+                                                                    <EyeOff className="w-3 h-3 text-amber-400" />
+                                                                ) : (
+                                                                    <Eye className="w-3 h-3" />
+                                                                )}
+                                                            </button>
+                                                            <span className="capitalize">{ext.type} ({Math.round(ext.durationMs / 100) / 10}s)</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={(e) => {
+                                                                    e.stopPropagation();
+                                                                    handleRemoveOutPreset(idx);
+                                                                }}
+                                                                title="Remove Out Preset"
+                                                                className="p-0.5 rounded-full hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
+                                                            >
+                                                                <X className="w-3 h-3" />
+                                                            </button>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
 
+                                {/* FLOATING POPUP FLYOUTS FOR ANIMATE TAB */}
+                                {/* Full Animate Properties Flyout (Categorized: Custom, Appearance, Effects) */}
                                 {addAnimMenuOpen && (
-                                    <div className="absolute right-3.5 top-9 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                    <div
+                                        className="absolute right-full mr-2.5 top-[92px] w-52 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-2 z-50 space-y-2 animate-in fade-in zoom-in-95 duration-100 select-none"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
+                                        <div className="space-y-0.5">
+                                            <div className="px-2 py-0.5 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                                Custom
+                                            </div>
+                                            {[
+                                                { id: 'position', label: 'Position', icon: Move, color: 'text-indigo-400' },
+                                                { id: 'tilt', label: '3D Tilt', icon: Compass, color: 'text-sky-400' },
+                                                { id: 'rotation', label: 'Rotation', icon: RotateCw, color: 'text-teal-400' },
+                                                { id: 'scale', label: 'Scale', icon: Maximize2, color: 'text-purple-400' },
+                                                { id: 'opacity', label: 'Opacity', icon: CircleDot, color: 'text-blue-400' },
+                                                { id: 'size', label: 'Size (W & H)', icon: Square, color: 'text-amber-400' },
+                                            ].map((item) => {
+                                                const Icon = item.icon;
+                                                return (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                        className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                    >
+                                                        <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                        <span>{item.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="space-y-0.5 border-t border-white/[0.06] pt-1.5">
+                                            <div className="px-2 py-0.5 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                                Appearance
+                                            </div>
+                                            {[
+                                                { id: 'glow', label: 'Glow', icon: Sparkles, color: 'text-amber-400' },
+                                                { id: 'cornerRadius', label: 'Corner Radius', icon: Square, color: 'text-emerald-400' },
+                                            ].map((item) => {
+                                                const Icon = item.icon;
+                                                return (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                        className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                    >
+                                                        <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                        <span>{item.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        <div className="space-y-0.5 border-t border-white/[0.06] pt-1.5">
+                                            <div className="px-2 py-0.5 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+                                                Effects
+                                            </div>
+                                            {[
+                                                { id: 'layerBlur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
+                                                { id: 'maskSweep', label: 'Mask Sweep', icon: Scan, color: 'text-emerald-400' },
+                                                { id: 'shimmer', label: 'Shimmer', icon: Sparkles, color: 'text-indigo-400' },
+                                            ].map((item) => {
+                                                const Icon = item.icon;
+                                                return (
+                                                    <button
+                                                        key={item.id}
+                                                        type="button"
+                                                        onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                        className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                    >
+                                                        <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                        <span>{item.label}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+
+                                {/* In Preset Picker Flyout */}
+                                {inMenuOpen && (
+                                    <div
+                                        className="absolute right-full mr-2.5 top-[140px] w-44 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 z-50 space-y-0.5 animate-in fade-in zoom-in-95 duration-100 select-none"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
                                         <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
-                                            Properties
+                                            Presets
                                         </div>
                                         {[
-                                            { id: 'position', label: 'Position', icon: Move, color: 'text-indigo-400' },
-                                            { id: 'tilt', label: '3D Tilt', icon: Compass, color: 'text-sky-400' },
-                                            { id: 'rotation', label: 'Rotation', icon: RotateCw, color: 'text-teal-400' },
-                                            { id: 'scale', label: 'Scale', icon: Maximize2, color: 'text-purple-400' },
-                                            { id: 'opacity', label: 'Opacity', icon: CircleDot, color: 'text-blue-400' },
-                                            { id: 'size', label: 'Size (W & H)', icon: Square, color: 'text-amber-400' },
-                                            { id: 'layerBlur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
-                                            { id: 'maskSweep', label: 'Mask Sweep', icon: Scan, color: 'text-emerald-400' },
+                                            { id: 'fade', label: 'Fade', icon: CircleDot, color: 'text-sky-400' },
+                                            { id: 'blur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
+                                            { id: 'slide', label: 'Slide', icon: Move, color: 'text-indigo-400' },
+                                            { id: 'focus', label: 'Focus', icon: Crosshair, color: 'text-emerald-400' },
+                                            { id: 'rack-focus', label: 'Rack Focus', icon: SlidersHorizontal, color: 'text-teal-400' },
+                                            { id: 'wipe', label: 'Wipe', icon: Scan, color: 'text-amber-400' },
+                                            ...(selectedLayer.kind === 'text' ? [{ id: 'typewriter', label: 'Typewriter', icon: AlignLeft, color: 'text-purple-400' }] : []),
                                         ].map((item) => {
                                             const Icon = item.icon;
                                             return (
                                                 <button
                                                     key={item.id}
-                                                    onClick={() => handleAddAnimationBlock(item.id as AnimationBlockProperty)}
+                                                    type="button"
+                                                    onClick={() => handleAddPreset('in', item.id)}
                                                     className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
                                                 >
                                                     <Icon className={`w-3.5 h-3.5 ${item.color}`} />
@@ -2676,622 +3554,120 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                         })}
                                     </div>
                                 )}
-                            </div>
 
-                            {/* ANIMATION BLOCKS LIST */}
-                            {selectedLayer.blocks.map((blk) => {
-                                const isSelectedBlock = selectedBlockId === blk.id;
-
-                                // Determine icon
-                                const getBlockIcon = (prop: AnimationBlockProperty) => {
-                                    switch (prop) {
-                                        case 'tilt': return <Compass className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'position': return <Move className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'rotation': return <RotateCw className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'scale': return <Maximize2 className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'opacity': return <Eye className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'size': return <Square className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'layerBlur': return <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        case 'maskSweep': return <Scan className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                        default: return <CircleDot className="w-3.5 h-3.5 text-[#0088ff]" />;
-                                    }
-                                };
-
-                                // Direction sign check
-                                const isNegDirection = typeof blk.amount === 'object'
-                                    ? (blk.property === 'tilt' ? ((blk.amount as Vec3).y || 0) < 0 : (blk.property === 'rotation' ? ((blk.amount as Vec3).z || 0) < 0 : ((blk.amount as Vec3).x || 0) < 0))
-                                    : (Number(blk.amount) < 0);
-
-                                return (
-                                    <div
-                                        key={blk.id}
-                                        onClick={() => selectBlock(blk.id, selectedLayer.id)}
-                                        className={`p-3.5 space-y-3 transition cursor-pointer border-b border-white/[0.06] ${isSelectedBlock
-                                            ? 'bg-[#0088ff]/5 border-l-2 border-l-[#0088ff]'
-                                            : 'hover:bg-white/[0.01]'
-                                            }`}
-                                    >
-                                        {/* Card Header: Icon + Title + Delete */}
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[12px] font-medium text-white capitalize flex items-center gap-2">
-                                                {getBlockIcon(blk.property)}
-                                                <span>{blk.label || (blk.property === 'tilt' ? 'Tilt' : blk.property === 'maskSweep' ? 'Mask Sweep' : blk.property)}</span>
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    handleDeleteBlock(blk.id);
-                                                }}
-                                                className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer transition"
-                                                title="Delete Animation Block"
-                                            >
-                                                <X className="w-3.5 h-3.5" />
-                                            </button>
-                                        </div>
-
-                                        {/* Property-Specific Inputs */}
-                                        {blk.property === 'tilt' && typeof blk.amount === 'object' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Tilt</label>
-                                                <div className="grid grid-cols-2 gap-1.5">
-                                                    <ScrubInput
-                                                        label="X"
-                                                        value={Math.round(radToDeg((blk.amount as Vec3).x || 0))}
-                                                        min={-360}
-                                                        max={360}
-                                                        step={1}
-                                                        unit="°"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), x: degToRad(v) }
-                                                        })}
-                                                    />
-                                                    <ScrubInput
-                                                        label="Y"
-                                                        value={Math.round(radToDeg((blk.amount as Vec3).y || 0))}
-                                                        min={-360}
-                                                        max={360}
-                                                        step={1}
-                                                        unit="°"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), y: degToRad(v) }
-                                                        })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'position' && typeof blk.amount === 'object' && (
-                                            <div className="space-y-2.5">
-                                                <div className="space-y-1.5">
-                                                    <div className="flex items-center justify-between">
-                                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Position</label>
-                                                        <Crosshair className="w-3 h-3 text-[#71717a]" />
-                                                    </div>
-                                                    <div className="grid grid-cols-2 gap-1.5">
-                                                        <ScrubInput
-                                                            label="X"
-                                                            value={Math.round((blk.amount as Vec3).x * refStageW)}
-                                                            min={-3000}
-                                                            max={3000}
-                                                            step={10}
-                                                            onChange={(v) => handleUpdateBlock(blk.id, {
-                                                                amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
-                                                            })}
-                                                        />
-                                                        <ScrubInput
-                                                            label="Y"
-                                                            value={Math.round((blk.amount as Vec3).y * refStageH)}
-                                                            min={-3000}
-                                                            max={3000}
-                                                            step={10}
-                                                            onChange={(v) => handleUpdateBlock(blk.id, {
-                                                                amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                </div>
-                                                <div className="space-y-1.5">
-                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Depth</label>
-                                                    <ScrubInput
-                                                        label="Z"
-                                                        value={Math.round((blk.amount as Vec3).z * 500)}
-                                                        min={-1500}
-                                                        max={1500}
-                                                        step={10}
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), z: Number((v / 500).toFixed(4)) }
-                                                        })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'rotation' && typeof blk.amount === 'object' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Rotation</label>
-                                                <ScrubInput
-                                                    label="Roll"
-                                                    value={Math.round(radToDeg((blk.amount as Vec3).z || 0))}
-                                                    min={-360}
-                                                    max={360}
-                                                    step={1}
-                                                    unit="°"
-                                                    onChange={(v) => handleUpdateBlock(blk.id, {
-                                                        amount: { ...(blk.amount as Vec3), z: degToRad(v) }
-                                                    })}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'scale' && typeof blk.amount === 'number' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
-                                                <ScrubInput
-                                                    label="Δ"
-                                                    value={Math.round(Number(blk.amount || 1) * 100)}
-                                                    min={10}
-                                                    max={500}
-                                                    step={5}
-                                                    unit="%"
-                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'scale' && typeof blk.amount === 'object' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Scale</label>
-                                                <div className="grid grid-cols-2 gap-1.5">
-                                                    <ScrubInput
-                                                        label="X"
-                                                        value={Math.round(((blk.amount as Vec3).x || 1) * 100)}
-                                                        min={10}
-                                                        max={500}
-                                                        step={5}
-                                                        unit="%"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), x: v / 100 }
-                                                        })}
-                                                    />
-                                                    <ScrubInput
-                                                        label="Y"
-                                                        value={Math.round(((blk.amount as Vec3).y || 1) * 100)}
-                                                        min={10}
-                                                        max={500}
-                                                        step={5}
-                                                        unit="%"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), y: v / 100 }
-                                                        })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'opacity' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Opacity</label>
-                                                <ScrubInput
-                                                    label="Δ"
-                                                    value={Math.round(Number(blk.amount || 1) * 100)}
-                                                    min={-100}
-                                                    max={100}
-                                                    step={5}
-                                                    unit="%"
-                                                    onChange={(v) => handleUpdateBlock(blk.id, { amount: v / 100 })}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'size' && typeof blk.amount === 'object' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Size</label>
-                                                <div className="grid grid-cols-2 gap-1.5">
-                                                    <ScrubInput
-                                                        label="ΔW"
-                                                        value={Math.round((blk.amount as Vec3).x * refStageW)}
-                                                        min={-2000}
-                                                        max={2000}
-                                                        step={10}
-                                                        unit="px"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), x: Number((v / refStageW).toFixed(4)) }
-                                                        })}
-                                                    />
-                                                    <ScrubInput
-                                                        label="ΔH"
-                                                        value={Math.round((blk.amount as Vec3).y * refStageH)}
-                                                        min={-2000}
-                                                        max={2000}
-                                                        step={10}
-                                                        unit="px"
-                                                        onChange={(v) => handleUpdateBlock(blk.id, {
-                                                            amount: { ...(blk.amount as Vec3), y: Number((v / refStageH).toFixed(4)) }
-                                                        })}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {blk.property === 'layerBlur' && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Blur</label>
-                                                <ScrubInput
-                                                    label="Radius"
-                                                    value={Math.round(Number(blk.amount || 0) * 100)}
-                                                    min={0}
-                                                    max={100}
-                                                    step={1}
-                                                    unit="%"
-                                                    onChange={(amount) => handleUpdateBlock(blk.id, { amount: amount / 100 })}
-                                                />
-                                            </div>
-                                        )}
-
-                                        {/* DIRECTION BUTTONS (Segmented ← / →) */}
-                                        {['position', 'tilt', 'rotation', 'scale', 'maskSweep'].includes(blk.property) && (
-                                            <div className="space-y-1.5">
-                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Direction</label>
-                                                <div className="grid grid-cols-2 gap-1 bg-[#141416] p-0.5 rounded-lg border border-white/[0.06]">
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleSetBlockDirection(blk, -1);
-                                                        }}
-                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${isNegDirection
-                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
-                                                            : 'text-[#71717a] hover:text-white'
-                                                            }`}
-                                                        title="Left / In to rest"
-                                                    >
-                                                        <ArrowLeft className="w-3.5 h-3.5" />
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            handleSetBlockDirection(blk, 1);
-                                                        }}
-                                                        className={`h-7 rounded-md flex items-center justify-center cursor-pointer transition ${!isNegDirection
-                                                            ? 'bg-[#222226] text-white shadow-xs border border-white/20'
-                                                            : 'text-[#71717a] hover:text-white'
-                                                            }`}
-                                                        title="Right / Out from rest"
-                                                    >
-                                                        <ArrowRight className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {/* Easing (Dropdown + Sliders Bezier Popover Button) */}
-                                        <div className="space-y-1.5">
-                                            <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
-                                            <div className="flex items-center gap-1.5">
+                                {/* In Preset Options Flyout */}
+                                {selectedInPresetIndex !== null && inPresets[selectedInPresetIndex] && (() => {
+                                    const currentPreset = inPresets[selectedInPresetIndex];
+                                    return (
+                                        <div
+                                            className="absolute right-full mr-2.5 top-[140px] w-64 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-3.5 z-50 space-y-3 animate-in fade-in zoom-in-95 duration-100 select-none"
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.08]">
+                                                <span className="text-[12px] font-semibold text-white flex items-center gap-1.5">
+                                                    <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />
+                                                    In Preset
+                                                </span>
                                                 <button
                                                     type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEasingPopoverConfig({
-                                                            easing: blk.easing,
-                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
-                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
-                                                        });
-                                                    }}
-                                                    className="flex-1 h-8 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 px-2.5 flex items-center justify-between text-[11px] text-white transition cursor-pointer"
+                                                    onClick={() => setSelectedInPresetIndex(null)}
+                                                    title="Close options"
+                                                    className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
                                                 >
-                                                    <span className="flex items-center gap-2 truncate">
-                                                        <Spline className="w-3 h-3 text-[#0088ff] shrink-0" />
-                                                        <span className="capitalize">{getEasingDisplayLabel(blk.easing)}</span>
-                                                    </span>
-                                                    <ChevronDown className="w-3.5 h-3.5 text-[#71717a] shrink-0" />
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        setEasingPopoverConfig({
-                                                            easing: blk.easing,
-                                                            onChange: (easing) => handleUpdateBlock(blk.id, { easing }),
-                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
-                                                        });
-                                                    }}
-                                                    title="Open interactive 2D Bezier curve editor"
-                                                    className={`w-8 h-8 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${blk.easing.kind === 'bezier'
-                                                        ? 'bg-[#0088ff] text-white border-[#0088ff]'
-                                                        : 'bg-[#18181b] text-[#a1a1aa] border-white/[0.08] hover:text-white hover:border-white/20'
-                                                        }`}
-                                                >
-                                                    <SlidersHorizontal className="w-3.5 h-3.5" />
+                                                    <X className="w-3.5 h-3.5" />
                                                 </button>
                                             </div>
-                                        </div>
 
-                                        {/* Timing (Start & Duration) */}
-                                        <div className="grid grid-cols-2 gap-1.5 pt-0.5">
-                                            <ScrubInput
-                                                label="🕒"
-                                                value={blk.startMs}
-                                                min={0}
-                                                max={Math.max(0, activeShot.durationMs - 80)}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(startMs) => handleUpdateBlock(blk.id, { startMs })}
-                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
-                                            />
-                                            <ScrubInput
-                                                label="⏱"
-                                                value={blk.durationMs}
-                                                min={80}
-                                                max={activeShot.durationMs}
-                                                step={20}
-                                                unit=" ms"
-                                                onChange={(durationMs) => handleUpdateBlock(blk.id, { durationMs })}
-                                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
-                                            />
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Type</label>
+                                                <FigmaSelect
+                                                    value={currentPreset.type}
+                                                    onChange={(e) => handleUpdateInPreset(selectedInPresetIndex, { type: e.target.value as TransitionType })}
+                                                    className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                >
+                                                    <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                    <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                    <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                    <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                    <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                    <option value="scale-out" className="bg-[#18181b]">Scale In</option>
+                                                    <option value="float-out" className="bg-[#18181b]">Float Out</option>
+                                                    <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                </FigmaSelect>
+                                            </div>
 
-                            {/* IN SECTION (Entrance Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5 relative">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        In{(selectedLayer.entrances?.length || 0) > 1 ? ` (${selectedLayer.entrances?.length})` : ''}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            setInMenuOpen((v) => !v);
-                                            setOutMenuOpen(false);
-                                            setAddAnimMenuOpen(false);
-                                        }}
-                                        title="Add In Preset"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-
-                                {inMenuOpen && (
-                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
-                                        <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
-                                            Presets
-                                        </div>
-                                        <button
-                                            onClick={() => handleAddPreset('in', 'fade')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
-                                            <span>Fade</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('in', 'slide')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
-                                            <span>Slide</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('in', 'float')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                                            <span>Float</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('in', 'wipe')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
-                                            <span>Wipe</span>
-                                        </button>
-                                    </div>
-                                )}
-
-                                {selectedLayer.entrances && selectedLayer.entrances.length > 0 ? (
-                                    <div className="space-y-2.5">
-                                        {selectedLayer.entrances.map((ent, idx) => (
-                                            <div key={ent.id || `ent-${ent.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                        <Sparkles className="w-3 h-3 text-[#0088ff]" />
-                                                        <select
-                                                            value={ent.type}
-                                                            onChange={(e) =>
-                                                                updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                    const next = [...(l.entrances || [])];
-                                                                    next[idx] = { ...next[idx], type: e.target.value as TransitionType };
-                                                                    return { ...l, entrances: next, entrance: next[0] };
-                                                                })
-                                                            }
-                                                            className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
-                                                        >
-                                                            <option value="fade" className="bg-[#18181b]">Fade</option>
-                                                            <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
-                                                            <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
-                                                            <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
-                                                            <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
-                                                            <option value="scale-out" className="bg-[#18181b]">Scale In</option>
-                                                            <option value="float-out" className="bg-[#18181b]">Float Out</option>
-                                                            <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
-                                                        </select>
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = (l.entrances || []).filter((_, i) => i !== idx);
-                                                                return {
-                                                                    ...l,
-                                                                    entrances: next.length > 0 ? next : undefined,
-                                                                    entrance: next[0] || { ...l.entrance, type: 'none' },
-                                                                };
-                                                            })
-                                                        }
-                                                        title="Remove this entrance"
-                                                        className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                                                    >
-                                                        <Minus className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-1.5">
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Duration</label>
                                                     <ScrubInput
-                                                        label="Delay"
-                                                        value={ent.delayMs || 0}
-                                                        min={0}
-                                                        max={Math.max(0, activeShot.durationMs - 100)}
-                                                        step={20}
-                                                        unit=" ms"
-                                                        onChange={(delayMs) =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = [...(l.entrances || [])];
-                                                                next[idx] = { ...next[idx], delayMs };
-                                                                return { ...l, entrances: next, entrance: next[0] };
-                                                            })
-                                                        }
-                                                    />
-                                                    <ScrubInput
-                                                        label="Length"
-                                                        value={ent.durationMs}
+                                                        label="⏱"
+                                                        value={currentPreset.durationMs}
                                                         min={0}
                                                         max={activeShot.durationMs}
                                                         step={20}
                                                         unit=" ms"
-                                                        onChange={(durationMs) =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = [...(l.entrances || [])];
-                                                                next[idx] = { ...next[idx], durationMs };
-                                                                return { ...l, entrances: next, entrance: next[0] };
-                                                            })
-                                                        }
+                                                        onChange={(durationMs) => handleUpdateInPreset(selectedInPresetIndex, { durationMs })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Stagger</label>
+                                                    <ScrubInput
+                                                        label="🕒"
+                                                        value={currentPreset.delayMs || 0}
+                                                        min={0}
+                                                        max={Math.max(0, activeShot.durationMs - 100)}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(delayMs) => handleUpdateInPreset(selectedInPresetIndex, { delayMs })}
                                                     />
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : selectedLayer.entrance.type !== 'none' ? (
-                                    <div className="space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                    <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
-                                                    <select
-                                                        value={selectedLayer.entrance.type}
-                                                        onChange={(e) =>
-                                                            updateLayer(
-                                                                activeShot.id,
-                                                                selectedLayer.id,
-                                                                (l) => ({
-                                                                    ...l,
-                                                                    entrance: {
-                                                                        ...l.entrance,
-                                                                        type: e.target.value as TransitionType,
-                                                                    },
-                                                                })
-                                                            )
-                                                        }
-                                                        className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
-                                                    >
-                                                        <option value="fade" className="bg-[#18181b]">Fade</option>
-                                                        <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
-                                                        <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
-                                                        <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
-                                                        <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
-                                                        <option value="scale-out" className="bg-[#18181b]">Scale In</option>
-                                                        <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
-                                                    </select>
-                                                </div>
-
-                                                <button
-                                                    onClick={() =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            entrance: {
-                                                                ...l.entrance,
-                                                                durationMs:
-                                                                    l.entrance.durationMs === 0 ? 650 : 0,
-                                                            },
-                                                        }))
-                                                    }
-                                                    title={selectedLayer.entrance.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                                >
-                                                    {selectedLayer.entrance.durationMs === 0 ? (
-                                                        <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                                    ) : (
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                    )}
-                                                </button>
-
-                                                <button
-                                                    onClick={() =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            entrance: { ...l.entrance, type: 'none' },
-                                                        }))
-                                                    }
-                                                    title="Remove Entrance"
-                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                                >
-                                                    <Minus className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
 
                                             <div className="grid grid-cols-2 gap-1.5">
-                                                <ScrubInput
-                                                    label="Delay"
-                                                    value={selectedLayer.entrance.delayMs || 0}
-                                                    min={0}
-                                                    max={Math.max(0, activeShot.durationMs - 100)}
-                                                    step={20}
-                                                    unit=" ms"
-                                                    onChange={(delayMs) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            entrance: { ...l.entrance, delayMs },
-                                                        }))
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Length"
-                                                    value={selectedLayer.entrance.durationMs}
-                                                    min={0}
-                                                    max={activeShot.durationMs}
-                                                    step={20}
-                                                    unit=" ms"
-                                                    onChange={(durationMs) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            entrance: { ...l.entrance, durationMs },
-                                                        }))
-                                                    }
-                                                />
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Distance</label>
+                                                    <ScrubInput
+                                                        label="Δ"
+                                                        value={Math.round((currentPreset.distance ?? 0.25) * 100)}
+                                                        min={0}
+                                                        max={200}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(d) => handleUpdateInPreset(selectedInPresetIndex, { distance: d / 100 })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Fade</label>
+                                                    <ScrubInput
+                                                        label="α"
+                                                        value={100}
+                                                        min={0}
+                                                        max={100}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={() => {}}
+                                                    />
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-1.5">
-                                                <span className="text-[10px] text-[#a1a1aa] block">
-                                                    Easing
-                                                </span>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
                                                 <div className="flex items-center gap-1.5">
-                                                    <select
+                                                    <FigmaSelect
                                                         value={
-                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                            currentPreset.easing?.kind === 'bezier'
                                                                 ? 'bezier'
-                                                                : selectedLayer.entrance.easing
-                                                                    ? `${selectedLayer.entrance.easing.kind}:${selectedLayer.entrance.easing.name}`
+                                                                : currentPreset.easing
+                                                                    ? `${currentPreset.easing.kind}:${currentPreset.easing.name}`
                                                                     : 'preset:ease-out'
                                                         }
                                                         onChange={(e) => {
                                                             const val = e.target.value;
                                                             const easing = easingFromSelection(val);
                                                             if (!easing) return;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                                ...l,
-                                                                entrance: { ...l.entrance, easing },
-                                                            }));
+                                                            handleUpdateInPreset(selectedInPresetIndex, { easing });
                                                         }}
-                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer"
                                                     >
                                                         <option value="preset:ease-in-out">Ease in and out</option>
                                                         <option value="preset:ease-in">Ease in</option>
@@ -3303,26 +3679,22 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                         <option value="spring:quick">Spring: Quick</option>
                                                         <option value="spring:bouncy">Spring: Bouncy</option>
                                                         <option value="bezier">Custom bezier</option>
-                                                    </select>
+                                                    </FigmaSelect>
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setEasingPopoverConfig({
-                                                                easing: selectedLayer.entrance.easing || { kind: 'preset', name: 'ease-out' },
-                                                                onChange: (easing) =>
-                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                                        ...l,
-                                                                        entrance: { ...l.entrance, easing },
-                                                                    })),
+                                                                easing: currentPreset.easing || { kind: 'preset', name: 'ease-out' },
+                                                                onChange: (easing) => handleUpdateInPreset(selectedInPresetIndex, { easing }),
                                                                 anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
                                                             });
                                                         }}
                                                         title="Open interactive Bezier curve editor"
                                                         className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
-                                                            selectedLayer.entrance.easing?.kind === 'bezier'
+                                                            currentPreset.easing?.kind === 'bezier'
                                                                 ? 'bg-[#0088ff] text-white border-[#0088ff]'
-                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/10 hover:text-white hover:bg-white/10'
                                                         }`}
                                                     >
                                                         <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -3330,266 +3702,156 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 </div>
                                             </div>
                                         </div>
-                                    ) : null}
-                                </div>
+                                    );
+                                })()}
 
-                            {/* OUT SECTION (Exit Transitions — supports stacked presets) */}
-                            <div className="p-3.5 space-y-2.5 relative">
-                                <div className="flex items-center justify-between">
-                                    <span className="text-[11px] font-medium text-[#e4e4e7]">
-                                        Out{(selectedLayer.exits?.length || 0) > 1 ? ` (${selectedLayer.exits?.length})` : ''}
-                                    </span>
-                                    <button
-                                        onClick={() => {
-                                            setOutMenuOpen((v) => !v);
-                                            setInMenuOpen(false);
-                                            setAddAnimMenuOpen(false);
-                                        }}
-                                        title="Add Out Preset"
-                                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                                    >
-                                        <Plus className="w-3.5 h-3.5" />
-                                    </button>
-                                </div>
-
+                                {/* Out Preset Picker Flyout */}
                                 {outMenuOpen && (
-                                    <div className="absolute right-3.5 top-9 w-36 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 z-30 space-y-0.5 animate-in fade-in zoom-in-95 duration-100">
+                                    <div
+                                        className="absolute right-full mr-2.5 top-[190px] w-44 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-1.5 z-50 space-y-0.5 animate-in fade-in zoom-in-95 duration-100 select-none"
+                                        onMouseDown={(e) => e.stopPropagation()}
+                                    >
                                         <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
                                             Presets
                                         </div>
-                                        <button
-                                            onClick={() => handleAddPreset('out', 'fade')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <CircleDot className="w-3.5 h-3.5 text-sky-400" />
-                                            <span>Fade</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('out', 'slide')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Move className="w-3.5 h-3.5 text-indigo-400" />
-                                            <span>Slide</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('out', 'float')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Layers className="w-3.5 h-3.5 text-emerald-400" />
-                                            <span>Float</span>
-                                        </button>
-                                        <button
-                                            onClick={() => handleAddPreset('out', 'wipe')}
-                                            className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
-                                        >
-                                            <Scan className="w-3.5 h-3.5 text-amber-400" />
-                                            <span>Wipe</span>
-                                        </button>
+                                        {[
+                                            { id: 'fade', label: 'Fade', icon: CircleDot, color: 'text-sky-400' },
+                                            { id: 'blur', label: 'Blur', icon: Sparkles, color: 'text-rose-400' },
+                                            { id: 'slide', label: 'Slide', icon: Move, color: 'text-indigo-400' },
+                                            { id: 'focus', label: 'Focus', icon: Crosshair, color: 'text-emerald-400' },
+                                            { id: 'rack-focus', label: 'Rack Focus', icon: SlidersHorizontal, color: 'text-teal-400' },
+                                            { id: 'wipe', label: 'Wipe', icon: Scan, color: 'text-amber-400' },
+                                            ...(selectedLayer.kind === 'text' ? [{ id: 'typewriter', label: 'Typewriter', icon: AlignLeft, color: 'text-purple-400' }] : []),
+                                        ].map((item) => {
+                                            const Icon = item.icon;
+                                            return (
+                                                <button
+                                                    key={item.id}
+                                                    type="button"
+                                                    onClick={() => handleAddPreset('out', item.id)}
+                                                    className="w-full h-7 px-2 rounded-lg flex items-center gap-2 text-[11px] text-[#e4e4e7] hover:bg-[#0088ff] hover:text-white transition cursor-pointer"
+                                                >
+                                                    <Icon className={`w-3.5 h-3.5 ${item.color}`} />
+                                                    <span>{item.label}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 )}
 
-                                {selectedLayer.exits && selectedLayer.exits.length > 0 ? (
-                                    <div className="space-y-2.5">
-                                        {selectedLayer.exits.map((ext, idx) => (
-                                            <div key={ext.id || `ext-${ext.type}-${idx}`} className="space-y-2 p-2.5 rounded-xl bg-[#161619] border border-white/[0.06]">
-                                                <div className="flex items-center gap-1.5">
-                                                    <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                        <Sparkles className="w-3 h-3 text-rose-400" />
-                                                        <select
-                                                            value={ext.type}
-                                                            onChange={(e) =>
-                                                                updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                    const next = [...(l.exits || [])];
-                                                                    next[idx] = { ...next[idx], type: e.target.value as TransitionType };
-                                                                    return { ...l, exits: next, exit: next[0] };
-                                                                })
-                                                            }
-                                                            className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
-                                                        >
-                                                            <option value="fade" className="bg-[#18181b]">Fade</option>
-                                                            <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
-                                                            <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
-                                                            <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
-                                                            <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
-                                                            <option value="scale-out" className="bg-[#18181b]">Scale Out</option>
-                                                            <option value="float-out" className="bg-[#18181b]">Float Out</option>
-                                                            <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
-                                                        </select>
-                                                    </div>
-                                                    <button
-                                                        onClick={() =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = (l.exits || []).filter((_, i) => i !== idx);
-                                                                return {
-                                                                    ...l,
-                                                                    exits: next.length > 0 ? next : undefined,
-                                                                    exit: next[0] || { ...l.exit, type: 'none' },
-                                                                };
-                                                            })
-                                                        }
-                                                        title="Remove this exit"
-                                                        className="p-1 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                                                    >
-                                                        <Minus className="w-3.5 h-3.5" />
-                                                    </button>
-                                                </div>
-                                                <div className="grid grid-cols-2 gap-1.5">
+                                {/* Out Preset Options Flyout */}
+                                {selectedOutPresetIndex !== null && outPresets[selectedOutPresetIndex] && (() => {
+                                    const currentPreset = outPresets[selectedOutPresetIndex];
+                                    return (
+                                        <div
+                                            className="absolute right-full mr-2.5 top-[190px] w-64 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl p-3.5 z-50 space-y-3 animate-in fade-in zoom-in-95 duration-100 select-none"
+                                            onMouseDown={(e) => e.stopPropagation()}
+                                        >
+                                            <div className="flex items-center justify-between pb-1.5 border-b border-white/[0.08]">
+                                                <span className="text-[12px] font-semibold text-white flex items-center gap-1.5">
+                                                    <Sparkles className="w-3.5 h-3.5 text-rose-400" />
+                                                    Out Preset
+                                                </span>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSelectedOutPresetIndex(null)}
+                                                    title="Close options"
+                                                    className="p-1 rounded hover:bg-white/10 text-[#71717a] hover:text-white cursor-pointer"
+                                                >
+                                                    <X className="w-3.5 h-3.5" />
+                                                </button>
+                                            </div>
+
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Type</label>
+                                                <FigmaSelect
+                                                    value={currentPreset.type}
+                                                    onChange={(e) => handleUpdateOutPreset(selectedOutPresetIndex, { type: e.target.value as TransitionType })}
+                                                    className="w-full h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer capitalize"
+                                                >
+                                                    <option value="fade" className="bg-[#18181b]">Fade</option>
+                                                    <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
+                                                    <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
+                                                    <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
+                                                    <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
+                                                    <option value="scale-out" className="bg-[#18181b]">Scale Out</option>
+                                                    <option value="float-out" className="bg-[#18181b]">Float Out</option>
+                                                    <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
+                                                </FigmaSelect>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-1.5">
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Duration</label>
                                                     <ScrubInput
-                                                        label="Offset"
-                                                        value={ext.delayMs || 0}
-                                                        min={0}
-                                                        max={Math.max(0, activeShot.durationMs - 100)}
-                                                        step={20}
-                                                        unit=" ms"
-                                                        onChange={(delayMs) =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = [...(l.exits || [])];
-                                                                next[idx] = { ...next[idx], delayMs };
-                                                                return { ...l, exits: next, exit: next[0] };
-                                                            })
-                                                        }
-                                                    />
-                                                    <ScrubInput
-                                                        label="Length"
-                                                        value={ext.durationMs}
+                                                        label="⏱"
+                                                        value={currentPreset.durationMs}
                                                         min={0}
                                                         max={activeShot.durationMs}
                                                         step={20}
                                                         unit=" ms"
-                                                        onChange={(durationMs) =>
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => {
-                                                                const next = [...(l.exits || [])];
-                                                                next[idx] = { ...next[idx], durationMs };
-                                                                return { ...l, exits: next, exit: next[0] };
-                                                            })
-                                                        }
+                                                        onChange={(durationMs) => handleUpdateOutPreset(selectedOutPresetIndex, { durationMs })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Stagger</label>
+                                                    <ScrubInput
+                                                        label="🕒"
+                                                        value={currentPreset.delayMs || 0}
+                                                        min={0}
+                                                        max={Math.max(0, activeShot.durationMs - 100)}
+                                                        step={20}
+                                                        unit=" ms"
+                                                        onChange={(delayMs) => handleUpdateOutPreset(selectedOutPresetIndex, { delayMs })}
                                                     />
                                                 </div>
                                             </div>
-                                        ))}
-                                    </div>
-                                ) : selectedLayer.exit.type !== 'none' ? (
-                                    <div className="space-y-2">
-                                            <div className="flex items-center gap-1.5">
-                                                <div className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 flex items-center gap-2">
-                                                    <Sparkles className="w-3 h-3 text-[#a1a1aa]" />
-                                                    <select
-                                                        value={selectedLayer.exit.type}
-                                                        onChange={(e) =>
-                                                            updateLayer(
-                                                                activeShot.id,
-                                                                selectedLayer.id,
-                                                                (l) => ({
-                                                                    ...l,
-                                                                    exit: {
-                                                                        ...l.exit,
-                                                                        type: e.target.value as TransitionType,
-                                                                    },
-                                                                })
-                                                            )
-                                                        }
-                                                        className="w-full bg-transparent text-[11px] text-white outline-none cursor-pointer capitalize"
-                                                    >
-                                                        <option value="fade" className="bg-[#18181b]">Fade</option>
-                                                        <option value="slide-up" className="bg-[#18181b]">Slide Up</option>
-                                                        <option value="slide-down" className="bg-[#18181b]">Slide Down</option>
-                                                        <option value="slide-left" className="bg-[#18181b]">Slide Left</option>
-                                                        <option value="slide-right" className="bg-[#18181b]">Slide Right</option>
-                                                        <option value="float-out" className="bg-[#18181b]">Float Out</option>
-                                                        <option value="scale-out" className="bg-[#18181b]">Scale Out</option>
-                                                        <option value="mask-sweep" className="bg-[#18181b]">Mask Sweep</option>
-                                                    </select>
-                                                </div>
-
-                                                <button
-                                                    onClick={() =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            exit: {
-                                                                ...l.exit,
-                                                                durationMs:
-                                                                    l.exit.durationMs === 0 ? 550 : 0,
-                                                            },
-                                                        }))
-                                                    }
-                                                    title={selectedLayer.exit.durationMs === 0 ? 'Enable' : 'Disable'}
-                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                                >
-                                                    {selectedLayer.exit.durationMs === 0 ? (
-                                                        <EyeOff className="w-3.5 h-3.5 text-amber-400" />
-                                                    ) : (
-                                                        <Eye className="w-3.5 h-3.5" />
-                                                    )}
-                                                </button>
-
-                                                <button
-                                                    onClick={() =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            exit: { ...l.exit, type: 'none' },
-                                                        }))
-                                                    }
-                                                    title="Remove Exit"
-                                                    className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer"
-                                                >
-                                                    <Minus className="w-3.5 h-3.5" />
-                                                </button>
-                                            </div>
 
                                             <div className="grid grid-cols-2 gap-1.5">
-                                                <ScrubInput
-                                                    label="Offset"
-                                                    value={selectedLayer.exit.delayMs || 0}
-                                                    min={0}
-                                                    max={Math.max(0, activeShot.durationMs - 100)}
-                                                    step={20}
-                                                    unit=" ms"
-                                                    onChange={(delayMs) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            exit: { ...l.exit, delayMs },
-                                                        }))
-                                                    }
-                                                />
-                                                <ScrubInput
-                                                    label="Length"
-                                                    value={selectedLayer.exit.durationMs}
-                                                    min={0}
-                                                    max={activeShot.durationMs}
-                                                    step={20}
-                                                    unit=" ms"
-                                                    onChange={(durationMs) =>
-                                                        updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                            ...l,
-                                                            exit: { ...l.exit, durationMs },
-                                                        }))
-                                                    }
-                                                />
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Distance</label>
+                                                    <ScrubInput
+                                                        label="Δ"
+                                                        value={Math.round((currentPreset.distance ?? 0.25) * 100)}
+                                                        min={0}
+                                                        max={200}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={(d) => handleUpdateOutPreset(selectedOutPresetIndex, { distance: d / 100 })}
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Fade</label>
+                                                    <ScrubInput
+                                                        label="α"
+                                                        value={100}
+                                                        min={0}
+                                                        max={100}
+                                                        step={5}
+                                                        unit="%"
+                                                        onChange={() => {}}
+                                                    />
+                                                </div>
                                             </div>
 
-                                            <div className="space-y-1.5">
-                                                <span className="text-[10px] text-[#a1a1aa] block">
-                                                    Easing
-                                                </span>
+                                            <div className="space-y-1">
+                                                <label className="text-[11px] text-[#8e8e93] block font-normal">Easing</label>
                                                 <div className="flex items-center gap-1.5">
-                                                    <select
+                                                    <FigmaSelect
                                                         value={
-                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                            currentPreset.easing?.kind === 'bezier'
                                                                 ? 'bezier'
-                                                                : selectedLayer.exit.easing
-                                                                    ? `${selectedLayer.exit.easing.kind}:${selectedLayer.exit.easing.name}`
-                                                                    : 'preset:ease-out'
+                                                                : currentPreset.easing
+                                                                    ? `${currentPreset.easing.kind}:${currentPreset.easing.name}`
+                                                                    : 'preset:ease-in'
                                                         }
                                                         onChange={(e) => {
                                                             const val = e.target.value;
                                                             const easing = easingFromSelection(val);
                                                             if (!easing) return;
-                                                            updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                                ...l,
-                                                                exit: { ...l.exit, easing },
-                                                            }));
+                                                            handleUpdateOutPreset(selectedOutPresetIndex, { easing });
                                                         }}
-                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                                                        className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/10 px-2 text-[11px] text-white outline-none cursor-pointer"
                                                     >
                                                         <option value="preset:ease-in-out">Ease in and out</option>
                                                         <option value="preset:ease-in">Ease in</option>
@@ -3601,26 +3863,22 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                         <option value="spring:quick">Spring: Quick</option>
                                                         <option value="spring:bouncy">Spring: Bouncy</option>
                                                         <option value="bezier">Custom bezier</option>
-                                                    </select>
+                                                    </FigmaSelect>
                                                     <button
                                                         type="button"
                                                         onClick={(e) => {
                                                             e.stopPropagation();
                                                             setEasingPopoverConfig({
-                                                                easing: selectedLayer.exit.easing || { kind: 'preset', name: 'ease-out' },
-                                                                onChange: (easing) =>
-                                                                    updateLayer(activeShot.id, selectedLayer.id, (l) => ({
-                                                                        ...l,
-                                                                        exit: { ...l.exit, easing },
-                                                                    })),
+                                                                easing: currentPreset.easing || { kind: 'preset', name: 'ease-in' },
+                                                                onChange: (easing) => handleUpdateOutPreset(selectedOutPresetIndex, { easing }),
                                                                 anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
                                                             });
                                                         }}
                                                         title="Open interactive Bezier curve editor"
                                                         className={`w-7 h-7 rounded-lg flex items-center justify-center border transition cursor-pointer shrink-0 ${
-                                                            selectedLayer.exit.easing?.kind === 'bezier'
+                                                            currentPreset.easing?.kind === 'bezier'
                                                                 ? 'bg-[#0088ff] text-white border-[#0088ff]'
-                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/[0.06] hover:text-white hover:bg-white/10'
+                                                                : 'bg-[#1c1c1f] text-[#a1a1aa] border-white/10 hover:text-white hover:bg-white/10'
                                                         }`}
                                                     >
                                                         <SlidersHorizontal className="w-3.5 h-3.5" />
@@ -3628,10 +3886,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                                                 </div>
                                             </div>
                                         </div>
-                                    ) : null}
-                                </div>
-                        </div>
-                    )}
+                                    );
+                                })()}
+                            </>
+                        );
+                    })()}
                 </>
             ) : selectedLightId && isSelectedLightValid ? (
                 <LightInspector
@@ -3640,11 +3899,20 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     onClose={() => selectLight(null)}
                 />
             ) : (
-                <ProjectSettingsPanel
-                    activeShot={activeShot}
-                    onSwapImageClick={onSwapImageClick}
-                    onOpenShortcuts={onOpenShortcuts}
-                />
+                <div className="flex-1 flex flex-col overflow-hidden">
+                    {effectiveInspectorTab === 'shot' ? (
+                        <ShotSettingsPanel
+                            activeShot={activeShot}
+                            onOpenExportModal={onOpenExportModal}
+                        />
+                    ) : (
+                        <ProjectSettingsPanel
+                            onSwapImageClick={onSwapImageClick}
+                            onOpenShortcuts={onOpenShortcuts}
+                            onOpenExportModal={onOpenExportModal}
+                        />
+                    )}
+                </div>
             )}
 
             {/* Persistent Inspector Footer: Ask Raylight & Help */}

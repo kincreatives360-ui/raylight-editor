@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../ui/FigmaSelect';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
@@ -491,7 +492,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             ) : (
                 <div className="space-y-2.5">
                     <div className="flex items-center gap-2">
-                        <select
+                        <FigmaSelect
                             aria-label="Gradient type"
                             value={gradient.gradientType ?? 'linear'}
                             onChange={(event) => updateGradient({ ...gradient, gradientType: event.target.value as 'linear' | 'radial' })}
@@ -499,7 +500,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         >
                             <option value="linear">Linear</option>
                             <option value="radial">Radial</option>
-                        </select>
+                        </FigmaSelect>
                         <button
                             type="button"
                             aria-label="Reverse gradient"

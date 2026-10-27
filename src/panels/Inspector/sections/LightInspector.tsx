@@ -1,3 +1,4 @@
+import { FigmaSelect } from '../../../ui/FigmaSelect';
 import React, { useCallback } from 'react';
 import { X, Sun, Thermometer, Sparkles } from 'lucide-react';
 import type { Shot, SceneLight, LightSourceType, Vec3, LightAnimationBlock } from '../../../model/types';
@@ -189,7 +190,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             {/* Type Dropdown */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Type</span>
-                <select
+                <FigmaSelect
                     value={currentLight.type}
                     disabled={isKey}
                     onChange={(e) => updateLight({ type: e.target.value as LightSourceType })}
@@ -201,7 +202,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     <option value="spot">Spot</option>
                     <option value="point">Point</option>
                     <option value="area">Area</option>
-                </select>
+                </FigmaSelect>
             </div>
 
             {/* Position: X, Y */}
