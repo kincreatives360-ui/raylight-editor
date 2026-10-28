@@ -105,7 +105,8 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerRefraction: { value: glass?.refraction ?? .1 },
         layerRoughness: { value: glass?.roughness ?? .15 },
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
-        layerWarp: { value: new THREE.Vector2(effects.warp?.enabled ? effects.warp.amount ?? .1 : 0, effects.warp?.frequency ?? 3) },
+        // Warp is authored in stage pixels by the inspector; shaders consume UV displacement.
+        layerWarp: { value: new THREE.Vector2(effects.warp?.enabled ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
     };
 }
 

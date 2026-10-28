@@ -48,7 +48,7 @@ describe('layer effect rendering', () => {
   });
 
   it('installs shader modifications for warp, blend modes, and backdrop sampling', () => {
-    const uniforms = getLayerEffectUniforms({ warp: { enabled: true, amount: 0.1, frequency: 4 }, backdropBlur: 0.2 }, 'multiply');
+    const uniforms = getLayerEffectUniforms({ warp: { enabled: true, amount: 192, frequency: 4 }, backdropBlur: 0.2 }, 'multiply');
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
       vertexShader: 'void main() {}',
@@ -57,7 +57,7 @@ describe('layer effect rendering', () => {
     installLayerEffects(shader, uniforms);
     expect(shader.uniforms.layerBlend).toBeDefined();
     expect(shader.uniforms.layerBlend.value).toBe(2); // multiply
-    expect(shader.uniforms.layerWarp.value.x).toBe(0.1);
+    expect(shader.uniforms.layerWarp.value.x).toBeCloseTo(0.1);
     expect(shader.fragmentShader).toContain('layerSampleScene');
     expect(shader.fragmentShader).toContain('layerWarp');
     expect(shader.fragmentShader).toContain('layerBlend == 2');
