@@ -942,7 +942,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 className="flex-1 overflow-hidden"
                                 onWheel={(event) => {
                                     event.preventDefault();
-                                    setTimelineScrollTop(Math.max(0, timelineScrollTop + event.deltaY));
+                                    const timelineScroller = document.getElementById('timeline-tracks-scroll');
+                                    if (timelineScroller) {
+                                        timelineScroller.scrollTop += event.deltaY;
+                                    } else {
+                                        setTimelineScrollTop(Math.max(0, timelineScrollTop + event.deltaY));
+                                    }
                                 }}
                             >
                                 <div

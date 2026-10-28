@@ -1348,7 +1348,6 @@ const StageComponent: React.FC<StageProps> = ({
                         selectedCameraBlockId={selectedCameraBlockId}
                         frameWidth={frameWidth}
                         frameHeight={frameHeight}
-                        cameraZoom={frame.camera.zoom}
                         canvasZoom={canvasZoom}
                     />
 
