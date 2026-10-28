@@ -174,7 +174,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
 
           {/* Add Effect Flyout Menu */}
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b] border border-white/15 p-1 shadow-2xl z-30 space-y-0.5">
+            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/15 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right">
               <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
                 Add Effect
               </div>
@@ -192,7 +192,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                     </div>
                     <span className="text-[11px] text-white flex-1">{EFFECT_NAMES[key]}</span>
                     {isAlreadyAdded && (
-                      <span className="text-[9px] text-[#71717a] font-medium">Added</span>
+                      <span className="text-[10px] text-[#71717a] font-medium">Added</span>
                     )}
                   </button>
                 );

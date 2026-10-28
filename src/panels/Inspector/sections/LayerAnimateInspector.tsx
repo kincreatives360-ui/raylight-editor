@@ -1,15 +1,14 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, SlidersHorizontal, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { degToRad, radToDeg } from '../../../model/defaults';
-import { easingFromSelection } from '../../../model/easingSelection';
 import type { AnimationBlock, AnimationBlockProperty, Easing, Layer, Shot, Transitionish, TransitionType, Vec3 } from '../../../model/types';
 import { usePlayheadStore } from '../../../store/usePlayheadStore';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
+import { EasingControl } from '../../../ui/EasingControl';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
-import { IconButton, InspectorRow } from '../../../ui/primitives';
+import { IconButton, InspectorRow, Switch } from '../../../ui/primitives';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import { EasingPopover } from '../../Timeline/EasingPopover';
 import { addBlocksToShot, animationLabel, availableAnimations, availablePresets, createAnimationBlock, createPreset, editPreset, presetLabel, presetList, replacePresets, type PresetSide } from '../animationModel';
 import { ColorPicker } from '../ColorPicker';
 import { InspectorFlyout } from './InspectorFlyout';
@@ -24,14 +23,11 @@ function Field({ label, children }: {
     label: string;
     children: ReactNode;
 }) { return <InspectorRow label={label} stacked>{children}</InspectorRow>; }
-const EASINGS = [['preset:linear', 'Linear'], ['preset:ease-in', 'Ease in'], ['preset:ease-out', 'Ease out'], ['preset:ease-in-out', 'Ease in and out'], ['preset:ease-out-back', 'Back'], ['preset:ease-out-expo', 'Expo'], ['spring:gentle', 'Gentle spring'], ['spring:quick', 'Quick spring'], ['spring:bouncy', 'Bouncy spring'], ['spring:slow', 'Slow spring'], ['spring:snappy', 'Snappy spring'], ['spring:stiff', 'Stiff spring'], ['bezier', 'Custom Bezier']];
 function EasingField({ value, onChange }: {
     value: Easing;
     onChange: (next: Easing) => void;
 }) {
-    const [anchor, setAnchor] = useState<DOMRect | null>(null);
-    return <Field label="Easing"><div className="animate-field-action"><FigmaSelect aria-label="Easing" value={value.kind === 'bezier' ? 'bezier' : `${value.kind}:${value.name}`} onChange={event => { const next = easingFromSelection(event.target.value); if (next)
-        onChange(next); }}>{EASINGS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</FigmaSelect><IconButton label="Edit easing curve" icon={<SlidersHorizontal />} onClick={event => setAnchor(event.currentTarget.getBoundingClientRect())}/></div>{anchor && <EasingPopover easing={value} onChange={onChange} onClose={() => setAnchor(null)} anchorRect={anchor}/>}</Field>;
+    return <Field label="Easing"><EasingControl value={value} onChange={onChange} rowClassName="animate-field-action"/></Field>;
 }
 function Directions({ value, onChange, vertical = false }: {
     value: string;
@@ -54,7 +50,7 @@ function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
         <ScrubInput label="Duration" value={preset.durationMs} min={10} max={Math.max(10, maxDuration - preset.delayMs)} unit=" ms" onChange={durationMs => onChange({ durationMs })}/>
         {blur && <Field label="Blur"><ScrubInput aria-label="Blur amount" label={side === 'in' ? 'From' : 'To'} value={preset.blur ?? 40} min={0} max={200} unit=" px" onChange={value => onChange({ blur: value })}/></Field>}
         {move && <Field label="Distance"><ScrubInput label="Offset" value={preset.distance * 100} min={0} max={200} unit=" %" onChange={value => onChange({ distance: value / 100 })}/></Field>}
-        {(blur || move || preset.type === 'scale-out') && <div className="animate-toggle-row"><span>Fade</span><button type="button" role="switch" aria-label="Fade" aria-checked={preset.fade !== false} className="animate-switch" onClick={() => onChange({ fade: preset.fade === false })}><span /></button></div>}
+        {(blur || move || preset.type === 'scale-out') && <div className="animate-toggle-row"><span>Fade</span><Switch ariaLabel="Fade" checked={preset.fade !== false} className="animate-switch" onChange={fade => onChange({ fade })}/></div>}
         {layers.every(layer => layer.kind === 'text') && <Field label="Stagger"><FigmaSelect aria-label="Stagger" value={preset.stagger ?? 'none'} onChange={event => onChange({ stagger: event.target.value as Transitionish['stagger'] })}>{[['none', 'None'], ['letter', 'Letter'], ['word', 'Word'], ['line', 'Line']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</FigmaSelect></Field>}
         <EasingField value={preset.easing} onChange={easing => onChange({ easing })}/>
         <details className="animate-timing"><summary>Timing</summary><ScrubInput label="Delay" value={preset.delayMs} min={0} max={Math.max(0, maxDuration - preset.durationMs)} unit=" ms" onChange={delayMs => onChange({ delayMs })}/></details>

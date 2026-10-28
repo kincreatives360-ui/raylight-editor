@@ -20,6 +20,7 @@ import { RAYLIGHT_COLOR_PALETTE,isBlankProjectState } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { FigmaSelect } from '../../ui/FigmaSelect';
+import { InspectorModeTabs, Switch } from '../../ui/primitives';
 import { ScrubInput } from '../../ui/ScrubInput';
 import { ColorPicker } from './ColorPicker';
 import { saveImageAsset } from './imageAssetHelper';
@@ -1115,30 +1116,13 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
         <div className="shot-settings-panel flex-1 min-h-0 overflow-y-auto select-none" data-testid="shot-settings-section">
             <div className="space-y-4">
                 {/* Header: Design / Animate tabs matching mockup */}
-                <div className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-white/[0.08]" role="tablist" aria-label="Shot settings">
-                    <button
-                        type="button"
-                        role="tab" aria-selected={shotTab === 'design'} onClick={() => setShotTab('design')}
-                        className={`flex-1 py-1 px-2.5 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
-                            shotTab === 'design'
-                                ? 'bg-[#222226] text-white shadow-xs border border-white/20'
-                                : 'text-[#8e8e93] hover:text-white'
-                        }`}
-                    >
-                        Design
-                    </button>
-                    <button
-                        type="button"
-                        role="tab" aria-selected={shotTab === 'animate'} onClick={() => setShotTab('animate')}
-                        className={`flex-1 py-1 px-2.5 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
-                            shotTab === 'animate'
-                                ? 'bg-[#222226] text-white shadow-xs border border-white/20'
-                                : 'text-[#8e8e93] hover:text-white'
-                        }`}
-                    >
-                        Animate
-                    </button>
-                </div>
+                <InspectorModeTabs
+                    mode={shotTab}
+                    onChange={setShotTab}
+                    ariaLabel="Shot settings"
+                    fullWidth
+                    className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-white/[0.08]"
+                />
 
                 {/* Shot Title & Duration */}
                 <div className="space-y-1.5">
@@ -1166,29 +1150,17 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                             {/* Use project toggle switch */}
                             <div className="flex items-center justify-between py-2">
                                 <span className="text-[11px] font-medium text-white">Use project</span>
-                                <button
-                                    type="button"
-                                    role="switch"
-                                    aria-label="Use project background"
-                                    aria-checked={isUsingProjectBg}
-                                    onClick={() => {
-                                        const next = !isUsingProjectBg;
+                                <Switch
+                                    ariaLabel="Use project background"
+                                    checked={isUsingProjectBg}
+                                    onChange={(next) => {
                                         updateShot(activeShot.id, (s) => ({
                                             ...s,
                                             useProjectBackground: next,
                                             background: s.background ?? structuredClone(project.background),
                                         }));
                                     }}
-                                    className={`w-9 h-5 rounded-full transition-colors relative cursor-pointer ${
-                                        isUsingProjectBg ? 'bg-[#0088ff]' : 'bg-[#27272a]'
-                                    }`}
-                                >
-                                    <span
-                                        className={`w-3.5 h-3.5 rounded-full bg-white absolute top-[3px] transition-transform ${
-                                            isUsingProjectBg ? 'right-1' : 'left-1'
-                                        }`}
-                                    />
-                                </button>
+                                />
                             </div>
 
                             {/* Inherited or override */}
@@ -1452,30 +1424,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 <>
                     {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
                     <div className="h-10 border-b border-white/[0.07] px-3.5 flex items-center shrink-0 bg-[#111111]">
-                        <div className="flex items-center gap-1.5" role="tablist" aria-label="Object properties">
-                            <button
-                                role="tab" aria-selected={effectiveMainTab === 'design'}
-                                onClick={() => setMainTab('design')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'design'
-                                    ? 'bg-[#1f1f23] text-white'
-                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                    }`}
-                            >
-                                Design
-                            </button>
-                            <button
-                                role="tab" aria-selected={effectiveMainTab === 'animate'}
-                                onClick={() => setMainTab('animate')}
-                                className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${effectiveMainTab === 'animate'
-                                    ? 'bg-[#1f1f23] text-white'
-                                    : 'text-[#a1a1aa] hover:text-[#d4d4d8]'
-                                    }`}
-                            >
-                                Animate
-                            </button>
-                        </div>
-
-
+                        <InspectorModeTabs
+                            mode={effectiveMainTab}
+                            onChange={setMainTab}
+                            ariaLabel="Object properties"
+                        />
                     </div>
 
                     {/* =============================================================== */}

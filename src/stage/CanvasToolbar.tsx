@@ -74,8 +74,9 @@ const DropdownMenu: React.FC<{
     className?: string;
 }> = ({ children, align = 'left', className = '' }) => (
     <div
-        className={`absolute bottom-full mb-2 ${align === 'right' ? 'right-0' : 'left-0'} min-w-[10rem] rounded-xl bg-[#1e1e22]/95 border border-white/[0.08] shadow-2xl p-1 text-xs z-50 ${className}`}
-        style={{ backdropFilter: 'blur(20px)' }}
+        role="menu"
+        className={`absolute bottom-full mb-2 ${align === 'right' ? 'right-0 origin-bottom-right' : 'left-0 origin-bottom-left'} min-w-[10rem] rounded-xl bg-[#1c1c1f]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-1 text-xs z-50 ${className}`}
+        style={{ animation: 'figma-popover-in 140ms var(--ease-out, cubic-bezier(0.23, 1, 0.32, 1))' }}
     >
         {children}
     </div>
@@ -92,7 +93,7 @@ const MenuItem: React.FC<{
     <button
         type="button"
         onClick={onClick}
-        className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition ${active ? 'bg-[var(--accent-primary,#0088ff)] text-white' : 'text-[#d4d4d8] hover:bg-white/5 hover:text-white'}`}
+        className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition-[color,background-color,transform] duration-150 active:scale-[0.97] ${active ? 'bg-[var(--accent-primary,#0088ff)] text-white' : 'text-[#d4d4d8] hover:bg-white/5 hover:text-white'}`}
     >
         <div className="flex items-center gap-2">
             <Icon className={`w-3.5 h-3.5 ${accent ?? 'opacity-80'}`} />

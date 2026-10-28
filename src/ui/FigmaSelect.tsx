@@ -19,7 +19,7 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
     const selected = options.find((option) => option.value === selectedValue);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
-    const [position, setPosition] = useState({ left: 0, top: 0, width: 180, maxHeight: 280 });
+    const [position, setPosition] = useState<{ left: number; top: number; width: number; maxHeight: number; transformOrigin?: string }>({ left: 0, top: 0, width: 180, maxHeight: 280, transformOrigin: 'top left' });
     const [label, setLabel] = useState('');
     const trigger = useRef<HTMLButtonElement>(null);
     const menu = useRef<HTMLDivElement>(null);
@@ -46,7 +46,7 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         const above = rect.top - 12;
         const placeBelow = below >= Math.min(height, options.length * 28 + 8) || below >= above;
         const maxHeight = Math.max(64, Math.min(height, placeBelow ? below : above));
-        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, options.length * 28 + 8) - 4), width, maxHeight });
+        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, options.length * 28 + 8) - 4), width, maxHeight, transformOrigin: placeBelow ? 'top left' : 'bottom left' });
         setActive(Math.max(0, options.findIndex((option) => option.value === selectedValue && !option.disabled)));
         setOpen(true);
     };

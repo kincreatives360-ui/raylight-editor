@@ -32,6 +32,13 @@ describe('Easing & Spring Engine', () => {
     const midVal = evaluateSpring('bouncy', 0.5);
     expect(midVal).toBeGreaterThan(0.5);
     expect(midVal).toBeLessThan(1.5);
+
+    // Critically damped springs ('gentle', 'stiff') never overshoot 1.0
+    for (let i = 1; i < 20; i++) {
+      const sample = evaluateSpring('gentle', i / 20);
+      expect(sample).toBeGreaterThanOrEqual(0);
+      expect(sample).toBeLessThanOrEqual(1);
+    }
   });
 
   it('supports custom cubic-bezier evaluation strings', () => {

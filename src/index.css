@@ -21,10 +21,13 @@
   --text-secondary: #a1a1aa;
   --text-muted: #8e8e96;
   --text-disabled: #52525b;
-  --accent: #0070e0;
-  --accent-hover: #005bb5;
-  --accent-soft: rgba(0, 112, 224, 0.14);
+  --accent: #0088ff;
+  --accent-hover: #0077e6;
+  --accent-soft: rgba(0, 136, 255, 0.14);
   --focus-ring: rgba(56, 189, 248, 0.8);
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --spring-snappy: cubic-bezier(0.16, 1, 0.3, 1);
   --success: #34d399;
   --warning: #fbbf24;
   --danger: #f43f5e;
@@ -253,15 +256,54 @@ select:focus-visible {
   }
 }
 
-/* Reduced motion sensitivity support */
+/* Reduced motion sensitivity support (Apple §14: preserve gentle opacity/color comprehension, disable spatial motion) */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-property: opacity, color, background-color, border-color, box-shadow !important;
+    transition-duration: 120ms !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* Reduced transparency accessibility fallback (Apple §4) */
+@media (prefers-reduced-transparency: reduce) {
+  .figma-select-menu,
+  .animate-flyout,
+  .animate-menu,
+  [role="dialog"],
+  [role="menu"],
+  [role="listbox"] {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    background-color: #1c1c1f !important;
+  }
+}
+
+/* Increased contrast accessibility support (Apple §4) */
+@media (prefers-contrast: more) {
+  :root {
+    --surface-border: rgba(255, 255, 255, 0.22);
+    --surface-border-strong: rgba(255, 255, 255, 0.36);
+    --border-subtle: rgba(255, 255, 255, 0.22);
+    --border-medium: rgba(255, 255, 255, 0.32);
+    --border-strong: rgba(255, 255, 255, 0.45);
+    --text-secondary: #d4d4d8;
+    --text-muted: #b4b4bb;
+  }
+}
+
+@keyframes figma-popover-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
   }
 }
 
@@ -318,11 +360,12 @@ textarea,
 }
 
 /* Inspector controls follow the compact, dark reference screenshots. */
-.figma-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; cursor: pointer; }
+.figma-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; cursor: pointer; transition: background-color 150ms var(--ease-out), border-color 150ms var(--ease-out), transform 120ms var(--ease-out); }
+.figma-select:not(:disabled):active { transform: scale(0.98); }
 .figma-select:disabled { opacity: .45; cursor: not-allowed; }
 .figma-select:focus-visible { outline: 1px solid #0088ff; outline-offset: 1px; }
-.figma-select-menu { position: fixed; z-index: 10000; overflow-y: auto; padding: 4px; border: 1px solid #454545; border-radius: 8px; background: #282828; color: #fff; box-shadow: 0 8px 24px #0008; font: 11px var(--font-sans); outline: none; }
-.figma-select-option { display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 6px; border-radius: 4px; cursor: pointer; }
+.figma-select-menu { position: fixed; z-index: 10000; overflow-y: auto; padding: 4px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: rgba(28, 28, 31, 0.84); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); color: #fff; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08); font: 11px var(--font-sans); outline: none; animation: figma-popover-in 140ms var(--ease-out); }
+.figma-select-option { display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 6px; border-radius: 6px; cursor: pointer; transition: background-color 100ms ease; }
 .figma-select-option.is-active { background: #0088ff; }
 .figma-select-option[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .shot-settings-panel { background: #111; }

@@ -128,7 +128,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
                 role="button"
                 aria-label={label}
                 disabled={disabled}
-                className={`inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-colors duration-150 cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${sizeClasses} ${variantClasses} ${className}`}
+                className={`inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${sizeClasses} ${variantClasses} ${className}`}
                 {...props}
             >
                 {icon}
@@ -383,7 +383,7 @@ export function SegmentedControl<T extends string = string>({
                         aria-label={opt.ariaLabel || (typeof opt.label === 'string' ? opt.label : undefined)}
                         disabled={opt.disabled}
                         onClick={() => !opt.disabled && onChange(opt.value)}
-                        className={`flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-colors duration-150 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${
+                        className={`flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${
                             isSelected
                                 ? 'bg-[var(--panel-active)] text-white shadow-sm font-semibold'
                                 : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--panel-hover)]'
@@ -407,3 +407,100 @@ export function SegmentedControl<T extends string = string>({
         </div>
     );
 }
+
+/* -------------------------------------------------------------------------- */
+/* Switch                                                                     */
+/* -------------------------------------------------------------------------- */
+
+export interface SwitchProps {
+    checked: boolean;
+    onChange: (checked: boolean) => void;
+    ariaLabel: string;
+    disabled?: boolean;
+    className?: string;
+}
+
+export const Switch: React.FC<SwitchProps> = ({
+    checked,
+    onChange,
+    ariaLabel,
+    disabled = false,
+    className = '',
+}) => (
+    <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={ariaLabel}
+        disabled={disabled}
+        onClick={() => !disabled && onChange(!checked)}
+        className={
+            className ||
+            `relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+                checked
+                    ? 'bg-[#0088ff] border-[#0088ff]'
+                    : 'bg-[#202020] border-[#333333]'
+            }`
+        }
+    >
+        <span
+            className={
+                className
+                    ? undefined
+                    : `inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-150 ${
+                          checked ? 'translate-x-[15px]' : 'translate-x-[2px]'
+                      }`
+            }
+        />
+    </button>
+);
+
+/* -------------------------------------------------------------------------- */
+/* InspectorModeTabs (Design / Animate)                                       */
+/* -------------------------------------------------------------------------- */
+
+export interface InspectorModeTabsProps {
+    mode: 'design' | 'animate';
+    onChange: (mode: 'design' | 'animate') => void;
+    ariaLabel?: string;
+    designTestId?: string;
+    animateTestId?: string;
+    fullWidth?: boolean;
+    actions?: React.ReactNode;
+    className?: string;
+}
+
+export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
+    mode,
+    onChange,
+    ariaLabel = 'Inspector mode',
+    designTestId,
+    animateTestId,
+    fullWidth = false,
+    actions,
+    className = 'flex items-center gap-1.5',
+}) => (
+    <div className={className} role="tablist" aria-label={ariaLabel}>
+        {(['design', 'animate'] as const).map((tab) => {
+            const isSelected = mode === tab;
+            return (
+                <button
+                    key={tab}
+                    type="button"
+                    role="tab"
+                    aria-selected={isSelected}
+                    data-testid={tab === 'design' ? designTestId : animateTestId}
+                    onClick={() => onChange(tab)}
+                    className={`${fullWidth ? 'flex-1 text-center ' : ''}px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-[color,background-color,transform] duration-150 active:scale-[0.97] cursor-pointer ${
+                        isSelected
+                            ? 'bg-[#222226] text-white shadow-xs border border-white/15'
+                            : 'text-[#8e8e93] hover:text-white'
+                    }`}
+                >
+                    {tab}
+                </button>
+            );
+        })}
+        {actions}
+    </div>
+);

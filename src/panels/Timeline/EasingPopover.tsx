@@ -168,13 +168,16 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
         }
         const top = Math.max(16, Math.min(window.innerHeight - 380, anchorRect.top - 80));
         let left = anchorRect.left - 270;
+        let originX = 'right';
         if (left < 16) {
             left = anchorRect.right + 12;
+            originX = 'left';
         }
         return {
             position: 'fixed',
             top: `${top}px`,
             left: `${left}px`,
+            transformOrigin: `top ${originX}`,
             zIndex: 100,
         };
     }, [anchorRect]);
@@ -185,7 +188,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
             style={style}
             role="dialog"
             aria-label="Easing curve editor"
-            className="w-[256px] rounded-2xl bg-[#141416] border border-white/10 shadow-2xl p-3 flex flex-col gap-2.5 text-white select-none backdrop-blur-xl animate-in fade-in zoom-in-95 duration-100"
+            className="w-[256px] rounded-2xl bg-[#141416]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-3 flex flex-col gap-2.5 text-white select-none animate-in fade-in zoom-in-95 duration-100"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
         >
@@ -330,7 +333,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                                     y2: preset.y2,
                                 })
                             }
-                            className={`h-5 px-1.5 rounded text-[9.5px] font-medium truncate cursor-pointer transition ${
+                            className={`h-5 px-1.5 rounded text-[10px] font-medium truncate cursor-pointer transition ${
                                 isActive
                                     ? 'bg-[#0088ff] text-white'
                                     : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white hover:bg-[#27272c]'

@@ -203,7 +203,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                     </button>
 
                     {addMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 w-32 rounded-lg bg-[#18181b] border border-white/10 shadow-2xl py-1 z-50 text-[11px]">
+                        <div className="absolute right-0 top-full mt-1 w-32 rounded-lg bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] py-1 z-50 text-[11px] origin-top-right">
                             <button
                                 type="button"
                                 onClick={() => handleAddLight('spot')}

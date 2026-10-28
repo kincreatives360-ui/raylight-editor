@@ -114,4 +114,15 @@ describe('LightInspector Animate Light integration', () => {
         expect(html).toContain('data-testid="animate-light-btn"');
         expect(html).toContain('animate');
     });
+
+    it('renders shared EasingControl with curve preview and curve editor trigger in LightBlockInspector', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const html = renderToStaticMarkup(
+            <LightBlockInspector activeShotId={shot.id} activeLightBlock={mockLightBlock} onDone={() => {}} />
+        );
+
+        expect(html).toContain('aria-label="Transition curve"');
+        expect(html).toContain('aria-label="Easing curve preview"');
+        expect(html).toContain('aria-label="Edit easing curve"');
+    });
 });

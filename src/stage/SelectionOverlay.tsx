@@ -103,10 +103,53 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryProj = projectCorners(primaryEval);
 
+    const bindPointerDrag = (
+        e: React.PointerEvent | React.MouseEvent,
+        onMove: (moveEvent: PointerEvent | MouseEvent) => void,
+        onEnd?: () => void
+    ) => {
+        const target = e.currentTarget as Element | null;
+        const pointerId = 'pointerId' in e ? e.pointerId : undefined;
+        if (pointerId !== undefined && target && 'setPointerCapture' in target) {
+            try {
+                target.setPointerCapture(pointerId);
+            } catch {
+                // Ignore synthetic or non-capturable pointer events
+            }
+        }
+
+        const handleUp = () => {
+            if (pointerId !== undefined && target && 'releasePointerCapture' in target) {
+                try {
+                    if (target.hasPointerCapture(pointerId)) {
+                        target.releasePointerCapture(pointerId);
+                    }
+                } catch {
+                    // Ignore release errors
+                }
+            }
+            onEnd?.();
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', handleUp);
+            window.removeEventListener('pointercancel', handleUp);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+
+        if (pointerId !== undefined) {
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', handleUp);
+            window.addEventListener('pointercancel', handleUp);
+        } else {
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', handleUp);
+        }
+    };
+
     // ============================================================================
     // 1. DRAG TO MOVE (Supports V Plane-Aware Move, G Screen Move, & Shift+A Rec!)
     // ============================================================================
-    const handleStartMove = (e: React.MouseEvent) => {
+    const handleStartMove = (e: React.PointerEvent | React.MouseEvent) => {
         if (activeTool === 'hand') return;
         if (activeTool === 'tilt') {
             handleStart3DTilt(e);
@@ -145,7 +188,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastDyFrac = 0;
         let lastDzFrac = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const dxPx = (moveEvent.clientX - startClientX) / (canvasZoom * zoom);
             const dyPx = (moveEvent.clientY - startClientY) / (canvasZoom * zoom);
 
@@ -235,21 +278,16 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
+        bindPointerDrag(e, onMouseMove, () => {
             onUpdateGuides([]);
             commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        });
     };
 
     // ============================================================================
     // 2. CORNER & EDGE RESIZE OR ON-CANVAS CROP HANDLES
     // ============================================================================
-    const handleStartResize = (e: React.MouseEvent, dir: ResizeHandleDir) => {
+    const handleStartResize = (e: React.PointerEvent | React.MouseEvent, dir: ResizeHandleDir) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -263,7 +301,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             const boxW = Math.max(40, primaryEval.size.width * frameWidth * canvasZoom);
             const boxH = Math.max(40, primaryEval.size.height * frameHeight * canvasZoom);
 
-            const onCropMove = (moveEvent: MouseEvent) => {
+            const onCropMove = (moveEvent: PointerEvent | MouseEvent) => {
                 const dx = (moveEvent.clientX - startClientX) / boxW;
                 const dy = (moveEvent.clientY - startClientY) / boxH;
 
@@ -312,14 +350,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 );
             };
 
-            const onCropUp = () => {
-                commitDragTransaction();
-                window.removeEventListener('mousemove', onCropMove);
-                window.removeEventListener('mouseup', onCropUp);
-            };
-
-            window.addEventListener('mousemove', onCropMove);
-            window.addEventListener('mouseup', onCropUp);
+            bindPointerDrag(e, onCropMove, commitDragTransaction);
             return;
         }
 
@@ -335,7 +366,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastDW = 0;
         let lastDH = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const dxFrac =
                 (moveEvent.clientX - startClientX) / (frameWidth * canvasZoom * zoom);
             const dyFrac =
@@ -443,20 +474,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     // ============================================================================
     // 3. TOP 2D ROTATION KNOB (Rotate Z - Fixed Stage-Relative Angle!)
     // ============================================================================
-    const handleStartRotateZ = (e: React.MouseEvent) => {
+    const handleStartRotateZ = (e: React.PointerEvent | React.MouseEvent) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -477,7 +501,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let accumulatedDelta = 0;
         let lastDeltaRad = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const currentAngle = Math.atan2(
                 moveEvent.clientY - centerClientY,
                 moveEvent.clientX - centerClientX
@@ -520,20 +544,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     // ============================================================================
     // 4. 3D TILT DRAG (Pitch & Yaw - X and Y Rotations + Shift+A Rec!)
     // ============================================================================
-    const handleStart3DTilt = (e: React.MouseEvent) => {
+    const handleStart3DTilt = (e: React.PointerEvent | React.MouseEvent) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -546,7 +563,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastPitchRad = 0;
         let lastYawRad = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const deltaYaw = (moveEvent.clientX - startClientX) * 0.45;
             const deltaPitch = -(moveEvent.clientY - startClientY) * 0.45;
 
@@ -600,14 +617,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     const handleItems: {
@@ -652,7 +662,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                 strokeWidth="1.5"
                                 strokeDasharray="5 3"
                                 className="cursor-move pointer-events-auto"
-                                onMouseDown={handleStartMove}
+                                onPointerDown={handleStartMove}
                                 onClick={(e) => {
                                     e.stopPropagation();
                                     onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
@@ -700,7 +710,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                         ? 'cursor-grab'
                                         : 'cursor-move'
                                 }`}
-                            onMouseDown={handleStartMove}
+                            onPointerDown={handleStartMove}
                             onDoubleClick={(e) => {
                                 if (layer.kind === 'text') {
                                     e.stopPropagation();
@@ -720,7 +730,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         top: `${primaryProj.pRot.y}px`,
                         transform: 'translate(-50%, -50%)',
                     }}
-                    onMouseDown={handleStartRotateZ}
+                    onPointerDown={handleStartRotateZ}
                     title="Drag around object to Spin / Rotate (Roll Z)"
                     className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
                 >
@@ -734,7 +744,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 handleItems.map((h) => (
                         <div
                             key={h.dir}
-                            onMouseDown={(e) => handleStartResize(e, h.dir)}
+                            onPointerDown={(e) => handleStartResize(e, h.dir)}
                             style={{
                                 left: `${h.pos.x}px`,
                                 top: `${h.pos.y}px`,
@@ -797,11 +807,11 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity duration-100">
                         {layer.kind === 'text' && (
                             <button
-                                onMouseDown={(e) => {
+                                onPointerDown={(e) => {
                                     e.stopPropagation();
                                     setIsEditingInlineText(true);
                                 }}
-                                className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--accent-primary,#0070e0)] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[11px] font-medium text-white transition-colors duration-100"
+                                className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--accent-primary,#0088ff)] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[11px] font-medium text-white transition-colors duration-100"
                             >
                                 <Type className="w-3 h-3" />
                                 <span>Edit</span>
@@ -809,15 +819,15 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         )}
 
                         <div
-                            onMouseDown={handleStartMove}
+                            onPointerDown={handleStartMove}
                             title="Drag to move in 3D space"
-                            className="w-6 h-6 rounded-full bg-[var(--accent-primary,#0070e0)] hover:bg-[var(--accent-hover,#005bb5)] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition-colors duration-100"
+                            className="w-6 h-6 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition-colors duration-100"
                         >
                             <Move className="w-3 h-3 text-white" />
                         </div>
 
                         <div
-                            onMouseDown={handleStart3DTilt}
+                            onPointerDown={handleStart3DTilt}
                             title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
                             className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-medium,rgba(255,255,255,0.12))] shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[11px] font-medium text-white transition-colors duration-100"
                         >

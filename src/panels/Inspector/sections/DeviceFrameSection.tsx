@@ -149,7 +149,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                             <button
                                 type="button"
                                 onClick={() => update({ screenPan: { x: 0, y: 0 }, screenZoom: 1 })}
-                                className="text-[9px] text-[#0088ff] hover:underline cursor-pointer"
+                                className="text-[10px] text-[#0088ff] hover:underline cursor-pointer"
                             >
                                 Reset
                             </button>

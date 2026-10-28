@@ -1,4 +1,3 @@
-import { FigmaSelect } from '../../../ui/FigmaSelect';
 // src/panels/Inspector/sections/LightBlockInspector.tsx
 import React, { useState } from 'react';
 import {
@@ -9,8 +8,8 @@ import {
     X,
 } from 'lucide-react';
 import type { LightAnimationBlock } from '../../../model/types';
-import { easingFromSelection } from '../../../model/easingSelection';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { EasingControl } from '../../../ui/EasingControl';
 import { ScrubInput } from '../../../ui/ScrubInput';
 
 interface LightBlockInspectorProps {
@@ -47,10 +46,6 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
         onDone();
     };
 
-    const easingValue =
-        activeLightBlock.easing.kind === 'bezier'
-            ? 'bezier'
-            : `${activeLightBlock.easing.kind}:${activeLightBlock.easing.name}`;
     const blockProperty = activeLightBlock.property;
     const isRoomAnimation = activeLightBlock.targetLightId === 'room';
 
@@ -265,25 +260,14 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
             {/* Easing Selection */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Transition Curve</span>
-                <FigmaSelect
-                    value={easingValue}
-                    onChange={(e) => {
-                        const parsed = easingFromSelection(e.target.value);
-                        if (parsed) {
-                            updateBlock((lb) => ({ ...lb, easing: parsed }));
-                        }
-                    }}
-                    className="w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition"
-                >
-                    <option value="preset:linear">Linear</option>
-                    <option value="preset:easeIn">Ease In</option>
-                    <option value="preset:easeOut">Ease Out</option>
-                    <option value="preset:easeInOut">Ease In Out</option>
-                    <option value="spring:gentle">Spring: Gentle</option>
-                    <option value="spring:bouncy">Spring: Bouncy</option>
-                    <option value="spring:snappy">Spring: Snappy</option>
-                    <option value="bezier">Custom Bezier</option>
-                </FigmaSelect>
+                <EasingControl
+                    value={activeLightBlock.easing}
+                    onChange={(easing) => updateBlock((lb) => ({ ...lb, easing }))}
+                    selectAriaLabel="Transition curve"
+                    selectClassName="flex-1 h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition"
+                    showCurvePreview
+                    showInlineTuning
+                />
             </div>
 
             {/* Delete Block */}

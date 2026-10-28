@@ -288,6 +288,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         const startY = e.clientY;
         const startHeight = timelineHeightPx;
         const pointerId = e.pointerId;
+        const target = e.currentTarget;
+        try {
+            target.setPointerCapture(pointerId);
+        } catch {
+            // Ignore synthetic pointer capture errors
+        }
 
         const onMove = (ev: PointerEvent) => {
             if (ev.pointerId === pointerId) {
@@ -297,6 +303,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         };
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId === pointerId) {
+                try {
+                    if (target.hasPointerCapture(pointerId)) {
+                        target.releasePointerCapture(pointerId);
+                    }
+                } catch {
+                    // Ignore release errors
+                }
                 window.removeEventListener('pointermove', onMove);
                 window.removeEventListener('pointerup', onEnd);
                 window.removeEventListener('pointercancel', onEnd);
@@ -1415,6 +1428,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
             {/* 2. SCROLL-SYNCED TRACKS BODY (Includes Ruler + Tracks + Playhead + Skimmer) */}
             <div
+                id="timeline-tracks-scroll"
                 ref={trackRef}
                 onScroll={(e) => {
                     setTimelineScrollTop(e.currentTarget.scrollTop);
@@ -1553,7 +1567,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
                                                 <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
                                                 <span className="truncate drop-shadow-sm">{clip.name}</span>
-                                                <span className="text-[9px] font-mono text-sky-300/70 hidden sm:inline">
+                                                <span className="text-[10px] font-mono text-sky-300/70 hidden sm:inline">
                                                     {(clip.durationMs / 1000).toFixed(1)}s
                                                 </span>
                                             </div>
@@ -1606,7 +1620,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
                                             <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
                                             <span className="truncate drop-shadow-sm">{clip.name}</span>
-                                            <span className="text-[9px] font-mono text-sky-300/70 hidden sm:inline">
+                                            <span className="text-[10px] font-mono text-sky-300/70 hidden sm:inline">
                                                 {(clip.durationMs / 1000).toFixed(1)}s
                                             </span>
                                         </div>

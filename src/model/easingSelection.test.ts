@@ -36,4 +36,10 @@ describe('easingFromSelection', () => {
       kind: 'bezier', x1: 0.16, y1: 1, x2: 0.3, y2: 1,
     });
   });
+
+  it('normalizes legacy camelCase preset names to canonical kebab-case', () => {
+    expect(easingFromSelection('preset:easeIn')).toEqual({ kind: 'preset', name: 'ease-in' });
+    expect(easingFromSelection('preset:easeOut')).toEqual({ kind: 'preset', name: 'ease-out' });
+    expect(easingFromSelection('preset:easeInOut')).toEqual({ kind: 'preset', name: 'ease-in-out' });
+  });
 });

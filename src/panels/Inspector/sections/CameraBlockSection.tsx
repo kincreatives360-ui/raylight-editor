@@ -1,4 +1,5 @@
 import { FigmaSelect } from '../../../ui/FigmaSelect';
+import { EasingControl } from '../../../ui/EasingControl';
 // src/panels/Inspector/sections/CameraBlockSection.tsx
 import React, { useState } from 'react';
 import {
@@ -12,12 +13,14 @@ import {
     AlignEndVertical,
     Focus,
     X,
+    Plus,
+    Minus,
 } from 'lucide-react';
 import type {
     CameraBlock,
     CameraKeyframeEndpoint,
 } from '../../../model/types';
-import { easingFromSelection } from '../../../model/easingSelection';
+import { createDefaultCameraBlock } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
@@ -33,7 +36,15 @@ import {
     focalLengthToFov,
     LENS_PRESETS,
     type CameraMovementId,
+    type CameraMovementCategory,
 } from '../../../stage/webgl/cameraMath';
+
+const MOVEMENT_GROUPS: { id: CameraMovementCategory; label: string }[] = [
+    { id: 'zoom', label: 'Zoom' },
+    { id: 'rotation', label: 'Pan & tilt' },
+    { id: 'track', label: 'Dolly, truck & pedestal' },
+    { id: 'special', label: 'Special moves' },
+];
 
 interface CameraBlockSectionProps {
     activeShotId: string;
@@ -54,6 +65,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     const halfH = artboardHeight / 2;
     const [fromCollapsed, setFromCollapsed] = useState(false);
     const [toCollapsed, setToCollapsed] = useState(false);
+    const [movementFlyoutOpen, setMovementFlyoutOpen] = useState(false);
 
 
     const updateCameraBlock = (
@@ -96,9 +108,6 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
             }));
         };
 
-        const badgeBorder = which === 'from'
-            ? 'border-emerald-500/40 text-emerald-300 bg-emerald-950/60'
-            : 'border-sky-500/40 text-sky-300 bg-sky-950/60';
         const activeBtnClass = which === 'from'
             ? 'bg-emerald-500 text-black font-semibold shadow-xs'
             : 'bg-sky-500 text-black font-semibold shadow-xs';
@@ -116,14 +125,11 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         <span className="text-[11px] font-semibold text-[#e4e4e7] capitalize">
                             {which}
                         </span>
-                        <span className={`text-[9px] px-2 py-0.5 rounded-full font-mono border ${badgeBorder}`}>
-                            {activePreset ? activePreset.name : 'Custom'}
-                        </span>
                         <span className="text-[10px] text-zinc-400 font-mono">
                             {Number(ep.zoom.toFixed(2))}x
                         </span>
                         {(ep.focalLength ?? 50) !== 50 && (
-                            <span className="text-[9px] text-zinc-400 font-mono">
+                            <span className="text-[10px] text-zinc-400 font-mono">
                                 • {Math.round(ep.focalLength ?? 50)}mm
                             </span>
                         )}
@@ -140,70 +146,80 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         {/* Alignment & Framing Toolbar */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                Alignment &amp; Framing
+                                Alignment
                             </span>
-                            <div className="grid grid-cols-7 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg" role="toolbar" aria-label={`${which} endpoint alignment and framing`}>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorX: Math.round(-halfW + halfW / Math.max(0.1, ep.zoom)) })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Left"
-                                    aria-label="Align Left"
-                                >
-                                    <AlignLeft className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorX: 0 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Center X"
-                                    aria-label="Center X"
-                                >
-                                    <AlignCenterHorizontal className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorX: Math.round(halfW - halfW / Math.max(0.1, ep.zoom)) })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Right"
-                                    aria-label="Align Right"
-                                >
-                                    <AlignRight className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorY: Math.round(halfH - halfH / Math.max(0.1, ep.zoom)) })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Top"
-                                    aria-label="Align Top"
-                                >
-                                    <AlignStartVertical className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorY: 0 })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Center Y"
-                                    aria-label="Center Y"
-                                >
-                                    <AlignCenterVertical className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => patchEndpoint({ anchorY: Math.round(-halfH + halfH / Math.max(0.1, ep.zoom)) })}
-                                    className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
-                                    title="Align Bottom"
-                                    aria-label="Align Bottom"
-                                >
-                                    <AlignEndVertical className="w-3.5 h-3.5" />
-                                </button>
+                            <div className="grid grid-cols-2 gap-1.5" role="toolbar" aria-label={`${which} endpoint alignment and framing`}>
+                                <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorX: Math.round(-halfW + halfW / Math.max(0.1, ep.zoom)) })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Align Left"
+                                        aria-label="Align Left"
+                                    >
+                                        <AlignLeft className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorX: 0 })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Center X"
+                                        aria-label="Center X"
+                                    >
+                                        <AlignCenterHorizontal className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorX: Math.round(halfW - halfW / Math.max(0.1, ep.zoom)) })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Align Right"
+                                        aria-label="Align Right"
+                                    >
+                                        <AlignRight className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                                <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorY: Math.round(halfH - halfH / Math.max(0.1, ep.zoom)) })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Align Top"
+                                        aria-label="Align Top"
+                                    >
+                                        <AlignStartVertical className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorY: 0 })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Center Y"
+                                        aria-label="Center Y"
+                                    >
+                                        <AlignCenterVertical className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                        type="button"
+                                        onClick={() => patchEndpoint({ anchorY: Math.round(-halfH + halfH / Math.max(0.1, ep.zoom)) })}
+                                        className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
+                                        title="Align Bottom"
+                                        aria-label="Align Bottom"
+                                    >
+                                        <AlignEndVertical className="w-3.5 h-3.5" />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <details className="group space-y-2">
+                            <summary className="cursor-pointer list-none text-[10px] font-medium text-[#a1a1aa] hover:text-white">Camera presets</summary>
+                            <div className="flex justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
                                         const selectedLayers = (currentShot?.layers || []).filter((l) => selectedLayerIds.includes(l.id));
                                         const targetLayers = selectedLayers.length > 0
                                             ? selectedLayers
-                                             : (currentShot?.layers || []).filter((l) => !l.hidden);
+                                            : (currentShot?.layers || []).filter((l) => !l.hidden);
                                         if (targetLayers.length > 0) {
                                             const framing = calculateLayersBoundingFraming(targetLayers, { width: artboardWidth, height: artboardHeight });
                                             patchEndpoint({
@@ -220,21 +236,6 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     <Focus className="w-3.5 h-3.5" />
                                 </button>
                             </div>
-                        </div>
-
-                        {/* Camera Preset Selector */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                    Camera Presets
-                                </span>
-                                {activePreset && (
-                                    <span className="text-[9px] text-zinc-400 truncate max-w-[170px]" title={activePreset.description}>
-                                        {activePreset.description}
-                                    </span>
-                                )}
-                            </div>
-
                             {/* Quick Preset Buttons */}
                             <div className="grid grid-cols-4 gap-1">
                                 {[
@@ -258,11 +259,10 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                                 const next = applyCameraPreset(preset, ep);
                                                 patchEndpoint(next);
                                             }}
-                                            className={`px-1.5 py-1 rounded text-[10px] transition-all cursor-pointer truncate text-center ${
-                                                isSelected
+                                            className={`px-1.5 py-1 rounded text-[10px] transition-all cursor-pointer truncate text-center ${isSelected
                                                     ? activeBtnClass
                                                     : 'bg-[#1c1c1f] hover:bg-white/10 text-[#d4d4d8] border border-white/5 hover:border-white/20'
-                                            }`}
+                                                }`}
                                             title={preset.description}
                                         >
                                             {btn.label}
@@ -306,12 +306,12 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     ))}
                                 </optgroup>
                             </FigmaSelect>
-                        </div>
+                        </details>
 
                         {/* Anchor & 3D Depth */}
                         <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#a1a1aa] block font-medium">Anchor &amp; Depth</span>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <span className="text-[10px] text-[#a1a1aa] block font-medium">Anchor</span>
+                            <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
                                     label="X"
                                     value={Math.round(ep.anchorX)}
@@ -336,7 +336,11 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                         })
                                     }
                                 />
-                                <ScrubInput
+
+                            </div>
+                            <details className="pt-1">
+                                <summary className="cursor-pointer list-none text-[10px] text-[#a1a1aa] hover:text-white">Depth</summary>
+                                <div className="pt-1">                                <ScrubInput
                                     label="Z"
                                     value={Math.round(ep.anchorZ ?? 0)}
                                     min={-2000}
@@ -348,8 +352,8 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                             anchorZ: Math.round(pxZ),
                                         })
                                     }
-                                />
-                            </div>
+                                /></div>
+                            </details>
                         </div>
 
                         {/* Zoom & Roll */}
@@ -366,6 +370,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     unit="x"
                                     onChange={(zoom) => patchEndpoint({ zoom: Number(zoom.toFixed(2)) })}
                                 />
+
                             </div>
                             <div className="space-y-1.5">
                                 <span className="text-[10px] text-[#a1a1aa] block font-medium">Roll</span>
@@ -384,7 +389,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         {/* Orbit & Tilt */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                Orbit &amp; Tilt
+                                Orbit &amp; tilt
                             </span>
                             <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
@@ -409,42 +414,44 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         </div>
 
                         {/* Lens & Focal Length */}
-                        <div className="space-y-1.5">
-                            <div className="flex items-center justify-between">
-                                <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                    Lens Focal Length
-                                </span>
-                                <span className="text-[9px] text-zinc-400 font-mono">
-                                    {focalLengthToFov(ep.focalLength ?? 50).toFixed(1)}° FOV
-                                </span>
+                        <details className="space-y-1.5">
+                            <summary className="cursor-pointer list-none text-[10px] font-medium text-[#a1a1aa] hover:text-white">Lens focal length</summary>
+                            <div className="space-y-1.5">
+                                <div className="flex items-center justify-between">
+                                    <span className="text-[10px] text-[#a1a1aa] block font-medium">
+                                        Lens Focal Length
+                                    </span>
+                                    <span className="text-[10px] text-zinc-400 font-mono">
+                                        {focalLengthToFov(ep.focalLength ?? 50).toFixed(1)}° FOV
+                                    </span>
+                                </div>
+                                <div className="flex gap-1 mb-1">
+                                    {LENS_PRESETS.map((lens) => (
+                                        <button
+                                            key={lens.mm}
+                                            type="button"
+                                            onClick={() => patchEndpoint({ focalLength: lens.mm })}
+                                            className={`flex-1 py-0.5 rounded text-[10px] font-mono transition-colors cursor-pointer text-center ${(ep.focalLength ?? 50) === lens.mm
+                                                    ? activeBtnClass
+                                                    : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
+                                                }`}
+                                            title={lens.label}
+                                        >
+                                            {lens.mm}mm
+                                        </button>
+                                    ))}
+                                </div>
+                                <ScrubInput
+                                    label="Lens"
+                                    value={Math.round(ep.focalLength ?? 50)}
+                                    min={12}
+                                    max={200}
+                                    step={1}
+                                    unit="mm"
+                                    onChange={(focal) => patchEndpoint({ focalLength: Math.round(focal) })}
+                                />
                             </div>
-                            <div className="flex gap-1 mb-1">
-                                {LENS_PRESETS.map((lens) => (
-                                    <button
-                                        key={lens.mm}
-                                        type="button"
-                                        onClick={() => patchEndpoint({ focalLength: lens.mm })}
-                                        className={`flex-1 py-0.5 rounded text-[9px] font-mono transition-colors cursor-pointer text-center ${
-                                            (ep.focalLength ?? 50) === lens.mm
-                                                ? activeBtnClass
-                                                : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
-                                        }`}
-                                        title={lens.label}
-                                    >
-                                        {lens.mm}mm
-                                    </button>
-                                ))}
-                            </div>
-                            <ScrubInput
-                                label="Lens"
-                                value={Math.round(ep.focalLength ?? 50)}
-                                min={12}
-                                max={200}
-                                step={1}
-                                unit="mm"
-                                onChange={(focal) => patchEndpoint({ focalLength: Math.round(focal) })}
-                            />
-                        </div>
+                        </details>
                     </div>
                 )}
             </div>
@@ -454,17 +461,33 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     return (
         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
             <div className="px-3.5 py-2.5 flex items-center justify-between bg-emerald-950/20">
-                <span className="text-[11px] font-semibold text-emerald-300">
-                    Camera Move
-                </span>
-                <button
-                    type="button"
-                    onClick={onDone}
-                    aria-label="Close camera move settings"
-                    className="text-[10px] text-[#a1a1aa] hover:text-white cursor-pointer px-2 py-0.5 rounded hover:bg-white/5"
-                >
-                    Done
-                </button>
+                <div className="flex items-center gap-1">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            updateShot(activeShotId, (s) => ({
+                                ...s,
+                                cameraBlocks: (s.cameraBlocks || []).filter(
+                                    (b) => b.id !== activeCameraBlock.id
+                                ),
+                            }));
+                            onDone();
+                        }}
+                        title="Delete Camera Move"
+                        aria-label="Delete Camera Move"
+                        className="p-1.5 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
+                    >
+                        <X className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                        type="button"
+                        onClick={onDone}
+                        aria-label="Close camera move settings"
+                        className="text-[10px] text-[#a1a1aa] hover:text-white cursor-pointer px-2 py-0.5 rounded hover:bg-white/5"
+                    >
+                        Done
+                    </button>
+                </div>
             </div>
 
             {/* 1. FROM SECTION */}
@@ -477,137 +500,71 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
             <div className="p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
                     <span className="text-[11px] font-semibold text-[#e4e4e7] block">
-                        Movement Preset
+                        Move
                     </span>
-                    <span className="text-[9px] px-2 py-0.5 rounded-full font-mono border border-sky-500/30 text-sky-300 bg-sky-950/40">
-                        {activeCameraBlock.label || 'Custom Move'}
-                    </span>
+                    <div className="flex items-center gap-1">
+                        {(() => {
+                            const selectedMovementId = getMovementPresetIdByLabel(activeCameraBlock.label);
+                            return selectedMovementId ? (
+                                <button
+                                    type="button"
+                                    aria-label="Remove applied camera movement preset"
+                                    title="Remove applied preset"
+                                    onClick={() => updateCameraBlock(activeCameraBlock.id, (cb) => {
+                                        const defaults = createDefaultCameraBlock(cb.id, cb.startMs, cb.durationMs, cb.fromFramingId, cb.toFramingId, 'Custom Move');
+                                        return { ...cb, label: defaults.label, mode: defaults.mode, from: defaults.from, to: defaults.to, shake: defaults.shake };
+                                    })}
+                                    className="h-6 w-6 rounded-md flex items-center justify-center bg-[#222226] border border-white/10 text-[#a1a1aa] hover:text-rose-300 hover:border-rose-400/40 cursor-pointer"
+                                >
+                                    <Minus className="w-3.5 h-3.5" />
+                                </button>
+                            ) : null;
+                        })()}
+                        <button
+                            type="button"
+                            aria-label="Add camera movement preset"
+                            aria-expanded={movementFlyoutOpen}
+                            onClick={() => setMovementFlyoutOpen((open) => !open)}
+                            className={`h-6 w-6 rounded-md flex items-center justify-center border cursor-pointer transition-colors ${movementFlyoutOpen ? 'bg-sky-500 text-black border-sky-400' : 'bg-[#222226] border-white/10 text-[#a1a1aa] hover:text-white hover:border-white/20'}`}
+                        >
+                            <Plus className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                 </div>
 
-                {/* Dropdown for All 15 Movement Presets */}
-                {(() => {
-                    const selectedMovementId = getMovementPresetIdByLabel(activeCameraBlock.label);
-                    return (
-                        <>
-                            <FigmaSelect
-                                value={selectedMovementId ?? ''}
-                                onChange={(e) => {
-                                    const moveId = e.target.value as CameraMovementId;
-                                    if (!moveId) return;
-                                    const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                    updateCameraBlock(activeCameraBlock.id, (cb) =>
-                                        applyCameraMovementPreset(cb, moveId, { artboardDimensions, preserveDuration: true })
-                                    );
-                                }}
-                                className="w-full px-2 py-1.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-xs text-[#d4d4d8] hover:border-white/20 focus:border-[#0088ff] focus:outline-none cursor-pointer"
-                                aria-label="Select camera movement preset"
-                            >
-                                <option value="" disabled>Choose Movement Preset…</option>
-                                <optgroup label="Zoom Moves (Lens Magnification)">
-                                    {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'zoom').map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Pan & Tilt (Fixed Tripod Rotation)">
-                                    {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'rotation').map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Dolly, Truck & Pedestal (3D Space Tracks)">
-                                    {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'track').map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Special FX (Vertigo & Organic Sway)">
-                                    {CAMERA_MOVEMENT_PRESETS.filter((m) => m.category === 'special').map((m) => (
-                                        <option key={m.id} value={m.id}>{m.name}</option>
-                                    ))}
-                                </optgroup>
-                            </FigmaSelect>
-
-                            {/* Quick Movement Buttons */}
-                            <div className="space-y-1">
-                                <span className="text-[10px] text-[#a1a1aa] block font-medium">Quick Moves</span>
-                                <div className="grid grid-cols-4 gap-1">
-                                    {[
-                                        { id: 'zoom-in', label: 'Zoom In' },
-                                        { id: 'zoom-out', label: 'Zoom Out' },
-                                        { id: 'pan-left', label: 'Pan L' },
-                                        { id: 'pan-right', label: 'Pan R' },
-                                        { id: 'tilt-up', label: 'Tilt Up' },
-                                        { id: 'tilt-down', label: 'Tilt Down' },
-                                        { id: 'dolly-in', label: 'Dolly In' },
-                                        { id: 'dolly-out', label: 'Dolly Out' },
-                                        { id: 'truck-left', label: 'Truck L' },
-                                        { id: 'truck-right', label: 'Truck R' },
-                                        { id: 'pedestal-up', label: 'Ped Up' },
-                                        { id: 'pedestal-down', label: 'Ped Down' },
-                                    ].map((btn) => {
-                                        const isSelected = selectedMovementId === btn.id;
-                                        return (
-                                            <button
-                                                key={btn.id}
+                {movementFlyoutOpen && (
+                    <div className="rounded-lg border border-white/10 bg-[#141416] p-2 space-y-2 shadow-xl" aria-label="Camera movement presets">
+                        {MOVEMENT_GROUPS.map((group) => {
+                            const presets = CAMERA_MOVEMENT_PRESETS.filter((preset) => preset.category === group.id);
+                            return (
+                                <div key={group.id} className="space-y-1">
+                                    <span className="text-[10px] uppercase tracking-wide text-[#71717a]">{group.label}</span>
+                                    <div className="grid grid-cols-2 gap-1">
+                                        {presets.map((preset) => {
+                                            const selected = getMovementPresetIdByLabel(activeCameraBlock.label) === preset.id;
+                                            return <button
+                                                key={preset.id}
                                                 type="button"
+                                                title={preset.description}
+                                                aria-pressed={selected}
                                                 onClick={() => {
-                                                    const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                                    updateCameraBlock(activeCameraBlock.id, (cb) =>
-                                                        applyCameraMovementPreset(cb, btn.id as CameraMovementId, {
-                                                            artboardDimensions,
-                                                            preserveDuration: true,
-                                                        })
-                                                    );
+                                                    updateCameraBlock(activeCameraBlock.id, (cb) => applyCameraMovementPreset(cb, preset.id as CameraMovementId, {
+                                                        artboardDimensions: { width: artboardWidth, height: artboardHeight },
+                                                        preserveDuration: true,
+                                                    }));
+                                                    setMovementFlyoutOpen(false);
                                                 }}
-                                                className={`py-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
-                                                    isSelected
-                                                        ? 'bg-sky-500 text-black font-semibold shadow-xs'
-                                                        : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
-                                                }`}
-                                                title={btn.label}
-                                            >
-                                                {btn.label}
-                                            </button>
-                                        );
-                                    })}
+                                                className={`min-h-7 px-2 rounded-md text-left text-[10px] transition-colors border cursor-pointer ${selected ? 'bg-sky-500/15 border-sky-400/40 text-sky-200' : 'bg-[#1c1c1f] border-white/[0.06] text-[#d4d4d8] hover:bg-white/10 hover:text-white'}`}
+                                            >{preset.name}</button>;
+                                        })}
+                                    </div>
                                 </div>
-                                <div className="grid grid-cols-2 gap-1 pt-0.5">
-                                    {[
-                                        { id: 'dolly-zoom-in', label: 'Vertigo (Dolly Zoom)' },
-                                        { id: 'handheld-sway', label: 'Handheld Sway' },
-                                    ].map((btn) => {
-                                        const isSelected = selectedMovementId === btn.id;
-                                        return (
-                                            <button
-                                                key={btn.id}
-                                                type="button"
-                                                onClick={() => {
-                                                    const artboardDimensions = { width: artboardWidth, height: artboardHeight };
-                                                    updateCameraBlock(activeCameraBlock.id, (cb) =>
-                                                        applyCameraMovementPreset(cb, btn.id as CameraMovementId, {
-                                                            artboardDimensions,
-                                                            preserveDuration: true,
-                                                        })
-                                                    );
-                                                }}
-                                                className={`py-1 px-1 rounded text-[10px] font-mono transition-colors cursor-pointer text-center truncate ${
-                                                    isSelected
-                                                        ? 'bg-sky-500 text-black font-semibold shadow-xs'
-                                                        : 'bg-[#1c1c1f] hover:bg-white/10 text-zinc-400 hover:text-white border border-white/5'
-                                                }`}
-                                                title={btn.label}
-                                            >
-                                                {btn.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                            </div>
-                        </>
-                    );
-                })()}
+                            );
+                        })}
+                    </div>
+                )}
 
-                {/* Physics / Projection Mode Toggle */}
                 <div className="space-y-1 pt-1 border-t border-white/5">
-                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Physics / Projection Mode</span>
                     <div className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]" role="radiogroup" aria-label="Camera move mode">
                         {(
                             [
@@ -627,11 +584,10 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                         mode: m.id,
                                     }))
                                 }
-                                className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${
-                                    activeCameraBlock.mode === m.id
+                                className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${activeCameraBlock.mode === m.id
                                         ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
                                         : 'text-[#a1a1aa] hover:text-white'
-                                }`}
+                                    }`}
                             >
                                 {m.label}
                             </button>
@@ -646,8 +602,8 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                     Shake
                 </span>
                 <div className="space-y-1.5">
-                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Intensity &amp; Speed</span>
-                    <div className="grid grid-cols-3 gap-1.5">
+                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Amount</span>
+                    <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput
                             label="From"
                             value={activeCameraBlock.shake?.from ?? 0}
@@ -684,25 +640,29 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                 }))
                             }
                         />
-                        <ScrubInput
-                            label="Speed"
-                            value={Math.round((activeCameraBlock.shake?.frequency ?? 1.0) * 10) / 10}
-                            min={0.2}
-                            max={5.0}
-                            step={0.1}
-                            decimals={1}
-                            unit="x"
-                            onChange={(frequency) =>
-                                updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                    ...cb,
-                                    shake: {
-                                        from: cb.shake?.from ?? 0,
-                                        to: cb.shake?.to ?? 0,
-                                        frequency: Number(frequency.toFixed(1)),
-                                    },
-                                }))
-                            }
-                        />
+                        <details className="col-span-2">
+                            <summary className="cursor-pointer list-none text-[10px] text-[#a1a1aa] hover:text-white">Speed</summary>
+                            <div className="pt-1">                        <ScrubInput
+                                label="Speed"
+                                value={Math.round((activeCameraBlock.shake?.frequency ?? 1.0) * 10) / 10}
+                                min={0.2}
+                                max={5.0}
+                                step={0.1}
+                                decimals={1}
+                                unit="x"
+                                onChange={(frequency) =>
+                                    updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                        ...cb,
+                                        shake: {
+                                            from: cb.shake?.from ?? 0,
+                                            to: cb.shake?.to ?? 0,
+                                            frequency: Number(frequency.toFixed(1)),
+                                        },
+                                    }))
+                                }
+                            /></div>
+                        </details>
+
                     </div>
                 </div>
             </div>
@@ -714,7 +674,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                 </span>
 
                 <div className="space-y-1.5">
-                    <span className="text-[10px] text-[#a1a1aa] block">Start &amp; Length</span>
+                    <span className="text-[10px] text-[#a1a1aa] block">Start &amp; length</span>
                     <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput
                             label="Start"
@@ -731,7 +691,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             }
                         />
                         <ScrubInput
-                            label="Dur"
+                            label="Length"
                             value={activeCameraBlock.durationMs}
                             min={100}
                             max={10000}
@@ -749,177 +709,22 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
 
                 <div className="space-y-1.5">
                     <span className="text-[10px] text-[#a1a1aa] block">Easing</span>
-                    <div className="flex items-center gap-1.5">
-                        <FigmaSelect
-                            aria-label="Camera move easing"
-                            value={
-                                activeCameraBlock.easing.kind === 'bezier'
-                                    ? 'bezier'
-                                    : `${activeCameraBlock.easing.kind}:${activeCameraBlock.easing.name}`
-                            }
-                            onChange={(e) => {
-                                const val = e.target.value;
-                                const easing = easingFromSelection(val, {
-                                    x1: 0.16, y1: 1, x2: 0.3, y2: 1,
-                                });
-                                if (!easing) return;
-                                updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                    ...cb,
-                                    easing,
-                                }));
-                            }}
-                            className="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
-                        >
-                            <optgroup label="Physics Springs">
-                                <option value="spring:gentle">Spring: Gentle</option>
-                                <option value="spring:quick">Spring: Quick</option>
-                                <option value="spring:bouncy">Spring: Bouncy</option>
-                                <option value="spring:slow">Spring: Slow</option>
-                                <option value="spring:snappy">Spring: Snappy</option>
-                                <option value="spring:stiff">Spring: Stiff</option>
-                            </optgroup>
-                            <optgroup label="Standard Presets">
-                                <option value="preset:linear">Linear</option>
-                                <option value="preset:ease">Standard Ease</option>
-                                <option value="preset:ease-in">Ease In</option>
-                                <option value="preset:ease-out">Ease Out</option>
-                                <option value="preset:ease-in-out">Ease In-Out</option>
-                                <option value="preset:ease-in-expo">Ease In Expo</option>
-                                <option value="preset:ease-out-expo">Ease Out Expo</option>
-                                <option value="preset:ease-in-back">Ease In Back</option>
-                                <option value="preset:ease-out-back">Ease Out Back</option>
-                                <option value="preset:bounce">Bounce</option>
-                            </optgroup>
-                            <optgroup label="Custom Curves">
-                                <option value="bezier">Custom Cubic Bezier</option>
-                            </optgroup>
-                        </FigmaSelect>
-                        <button
-                            type="button"
-                            onClick={() => {
-                                updateShot(activeShotId, (s) => ({
-                                    ...s,
-                                    cameraBlocks: (s.cameraBlocks || []).filter(
-                                        (b) => b.id !== activeCameraBlock.id
-                                    ),
-                                }));
-                                onDone();
-                            }}
-                            title="Delete Camera Move"
-                            aria-label="Delete Camera Move"
-                            className="p-1.5 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                        >
-                            <X className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-
-                    {/* Spring Physics Parameters Slider Tuning */}
-                    {activeCameraBlock.easing.kind === 'spring' && (
-                        <div className="p-2 rounded-lg bg-[#141416] border border-white/[0.06] space-y-1.5 mt-2">
-                            <div className="flex items-center justify-between text-[10px] text-[#38bdf8] font-medium">
-                                <span>Spring Physics Tuning</span>
-                                <span className="text-[10px] text-[#a1a1aa] font-mono capitalize tracking-tight">{activeCameraBlock.easing.name}</span>
-                            </div>
-                            <div className="grid grid-cols-3 gap-1">
-                                <ScrubInput
-                                    label="Stiff"
-                                    value={activeCameraBlock.easing.config?.stiffness ?? 180}
-                                    min={20}
-                                    max={400}
-                                    step={5}
-                                    onChange={(stiffness) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing: {
-                                                ...cb.easing,
-                                                kind: 'spring',
-                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
-                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), stiffness },
-                                            },
-                                        }))
-                                    }
-                                />
-                                <ScrubInput
-                                    label="Damp"
-                                    value={activeCameraBlock.easing.config?.damping ?? 18}
-                                    min={1}
-                                    max={50}
-                                    step={1}
-                                    onChange={(damping) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing: {
-                                                ...cb.easing,
-                                                kind: 'spring',
-                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
-                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), damping },
-                                            },
-                                        }))
-                                    }
-                                />
-                                <ScrubInput
-                                    label="Mass"
-                                    value={Math.round((activeCameraBlock.easing.config?.mass ?? 1) * 10)}
-                                    min={1}
-                                    max={50}
-                                    step={1}
-                                    unit="x"
-                                    onChange={(massVal) =>
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing: {
-                                                ...cb.easing,
-                                                kind: 'spring',
-                                                name: cb.easing.kind === 'spring' ? cb.easing.name : 'gentle',
-                                                config: { ...(cb.easing.kind === 'spring' ? cb.easing.config : {}), mass: Number((massVal / 10).toFixed(1)) },
-                                            },
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
-                    )}
-
-                    {/* Bezier Handles Tuning */}
-                    {activeCameraBlock.easing.kind === 'bezier' && (
-                        <div className="p-2 rounded-lg bg-[#141416] border border-white/[0.06] space-y-1.5 mt-2">
-                            <div className="flex items-center justify-between text-[10px] text-[#38bdf8] font-medium">
-                                <span>Cubic Bezier Curve Handles</span>
-                            </div>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="X1"
-                                    value={Math.round(activeCameraBlock.easing.x1 * 100)}
-                                    min={0}
-                                    max={100}
-                                    step={1}
-                                    unit="%"
-                                    onChange={(val) => {
-                                        const x1 = Number((val / 100).toFixed(2));
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing: cb.easing.kind === 'bezier' ? { ...cb.easing, x1 } : cb.easing,
-                                        }));
-                                    }}
-                                />
-                                <ScrubInput
-                                    label="Y1"
-                                    value={Math.round(activeCameraBlock.easing.y1 * 100)}
-                                    min={-100}
-                                    max={200}
-                                    step={1}
-                                    unit="%"
-                                    onChange={(val) => {
-                                        const y1 = Number((val / 100).toFixed(2));
-                                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                            ...cb,
-                                            easing: cb.easing.kind === 'bezier' ? { ...cb.easing, y1 } : cb.easing,
-                                        }));
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    )}
+                    <EasingControl
+                        value={activeCameraBlock.easing}
+                        onChange={(easing) =>
+                            updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                                ...cb,
+                                easing,
+                            }))
+                        }
+                        selectAriaLabel="Camera move easing"
+                        selectClassName="flex-1 h-7 rounded-lg bg-[#1c1c1f] border border-white/[0.06] px-2.5 text-[11px] text-white outline-none cursor-pointer"
+                        bezierDefaults={{ x1: 0.16, y1: 1, x2: 0.3, y2: 1 }}
+                        showCurvePreview
+                        previewAriaLabel="Camera easing curve preview"
+                        popoverButtonLabel="Easing settings"
+                        showInlineTuning
+                    />
                 </div>
             </div>
         </div>

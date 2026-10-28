@@ -1,4 +1,5 @@
 import { FigmaSelect } from '../../../ui/FigmaSelect';
+import { InspectorModeTabs } from '../../../ui/primitives';
 import React, { useCallback, useState } from 'react';
 import { X, Sun, Thermometer, Sparkles, Plus, ChevronDown } from 'lucide-react';
 import type { Shot, SceneLight, LightSourceType, LightAnimationBlock, LightRig } from '../../../model/types';
@@ -176,19 +177,34 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
     return (
         <div data-testid="light-inspector" className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
             <div className="sticky top-0 z-10 bg-[#0b0b0d] border-b border-white/[0.07]">
-                <div className="flex items-center gap-1 px-3 py-2" role="tablist" aria-label="Lighting settings">
-                    {(['design', 'animate'] as const).map((tab) => <button key={tab} type="button" role="tab" data-testid={tab === 'animate' ? 'animate-light-btn' : undefined} aria-selected={activeTab === tab}
-                        onClick={() => setActiveTab(tab)} className={`px-3 py-1.5 rounded-md text-[11px] font-medium capitalize transition cursor-pointer ${activeTab === tab ? 'bg-[#222226] text-white' : 'text-[#8e8e93] hover:text-white'}`}>{tab}</button>)}
-                    <span className="flex-1" />
-                    <button type="button" onClick={onClose} aria-label="Close Inspector" title="Close Inspector" className="w-7 h-7 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"><X className="w-3.5 h-3.5" /></button>
-                </div>
+                <InspectorModeTabs
+                    mode={activeTab}
+                    onChange={setActiveTab}
+                    ariaLabel="Lighting settings"
+                    animateTestId="animate-light-btn"
+                    className="flex items-center gap-1 px-3 py-2"
+                    actions={
+                        <>
+                            <span className="flex-1" />
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                aria-label="Close Inspector"
+                                title="Close Inspector"
+                                className="w-7 h-7 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"
+                            >
+                                <X className="w-3.5 h-3.5" />
+                            </button>
+                        </>
+                    }
+                />
             </div>
             {activeTab === 'animate' ? <div className="p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Animations</span>
                     <div className="relative">
                         <button type="button" aria-label="Add light animation" aria-expanded={addAnimationOpen} onClick={() => setAddAnimationOpen((open) => !open)} className="w-7 h-7 rounded-md bg-[#222226] hover:bg-[#303035] border border-white/10 text-white flex items-center justify-center cursor-pointer"><Plus className="w-4 h-4" /></button>
-                        {addAnimationOpen && <div className="absolute right-0 top-full mt-1 w-40 rounded-xl bg-[#222226] border border-white/10 shadow-xl p-1 z-30">
+                        {addAnimationOpen && <div className="absolute right-0 top-full mt-1 w-40 rounded-xl bg-[#1c1c1f]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-1 z-30 origin-top-right">
                             <span className="block px-2.5 pt-1.5 pb-1 text-[10px] text-[#8e8e93]">Custom</span>
                             {(isRoom ? [['ambience', 'Ambience']] : [['position', 'Position'], ['intensity', 'Power'], ['temperature', 'Temp']]).map(([property, label]) => <button key={property} type="button" onClick={() => handleAnimateLight(property as NonNullable<LightAnimationBlock['property']>)} className="w-full px-2.5 py-2 rounded-lg text-left text-[11px] text-white hover:bg-white/10 cursor-pointer">{label}</button>)}
                         </div>}

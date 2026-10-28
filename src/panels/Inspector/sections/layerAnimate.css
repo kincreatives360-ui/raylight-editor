@@ -45,8 +45,8 @@
 .animate-switch > span {position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:white;}
 .animate-switch[aria-checked="true"] {background:#00aaff;}
 .animate-switch[aria-checked="true"] > span {left:19px;}
-.animate-flyout {position:fixed;z-index:125;width:264px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;border:1px solid #333;border-radius:16px;box-shadow:0 8px 24px #0005;font-family:inherit;}
-.animate-menu {width:224px;padding:6px;background:#242424;border-radius:10px;}
+.animate-flyout {position:fixed;z-index:125;width:264px;max-width:calc(100vw - 16px);max-height:calc(100vh - 16px);overflow:auto;border:1px solid rgba(255,255,255,0.12);border-radius:16px;background:rgba(24,24,27,0.86);backdrop-filter:blur(20px) saturate(180%);-webkit-backdrop-filter:blur(20px) saturate(180%);box-shadow:0 16px 36px rgba(0,0,0,0.55),inset 0 1px 0 rgba(255,255,255,0.08);font-family:inherit;animation:figma-popover-in 140ms var(--ease-out,cubic-bezier(0.23,1,0.32,1));}
+.animate-menu {width:224px;padding:6px;background:rgba(28,28,31,0.86);border-radius:12px;}
 .animate-menu-label {font-size:11px;color:#b5b5b5;padding:8px 10px 6px;}
 .animate-menu > button {display:flex;align-items:center;gap:10px;width:100%;min-height:30px;padding:5px 10px;background:transparent;border:0;border-radius:5px;color:#eee;text-align:left;cursor:pointer;font-size:12px;}
 .animate-menu > button:hover, .animate-menu > button:focus-visible {background:#0088ff;outline:0;color:white;}
