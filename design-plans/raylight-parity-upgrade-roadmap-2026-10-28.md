@@ -115,6 +115,8 @@ P0/P1/P2 here mean user-facing severity and dependency order for this roadmap, n
 
 **Owners:** `src/stage/CanvasToolbar.tsx`, `src/stage/Stage.tsx`, `src/model/types.ts`, selection overlays, command/help surfaces, undo/serialization/renderers according to the selected tools.
 
+**Phase 4 scope decision (28 October 2026):** Keep Pen as a basic closed polygon path tool and expose it. Do not add collaborative Comment until a real identity/thread/backend contract exists; a project-local annotation is a separate product feature. Do not add frame-container creation to the fixed-artboard model; existing Frame Scene/Selection remain camera actions. These two reference tools stay out of the local parity commitment and user-facing tool surfaces.
+
 ### 4A. Pen
 
 Pen path drawing already exists and creates polygon path layers with points. If Pen remains in scope, add a discoverable toolbar entry and then audit whether path closure, Bézier handles, node editing, style, undo/redo, serialization, rendering and timeline participation meet the intended product contract. Do not duplicate the existing path model before checking it.
@@ -130,6 +132,8 @@ Distinguish a canvas frame/layout object from the existing camera “Frame Scene
 **Acceptance:** Every surfaced creation tool produces an object/action that can be selected, edited, undone, saved and reopened, or it is absent from toolbar/help. Tool names and shortcut labels stay aligned.
 
 **Verification:** tool-creation interaction tests, selection/undo/redo, project serialization round trip, WebGL/Canvas2D visibility, and keyboard command parity for each approved tool.
+
+**Execution update (28 October 2026):** Exposed Pen path creation in the Shape menu and Command Menu; centralized the P shortcut across the toolbar, key handler, command list, and shortcut guide. Lifecycle tests verify polygon points survive project JSON round-trip and undo/redo. Scope decision excludes Comment and frame-container creation for the documented product-model reasons; no such controls are exposed. Full verification passed: 536 tests, production build, and lint with one pre-existing warning in `src/stage/webgl/SceneEffectsPipeline.tsx:102`. Browser pointer verification could not run because browser use is disabled in Work settings.
 
 ## Phase 5 — Tune default workspace sizing to canvas-first intent (P2)
 

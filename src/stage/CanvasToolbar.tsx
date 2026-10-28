@@ -4,7 +4,7 @@ import { useFloatingPanel } from '../ui/useFloatingPanel';
 import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
 import React, { useState, useRef } from 'react';
-import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus } from 'lucide-react';
+import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus, Feather } from 'lucide-react';
 import type { Layer, SceneLight } from '../model/types';
 import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
@@ -43,6 +43,7 @@ const ShapeIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
         case 'line': return <Minus className="w-3.5 h-3.5" />;
         case 'arrow': return <ArrowRight className="w-3.5 h-3.5" />;
         case 'polygon': return <Pentagon className="w-3.5 h-3.5" />;
+        case 'pen': return <Feather className="w-3.5 h-3.5" />;
         case 'image': return <ImageIcon className="w-3.5 h-3.5" />;
         default: return <Square className="w-3.5 h-3.5" />;
     }
@@ -107,6 +108,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         activeTool === 'line' ||
         activeTool === 'arrow' ||
         activeTool === 'polygon' ||
+        activeTool === 'pen' ||
         activeTool === 'image';
 
     /* ── helpers ── */
@@ -502,7 +504,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                 isShapeActive ? activeTool : 'rectangle'
                             )
                         }
-                        title="Shape Tool (R / O / L)"
+                        title="Shape tools (R / O / P / L / A)"
                         className={toolBtn(isShapeActive)}
                     />
                     <IconButton

@@ -1,6 +1,6 @@
 import { ModalShell } from './ui/ModalShell';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Download, Upload, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
+import { Sparkles, Download, Upload, PanelLeftOpen, PanelRightOpen, Camera, Feather } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -42,6 +42,7 @@ import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
 import { isEditableElement, isInteractiveElement } from './utils/shortcuts';
 import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT, matchesCameraToolShortcut, matchesScissorsShortcut } from './utils/cameraShortcuts';
+import { matchesPenPathShortcut, PEN_PATH_SHORTCUT } from './utils/penPathShortcut';
 import { withViewTransition } from './utils/viewTransitions';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
@@ -765,7 +766,7 @@ export default function App() {
         }
         if (key === 'l') { setActiveTool('line'); return; }
         if (key === 'a') { setActiveTool('arrow'); return; }
-        if (key === 'p') { setActiveTool('pen'); return; }
+        if (matchesPenPathShortcut(e)) { setActiveTool('pen'); return; }
       }
 
       // ': Toggle Safe Zones & Rule of Thirds Grid (or Cmd/Ctrl + ')
@@ -1318,6 +1319,15 @@ export default function App() {
       icon: Sparkles,
       shortcut: ['R'],
       action: () => addLayerToShot(activeShot.id, 'shape'),
+    },
+    {
+      id: 'tool-pen-path',
+      title: 'Pen Path Tool',
+      subtitle: 'Draw a freehand closed polygon path',
+      category: 'Tools',
+      icon: Feather,
+      shortcut: [...PEN_PATH_SHORTCUT.keys],
+      action: () => setActiveTool('pen'),
     },
     {
       id: 'tool-camera',

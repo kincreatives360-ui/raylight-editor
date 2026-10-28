@@ -7,6 +7,7 @@ import React, { useState, useMemo } from 'react';
 import { X, Command, Keyboard } from 'lucide-react';
 import { getModifierKey } from '../utils/shortcuts';
 import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
+import { PEN_PATH_SHORTCUT } from '../utils/penPathShortcut';
 
 export interface ShortcutItem {
   keys: string[];
@@ -26,7 +27,7 @@ const SHORTCUTS: ShortcutItem[] = [
   { keys: ['O'], description: 'Ellipse Tool (Draw circle)', category: 'Tools' },
   { keys: ['L'], description: 'Line Tool (Draw straight line)', category: 'Tools' },
   { keys: ['A'], description: 'Arrow Tool (Draw direction arrow)', category: 'Tools' },
-  { keys: ['P'], description: 'Pen Tool (Vector path creation)', category: 'Tools' },
+  { keys: [...PEN_PATH_SHORTCUT.keys], description: 'Pen Path Tool (Draw freehand polygon paths)', category: 'Tools' },
   { keys: [...CAMERA_TOOL_SHORTCUT.keys], description: 'Orbit Tool (Camera, Pan, Dolly)', category: 'Tools' },
   { keys: [...SCISSORS_SHORTCUT.keys], description: 'Scissors (Split shot at playhead)', category: 'Tools' },
 
