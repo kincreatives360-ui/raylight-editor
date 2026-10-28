@@ -1311,7 +1311,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     } = useSelectionStore();
 
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
-    const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
     const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -1412,27 +1411,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     />
 
-                    <IconButton
-                        unstyled
-                        tooltip={false}
-                        label="Export MP4 Video or GIF"
-                        icon={<>
-                            <Upload className="w-4 h-4" />
-                        </>}
-                        onClick={onOpenExportModal}
-                        title="Export MP4 Video or GIF"
-                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                    />
-
                     <button
-                        onClick={() => {
-                            setShareToast(true);
-                            setTimeout(() => setShareToast(false), 2000);
-                            onOpenExportModal();
-                        }}
+                        onClick={onOpenExportModal}
                         className="px-3.5 py-1.5 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
                     >
-                        {shareToast ? 'Copied!' : 'Share'}
+                        Export
                     </button>
                 </div>
             </div>

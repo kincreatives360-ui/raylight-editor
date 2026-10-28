@@ -52,4 +52,11 @@ describe('reference object Design inspectors', () => {
         expect(html).toContain('aria-label="Fill"');
         expect(html).not.toContain('Text Content');
     });
+    it('labels the export action accurately without claiming an unperformed copy', () => {
+        const html = render(createDefaultShapeLayer());
+        expect(html).toContain('>Export</button>');
+        expect(html).not.toContain('Export MP4 Video or GIF');
+        expect(html).not.toContain('Share');
+        expect(html).not.toContain('Copied!');
+    });
 });

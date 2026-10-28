@@ -10,6 +10,7 @@ import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
+import { SHAPE_TOOL_ITEMS } from './canvasToolItems';
 
 interface CanvasToolbarProps {
     selectedLayer: Layer | undefined;
@@ -370,14 +371,6 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         { id: 'move', label: 'Move', key: 'G', icon: Move },
     ];
 
-    const shapeItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
-        { id: 'rectangle', label: 'Rectangle', key: 'R', icon: Square },
-        { id: 'ellipse', label: 'Ellipse', key: 'O', icon: Circle },
-        { id: 'polygon', label: 'Polygon', key: '', icon: Pentagon },
-        { id: 'line', label: 'Line', key: 'L', icon: Minus },
-        { id: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowRight },
-    ];
-
     return (
         <div
             ref={menuRef}
@@ -525,7 +518,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
                     {openMenu === 'shape' && (
                         <DropdownMenu>
-                            {shapeItems.map((item) => (
+                            {SHAPE_TOOL_ITEMS.map((item) => (
                                 <MenuItem
                                     key={item.id}
                                     icon={item.icon}
