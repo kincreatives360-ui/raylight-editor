@@ -1,14 +1,17 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
 import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo, applyMotionBlur } from './layerEffects';
+import { canvasPool } from '../../engine/canvasPool';
 
 describe('layer effect rendering', () => {
   let origDocument: unknown;
 
   beforeEach(() => {
+    canvasPool.clear();
     origDocument = (globalThis as unknown as { document?: unknown }).document;
   });
 
   afterEach(() => {
+    canvasPool.clear();
     (globalThis as unknown as { document?: unknown }).document = origDocument;
   });
 
@@ -97,6 +100,9 @@ describe('layer effect rendering', () => {
       resetTransform: vi.fn(),
       drawImage: vi.fn(),
       clearRect: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
     };
     (globalThis as unknown as { document?: unknown }).document = {
       createElement: vi.fn(() => ({
@@ -120,5 +126,44 @@ describe('layer effect rendering', () => {
     applyMotionBlur(targetCanvas, 10, 5, 8);
     // 1 draw to source canvas + 8 draws to target
     expect(mockCtx.drawImage).toHaveBeenCalledTimes(9);
+  });
+
+  it('applyMotionBlur applies 3D rotational and scale smear', () => {
+    const mockCtx = {
+      save: vi.fn(),
+      restore: vi.fn(),
+      resetTransform: vi.fn(),
+      drawImage: vi.fn(),
+      clearRect: vi.fn(),
+      translate: vi.fn(),
+      rotate: vi.fn(),
+      scale: vi.fn(),
+    };
+    (globalThis as unknown as { document?: unknown }).document = {
+      createElement: vi.fn(() => ({
+        width: 100,
+        height: 100,
+        getContext: vi.fn(() => mockCtx),
+      })),
+    };
+
+    const targetCanvas = {
+      width: 100,
+      height: 100,
+      getContext: vi.fn(() => mockCtx),
+    } as unknown as HTMLCanvasElement;
+
+    applyMotionBlur(targetCanvas, {
+      motionX: 0,
+      motionY: 0,
+      rotZ: 0.5,
+      scaleX: 0.2,
+      scaleY: 0.2,
+      samples: 6,
+    });
+
+    expect(mockCtx.rotate).toHaveBeenCalled();
+    expect(mockCtx.scale).toHaveBeenCalled();
+    expect(mockCtx.drawImage).toHaveBeenCalledTimes(7); // 1 copy + 6 samples
   });
 });

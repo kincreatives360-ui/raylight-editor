@@ -11,6 +11,7 @@ import { decodeAudioFromDataUrl } from './audioEngine';
 import { captureStageFrame } from './stageCapture';
 import { validateRecordedVideo } from './recordingValidation';
 import { IncrementalGifEncoder, gifFrameDelayCentiseconds } from './gifEncoder';
+import { acquireCanvas, releaseCanvas } from './canvasPool';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
@@ -90,9 +91,7 @@ export async function exportCurrentFrameAsPng(
         resolution
     );
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    const canvas = acquireCanvas(width, height);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
@@ -112,6 +111,7 @@ export async function exportCurrentFrameAsPng(
 
     canvas.toBlob((blob) => {
         if (blob) downloadBlob(blob, filename);
+        releaseCanvas(canvas);
     }, 'image/png');
 }
 
@@ -228,9 +228,7 @@ export async function runVideoExportPipeline(
         const gifFps = 15;
         const totalFrames = Math.max(2, Math.floor((durationMs / 1000) * gifFps));
 
-        const canvas = document.createElement('canvas');
-        canvas.width = gifW;
-        canvas.height = gifH;
+        const canvas = acquireCanvas(gifW, gifH);
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
@@ -319,9 +317,7 @@ export async function runVideoExportPipeline(
     const fps = settings.fps;
     const totalFrames = Math.max(1, Math.floor((durationMs / 1000) * fps));
 
-    const canvas = document.createElement('canvas');
-    canvas.width = width;
-    canvas.height = height;
+    const canvas = acquireCanvas(width, height);
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 

@@ -20,6 +20,7 @@ import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 import { MacBookProDeviceFrame } from './MacBookProDeviceFrame';
 import { applyBokehBlur, applyMotionBlur, applyLayerReveal, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
+import { releaseCanvas } from '../../engine/canvasPool';
 
 interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
@@ -553,12 +554,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
         applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
         if (evalLayer.motionBlur) {
-            applyMotionBlur(
-                canvas,
-                evalLayer.motionBlur.x * canvasW * texturePixelRatio,
-                evalLayer.motionBlur.y * canvasH * texturePixelRatio,
-                evalLayer.motionBlur.samples
-            );
+            applyMotionBlur(canvas, {
+                motionX: evalLayer.motionBlur.x * canvasW * texturePixelRatio,
+                motionY: evalLayer.motionBlur.y * canvasH * texturePixelRatio,
+                motionZ: evalLayer.motionBlur.z,
+                rotZ: evalLayer.motionBlur.rotZ,
+                scaleX: evalLayer.motionBlur.scaleX,
+                scaleY: evalLayer.motionBlur.scaleY,
+                samples: evalLayer.motionBlur.samples,
+            });
         }
 
         ctx.resetTransform();
@@ -617,7 +621,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         configureLayerTexture(haloTexture, gl.capabilities.getMaxAnisotropy());
         return { ...result, texture: haloTexture };
     }, [texture, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl]);
-    useEffect(() => () => { halo?.texture.dispose(); }, [halo]);
+    useEffect(() => () => {
+        halo?.texture.dispose();
+        if (halo?.canvas) releaseCanvas(halo.canvas);
+    }, [halo]);
 
     // Dispose persistent texture only when layer unmounts
     useEffect(() => {
@@ -664,12 +671,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
             applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
             if (evalLayer.motionBlur) {
-                applyMotionBlur(
-                    canvas,
-                    evalLayer.motionBlur.x * canvasW * texturePixelRatio,
-                    evalLayer.motionBlur.y * canvasH * texturePixelRatio,
-                    evalLayer.motionBlur.samples
-                );
+                applyMotionBlur(canvas, {
+                    motionX: evalLayer.motionBlur.x * canvasW * texturePixelRatio,
+                    motionY: evalLayer.motionBlur.y * canvasH * texturePixelRatio,
+                    motionZ: evalLayer.motionBlur.z,
+                    rotZ: evalLayer.motionBlur.rotZ,
+                    scaleX: evalLayer.motionBlur.scaleX,
+                    scaleY: evalLayer.motionBlur.scaleY,
+                    samples: evalLayer.motionBlur.samples,
+                });
             }
             ctx.resetTransform();
             ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);

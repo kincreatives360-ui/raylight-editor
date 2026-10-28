@@ -101,7 +101,15 @@ export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
     dofBlurPx: number;
     dofBokehShape?: SceneEffects['depthOfField']['bokehShape'];
     totalBlurPx: number;
-    motionBlur?: { x: number; y: number; samples: number };
+    motionBlur?: {
+        x: number;
+        y: number;
+        z?: number;
+        rotZ?: number;
+        scaleX?: number;
+        scaleY?: number;
+        samples: number;
+    };
 }
 
 export interface EvaluatedProjectFrame {
@@ -436,7 +444,7 @@ export function evaluateProjectAtTime(
         const manualBlurPx =
             (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
 
-        let motionBlur: { x: number; y: number; samples: number } | undefined;
+        let motionBlur: EvaluatedLayerWithEffects['motionBlur'] | undefined;
         if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
             const rawPrev = evaluateLayerAtTime(
                 isHidden ? { ...layer, hidden: true } : layer,
@@ -445,8 +453,19 @@ export function evaluateProjectAtTime(
             const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
             const prevX = rawPrev.position.x * prevGroupTransform.scale.x + prevGroupTransform.position.x;
             const prevY = rawPrev.position.y * prevGroupTransform.scale.y + prevGroupTransform.position.y;
+            const prevZ = rawPrev.position.z + prevGroupTransform.position.z;
+            const prevRotZ = (rawPrev.rotation.z + prevGroupTransform.rotation.z) * (Math.PI / 180);
+            const curRotZ = evalLayer.rotation.z * (Math.PI / 180);
+            const prevScaleX = rawPrev.scale.x * prevGroupTransform.scale.x;
+            const prevScaleY = rawPrev.scale.y * prevGroupTransform.scale.y;
+
             const rawDx = evalLayer.position.x - prevX;
             const rawDy = evalLayer.position.y - prevY;
+            const rawDz = evalLayer.position.z - prevZ;
+            const rawDrotZ = curRotZ - prevRotZ;
+            const rawDscaleX = (evalLayer.scale.x - prevScaleX) / Math.max(0.001, Math.abs(prevScaleX));
+            const rawDscaleY = (evalLayer.scale.y - prevScaleY) / Math.max(0.001, Math.abs(prevScaleY));
+
             if (Math.hypot(rawDx, rawDy) > Math.hypot(maxLayerMotionX, maxLayerMotionY)) {
                 maxLayerMotionX = rawDx;
                 maxLayerMotionY = rawDy;
@@ -454,10 +473,20 @@ export function evaluateProjectAtTime(
             const shutter = (effects.state.motionBlur.shutterAngle ?? 180) / 360;
             const dx = rawDx * shutter;
             const dy = rawDy * shutter;
-            if (Math.hypot(dx, dy) > 0.0001) {
+            const dz = rawDz * shutter;
+            const dRotZ = rawDrotZ * shutter;
+            const dScaleX = rawDscaleX * shutter;
+            const dScaleY = rawDscaleY * shutter;
+
+            const hasMotion = Math.hypot(dx, dy) > 0.0001 || Math.abs(dRotZ) > 0.0001 || Math.abs(dScaleX) > 0.0001 || Math.abs(dScaleY) > 0.0001;
+            if (hasMotion) {
                 motionBlur = {
                     x: dx,
                     y: dy,
+                    z: dz,
+                    rotZ: dRotZ,
+                    scaleX: dScaleX,
+                    scaleY: dScaleY,
                     samples: Math.max(2, Math.min(32, Math.round(effects.state.motionBlur.samples ?? 8))),
                 };
             }

@@ -3,17 +3,18 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 
-export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch'];
+export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'depthOfField'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 
 // Each pass reads the result of the preceding pass. All intermediate RGB is linear and premultiplied.
 export function createSceneEffectPass(key: EffectKey): ShaderPass {
   return new ShaderPass({
-    uniforms: { tDiffuse: { value: null }, uResolution: { value: new THREE.Vector2(1, 1) }, uParams: { value: new THREE.Vector4() }, uExtra: { value: new THREE.Vector4() }, uSeed: { value: 0 }, uMotion: { value: new THREE.Vector2() } },
+    uniforms: { tDiffuse: { value: null }, tDepth: { value: null }, uResolution: { value: new THREE.Vector2(1, 1) }, uParams: { value: new THREE.Vector4() }, uExtra: { value: new THREE.Vector4() }, uSeed: { value: 0 }, uMotion: { value: new THREE.Vector2() } },
     vertexShader,
     fragmentShader: `
       #define EFFECT ${scenePassKeys.indexOf(key)}
       uniform sampler2D tDiffuse;
+      uniform sampler2D tDepth;
       uniform vec2 uResolution, uMotion;
       uniform vec4 uParams, uExtra;
       uniform float uSeed;
@@ -71,6 +72,34 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float noise=fract(sin(floor((1.0-vUv.y)*50.0)*12.9898+uSeed*78.233)*43758.5453);
           float shift=noise>1.0-uParams.x*.2?(noise-.5)*uParams.x*.1:0.0;
           col=sampleAt(vUv+vec2(shift,0.0));
+        #elif EFFECT == 9
+          // Studio Depth-Buffer Depth of Field
+          float depthVal = texture2D(tDepth, vUv).r;
+          float zNear = uExtra.y > 0.0 ? uExtra.y : 0.1;
+          float zFar = uExtra.z > 0.0 ? uExtra.z : 100.0;
+          float linearDepth = (2.0 * zNear) / (zFar + zNear - depthVal * (zFar - zNear));
+          
+          float focalPlane = uParams.x;
+          float focusRange = max(0.001, uParams.y);
+          float bokehScale = max(0.0, uParams.z);
+          float coc = clamp(abs(linearDepth - focalPlane) / focusRange * bokehScale, 0.0, 1.0);
+          
+          if (coc > 0.003) {
+            vec4 accum = vec4(0.0);
+            float total = 0.0;
+            float maxR = coc * min(32.0, uResolution.y * 0.035);
+            for (int i = 0; i < 24; i++) {
+              float fi = float(i);
+              float angle = fi * 2.39996323;
+              float r = sqrt((fi + 0.5) / 24.0) * maxR;
+              vec2 offset = vec2(cos(angle), sin(angle)) * r / uResolution;
+              if (uExtra.w == 1.0) offset.x *= 2.0; // Anamorphic
+              vec4 s = sampleAt(vUv + offset);
+              accum += s;
+              total += 1.0;
+            }
+            col = accum / total;
+          }
         #endif
         gl_FragColor=col;
       }`,
@@ -94,6 +123,23 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'colorGrade': p.set(e.colorGrade.exposure, e.colorGrade.contrast, e.colorGrade.saturation, e.colorGrade.temperature ?? 0); pass.uniforms.uExtra.value.x = e.colorGrade.tint ?? 0; break;
     case 'edgeFade': p.set(e.edgeFade.top, e.edgeFade.bottom, e.edgeFade.left ?? 0, e.edgeFade.right ?? 0); break;
     case 'glitch': p.x = e.glitch.intensity; break;
+    case 'depthOfField': {
+      const dof = e.depthOfField;
+      const focusDist = Math.max(0.01, Math.min(1.0, (dof.target?.z ?? 0) * 0.1 + 0.5));
+      p.set(
+        focusDist,
+        Math.max(0.005, dof.focusRange ?? 0.1),
+        Math.max(0.0, dof.bokehScale ?? 1.0),
+        dof.aperture ?? 2.8
+      );
+      pass.uniforms.uExtra.value.set(
+        dof.highlightThreshold ?? 0.8,
+        0.1,
+        100.0,
+        dof.bokehShape === 'anamorphic' ? 1.0 : 0.0
+      );
+      break;
+    }
   }
 }
 

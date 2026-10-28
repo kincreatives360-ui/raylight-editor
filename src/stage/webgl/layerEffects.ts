@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import type { BlendMode, LayerEffects, SceneEffects } from '../../model/types';
+import { acquireCanvas, releaseCanvas } from '../../engine/canvasPool';
 
 export function getBokehOffsets(shape: SceneEffects['depthOfField']['bokehShape'] = 'spherical') {
     return Array.from({ length: 32 }, (_, i) => {
@@ -13,12 +14,13 @@ export function getBokehOffsets(shape: SceneEffects['depthOfField']['bokehShape'
 
 export function applyBokehBlur(canvas: HTMLCanvasElement, radius: number, shape?: SceneEffects['depthOfField']['bokehShape']) {
     if (radius <= .1) return;
-    const source = document.createElement('canvas');
-    source.width = canvas.width;
-    source.height = canvas.height;
+    const source = acquireCanvas(canvas.width, canvas.height);
     const sourceCtx = source.getContext('2d');
     const ctx = canvas.getContext('2d');
-    if (!sourceCtx || !ctx) return;
+    if (!sourceCtx || !ctx) {
+        releaseCanvas(source);
+        return;
+    }
     sourceCtx.drawImage(canvas, 0, 0);
     ctx.save();
     ctx.resetTransform();
@@ -28,29 +30,82 @@ export function applyBokehBlur(canvas: HTMLCanvasElement, radius: number, shape?
     ctx.globalAlpha = 1 / samples.length;
     for (const offset of samples) ctx.drawImage(source, offset.x * radius, offset.y * radius);
     ctx.restore();
+    releaseCanvas(source);
 }
 
-export function applyMotionBlur(canvas: HTMLCanvasElement, motionX: number, motionY: number, samples = 8) {
-    const dist = Math.hypot(motionX, motionY);
-    if (dist <= 0.5) return;
-    const source = document.createElement('canvas');
-    source.width = canvas.width;
-    source.height = canvas.height;
+export interface MotionBlurParams {
+    motionX: number;
+    motionY: number;
+    motionZ?: number;
+    rotZ?: number;
+    scaleX?: number;
+    scaleY?: number;
+    samples?: number;
+}
+
+export function applyMotionBlur(
+    canvas: HTMLCanvasElement,
+    motionX: number | MotionBlurParams,
+    motionY = 0,
+    samples = 8
+) {
+    let mX: number;
+    let mY: number;
+    let rZ = 0;
+    let sX = 0;
+    let sY = 0;
+    let sampleCount = samples;
+
+    if (typeof motionX === 'object' && motionX !== null) {
+        mX = motionX.motionX;
+        mY = motionX.motionY;
+        rZ = motionX.rotZ ?? 0;
+        sX = motionX.scaleX ?? 0;
+        sY = motionX.scaleY ?? 0;
+        sampleCount = motionX.samples ?? 8;
+    } else {
+        mX = motionX;
+        mY = motionY;
+    }
+
+    const dist = Math.hypot(mX, mY);
+    const hasAngular = Math.abs(rZ) > 0.0001;
+    const hasScale = Math.abs(sX) > 0.0001 || Math.abs(sY) > 0.0001;
+    if (dist <= 0.5 && !hasAngular && !hasScale) return;
+
+    const source = acquireCanvas(canvas.width, canvas.height);
     const sourceCtx = source.getContext('2d');
     const ctx = canvas.getContext('2d');
-    if (!sourceCtx || !ctx) return;
+    if (!sourceCtx || !ctx) {
+        releaseCanvas(source);
+        return;
+    }
     sourceCtx.drawImage(canvas, 0, 0);
     ctx.save();
     ctx.resetTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const count = Math.max(2, Math.min(32, Math.round(samples)));
+    const count = Math.max(2, Math.min(32, Math.round(sampleCount)));
     ctx.globalAlpha = 1 / count;
     ctx.globalCompositeOperation = 'lighter';
+
+    const cx = canvas.width / 2;
+    const cy = canvas.height / 2;
+
     for (let i = 0; i < count; i++) {
         const t = (i / (count - 1)) - 0.5;
-        ctx.drawImage(source, motionX * t, motionY * t);
+        if (hasAngular || hasScale) {
+            ctx.save();
+            ctx.translate(cx + mX * t, cy + mY * t);
+            if (hasAngular) ctx.rotate(rZ * t);
+            if (hasScale) ctx.scale(1 + sX * t, 1 + sY * t);
+            ctx.drawImage(source, -cx, -cy);
+            ctx.restore();
+        } else {
+            ctx.drawImage(source, mX * t, mY * t);
+        }
     }
     ctx.restore();
+    releaseCanvas(source);
 }
 
 export function applyLayerReveal(ctx: CanvasRenderingContext2D, width: number, height: number, sweep = 1, path = 1) {
@@ -70,7 +125,10 @@ export function getLayerHaloLayout(effects: LayerEffects, width: number, height:
 export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number) {
     const layout = getLayerHaloLayout(effects, source.width, source.height, intensityOffset, radiusOffset);
     if (!layout.shadow && layout.glowIntensity <= 0) return null;
-    const canvas = document.createElement('canvas');
+    const canvas = acquireCanvas(
+        Math.max(1, Math.ceil(layout.width * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height)))),
+        Math.max(1, Math.ceil(layout.height * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height))))
+    );
     const ratio = Math.min(1, maxTextureSize / Math.max(layout.width, layout.height));
     canvas.width = Math.max(1, Math.ceil(layout.width * ratio));
     canvas.height = Math.max(1, Math.ceil(layout.height * ratio));

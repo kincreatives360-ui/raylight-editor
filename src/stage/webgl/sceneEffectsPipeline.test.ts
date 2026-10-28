@@ -198,5 +198,39 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
 
     composer.dispose();
   });
+
+  it('configures depthOfField pass with depth texture uniform and focal parameters', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.depthOfField.enabled = true;
+    effectsState.depthOfField.target.z = 2.5;
+    effectsState.depthOfField.focusRange = 0.2;
+    effectsState.depthOfField.bokehScale = 1.5;
+    effectsState.depthOfField.aperture = 1.8;
+    effectsState.depthOfField.bokehShape = 'anamorphic';
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'depthOfField', orderIndex: 0, summary: 'Depth of Field' },
+      ],
+      deterministicSeed: 0.5,
+    };
+
+    const pass = createSceneEffectPass('depthOfField');
+    expect(pass.uniforms.tDepth).toBeDefined();
+
+    configureSceneEffectPass(pass, 'depthOfField', evaluated, 1920, 1080);
+
+    const params = pass.uniforms.uParams.value as THREE.Vector4;
+    expect(params.x).toBeGreaterThan(0.5); // focal plane
+    expect(params.y).toBeCloseTo(0.2); // focusRange
+    expect(params.z).toBeCloseTo(1.5); // bokehScale
+    expect(params.w).toBeCloseTo(1.8); // aperture
+
+    const extra = pass.uniforms.uExtra.value as THREE.Vector4;
+    expect(extra.w).toBe(1.0); // anamorphic flag
+
+    pass.material.dispose();
+  });
 });
 

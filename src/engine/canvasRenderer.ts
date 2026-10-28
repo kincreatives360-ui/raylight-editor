@@ -24,6 +24,7 @@ import { getArtboardDimensions } from '../stage/stageUtils';
 import { resolveLighting } from './lightingSystem';
 import { getShaderColors } from '../model/backgroundPresets';
 import { applyCanvasSceneEffects } from './canvasSceneEffects';
+import { acquireCanvas, releaseCanvas } from './canvasPool';
 
 const MAX_IMAGE_CACHE_SIZE = 100;
 const imageElementCache = new Map<string, HTMLImageElement>();
@@ -531,7 +532,7 @@ function drawDefaultImagePlaceholder(
   );
 }
 
-// Isolate layers requiring backdrop sampling or distortion.
+// Isolate layers requiring backdrop sampling or distortion (Zero-allocation via pooled canvas).
 async function drawLayerOnCanvas(
   ctx: CanvasRenderingContext2D, layer: EvaluatedLayerWithEffects, project: Project,
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
@@ -540,36 +541,50 @@ async function drawLayerOnCanvas(
   if (!(layer.shimmerProgress > 0 && layer.shimmerProgress < 1) && !effects?.warp?.enabled && !effects?.liquidGlass?.enabled && !(effects?.backdropBlur && effects.backdropBlur > 0)) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }
-  const make = () => { const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h; return canvas; };
-  const surface = make(), content = surface.getContext('2d'); if (!content) return;
-  await drawLayerContentOnCanvas(content, { ...layer, layer: { ...layer.layer, blendMode: 'normal' } }, project, frame, w, h);
-  if (effects?.warp?.enabled) {
-    const original = make(); original.getContext('2d')?.drawImage(surface, 0, 0);
-    content.clearRect(0, 0, w, h);
-    const amount = (effects.warp.amount ?? 0) / 1920;
-    const frequency = effects.warp.frequency ?? 3;
-    for (let y = 0; y < h; y++) {
-      const offsetPx = Math.sin((y / h) * Math.PI * 2 * frequency) * amount * w;
-      content.drawImage(original, 0, y, w, 1, offsetPx, y, w, 1);
-    }
+  const surface = acquireCanvas(w, h);
+  const content = surface.getContext('2d');
+  if (!content) {
+    releaseCanvas(surface);
+    return;
   }
-  if ((effects?.backdropBlur ?? 0) > 0 || effects?.liquidGlass?.enabled) {
-    const backdrop = make(), back = backdrop.getContext('2d');
-    if (back) {
-      const glass = effects?.liquidGlass;
-      back.filter = `blur(${Math.max(effects?.backdropBlur ?? 0, (glass?.enabled ? glass.roughness ?? 0.1 : 0) * 30) * w / 1920}px)`;
-      const offset = glass?.enabled ? (glass.refraction ?? 0.1) * w * 0.03 : 0;
-      back.drawImage(ctx.canvas, offset, 0, w, h);
-      back.filter = 'none';
-      if (glass?.enabled && glass.tint) { back.globalAlpha = 0.12; back.fillStyle = glass.tint; back.fillRect(0, 0, w, h); back.globalAlpha = 1; }
-      back.globalCompositeOperation = 'destination-in'; back.drawImage(surface, 0, 0);
-      content.globalCompositeOperation = 'destination-over'; content.drawImage(backdrop, 0, 0);
-      // Glass replaces the opaque fill with a refracted backdrop and a subtle surface highlight.
-      if (glass?.enabled) { content.clearRect(0, 0, w, h); content.globalCompositeOperation = 'source-over'; content.drawImage(backdrop, 0, 0); }
+  let original: HTMLCanvasElement | null = null;
+  let backdrop: HTMLCanvasElement | null = null;
+  try {
+    await drawLayerContentOnCanvas(content, { ...layer, layer: { ...layer.layer, blendMode: 'normal' } }, project, frame, w, h);
+    if (effects?.warp?.enabled) {
+      original = acquireCanvas(w, h);
+      original.getContext('2d')?.drawImage(surface, 0, 0);
+      content.clearRect(0, 0, w, h);
+      const amount = (effects.warp.amount ?? 0) / 1920;
+      const frequency = effects.warp.frequency ?? 3;
+      for (let y = 0; y < h; y++) {
+        const offsetPx = Math.sin((y / h) * Math.PI * 2 * frequency) * amount * w;
+        content.drawImage(original, 0, y, w, 1, offsetPx, y, w, 1);
+      }
     }
+    if ((effects?.backdropBlur ?? 0) > 0 || effects?.liquidGlass?.enabled) {
+      backdrop = acquireCanvas(w, h);
+      const back = backdrop.getContext('2d');
+      if (back) {
+        const glass = effects?.liquidGlass;
+        back.filter = `blur(${Math.max(effects?.backdropBlur ?? 0, (glass?.enabled ? glass.roughness ?? 0.1 : 0) * 30) * w / 1920}px)`;
+        const offset = glass?.enabled ? (glass.refraction ?? 0.1) * w * 0.03 : 0;
+        back.drawImage(ctx.canvas, offset, 0, w, h);
+        back.filter = 'none';
+        if (glass?.enabled && glass.tint) { back.globalAlpha = 0.12; back.fillStyle = glass.tint; back.fillRect(0, 0, w, h); back.globalAlpha = 1; }
+        back.globalCompositeOperation = 'destination-in'; back.drawImage(surface, 0, 0);
+        content.globalCompositeOperation = 'destination-over'; content.drawImage(backdrop, 0, 0);
+        // Glass replaces the opaque fill with a refracted backdrop and a subtle surface highlight.
+        if (glass?.enabled) { content.clearRect(0, 0, w, h); content.globalCompositeOperation = 'source-over'; content.drawImage(backdrop, 0, 0); }
+      }
+    }
+    ctx.save(); ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
+    ctx.drawImage(surface, 0, 0); ctx.restore();
+  } finally {
+    releaseCanvas(surface);
+    if (original) releaseCanvas(original);
+    if (backdrop) releaseCanvas(backdrop);
   }
-  ctx.save(); ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
-  ctx.drawImage(surface, 0, 0); ctx.restore();
 }
 
 async function drawLayerContentOnCanvas(
@@ -1157,53 +1172,99 @@ export async function renderProjectFrameToCanvas(
       incomingSlideX = (1 - transProgress) * canvasW;
     }
 
-    const outgoingBg = resolveShotBackground(project, outgoing.activeShot);
-    renderSingleBackground(ctx, project, outgoingBg, canvasW, canvasH, outgoingOpacity, outgoingSlideX);
-    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, incomingOpacity, incomingSlideX);
+    // 1. True per-shot isolated render of Outgoing Shot + Outgoing Post-Processing
+    const outgoingCanvas = acquireCanvas(canvasW, canvasH);
+    const outgoingCtx = outgoingCanvas.getContext('2d');
+    if (outgoingCtx) {
+      const outgoingBg = resolveShotBackground(project, outgoing.activeShot);
+      renderSingleBackground(outgoingCtx, project, outgoingBg, canvasW, canvasH, 1, 0);
+      for (const outLayer of outgoing.layers) {
+        await drawLayerOnCanvas(outgoingCtx, outLayer, project, outgoing, canvasW, canvasH);
+      }
+      renderSceneLightSources(
+        outgoingCtx,
+        outgoing.activeShot.light,
+        outgoing.camera,
+        canvasW,
+        canvasH,
+        project.aspectRatio
+      );
+      if (outgoing.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+        const outImg = outgoingCtx.getImageData(0, 0, canvasW, canvasH);
+        applyCanvasSceneEffects(outImg.data, canvasW, canvasH, outgoing.effects);
+        outgoingCtx.putImageData(outImg, 0, 0);
+      }
+    }
+
+    // 2. True per-shot isolated render of Incoming Shot + Incoming Post-Processing
+    const incomingCanvas = acquireCanvas(canvasW, canvasH);
+    const incomingCtx = incomingCanvas.getContext('2d');
+    if (incomingCtx) {
+      renderSingleBackground(incomingCtx, project, incomingBg, canvasW, canvasH, 1, 0);
+      for (const evalLayer of frame.layers) {
+        await drawLayerOnCanvas(incomingCtx, evalLayer, project, frame, canvasW, canvasH);
+      }
+      renderSceneLightSources(
+        incomingCtx,
+        frame.activeShot.light,
+        frame.camera,
+        canvasW,
+        canvasH,
+        project.aspectRatio
+      );
+      if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+        const inImg = incomingCtx.getImageData(0, 0, canvasW, canvasH);
+        applyCanvasSceneEffects(inImg.data, canvasW, canvasH, frame.effects);
+        incomingCtx.putImageData(inImg, 0, 0);
+      }
+    }
+
+    // 3. Composite both post-processed shots with transition transforms
+    if (outgoingCtx) {
+      ctx.save();
+      ctx.globalAlpha = outgoingOpacity;
+      if (outgoingSlideX !== 0) ctx.translate(outgoingSlideX, 0);
+      ctx.drawImage(outgoingCanvas, 0, 0);
+      ctx.restore();
+    }
+
+    if (incomingCtx) {
+      ctx.save();
+      ctx.globalAlpha = incomingOpacity;
+      if (incomingSlideX !== 0) ctx.translate(incomingSlideX, 0);
+      ctx.drawImage(incomingCanvas, 0, 0);
+      ctx.restore();
+    }
+
+    releaseCanvas(outgoingCanvas);
+    releaseCanvas(incomingCanvas);
+  } else {
+    // Non-transitioning single shot: render directly to destination canvas
+    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, 1, 0);
 
     ctx.save();
-    ctx.globalAlpha = outgoingOpacity;
-    if (outgoingSlideX !== 0) ctx.translate(outgoingSlideX, 0);
-    for (const outLayer of outgoing.layers) {
-      await drawLayerOnCanvas(ctx, outLayer, project, outgoing, canvasW, canvasH);
+    ctx.globalAlpha = incomingOpacity;
+    if (incomingSlideX !== 0) ctx.translate(incomingSlideX, 0);
+
+    for (const evalLayer of frame.layers) {
+      await drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
     }
+
     renderSceneLightSources(
       ctx,
-      outgoing.activeShot.light,
-      outgoing.camera,
+      frame.activeShot.light,
+      frame.camera,
       canvasW,
       canvasH,
       project.aspectRatio
     );
     ctx.restore();
-  } else {
-    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, 1, 0);
-  }
 
-  ctx.save();
-  ctx.globalAlpha = incomingOpacity;
-  if (incomingSlideX !== 0) ctx.translate(incomingSlideX, 0);
-
-  // 4. Render All 3D Layers (Sorted Back-to-Front)
-  for (const evalLayer of frame.layers) {
-    await drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
-  }
-
-  // 4b. Render Scene Light Sources (Fallback Path)
-  renderSceneLightSources(
-    ctx,
-    frame.activeShot.light,
-    frame.camera,
-    canvasW,
-    canvasH,
-    project.aspectRatio
-  );
-  ctx.restore();
-
-  if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
-    const image = ctx.getImageData(0, 0, canvasW, canvasH);
-    applyCanvasSceneEffects(image.data, canvasW, canvasH, frame.effects);
-    ctx.putImageData(image, 0, 0);
+    if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+      const image = ctx.getImageData(0, 0, canvasW, canvasH);
+      applyCanvasSceneEffects(image.data, canvasW, canvasH, frame.effects);
+      ctx.putImageData(image, 0, 0);
+    }
   }
 
   ctx.restore();

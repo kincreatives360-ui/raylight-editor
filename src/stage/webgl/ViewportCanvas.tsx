@@ -308,7 +308,11 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 </group>
 
                 {/* 5. Realtime Cinematic Scene Effects (Bloom, Vignette, Chromatic Aberration, Grain, Glitch) */}
-                <SceneEffectsPipeline effects={frame.effects} />
+                <SceneEffectsPipeline
+                    effects={frame.effects}
+                    outgoingEffects={frame.shotTransition.outgoingFrame?.effects}
+                    transitionProgress={frame.shotTransition.progress}
+                />
             </Canvas>
         </WebGLErrorBoundary>
     </div>
