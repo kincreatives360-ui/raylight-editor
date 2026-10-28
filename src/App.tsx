@@ -1,5 +1,6 @@
 import { ModalShell } from './ui/ModalShell';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { Sparkles, Download, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
@@ -1488,6 +1489,7 @@ export default function App() {
           </Suspense>
         </ModalErrorBoundary>
       )}
+      <SpeedInsights />
     </div>
   );
 }
