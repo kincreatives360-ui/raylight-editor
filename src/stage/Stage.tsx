@@ -1,7 +1,7 @@
 import { MenuSurface, MenuItem } from '../ui/Menu';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers, Camera, Focus } from 'lucide-react';
+import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers } from 'lucide-react';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
@@ -13,10 +13,10 @@ import { readImageFileWithThumbnail, readVideoFile, readAudioFile, parseFigmaSvg
 import { SelectionOverlay } from './SelectionOverlay';
 import { LightingOverlay } from './LightingOverlay';
 import { Guides } from './Guides';
-import { CameraWorkflowActions, OrientationGizmo } from './OrientationGizmo';
+import { OrientationGizmo } from './OrientationGizmo';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { ASPECT_RATIO_CONFIG, type SnapGuideLine } from './stageUtils';
-import { CAMERA_TOOL_SHORTCUT } from '../utils/cameraShortcuts';
+import { OrbitCameraControls, OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { isInteractiveElement } from '../utils/shortcuts';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
@@ -362,11 +362,11 @@ const StageComponent: React.FC<StageProps> = ({
     const isCameraSelected = Boolean(selectedCameraBlockId);
 
     const effectiveViewportFrame = useMemo(() => {
-        if (isCameraSelected) {
+        if (isCameraSelected || activeTool === 'camera') {
             const designCamera: EvaluatedCamera = {
                 target: { x: 0, y: 0, z: 0 },
-                rotation: { x: 0, y: 0, z: 0 },
-                zoom: 1,
+                rotation: activeTool === 'camera' ? { x: -0.3, y: -0.65, z: 0 } : { x: 0, y: 0, z: 0 },
+                zoom: activeTool === 'camera' ? 0.45 : 1,
                 fovDegrees: 27.0006,
                 focalLength: 50,
                 activeMode: 'static',
@@ -377,7 +377,7 @@ const StageComponent: React.FC<StageProps> = ({
             };
         }
         return frame;
-    }, [frame, isCameraSelected]);
+    }, [frame, isCameraSelected, activeTool]);
 
     const exteriorSilhouettes = useMemo(() => {
         if (isPlaying) {
@@ -570,7 +570,7 @@ const StageComponent: React.FC<StageProps> = ({
             setCameraBookmark(frame.activeShot.id, null);
             return;
         }
-        const camera = effectiveViewportFrame.camera;
+        const camera = frame.camera;
         setCameraBookmark(frame.activeShot.id, {
             orbit: radToDeg(camera.rotation.y),
             tilt: radToDeg(camera.rotation.x),
@@ -581,15 +581,7 @@ const StageComponent: React.FC<StageProps> = ({
             targetZ: camera.target.z,
             focalLength: camera.focalLength,
         });
-    }, [effectiveViewportFrame.camera, frame.activeShot.id, setCameraBookmark]);
-
-    const handleBackToPinnedCameraView = useCallback(() => {
-        const bookmark = useSelectionStore.getState().cameraBookmarks[frame.activeShot.id];
-        if (!bookmark) return;
-        beginDragTransaction();
-        updateActiveShotCamera(bookmark);
-        commitDragTransaction();
-    }, [frame.activeShot.id, beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
+    }, [frame.camera, frame.activeShot.id, setCameraBookmark]);
 
     const handleFrameSelectedLayers = useCallback(() => {
         const selectedIds = useSelectionStore.getState().selectedLayerIds;
@@ -1436,6 +1428,8 @@ const StageComponent: React.FC<StageProps> = ({
                         />
                     )}
 
+                    {activeTool === 'camera' && <OrbitCameraFrustum camera={frame.camera} observer={effectiveViewportFrame.camera} reference={gradientReferenceCamera} width={frameWidth} height={frameHeight} />}
+
                     {/* Visual Camera Move Framing Rectangles (From/To) */}
                     <CameraFramingOverlay
                         shot={frame.activeShot}
@@ -1468,7 +1462,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
             {/* Top-Right 3D Interactive Orientation Gizmo HUD */}
-            <OrientationGizmo
+            {activeTool !== 'camera' && <OrientationGizmo
                 topInset={rightSidebarOpen ? 12 : 56}
                 cameraRotation={effectiveViewportFrame.camera.rotation}
                 onSetOrientation={handleSetOrientation}
@@ -1479,48 +1473,9 @@ const StageComponent: React.FC<StageProps> = ({
                 onFrameSelection={handleFrameSelectedLayers}
                 hasSelection={selectedLayerIds.length > 0}
                 currentZoom={effectiveViewportFrame.camera.zoom}
-            />
+            />}
 
-            {/* Top-Center Camera Tool Floating Pill (when camera tool is active) */}
-            {activeTool === 'camera' && !isAnimateMode && (
-                <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-medium text-[var(--text-primary,#f4f4f5)] flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
-                    <div className="flex items-center gap-1.5 text-[var(--accent-primary,#0070e0)]">
-                        <Camera className="w-3.5 h-3.5" />
-                        <span className="font-semibold">Orbit ({CAMERA_TOOL_SHORTCUT.label})</span>
-                    </div>
-                    <div className="text-[11px] text-gray-400 font-mono hidden sm:flex items-center gap-2">
-                        <span>Left-drag: Orbit</span>
-                        <span>•</span>
-                        <span>Middle: Pan</span>
-                        <span>•</span>
-                        <span>Right: Dolly</span>
-                    </div>
-                    <CameraWorkflowActions
-                        hasBookmark={Boolean(currentShotCameraBookmark)}
-                        isPinned={Boolean(currentShotCameraBookmark)}
-                        onPin={handlePinCameraView}
-                        onBack={handleBackToPinnedCameraView}
-                    />
-                    <button
-                        type="button"
-                        onClick={handleFrameSelectedLayers}
-                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] text-gray-200 cursor-pointer transition flex items-center gap-1"
-                        title={selectedLayerIds.length > 0 ? "Frame Selected Layer(s) [F]" : "Frame All Visible Content [F]"}
-                    >
-                        <Focus className="w-2.5 h-2.5 text-[var(--accent-primary,#0070e0)]" />
-                        <span>Frame [F]</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleResetCamera}
-                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] text-gray-200 cursor-pointer transition flex items-center gap-1"
-                        title="Reset Camera Pose to Default"
-                    >
-                        <RotateCcw className="w-2.5 h-2.5" />
-                        <span>Reset</span>
-                    </button>
-                </div>
-            )}
+            {activeTool === 'camera' && <OrbitCameraControls pinned={Boolean(currentShotCameraBookmark)} zoom={canvasZoom} onAngle={handleSetOrientation} onPin={handlePinCameraView} onBack={() => setActiveTool('select')} onZoom={setCanvasZoom} />}
 
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (
@@ -1862,13 +1817,13 @@ const StageComponent: React.FC<StageProps> = ({
             )}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
-            <CanvasToolbar
+            {activeTool !== 'camera' && <CanvasToolbar
                 selectedLayer={selectedLayer}
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}
                 onOpenShortcuts={onOpenShortcuts}
                 onFrameSelection={handleFrameSelectedLayers}
-            />
+            />}
         </div>
     );
 };
