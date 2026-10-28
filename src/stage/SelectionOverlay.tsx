@@ -58,6 +58,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         isCropping,
         canvasZoom,
         selectBlock,
+        selectedBlockId,
         setTimelineLayerExpanded,
     } = useSelectionStore();
 
@@ -102,6 +103,70 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     };
 
     const primaryProj = projectCorners(primaryEval);
+
+    const selectedBlock = layer?.blocks?.find((b) => b.id === selectedBlockId);
+    const isMotionBlock = Boolean(selectedBlock && (selectedBlock.property === 'position' || selectedBlock.property === 'followPath'));
+    const motionAmt = selectedBlock
+        ? typeof selectedBlock.amount === 'object'
+            ? selectedBlock.amount
+            : { x: selectedBlock.amount, y: 0, z: 0 }
+        : { x: 0, y: 0, z: 0 };
+    const motionDeltaX = motionAmt.x * frameWidth * zoom;
+    const motionDeltaY = motionAmt.y * frameHeight * zoom;
+    const motionStartPoint = primaryProj.pCenter;
+    const motionEndPoint = {
+        x: primaryProj.pCenter.x + motionDeltaX,
+        y: primaryProj.pCenter.y + motionDeltaY,
+    };
+    const motionMidControl = {
+        x: (motionStartPoint.x + motionEndPoint.x) / 2,
+        y: (motionStartPoint.y + motionEndPoint.y) / 2 - 25,
+    };
+
+    const handleStartDragMotionEnd = (e: React.PointerEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!selectedBlock) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const initAmtX = motionAmt.x;
+        const initAmtY = motionAmt.y;
+
+        bindPointerDrag(
+            e,
+            (moveEvent) => {
+                const dxPx = (moveEvent.clientX - startX) / (canvasZoom * zoom);
+                const dyPx = (moveEvent.clientY - startY) / (canvasZoom * zoom);
+                const deltaFracX = dxPx / frameWidth;
+                const deltaFracY = dyPx / frameHeight;
+                const nextX = Number((initAmtX + deltaFracX).toFixed(4));
+                const nextY = Number((initAmtY + deltaFracY).toFixed(4));
+
+                updateShot(
+                    activeShot.id,
+                    (s) => ({
+                        ...s,
+                        layers: s.layers.map((l) =>
+                            l.id === layer.id
+                                ? {
+                                    ...l,
+                                    blocks: l.blocks.map((b) =>
+                                        b.id === selectedBlock.id
+                                            ? { ...b, amount: { ...motionAmt, x: nextX, y: nextY } }
+                                            : b
+                                    ),
+                                }
+                                : l
+                        ),
+                    }),
+                    { skipHistory: true }
+                );
+            },
+            () => {
+                updateShot(activeShot.id, (s) => ({ ...s }));
+            }
+        );
+    };
 
     const bindPointerDrag = (
         e: React.PointerEvent | React.MouseEvent,
@@ -752,6 +817,52 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                                 }
                             }}
                         />
+
+                        {isMotionBlock && (
+                            <g className="motion-path-gizmo pointer-events-auto">
+                                <path
+                                    d={`M ${motionStartPoint.x} ${motionStartPoint.y} Q ${motionMidControl.x} ${motionMidControl.y} ${motionEndPoint.x} ${motionEndPoint.y}`}
+                                    stroke="var(--accent-primary, #0088ff)"
+                                    strokeWidth="2.5"
+                                    strokeDasharray="5 4"
+                                    fill="none"
+                                />
+                                <circle
+                                    cx={motionStartPoint.x}
+                                    cy={motionStartPoint.y}
+                                    r="5"
+                                    fill="var(--accent-primary, #0088ff)"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                />
+                                <g
+                                    transform={`translate(${motionEndPoint.x}, ${motionEndPoint.y})`}
+                                    onPointerDown={handleStartDragMotionEnd}
+                                    className="cursor-move"
+                                >
+                                    <circle
+                                        r="7"
+                                        fill="var(--accent-danger, #f43f5e)"
+                                        stroke="#ffffff"
+                                        strokeWidth="2.5"
+                                        className="hover:scale-125 transition-transform"
+                                    />
+                                    <text
+                                        x="12"
+                                        y="4"
+                                        fill="#ffffff"
+                                        fontSize="10"
+                                        fontWeight="bold"
+                                        className="pointer-events-none select-none font-mono"
+                                        paintOrder="stroke"
+                                        stroke="#000000"
+                                        strokeWidth="3"
+                                    >
+                                        To ({Math.round(motionAmt.x * 1920)}px, {Math.round(motionAmt.y * 1080)}px)
+                                    </text>
+                                </g>
+                            </g>
+                        )}
                     </g>
                 )}
             </svg>

@@ -395,6 +395,11 @@ export interface Group {
   collapsed: boolean;
   hidden: boolean;
   locked: boolean;
+  position?: Vec3;
+  rotation?: Vec3;
+  scale?: Vec3;
+  opacity?: number;
+  blocks?: AnimationBlock[];
 }
 
 export interface Framing {

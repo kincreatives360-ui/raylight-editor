@@ -24,6 +24,7 @@ export interface ExportSettings {
     quality: ExportQuality;
     scope: ExportScope;
     selectedShotId?: string;
+    deterministic?: boolean;
     onSeekFrame?: (timeMs: number) => Promise<void> | void;
 }
 
@@ -530,9 +531,9 @@ export async function runVideoExportPipeline(
                 throw recordingError;
             }
 
-            // MediaRecorder uses wall-clock timestamps: skip overdue frames rather
-            // than accumulating render/seek overhead into the exported duration.
-            if (f > 0) {
+            // MediaRecorder uses wall-clock timestamps: skip overdue frames in social/web mode,
+            // but in lossless or deterministic mode step every single frame sequentially without skipping.
+            if (f > 0 && !settings.deterministic && settings.quality !== 'studio') {
                 const elapsed = (audioContext ? audioContext.currentTime : performance.now() / 1000) - baseAudioTime;
                 f = Math.max(f, Math.floor(elapsed * fps));
                 if (f >= totalFrames) break;

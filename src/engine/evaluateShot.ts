@@ -1,4 +1,4 @@
-import type { Project, Shot, SceneEffects, Group } from '../model/types';
+import type { Project, Shot, SceneEffects, Group, Vec3 } from '../model/types';
 import { createDefaultShot } from '../model/defaults';
 import { evaluateEasing } from './easing';
 import { evaluateLightBlocks } from './evaluateLight';
@@ -168,6 +168,84 @@ export function isLayerEffectivelyLocked(
     return false;
 }
 
+
+
+export function computeGroupTransform(
+    groupId: string | undefined,
+    groups: Group[] | Map<string, Group> | undefined,
+    shotLocalTimeMs: number
+): {
+    position: Vec3;
+    rotation: Vec3;
+    scale: Vec3;
+    opacity: number;
+} {
+    if (!groupId || !groups) {
+        return {
+            position: { x: 0, y: 0, z: 0 },
+            rotation: { x: 0, y: 0, z: 0 },
+            scale: { x: 1, y: 1, z: 1 },
+            opacity: 1,
+        };
+    }
+    const groupById = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
+    let currentId: string | undefined = groupId;
+    let posX = 0, posY = 0, posZ = 0;
+    let rotX = 0, rotY = 0, rotZ = 0;
+    let scaleX = 1, scaleY = 1, scaleZ = 1;
+    let opacity = 1;
+    const visited = new Set<string>();
+
+    while (currentId && !visited.has(currentId)) {
+        visited.add(currentId);
+        const group = groupById.get(currentId);
+        if (!group) break;
+
+        let gPos = group.position ?? { x: 0, y: 0, z: 0 };
+        let gRot = group.rotation ?? { x: 0, y: 0, z: 0 };
+        let gScale = group.scale ?? { x: 1, y: 1, z: 1 };
+        let gOpacity = group.opacity ?? 1;
+
+        if (group.blocks && group.blocks.length > 0) {
+            for (const b of group.blocks) {
+                if (b.enabled === false) continue;
+                if (shotLocalTimeMs < b.startMs || shotLocalTimeMs > b.startMs + b.durationMs) continue;
+                const p = evaluateEasing((shotLocalTimeMs - b.startMs) / Math.max(1, b.durationMs), b.easing);
+                const amt = b.amount;
+                if (b.property === 'position' && typeof amt === 'object') {
+                    gPos = { x: gPos.x + amt.x * p, y: gPos.y + amt.y * p, z: gPos.z + amt.z * p };
+                } else if (b.property === 'rotation' && typeof amt === 'object') {
+                    gRot = { x: gRot.x + amt.x * p, y: gRot.y + amt.y * p, z: gRot.z + amt.z * p };
+                } else if (b.property === 'scale' && typeof amt === 'object') {
+                    gScale = { x: gScale.x * (1 + (amt.x - 1) * p), y: gScale.y * (1 + (amt.y - 1) * p), z: gScale.z * (1 + (amt.z - 1) * p) };
+                } else if (b.property === 'opacity' && typeof amt === 'number') {
+                    gOpacity *= (1 - p) + amt * p;
+                }
+            }
+        }
+
+        posX += gPos.x;
+        posY += gPos.y;
+        posZ += gPos.z;
+        rotX += gRot.x;
+        rotY += gRot.y;
+        rotZ += gRot.z;
+        scaleX *= gScale.x;
+        scaleY *= gScale.y;
+        scaleZ *= gScale.z;
+        opacity *= gOpacity;
+
+        currentId = group.parentGroupId;
+    }
+
+    return {
+        position: { x: posX, y: posY, z: posZ },
+        rotation: { x: rotX, y: rotY, z: rotZ },
+        scale: { x: scaleX, y: scaleY, z: scaleZ },
+        opacity,
+    };
+}
+
 export function evaluateProjectAtTime(
     project: Project,
     globalTimeMs: number
@@ -326,10 +404,30 @@ export function evaluateProjectAtTime(
 
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
         const isHidden = isLayerEffectivelyHidden(layer, groupById);
-        const evalLayer = evaluateLayerAtTime(
+        const rawEvalLayer = evaluateLayerAtTime(
             isHidden ? { ...layer, hidden: true } : layer,
             shotLocalTimeMs
         );
+        const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs);
+        const evalLayer = {
+            ...rawEvalLayer,
+            position: {
+                x: Number((rawEvalLayer.position.x * groupTransform.scale.x + groupTransform.position.x).toFixed(4)),
+                y: Number((rawEvalLayer.position.y * groupTransform.scale.y + groupTransform.position.y).toFixed(4)),
+                z: Number((rawEvalLayer.position.z + groupTransform.position.z).toFixed(4)),
+            },
+            rotation: {
+                x: rawEvalLayer.rotation.x + groupTransform.rotation.x,
+                y: rawEvalLayer.rotation.y + groupTransform.rotation.y,
+                z: rawEvalLayer.rotation.z + groupTransform.rotation.z,
+            },
+            scale: {
+                x: rawEvalLayer.scale.x * groupTransform.scale.x,
+                y: rawEvalLayer.scale.y * groupTransform.scale.y,
+                z: rawEvalLayer.scale.z * groupTransform.scale.z,
+            },
+            opacity: rawEvalLayer.opacity * groupTransform.opacity,
+        };
 
         const dofBlurPx = calculateLayerDofBlurPx(
             evalLayer.position.z,
@@ -340,12 +438,15 @@ export function evaluateProjectAtTime(
 
         let motionBlur: { x: number; y: number; samples: number } | undefined;
         if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
-            const prevLayer = evaluateLayerAtTime(
+            const rawPrev = evaluateLayerAtTime(
                 isHidden ? { ...layer, hidden: true } : layer,
                 prevShotLocalTime
             );
-            const rawDx = evalLayer.position.x - prevLayer.position.x;
-            const rawDy = evalLayer.position.y - prevLayer.position.y;
+            const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
+            const prevX = rawPrev.position.x * prevGroupTransform.scale.x + prevGroupTransform.position.x;
+            const prevY = rawPrev.position.y * prevGroupTransform.scale.y + prevGroupTransform.position.y;
+            const rawDx = evalLayer.position.x - prevX;
+            const rawDy = evalLayer.position.y - prevY;
             if (Math.hypot(rawDx, rawDy) > Math.hypot(maxLayerMotionX, maxLayerMotionY)) {
                 maxLayerMotionX = rawDx;
                 maxLayerMotionY = rawDy;

@@ -443,6 +443,11 @@ export const GroupSchema = z.object({
   collapsed: z.boolean(),
   hidden: z.boolean(),
   locked: z.boolean(),
+  position: Vec3Schema.optional(),
+  rotation: Vec3Schema.optional(),
+  scale: Vec3Schema.optional(),
+  opacity: z.number().min(0).max(1).optional(),
+  blocks: z.array(AnimationBlockSchema).optional(),
 });
 
 export const FramingSchema = z.object({
