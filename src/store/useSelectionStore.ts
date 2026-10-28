@@ -1,3 +1,4 @@
+import { MIN_STAGE_WIDTH, defaultInspectorWidth, DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
 // src/store/useSelectionStore.ts
 import { create } from 'zustand';
 
@@ -116,13 +117,8 @@ interface SelectionStore {
     setCameraBookmark: (shotId: string, bookmark: CameraViewBookmark | null) => void;
 }
 
-export const DEFAULT_LEFT_PANEL_WIDTH = 260;
-export const MIN_LEFT_PANEL_WIDTH = 200;
-export const MAX_LEFT_PANEL_WIDTH = 460;
-
-export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 300;
-export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
-export const MAX_RIGHT_SIDEBAR_WIDTH = 500;
+export { DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
+export const DEFAULT_RIGHT_SIDEBAR_WIDTH = defaultInspectorWidth(typeof window === 'undefined' ? 1536 : window.innerWidth);
 
 function getSavedPanelWidth(key: string, defaultVal: number, minVal: number, maxVal: number): number {
     try {
@@ -417,7 +413,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         return { cameraBookmarks };
     }),
 
-    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
+    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen, ...(!state.leftPanelOpen && typeof window !== 'undefined' && window.innerWidth < MIN_STAGE_WIDTH + MIN_LEFT_PANEL_WIDTH + MIN_RIGHT_SIDEBAR_WIDTH ? { rightSidebarOpen: false } : {}) })),
     toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
     setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
     setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
@@ -457,7 +453,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         }
         set({
             leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
-            rightSidebarWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH,
+            rightSidebarWidth: defaultInspectorWidth(typeof window === 'undefined' ? 1536 : window.innerWidth),
         });
     },
 }));

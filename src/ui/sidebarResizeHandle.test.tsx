@@ -54,7 +54,7 @@ describe('SidebarResizeHandle', () => {
                 expect(preventDefault).toHaveBeenCalledTimes(key === 'Escape' ? 0 : 1);
             }
             handle.props.onDoubleClick();
-            expect(onResize.mock.calls.map(call => call[0])).toEqual(side === 'left' ? [290, 310, 200, 600, 320] : [310, 290, 200, 600, 320]);
+            expect(onResize.mock.calls.map(call => call[0])).toEqual(side === 'left' ? [290, 310, 200, 500, 320] : [310, 290, 200, 500, 320]);
         });
     }
     it('releases capture and removes listeners when the handle unmounts', () => {

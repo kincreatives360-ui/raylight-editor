@@ -1,3 +1,4 @@
+import { getWorkspaceLayout, defaultInspectorWidth, MIN_STAGE_WIDTH } from './ui/workspaceLayout';
 import { ModalShell } from './ui/ModalShell';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Download, Upload, PanelLeftOpen, PanelRightOpen, Camera, Feather } from 'lucide-react';
@@ -12,7 +13,6 @@ import {
   DEFAULT_LEFT_PANEL_WIDTH,
   MIN_RIGHT_SIDEBAR_WIDTH,
   MAX_RIGHT_SIDEBAR_WIDTH,
-  DEFAULT_RIGHT_SIDEBAR_WIDTH,
 } from './store/useSelectionStore';
 import { isLayerEffectivelyLocked } from './engine/evaluateShot';
 import {
@@ -589,10 +589,15 @@ export default function App() {
     setInspectorTab,
   ]);
 
+  const [workspaceWidth, setWorkspaceWidth] = useState(() => window.innerWidth);
+  const [resizePriority, setResizePriority] = useState<'left' | 'right'>();
+  const panelLayout = getWorkspaceLayout({ viewport: workspaceWidth, left: leftPanelWidth, right: rightSidebarWidth, leftOpen: leftPanelOpen, rightOpen: rightSidebarOpen, priority: resizePriority });
+
   // Responsive auto-collapse sidebars on smaller screens / split view
   useEffect(() => {
     const handleResize = () => {
       const width = window.innerWidth;
+      setWorkspaceWidth(width);
       if (width < 1024) {
         setLeftPanelOpen(false);
       }
@@ -1527,9 +1532,9 @@ export default function App() {
         className="hidden"
       />
 
-      <div className="relative flex min-h-0 flex-1 overflow-hidden">
+      <div className="relative flex min-h-0 flex-1 overflow-hidden" style={{ '--workspace-left-width': panelLayout.left + 'px', '--workspace-right-width': panelLayout.right + 'px' } as React.CSSProperties}>
         {/* COLUMN 1: FULL-HEIGHT LEFT SIDEBAR OR FLOATING RESTORE TAB */}
-        {leftPanelOpen ? (
+        {panelLayout.showLeft ? (
           <>
             <LeftPanel
               activeShot={projectActiveShot}
@@ -1539,11 +1544,11 @@ export default function App() {
             />
             {/* Draggable vertical splitter for Left Panel */}
             <SidebarResizeHandle
-              side="left" width={leftPanelWidth}
+              side="left" width={panelLayout.left}
               minWidth={MIN_LEFT_PANEL_WIDTH} maxWidth={MAX_LEFT_PANEL_WIDTH}
               resetWidth={DEFAULT_LEFT_PANEL_WIDTH}
-              getMaxWidth={() => window.innerWidth - (rightSidebarOpen ? rightSidebarWidth : 0) - 340}
-              onResize={setLeftPanelWidth} label="Resize left panel" title="Drag to resize left panel (double-click to reset)"
+              getMaxWidth={() => window.innerWidth - panelLayout.right - MIN_STAGE_WIDTH}
+              onResize={width => { setResizePriority('left'); setLeftPanelWidth(width); }} label="Resize left panel" title="Drag to resize left panel (double-click to reset)"
             />
           </>
         ) : (
@@ -1582,15 +1587,15 @@ export default function App() {
         </main>
 
         {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) OR FLOATING RESTORE TAB */}
-        {rightSidebarOpen ? (
+        {panelLayout.showRight ? (
           <>
             {/* Draggable vertical splitter for Right Sidebar */}
             <SidebarResizeHandle
-              side="right" width={rightSidebarWidth}
+              side="right" width={panelLayout.right}
               minWidth={MIN_RIGHT_SIDEBAR_WIDTH} maxWidth={MAX_RIGHT_SIDEBAR_WIDTH}
-              resetWidth={DEFAULT_RIGHT_SIDEBAR_WIDTH}
-              getMaxWidth={() => window.innerWidth - (leftPanelOpen ? leftPanelWidth : 0) - 340}
-              onResize={setRightSidebarWidth} label="Resize right inspector" title="Drag to resize inspector (double-click to reset)"
+              resetWidth={defaultInspectorWidth(workspaceWidth)}
+              getMaxWidth={() => window.innerWidth - panelLayout.left - MIN_STAGE_WIDTH}
+              onResize={width => { setResizePriority('right'); setRightSidebarWidth(width); }} label="Resize right inspector" title="Drag to resize inspector (double-click to reset)"
             />
             <RightSidebar
               activeShot={projectActiveShot}

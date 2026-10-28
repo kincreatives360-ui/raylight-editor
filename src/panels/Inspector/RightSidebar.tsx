@@ -1370,7 +1370,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     return (
         <aside
-            style={{ width: `${rightSidebarWidth}px` }}
+            style={{ width: `var(--workspace-right-width, ${rightSidebarWidth}px)` }}
             className="border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
         >
             <input

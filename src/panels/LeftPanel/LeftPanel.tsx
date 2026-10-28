@@ -621,7 +621,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
     return (
         <aside
-            style={{ width: `${leftPanelWidth}px` }}
+            style={{ width: `var(--workspace-left-width, ${leftPanelWidth}px)` }}
             className="border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
         >
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}

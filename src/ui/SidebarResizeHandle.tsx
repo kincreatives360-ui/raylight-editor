@@ -1,3 +1,4 @@
+import { clampPanelWidth } from './workspaceLayout';
 import { useEffect, useRef, type PointerEvent } from 'react';
 
 interface SidebarResizeHandleProps {
@@ -15,6 +16,7 @@ interface SidebarResizeHandleProps {
 export function SidebarResizeHandle({ side, width, minWidth, maxWidth, resetWidth, getMaxWidth, onResize, label, title }: SidebarResizeHandleProps) {
     const cleanupRef = useRef<(() => void) | null>(null);
     useEffect(() => () => cleanupRef.current?.(), []);
+    const resize = (value: number) => onResize(clampPanelWidth(value, minWidth, maxWidth, getMaxWidth()));
     const direction = side === 'left' ? 1 : -1;
     const startResize = (event: PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -25,8 +27,7 @@ export function SidebarResizeHandle({ side, width, minWidth, maxWidth, resetWidt
         const startX = event.clientX;
         target.setPointerCapture(pointerId);
         const move = (next: globalThis.PointerEvent) => {
-            const maximum = Math.min(maxWidth, getMaxWidth());
-            onResize(Math.max(minWidth, Math.min(maximum, width + direction * (next.clientX - startX))));
+            resize(width + direction * (next.clientX - startX));
         };
         const cleanup = () => {
             if (target.hasPointerCapture(pointerId)) target.releasePointerCapture(pointerId);
@@ -42,16 +43,16 @@ export function SidebarResizeHandle({ side, width, minWidth, maxWidth, resetWidt
     };
     return <div
         role="separator" aria-orientation="vertical" aria-label={label}
-        aria-valuenow={width} aria-valuemin={minWidth} aria-valuemax={maxWidth} tabIndex={0}
+        aria-valuenow={width} aria-valuemin={minWidth} aria-valuemax={Math.max(minWidth, Math.min(maxWidth, getMaxWidth()))} tabIndex={0}
         onPointerDown={startResize}
-        onDoubleClick={() => onResize(resetWidth)}
+        onDoubleClick={() => resize(resetWidth)}
         onKeyDown={event => {
             const next = event.key === 'ArrowLeft' ? width - direction * 10
                 : event.key === 'ArrowRight' ? width + direction * 10
                 : event.key === 'Home' ? minWidth : event.key === 'End' ? maxWidth : null;
             if (next === null) return;
             event.preventDefault();
-            onResize(next);
+            resize(next);
         }}
         className="w-1.5 -mx-[3px] relative flex items-center justify-center cursor-col-resize group select-none shrink-0 z-20 hover:bg-[#0088ff]/40 active:bg-[#0088ff] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
         title={title}
