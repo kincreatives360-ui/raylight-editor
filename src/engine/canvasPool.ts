@@ -97,3 +97,4 @@ export const withCanvas = <T>(
   height: number,
   fn: (canvas: HTMLCanvasElement, ctx: CanvasRenderingContext2D) => T
 ): T => canvasPool.withCanvas(width, height, fn);
+
