@@ -1,41 +1,160 @@
 @import "tailwindcss";
 
 @theme {
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: 'Manrope', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Raylight Timeline Semantic Tone Theme Colors */
+  --color-camera-zoom: var(--color-brand-green);
+  --color-animation: var(--color-brand-purple);
+  --color-effect: var(--color-brand-purple);
+  --color-light-key: var(--color-brand-amber);
+  --color-text-track: var(--color-brand-pink);
+  --color-audio-track: var(--color-brand-orange);
+  --color-shot: var(--primary);
+  --color-component: var(--color-brand-pink);
+  --color-shape: var(--color-brand-dark-blue);
+  --color-frame: var(--color-brand-teal);
+
+  /* Raylight Brand Primitives */
+  --color-brand-primary-blue: var(--primary);
+  --color-brand-light-blue: oklch(65.79% 0.118 218.57);
+  --color-brand-dark-blue: oklch(53.51% 0.255 274.53);
+  --color-brand-green: oklch(65.95% 0.168 152.32);
+  --color-brand-purple: oklch(59.81% 0.254 298.01);
+  --color-brand-orange: oklch(68.43% 0.21 39.11);
+  --color-brand-pink: oklch(67.59% 0.273 344.75);
+  --color-brand-electric-green: oklch(75.564% 0.23374 144.349);
+  --color-brand-amber: oklch(65.393% 0.23303 31.062);
+  --color-brand-teal: oklch(67% 0.117 185);
+
+  /* Raylight Core Theme Semantic Colors */
+  --color-background: var(--background);
+  --color-canvas: var(--canvas);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-light: var(--primary-light);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-block: var(--block);
+  --color-measure: var(--measure);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-border: var(--sidebar-border);
 }
 
-:root {
+:root, .dark {
   color-scheme: dark;
 
-  /* Canonical Design Tokens (DESIGN.md Section 11.2) */
-  --ui-bg: #07080d;
-  --panel-bg: #0b0b0d;
-  --panel-raised: #111114;
-  --panel-hover: #18181b;
-  --panel-active: #1c1c1f;
-  --canvas-workspace: #080a10;
-  --surface-border: rgba(255, 255, 255, 0.08);
-  --surface-border-strong: rgba(255, 255, 255, 0.14);
-  --text-primary: #f3f4f6;
-  --text-secondary: #a1a1aa;
-  --text-muted: #8e8e96;
-  --text-disabled: #52525b;
-  --accent: #0088ff;
-  --accent-hover: #0077e6;
-  --accent-soft: rgba(0, 136, 255, 0.14);
-  --focus-ring: rgba(56, 189, 248, 0.8);
+  /* Raylight OKLCH Primitive Brand Tokens */
+  --color-brand-primary-blue: var(--primary);
+  --color-brand-light-blue: oklch(65.79% 0.118 218.57);
+  --color-brand-dark-blue: oklch(53.51% 0.255 274.53);
+  --color-brand-green: oklch(65.95% 0.168 152.32);
+  --color-brand-purple: oklch(59.81% 0.254 298.01);
+  --color-brand-orange: oklch(68.43% 0.21 39.11);
+  --color-brand-pink: oklch(67.59% 0.273 344.75);
+  --color-brand-electric-green: oklch(75.564% 0.23374 144.349);
+  --color-brand-amber: oklch(65.393% 0.23303 31.062);
+  --color-brand-teal: oklch(67% 0.117 185);
+
+  /* Raylight Semantic Tone Tokens */
+  --color-shot: var(--primary);
+  --color-camera-zoom: var(--color-brand-green);
+  --color-animation: var(--color-brand-purple);
+  --color-effect: var(--color-brand-purple);
+  --color-light-key: var(--color-brand-amber);
+  --color-text-track: var(--color-brand-pink);
+  --color-audio-track: var(--color-brand-orange);
+  --color-component: var(--color-brand-pink);
+  --color-shape: var(--color-brand-dark-blue);
+  --color-frame: var(--color-brand-teal);
+
+  /* Raylight Dark Core Palette */
+  --background: oklch(17.76% 0 0);
+  --canvas: oklch(26.487% 0.00187 286.038);
+  --foreground: oklch(98.5% 0 0);
+  --card: oklch(21% 0.006 285.885);
+  --card-foreground: oklch(98.5% 0 0);
+  --popover: oklch(26% 0 0);
+  --popover-foreground: oklch(98.5% 0 0);
+  --primary: oklch(66.9% 0.184 248.81);
+  --primary-light: oklch(82.662% 0.0967 19.28);
+  --primary-foreground: oklch(21% 0.006 285.885);
+  --secondary: oklch(27.4% 0.006 286.033);
+  --secondary-foreground: oklch(98.5% 0 0);
+  --muted: oklch(27.4% 0.006 286.033);
+  --muted-foreground: oklch(70.5% 0.015 286.067);
+  --destructive: oklch(70.4% 0.191 22.216);
+  --measure: oklch(68% 0.25 5.5);
+  --measure-foreground: oklch(98.5% 0 0);
+  --border: oklch(24.33% 0.004 264.49);
+  --input: oklch(100% 0 0 / 0.15);
+  --ring: oklch(44.914% 0.01461 285.754);
+  --block: oklch(23.863% 0.00246 248.184);
+
+  /* Sidebar Tokens */
+  --sidebar: oklch(17.76% 0 0);
+  --sidebar-foreground: oklch(98.5% 0 0);
+  --sidebar-primary: oklch(48.8% 0.243 264.376);
+  --sidebar-primary-foreground: oklch(98.5% 0 0);
+  --sidebar-accent: oklch(23.16% 0.004 286.1);
+  --sidebar-accent-foreground: oklch(98.5% 0 0);
+  --sidebar-border: oklch(100% 0 0 / 0.1);
+  --sidebar-ring: oklch(68.3% 0 0);
+
+  /* Button Shine & Shading (Apple-style specular highlight) */
+  --button-shine: oklch(100% 0 0 / 0.9);
+  --button-shine-soft: oklch(100% 0 0 / 0.45);
+  --button-shade: oklch(0% 0 0 / 0.25);
+
+  /* Canonical Aliases connecting legacy tokens to OKLCH tokens */
+  --ui-bg: var(--background);
+  --panel-bg: var(--sidebar);
+  --panel-raised: var(--card);
+  --panel-hover: var(--sidebar-accent);
+  --panel-active: oklch(25% 0.004 286.1);
+  --canvas-workspace: var(--canvas);
+  --surface-border: var(--border);
+  --surface-border-strong: color-mix(in oklab, var(--border) 150%, white);
+  --text-primary: var(--foreground);
+  --text-secondary: var(--muted-foreground);
+  --text-muted: oklch(58% 0.01 286.067);
+  --text-disabled: oklch(42% 0.006 286.033);
+  --accent: var(--primary);
+  --accent-hover: color-mix(in oklab, var(--primary) 85%, black);
+  --accent-soft: color-mix(in oklab, var(--primary) 15%, transparent);
+  --focus-ring: var(--ring);
+
+  /* Animation & Easing Constants */
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --spring-snappy: cubic-bezier(0.16, 1, 0.3, 1);
   --success: #34d399;
   --warning: #fbbf24;
-  --danger: #f43f5e;
-  --purple: #8b5cf6;
+  --danger: var(--destructive);
+  --purple: var(--color-brand-purple);
+
+  /* Geometry & Sizing */
   --radius-xs: 3px;
   --radius-sm: 5px;
   --radius-md: 8px;
-  --radius-lg: 12px;
+  --radius-lg: 10px;
+  --radius-xl: 14px;
+  --radius: 0.625rem; /* 10px */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -44,30 +163,30 @@
   --space-6: 24px;
   --control-height: 28px;
   --row-height: 28px;
-  --sidebar-width: 240px;
-  --inspector-width: 300px;
+  --sidebar-width: 224px;
+  --inspector-width: 256px;
   --timeline-min-height: 180px;
-  --timeline-default-height: 280px;
+  --timeline-default-height: 221px;
   --timeline-max-height: 60vh;
 
-  /* Safe area insets (Detail 14) */
+  /* Safe Area Insets */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --safe-left: env(safe-area-inset-left, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
 
-  /* Live scaling & typography font stacks */
+  /* Live scaling & font stacks */
   --p-scale: 1;
-  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: 'Manrope', 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* Backward-compatible token aliases */
-  --bg-canvas: var(--ui-bg);
-  --bg-app: var(--panel-bg);
+  --bg-canvas: var(--canvas);
+  --bg-app: var(--background);
   --bg-panel: var(--panel-raised);
   --bg-surface: var(--panel-hover);
   --bg-subtle: var(--panel-active);
-  --bg-muted: #242428;
+  --bg-muted: var(--card);
   --bg-hover: rgba(255, 255, 255, 0.05);
   --bg-active: rgba(255, 255, 255, 0.08);
 
@@ -256,7 +375,7 @@ select:focus-visible {
   }
 }
 
-/* Reduced motion sensitivity support (Apple §14: preserve gentle opacity/color comprehension, disable spatial motion) */
+/* Reduced motion sensitivity support */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -269,7 +388,7 @@ select:focus-visible {
   }
 }
 
-/* Reduced transparency accessibility fallback (Apple §4) */
+/* Reduced transparency accessibility fallback */
 @media (prefers-reduced-transparency: reduce) {
   .figma-select-menu,
   .animate-flyout,
@@ -283,7 +402,7 @@ select:focus-visible {
   }
 }
 
-/* Increased contrast accessibility support (Apple §4) */
+/* Increased contrast accessibility support */
 @media (prefers-contrast: more) {
   :root {
     --surface-border: rgba(255, 255, 255, 0.22);
@@ -321,7 +440,8 @@ select:focus-visible {
 ::-webkit-scrollbar-thumb:hover {
   background: #363a4d;
 }
-/* Balanced headlines and readable text wrapping (Detail 17) */
+
+/* Balanced headlines and readable text wrapping */
 h1, h2, h3, h4, h5, h6, .typeset-display, .typeset-heading {
   text-wrap: balance;
 }
@@ -330,7 +450,7 @@ p, .typeset-body {
   text-wrap: pretty;
 }
 
-/* Continuous corners / Apple squircles for supporting Chromium browsers (Detail 18) */
+/* Continuous corners / Apple squircles for supporting Chromium browsers */
 button,
 input,
 select,
@@ -345,27 +465,10 @@ textarea,
   corner-shape: squircle;
 }
 
-/* View Transitions API under 300ms (Detail 9) */
+/* View Transitions API under 300ms */
 ::view-transition-group(root) {
   animation-duration: 200ms;
   animation-timing-function: cubic-bezier(0.23, 1, 0.32, 1);
-}
-
-@media (prefers-reduced-motion: reduce) {
-  *,
-  ::before,
-  ::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-
-  ::view-transition-group(root),
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation: none !important;
-  }
 }
 
 /* Inspector controls follow the compact, dark reference screenshots. */
@@ -389,3 +492,37 @@ textarea,
 .shot-settings-tabs button[aria-selected="true"] { background: #222; }
 .shot-settings-panel [role="switch"] { width: 36px; height: 20px; }
 .shot-settings-panel [data-testid="shot-background-editor"] { padding-bottom: 8px; }
+
+/* Direct Tone Utility Classes for Timeline & Gizmos */
+.border-animation { border-color: var(--color-brand-purple); }
+.border-camera-zoom { border-color: var(--color-brand-green); }
+.border-effect { border-color: var(--color-brand-purple); }
+.border-light-key { border-color: var(--color-brand-amber); }
+.border-text-track { border-color: var(--color-brand-pink); }
+.border-audio-track { border-color: var(--color-brand-orange); }
+.border-shot { border-color: var(--color-shot); }
+
+.bg-animation { background-color: var(--color-brand-purple); }
+.bg-camera-zoom { background-color: var(--color-brand-green); }
+.bg-effect { background-color: var(--color-brand-purple); }
+.bg-light-key { background-color: var(--color-brand-amber); }
+.bg-audio-track { background-color: var(--color-brand-orange); }
+.bg-shot { background-color: var(--color-shot); }
+
+.text-animation { color: var(--color-brand-purple); }
+.text-camera-zoom { color: var(--color-brand-green); }
+.text-effect { color: var(--color-brand-purple); }
+.text-light-key { color: var(--color-brand-amber); }
+.text-audio-track { color: var(--color-brand-orange); }
+.text-shot { color: var(--color-shot); }
+.text-component { color: var(--color-brand-pink); }
+
+.fill-camera-zoom { fill: var(--color-brand-green); }
+.fill-light-key { fill: var(--color-brand-amber); }
+.fill-animation { fill: var(--color-brand-purple); }
+.fill-audio-track { fill: var(--color-brand-orange); }
+
+.stroke-camera-zoom { stroke: var(--color-brand-green); }
+.stroke-light-key { stroke: var(--color-brand-amber); }
+.stroke-animation { stroke: var(--color-brand-purple); }
+.stroke-audio-track { stroke: var(--color-brand-orange); }
