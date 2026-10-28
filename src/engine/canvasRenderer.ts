@@ -546,8 +546,12 @@ async function drawLayerOnCanvas(
   if (effects?.warp?.enabled) {
     const original = make(); original.getContext('2d')?.drawImage(surface, 0, 0);
     content.clearRect(0, 0, w, h);
-    const amount = effects.warp.amount ?? 0.05, frequency = effects.warp.frequency ?? 3;
-    for (let y = 0; y < h; y++) content.drawImage(original, 0, y, w, 1, Math.sin(y / h * Math.PI * 2 * frequency) * amount * w, y, w, 1);
+    const amount = (effects.warp.amount ?? 0) / 1920;
+    const frequency = effects.warp.frequency ?? 3;
+    for (let y = 0; y < h; y++) {
+      const offsetPx = Math.sin((y / h) * Math.PI * 2 * frequency) * amount * w;
+      content.drawImage(original, 0, y, w, 1, offsetPx, y, w, 1);
+    }
   }
   if ((effects?.backdropBlur ?? 0) > 0 || effects?.liquidGlass?.enabled) {
     const backdrop = make(), back = backdrop.getContext('2d');
