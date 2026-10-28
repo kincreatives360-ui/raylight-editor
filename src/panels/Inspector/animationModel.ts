@@ -12,9 +12,12 @@ export const PRESETS: {
 }[] = [
     { type: 'fade', label: 'Fade' }, { type: 'blur', label: 'Blur' }, { type: 'slide-up', label: 'Slide' },
     { type: 'focus', label: 'Focus' }, { type: 'rack-focus', label: 'Rack Focus' }, { type: 'mask-sweep', label: 'Wipe' },
-    { type: 'typewriter', label: 'Typewriter', textOnly: true }, { type: 'slide-down', label: 'Slide down' },
-    { type: 'slide-left', label: 'Slide left' }, { type: 'slide-right', label: 'Slide right' },
+    { type: 'typewriter', label: 'Typewriter', textOnly: true }, { type: 'scramble', label: 'Scramble', textOnly: true },
+    { type: 'slide-down', label: 'Slide down' }, { type: 'slide-left', label: 'Slide left' }, { type: 'slide-right', label: 'Slide right' },
     { type: 'float-out', label: 'Float' }, { type: 'scale-out', label: 'Scale' },
+    { type: 'pop', label: 'Pop' }, { type: 'spin', label: 'Spin' },
+    { type: 'flip-x', label: 'Flip X' }, { type: 'flip-y', label: 'Flip Y' },
+    { type: 'swing', label: 'Swing' }, { type: 'wipe', label: 'Mask sweep' },
 ];
 export const ANIMATIONS: {
     property: AnimationBlockProperty;

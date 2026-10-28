@@ -432,8 +432,8 @@ export default function App() {
       if (drift > 45) {
         lastSyncPlayhead = state.currentTimeMs;
         lastSyncWallTime = performance.now();
-        syncAudioPlayback(project.audio, true, state.currentTimeMs);
       }
+      syncAudioPlayback(project.audio, true, state.currentTimeMs);
     });
     return unsub;
   }, [project.audio]);
@@ -443,28 +443,44 @@ export default function App() {
   // 60fps Playback Loop
   useEffect(() => {
     if (!isPlaying) return;
+    if (totalDurationMs <= 0) {
+      setIsPlaying(false);
+      return;
+    }
     let rafId: number;
     let lastTime = performance.now();
+    let stopped = false;
 
     const tick = (now: number) => {
+      if (stopped) return;
       const dt = now - lastTime;
       lastTime = now;
 
+      let reachedEnd = false;
       setCurrentTimeMs((prev) => {
         const next = prev + dt;
         if (next >= totalDurationMs) {
           if (loop) return 0;
-          setIsPlaying(false);
+          reachedEnd = true;
           return totalDurationMs;
         }
         return next;
       });
 
+      if (reachedEnd) {
+        stopped = true;
+        setIsPlaying(false);
+        return;
+      }
+
       rafId = requestAnimationFrame(tick);
     };
 
     rafId = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(rafId);
+    return () => {
+      stopped = true;
+      cancelAnimationFrame(rafId);
+    };
   }, [isPlaying, loop, totalDurationMs, setCurrentTimeMs, setIsPlaying]);
 
   // Global Clipboard Paste Listener (Figma SVG, Screenshots, & Copied Layers)

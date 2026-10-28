@@ -25,11 +25,39 @@ export interface EvaluatedLayer {
     layer: Layer;
 }
 
+const SCRAMBLE_GLYPHS = 'ABCDEFGHJKLMNPQRSTUVWXYZ0123456789#@%&*';
+
 /** Keep whitespace attached to the preceding word/line and never split a Unicode code point. */
-export function revealText(content: string, progress: number, unit: Transitionish['stagger'] = 'letter'): string {
-    const parts = unit === 'word' ? content.match(/\S+\s*|\s+/g) ?? []
-        : unit === 'line' ? content.match(/[^\n]*\n|[^\n]+$/g) ?? [] : Array.from(content);
-    return parts.slice(0, Math.floor(Math.max(0, Math.min(1, progress)) * parts.length)).join('');
+export function revealText(
+    content: string,
+    progress: number,
+    unit: Transitionish['stagger'] = 'letter',
+    scramble = false
+): string {
+    const clamped = Math.max(0, Math.min(1, progress));
+    const effectiveUnit = !unit || unit === 'none' ? 'letter' : unit;
+    const parts = effectiveUnit === 'word' ? content.match(/\S+\s*|\s+/g) ?? []
+        : effectiveUnit === 'line' ? content.match(/[^\n]*\n|[^\n]+$/g) ?? [] : Array.from(content);
+    const revealedCount = Math.floor(clamped * parts.length);
+
+    if (!scramble || clamped <= 0) {
+        return parts.slice(0, revealedCount).join('');
+    }
+    if (clamped >= 1) {
+        return content;
+    }
+
+    const frontierEnd = Math.min(parts.length, Math.max(revealedCount + 1, Math.ceil(clamped * parts.length) + 2));
+    const stepSeed = Math.floor(clamped * 24);
+    const resolved = parts.slice(0, revealedCount).join('');
+    let scrambledTail = '';
+    for (let i = revealedCount; i < frontierEnd; i++) {
+        const part = parts[i];
+        scrambledTail += Array.from(part)
+            .map((ch, j) => (/\s/.test(ch) ? ch : SCRAMBLE_GLYPHS[((i + j) * 17 + stepSeed * 31) % SCRAMBLE_GLYPHS.length]))
+            .join('');
+    }
+    return resolved + scrambledTail;
 }
 
 function evaluateSplineOffset(amount: Vec3 | number, u: number): Vec3 {
@@ -103,8 +131,13 @@ export function evaluateLayerAtTime(
                 const inv = 1 - p;
                 const dist = ent.distance ?? 0.18;
 
-                if (layer.kind === 'text' && (ent.type === 'typewriter' || (ent.stagger && ent.stagger !== 'none'))) {
-                    textContentOverride = revealText(textContentOverride ?? layer.content, p, ent.stagger);
+                if (layer.kind === 'text' && (ent.type === 'typewriter' || ent.type === 'scramble' || (ent.stagger && ent.stagger !== 'none'))) {
+                    textContentOverride = revealText(
+                        textContentOverride ?? layer.content,
+                        p,
+                        ent.stagger,
+                        ent.type === 'scramble'
+                    );
                 }
                 if (ent.type === 'blur' || ent.type === 'focus' || ent.type === 'rack-focus') {
                     const blur = Math.max(0, ent.blur ?? 40);
@@ -133,8 +166,29 @@ export function evaluateLayerAtTime(
                     if (ent.fade !== false) opacity *= p;
                     scale.x *= 0.7 + 0.3 * p;
                     scale.y *= 0.7 + 0.3 * p;
-                } else if (ent.type === 'mask-sweep') {
+                } else if (ent.type === 'pop') {
+                    if (ent.fade !== false) opacity *= Math.min(1, p * 1.4);
+                    const popFactor = 0.25 + 0.75 * p + Math.sin(p * Math.PI) * 0.14 * inv;
+                    scale.x *= popFactor;
+                    scale.y *= popFactor;
+                } else if (ent.type === 'spin') {
+                    if (ent.fade !== false) opacity *= p;
+                    rotation.z -= Math.PI * inv;
+                    scale.x *= 0.65 + 0.35 * p;
+                    scale.y *= 0.65 + 0.35 * p;
+                } else if (ent.type === 'flip-x') {
+                    if (ent.fade !== false) opacity *= p;
+                    rotation.x += (Math.PI / 2) * inv;
+                } else if (ent.type === 'flip-y') {
+                    if (ent.fade !== false) opacity *= p;
+                    rotation.y += (Math.PI / 2) * inv;
+                } else if (ent.type === 'swing') {
+                    if (ent.fade !== false) opacity *= p;
+                    rotation.z += Math.sin(inv * Math.PI * 2.5) * 0.35 * inv;
+                } else if (ent.type === 'mask-sweep' || ent.type === 'wipe') {
                     maskSweepProgress = Math.min(maskSweepProgress, p);
+                } else if (ent.type === 'scramble') {
+                    if (ent.fade !== false) opacity *= Math.min(1, 0.25 + 0.75 * p);
                 }
             }
         }
@@ -157,8 +211,13 @@ export function evaluateLayerAtTime(
                 const p = evaluateEasing(Math.max(0, Math.min(1, rawP)), ext.easing);
                 const dist = ext.distance ?? 0.16;
 
-                if (layer.kind === 'text' && (ext.type === 'typewriter' || (ext.stagger && ext.stagger !== 'none'))) {
-                    textContentOverride = revealText(textContentOverride ?? layer.content, 1 - p, ext.stagger);
+                if (layer.kind === 'text' && (ext.type === 'typewriter' || ext.type === 'scramble' || (ext.stagger && ext.stagger !== 'none'))) {
+                    textContentOverride = revealText(
+                        textContentOverride ?? layer.content,
+                        1 - p,
+                        ext.stagger,
+                        ext.type === 'scramble'
+                    );
                 }
                 if (ext.type === 'blur' || ext.type === 'focus' || ext.type === 'rack-focus') {
                     const blur = Math.max(0, ext.blur ?? 40);
@@ -187,8 +246,29 @@ export function evaluateLayerAtTime(
                     if (ext.fade !== false) opacity *= 1 - p;
                     scale.x *= 1 - 0.3 * p;
                     scale.y *= 1 - 0.3 * p;
-                } else if (ext.type === 'mask-sweep') {
+                } else if (ext.type === 'pop') {
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    const popFactor = 1 - 0.75 * p;
+                    scale.x *= popFactor;
+                    scale.y *= popFactor;
+                } else if (ext.type === 'spin') {
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    rotation.z += Math.PI * p;
+                    scale.x *= 1 - 0.35 * p;
+                    scale.y *= 1 - 0.35 * p;
+                } else if (ext.type === 'flip-x') {
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    rotation.x -= (Math.PI / 2) * p;
+                } else if (ext.type === 'flip-y') {
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    rotation.y -= (Math.PI / 2) * p;
+                } else if (ext.type === 'swing') {
+                    if (ext.fade !== false) opacity *= 1 - p;
+                    rotation.z -= Math.sin(p * Math.PI * 2.5) * 0.35 * p;
+                } else if (ext.type === 'mask-sweep' || ext.type === 'wipe') {
                     maskSweepProgress = Math.min(maskSweepProgress, 1 - p);
+                } else if (ext.type === 'scramble') {
+                    if (ext.fade !== false) opacity *= 1 - p;
                 }
             }
         }

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getExportDimensions, estimateExportMetrics } from './exportMetrics';
-import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache } from './audioEngine';
+import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache, syncAudioPlayback, stopAudioPlayback } from './audioEngine';
 import { runVideoExportPipeline } from './exporter';
 import type { Project, AudioClip } from '../model/types';
 import { createDefaultProject } from '../model/defaults';
@@ -360,6 +360,85 @@ describe('Export Pipeline Cancellation', () => {
         } finally {
             (globalThis as unknown as { document: unknown }).document = originalDocument;
             (globalThis as unknown as { window: unknown }).window = originalWindow;
+        }
+    });
+
+    it('schedules both active and future audio clips using Web Audio lookahead timestamps (F-01)', async () => {
+        const mockBuffer = {
+            sampleRate: 44100,
+            duration: 5,
+            numberOfChannels: 2,
+            getChannelData: () => new Float32Array(500),
+        } as unknown as AudioBuffer;
+
+        const startedSources: Array<{ when: number; offset: number; duration: number }> = [];
+        const originalWindow = (globalThis as unknown as { window?: unknown }).window;
+        const originalFetch = globalThis.fetch;
+
+        class MockAudioContext {
+            state = 'running';
+            currentTime = 10;
+            destination = {};
+            decodeAudioData = vi.fn().mockResolvedValue(mockBuffer);
+            resume = vi.fn().mockResolvedValue(undefined);
+            createGain = vi.fn(() => ({
+                gain: { value: 1, setValueAtTime: vi.fn() },
+                connect: vi.fn(),
+                disconnect: vi.fn(),
+            }));
+            createBufferSource = vi.fn(() => ({
+                buffer: null as AudioBuffer | null,
+                connect: vi.fn(),
+                disconnect: vi.fn(),
+                stop: vi.fn(),
+                start: vi.fn((when: number, offset: number, duration: number) => {
+                    startedSources.push({ when, offset, duration });
+                }),
+            }));
+        }
+
+        (globalThis as unknown as { window: unknown }).window = {
+            AudioContext: MockAudioContext,
+        };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+        } as unknown as Response);
+
+        try {
+            const urlA = 'data:audio/wav;base64,lookaheadClipA';
+            const urlB = 'data:audio/wav;base64,lookaheadClipB';
+            await decodeAudioFromDataUrl(urlA);
+            await decodeAudioFromDataUrl(urlB);
+
+            syncAudioPlayback(
+                {
+                    masterVolume: 1,
+                    muted: false,
+                    clips: [
+                        { id: 'c1', name: 'Active Now', dataUrl: urlA, startMs: 0, durationMs: 1000, offsetMs: 100, volume: 0.8, muted: false },
+                        { id: 'c2', name: 'Future Clip', dataUrl: urlB, startMs: 1500, durationMs: 800, offsetMs: 200, volume: 0.9, muted: false },
+                    ],
+                },
+                true,
+                200
+            );
+
+            expect(startedSources.length).toBe(2);
+            // Active clip starts immediately at ctx.currentTime (10s) with offset (100 + 200)/1000 = 0.3s
+            expect(startedSources[0].when).toBeCloseTo(10, 3);
+            expect(startedSources[0].offset).toBeCloseTo(0.3, 3);
+            expect(startedSources[0].duration).toBeCloseTo(0.8, 3);
+            // Future clip is scheduled at ctx.currentTime + (1500 - 200)/1000 = 11.3s with offset 0.2s
+            expect(startedSources[1].when).toBeCloseTo(11.3, 3);
+            expect(startedSources[1].offset).toBeCloseTo(0.2, 3);
+            expect(startedSources[1].duration).toBeCloseTo(0.8, 3);
+        } finally {
+            stopAudioPlayback();
+            (globalThis as unknown as { window: unknown }).window = originalWindow;
+            globalThis.fetch = originalFetch;
         }
     });
 });

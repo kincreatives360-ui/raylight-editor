@@ -113,7 +113,18 @@ export function evaluateSpring(
 
     const endValue = rawAt(1);
     if (Math.abs(endValue) < 1e-6) return 1;
-    return Number((rawAt(t) / endValue).toFixed(6));
+    if (isCriticallyDamped) {
+        return Number((rawAt(t) / endValue).toFixed(6));
+    }
+    // For underdamped (bouncy) springs, preserve physical oscillation peaks over [0, 0.85]
+    // and smoothly blend any residual tail displacement into 1.0 over [0.85, 1.0]
+    const raw = rawAt(t);
+    if (t <= 0.85) {
+        return Number(raw.toFixed(6));
+    }
+    const s = (t - 0.85) / 0.15;
+    const smooth = s * s * (3 - 2 * s);
+    return Number((raw * (1 - smooth) + 1 * smooth).toFixed(6));
 }
 
 // 3. The 11 Standard Presets
@@ -274,7 +285,7 @@ export const ALL_18_EASINGS: EasingCatalogItem[] = [
         easing: { kind: 'bezier', x1: 0.85, y1: 0, x2: 0.15, y2: 1 },
     },
     {
-        id: 'bezier: whip',
+        id: 'bezier:whip',
         label: 'Bezier: Anticipate Whip (0.6, -0.28, 0.74, 0.05)',
         category: 'Custom Bezier',
         easing: { kind: 'bezier', x1: 0.6, y1: -0.28, x2: 0.74, y2: 0.05 },

@@ -1,6 +1,7 @@
 // src/engine/easing.test.ts
 import { describe, it, expect } from 'vitest';
 import { evaluateEasing, evaluateSpring, ALL_18_EASINGS } from './easing';
+import { easingFromSelection } from '../model/easingSelection';
 
 describe('Easing & Spring Engine', () => {
   it('includes all 18 easing functions and spring presets', () => {
@@ -10,6 +11,22 @@ describe('Easing & Spring Engine', () => {
     expect(ids).toContain('spring:snappy');
     expect(ids).toContain('preset:linear');
     expect(ids).toContain('bezier:cinematic');
+    expect(ids).toContain('bezier:whip');
+    expect(ids).not.toContain('bezier: whip');
+    expect(easingFromSelection('bezier:whip')).toEqual({
+      kind: 'bezier',
+      x1: 0.6,
+      y1: -0.28,
+      x2: 0.74,
+      y2: 0.05,
+    });
+    expect(easingFromSelection('bezier: whip')).toEqual({
+      kind: 'bezier',
+      x1: 0.6,
+      y1: -0.28,
+      x2: 0.74,
+      y2: 0.05,
+    });
   });
 
   it('clamps evaluateEasing boundaries t=0 and t=1 correctly', () => {

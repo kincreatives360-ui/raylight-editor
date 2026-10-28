@@ -211,10 +211,17 @@ export const TransitionTypeSchema = z.enum([
   'float-out',
   'scale-out',
   'mask-sweep',
+  'wipe',
   'blur',
   'focus',
   'rack-focus',
+  'pop',
+  'spin',
+  'flip-x',
+  'flip-y',
+  'swing',
   'typewriter',
+  'scramble',
 ]);
 
 export const TransitionishSchema = z.object({

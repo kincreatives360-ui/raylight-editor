@@ -7,8 +7,95 @@ import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera
 import {
     evaluateEffectsAtTime,
     calculateLayerDofBlurPx,
+    resolveDepthOfFieldFocusZ,
     type EvaluatedEffects,
 } from './evaluateEffects';
+export { resolveDepthOfFieldFocusZ };
+
+export interface ShotTransitionCompositeState {
+    isActive: boolean;
+    incomingOpacity: number;
+    incomingSlideX: number;
+    outgoingOpacity: number;
+    outgoingSlideX: number;
+    incomingLayers: EvaluatedLayerWithEffects[];
+    outgoingLayers: EvaluatedLayerWithEffects[];
+    outgoingShotStartMs: number;
+    outgoingCamera?: EvaluatedCamera;
+}
+
+/**
+ * Pure helper computing transition-modulated incoming and outgoing layer sets
+ * so WebGL (ViewportCanvas) and Canvas 2D (canvasRenderer) share identical shot transition composition.
+ */
+export function getShotTransitionCompositeState(
+    frame: EvaluatedProjectFrame
+): ShotTransitionCompositeState {
+    const outgoing = frame.shotTransition.outgoingFrame;
+    const progress = frame.shotTransition.progress;
+    const isActive = Boolean(
+        frame.shotTransition.isTransitioning && outgoing && progress < 1
+    );
+
+    if (!isActive || !outgoing) {
+        return {
+            isActive: false,
+            incomingOpacity: 1,
+            incomingSlideX: 0,
+            outgoingOpacity: 0,
+            outgoingSlideX: 0,
+            incomingLayers: frame.layers,
+            outgoingLayers: [],
+            outgoingShotStartMs: frame.activeShot.startMs,
+        };
+    }
+
+    let outgoingOpacity = 1;
+    let outgoingSlideX = 0;
+    let incomingOpacity = 1;
+    let incomingSlideX = 0;
+
+    if (frame.shotTransition.type === 'crossfade') {
+        outgoingOpacity = 1 - progress;
+        incomingOpacity = progress;
+    } else if (frame.shotTransition.type === 'push') {
+        outgoingSlideX = -progress;
+        incomingSlideX = 1 - progress;
+    } else if (frame.shotTransition.type === 'slide') {
+        outgoingSlideX = -progress * 0.25;
+        incomingSlideX = 1 - progress;
+    }
+
+    const modulateLayers = (
+        sourceLayers: EvaluatedLayerWithEffects[],
+        opacityMult: number,
+        slideX: number
+    ): EvaluatedLayerWithEffects[] =>
+        sourceLayers.map((l) => {
+            const nextOpacity = Math.max(0, Math.min(1, Number((l.opacity * opacityMult).toFixed(4))));
+            return {
+                ...l,
+                opacity: nextOpacity,
+                visible: l.visible && nextOpacity > 0.001,
+                position:
+                    slideX !== 0
+                        ? { ...l.position, x: l.position.x + slideX }
+                        : l.position,
+            };
+        });
+
+    return {
+        isActive: true,
+        incomingOpacity,
+        incomingSlideX,
+        outgoingOpacity,
+        outgoingSlideX,
+        incomingLayers: modulateLayers(frame.layers, incomingOpacity, incomingSlideX),
+        outgoingLayers: modulateLayers(outgoing.layers, outgoingOpacity, outgoingSlideX),
+        outgoingShotStartMs: outgoing.activeShot.startMs,
+        outgoingCamera: outgoing.camera,
+    };
+}
 
 export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
     dofBlurPx: number;
@@ -225,6 +312,13 @@ export function evaluateProjectAtTime(
     // 4. Evaluate Scene Effects Rack
     const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
 
+    // Populate scene-level motionVector when motionBlur is enabled so Canvas 2D fallback matches WebGL
+    const fps = project.fps && project.fps > 0 ? project.fps : 60;
+    const frameDt = 1000 / fps;
+    const prevShotLocalTime = Math.max(0, shotLocalTimeMs - frameDt);
+    let maxLayerMotionX = 0;
+    let maxLayerMotionY = 0;
+
     // 5. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
     const groupById = new Map((activeShot.groups || []).map((g) => [g.id, g]));
 
@@ -246,16 +340,19 @@ export function evaluateProjectAtTime(
 
         let motionBlur: { x: number; y: number; samples: number } | undefined;
         if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
-            const fps = project.fps && project.fps > 0 ? project.fps : 60;
-            const dt = 1000 / fps;
-            const prevTime = Math.max(0, shotLocalTimeMs - dt);
             const prevLayer = evaluateLayerAtTime(
                 isHidden ? { ...layer, hidden: true } : layer,
-                prevTime
+                prevShotLocalTime
             );
+            const rawDx = evalLayer.position.x - prevLayer.position.x;
+            const rawDy = evalLayer.position.y - prevLayer.position.y;
+            if (Math.hypot(rawDx, rawDy) > Math.hypot(maxLayerMotionX, maxLayerMotionY)) {
+                maxLayerMotionX = rawDx;
+                maxLayerMotionY = rawDy;
+            }
             const shutter = (effects.state.motionBlur.shutterAngle ?? 180) / 360;
-            const dx = (evalLayer.position.x - prevLayer.position.x) * shutter;
-            const dy = (evalLayer.position.y - prevLayer.position.y) * shutter;
+            const dx = rawDx * shutter;
+            const dy = rawDy * shutter;
             if (Math.hypot(dx, dy) > 0.0001) {
                 motionBlur = {
                     x: dx,
@@ -277,6 +374,17 @@ export function evaluateProjectAtTime(
             motionBlur,
         };
     });
+
+    if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
+        const prevCamera = evaluateShotCameraAtTime(activeShot, prevShotLocalTime);
+        const camDx = -(camera.target.x - prevCamera.target.x) / 1920 + (camera.zoom - prevCamera.zoom) * 0.25;
+        const camDy = -(camera.target.y - prevCamera.target.y) / 1080 + (camera.rotation.x - prevCamera.rotation.x) * 0.25;
+        const mvX = Math.abs(camDx) > Math.abs(maxLayerMotionX) ? camDx : maxLayerMotionX;
+        const mvY = Math.abs(camDy) > Math.abs(maxLayerMotionY) ? camDy : maxLayerMotionY;
+        if (Math.hypot(mvX, mvY) > 0.0001) {
+            effects.motionVector = { x: Number(mvX.toFixed(6)), y: Number(mvY.toFixed(6)) };
+        }
+    }
 
     // 6. Evaluate Shot-to-Shot Transition
     const trans = activeShot.transition || { type: 'cut' as const, durationMs: 0, easing: { kind: 'preset' as const, name: 'linear' as const } };

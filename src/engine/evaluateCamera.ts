@@ -1,5 +1,5 @@
 // src/engine/evaluateCamera.ts
-import type { Shot } from '../model/types';
+import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { degToRad } from '../model/defaults';
 import { evaluateEasing } from './easing';
 
@@ -57,26 +57,38 @@ export function evaluateShotCameraAtTime(
     );
 
     const framingMap = new Map(framings.map((f) => [f.id, f]));
+    let prevResolvedTo: {
+        anchorX: number;
+        anchorY: number;
+        anchorZ: number;
+        zoom: number;
+        roll: number;
+        orbit: number;
+        tilt: number;
+        focalLength: number;
+    } | null = null;
 
     for (let i = 0; i < sortedBlocks.length; i++) {
         const block = sortedBlocks[i];
-        const fromFraming =
-            (block.fromFramingId ? framingMap.get(block.fromFramingId) : undefined) || defaultFraming;
+        const explicitFromFraming = block.fromFramingId ? framingMap.get(block.fromFramingId) : undefined;
+        const fromFraming = explicitFromFraming || defaultFraming;
         const toFraming =
             (block.toFramingId ? framingMap.get(block.toFramingId) : undefined) || fromFraming;
 
-        const fromEndpoint = block.from || {
-            anchorX: fromFraming.target.x,
-            anchorY: fromFraming.target.y,
-            anchorZ: fromFraming.target.z,
-            zoom: fromFraming.zoom,
-            roll: fromFraming.roll ?? 0,
-            orbit: fromFraming.orbit ?? 0,
-            tilt: fromFraming.tilt ?? 0,
-            focalLength: DEFAULT_FOCAL_LENGTH,
-        };
+        const fromEndpoint: CameraKeyframeEndpoint = block.from || (prevResolvedTo && !explicitFromFraming
+            ? { ...prevResolvedTo }
+            : {
+                anchorX: fromFraming.target.x,
+                anchorY: fromFraming.target.y,
+                anchorZ: fromFraming.target.z,
+                zoom: fromFraming.zoom,
+                roll: fromFraming.roll ?? 0,
+                orbit: fromFraming.orbit ?? 0,
+                tilt: fromFraming.tilt ?? 0,
+                focalLength: DEFAULT_FOCAL_LENGTH,
+            });
 
-        const toEndpoint = block.to || {
+        const toEndpoint: CameraKeyframeEndpoint = block.to || {
             anchorX: toFraming.target.x,
             anchorY: toFraming.target.y,
             anchorZ: toFraming.target.z,
@@ -85,6 +97,17 @@ export function evaluateShotCameraAtTime(
             orbit: toFraming.orbit ?? 0,
             tilt: toFraming.tilt ?? 0,
             focalLength: DEFAULT_FOCAL_LENGTH,
+        };
+
+        prevResolvedTo = {
+            anchorX: toEndpoint.anchorX,
+            anchorY: toEndpoint.anchorY,
+            anchorZ: toEndpoint.anchorZ ?? toFraming.target.z ?? 0,
+            zoom: toEndpoint.zoom,
+            roll: toEndpoint.roll ?? 0,
+            orbit: toEndpoint.orbit ?? 0,
+            tilt: toEndpoint.tilt ?? 0,
+            focalLength: toEndpoint.focalLength ?? fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH,
         };
 
         if (shotLocalTimeMs < block.startMs) {
@@ -159,6 +182,10 @@ export function evaluateShotCameraAtTime(
                 Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+            if (Math.abs(toZ - fromZ) < 1e-6) {
+                // Compensate Z distance when no explicit Z shift was authored so subject width stays locked
+                targetZ = fromZ + (1 - fromBaseZoom / zoom) * 0.45;
+            }
         } else {
             // Dolly: physical 3D camera push with configured focal length (e.g. 50mm or custom lens)
             focalLength = lerp(fromFocal, toFocal, eased);

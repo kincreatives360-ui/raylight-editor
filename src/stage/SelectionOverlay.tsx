@@ -362,37 +362,71 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 : layer.size.height;
         const initialPosX = layer.position.x;
         const initialPosY = layer.position.y;
+        const rotZ = primaryEval.rotation.z || 0;
+        const cosZ = Math.cos(rotZ);
+        const sinZ = Math.sin(rotZ);
+        const safeAspect = initialH > 0.0001 ? initialW / initialH : 1;
 
         let lastDW = 0;
         let lastDH = 0;
 
         const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
-            const dxFrac =
-                (moveEvent.clientX - startClientX) / (frameWidth * canvasZoom * zoom);
-            const dyFrac =
-                (moveEvent.clientY - startClientY) / (frameHeight * canvasZoom * zoom);
+            const screenDxPx =
+                (moveEvent.clientX - startClientX) / (canvasZoom * zoom);
+            const screenDyPx =
+                (moveEvent.clientY - startClientY) / (canvasZoom * zoom);
+
+            // Project pointer delta onto the layer's local rotated axes
+            const localDxPx = screenDxPx * cosZ + screenDyPx * sinZ;
+            const localDyPx = -screenDxPx * sinZ + screenDyPx * cosZ;
+            const dxFrac = localDxPx / frameWidth;
+            const dyFrac = localDyPx / frameHeight;
+
+            const isSymmetric = Boolean(moveEvent.altKey);
+            const isAspectLocked = Boolean(moveEvent.shiftKey);
+            const mult = isSymmetric ? 2 : 1;
 
             let nextW = initialW;
             let nextH = initialH;
-            let nextPosX = initialPosX;
-            let nextPosY = initialPosY;
 
             if (dir.includes('e')) {
-                nextW = Math.max(0.04, initialW + dxFrac);
-                nextPosX = initialPosX + (nextW - initialW) / 2;
+                nextW = Math.max(0.04, initialW + dxFrac * mult);
             }
             if (dir.includes('w')) {
-                nextW = Math.max(0.04, initialW - dxFrac);
-                nextPosX = initialPosX - (nextW - initialW) / 2;
+                nextW = Math.max(0.04, initialW - dxFrac * mult);
             }
             if (dir.includes('s')) {
-                nextH = Math.max(0.02, initialH + dyFrac);
-                nextPosY = initialPosY + (nextH - initialH) / 2;
+                nextH = Math.max(0.02, initialH + dyFrac * mult);
             }
             if (dir.includes('n')) {
-                nextH = Math.max(0.02, initialH - dyFrac);
-                nextPosY = initialPosY - (nextH - initialH) / 2;
+                nextH = Math.max(0.02, initialH - dyFrac * mult);
             }
+
+            if (isAspectLocked && layer.kind !== 'text') {
+                if ((dir === 'e' || dir === 'w') || (dir.length === 2 && Math.abs(dxFrac) >= Math.abs(dyFrac))) {
+                    nextH = Math.max(0.02, nextW / safeAspect);
+                } else {
+                    nextW = Math.max(0.04, nextH * safeAspect);
+                }
+            }
+
+            let localShiftFracX = 0;
+            let localShiftFracY = 0;
+            if (!isSymmetric) {
+                if (dir.includes('e')) localShiftFracX = (nextW - initialW) / 2;
+                if (dir.includes('w')) localShiftFracX = -(nextW - initialW) / 2;
+                if (dir.includes('s')) localShiftFracY = (nextH - initialH) / 2;
+                if (dir.includes('n')) localShiftFracY = -(nextH - initialH) / 2;
+            }
+
+            // Rotate the local center shift back into world space so the opposite edge/corner stays pinned
+            const localShiftPxX = localShiftFracX * frameWidth;
+            const localShiftPxY = localShiftFracY * frameHeight;
+            const worldShiftPxX = localShiftPxX * cosZ - localShiftPxY * sinZ;
+            const worldShiftPxY = localShiftPxX * sinZ + localShiftPxY * cosZ;
+
+            let nextPosX = initialPosX + worldShiftPxX / frameWidth;
+            let nextPosY = initialPosY + worldShiftPxY / frameHeight;
 
             const isMedia = layer.kind === 'image' || layer.kind === 'video';
             const mediaDeviceFrame = isMedia ? (layer as ImageLayer | VideoLayer).deviceFrame : undefined;

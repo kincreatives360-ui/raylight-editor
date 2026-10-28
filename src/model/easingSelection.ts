@@ -92,7 +92,14 @@ export function easingFromSelection(
   const separator = selection.indexOf(':');
   if (separator < 0) return null;
   const kind = selection.slice(0, separator);
-  const name = selection.slice(separator + 1);
+  const name = selection.slice(separator + 1).trim();
+
+  if (kind === 'bezier') {
+    if (name === 'cinematic') return { kind: 'bezier', x1: 0.16, y1: 1, x2: 0.3, y2: 1 };
+    if (name === 'dramatic') return { kind: 'bezier', x1: 0.85, y1: 0, x2: 0.15, y2: 1 };
+    if (name === 'whip') return { kind: 'bezier', x1: 0.6, y1: -0.28, x2: 0.74, y2: 0.05 };
+    return { kind: 'bezier', ...bezierDefaults };
+  }
 
   if (kind === 'spring') {
     const result = SpringEasingNameSchema.safeParse(name);

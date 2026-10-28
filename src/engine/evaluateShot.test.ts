@@ -1,6 +1,10 @@
 // src/engine/evaluateShot.test.ts
 import { describe, it, expect } from 'vitest';
-import { evaluateProjectAtTime } from './evaluateShot';
+import {
+  evaluateProjectAtTime,
+  getShotTransitionCompositeState,
+  resolveDepthOfFieldFocusZ,
+} from './evaluateShot';
 import {
   DEFAULT_PROJECT,
   createDefaultShot,
@@ -423,5 +427,30 @@ describe('evaluateProjectAtTime', () => {
       expect(evalMs).toBeLessThan(scale.maxEvalMs);
       expect(serializeMs).toBeLessThan(250);
     }
+  });
+
+  it('11. Phase 1 Parity: getShotTransitionCompositeState, resolveDepthOfFieldFocusZ, sequential CameraBlocks, and motionVector', () => {
+    const project = createMultiShotContractFixture();
+    // At t=3300ms (halfway through Shot 2's 600ms crossfade transition)
+    const transFrame = evaluateProjectAtTime(project, 3300);
+    const comp = getShotTransitionCompositeState(transFrame);
+    expect(comp.isActive).toBe(true);
+    expect(comp.outgoingLayers.length).toBeGreaterThan(0);
+    expect(comp.incomingLayers.length).toBeGreaterThan(0);
+    expect(comp.outgoingOpacity + comp.incomingOpacity).toBeCloseTo(1, 2);
+    expect(comp.outgoingShotStartMs).toBe(0);
+
+    // Foreground hero layer fallback for Depth-of-Field auto-focus
+    const focusZ = resolveDepthOfFieldFocusZ(undefined, [
+      { id: 'bg', position: { z: -0.8 } },
+      { id: 'hero', position: { z: 0.35 } },
+    ]);
+    expect(focusZ).toBeCloseTo(0.35, 3);
+
+    // Scene motionBlur populates effects.motionVector when camera/layers move
+    project.shots[0].effects.motionBlur.enabled = true;
+    const motionFrame = evaluateProjectAtTime(project, 300);
+    expect(motionFrame.effects.motionVector).toBeDefined();
+    expect(Math.hypot(motionFrame.effects.motionVector!.x, motionFrame.effects.motionVector!.y)).toBeGreaterThan(0);
   });
 });

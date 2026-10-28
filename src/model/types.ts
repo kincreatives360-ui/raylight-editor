@@ -203,10 +203,17 @@ export type TransitionType =
   | 'float-out'
   | 'scale-out'
   | 'mask-sweep'
+  | 'wipe'
   | 'blur'
   | 'focus'
   | 'rack-focus'
-  | 'typewriter';
+  | 'pop'
+  | 'spin'
+  | 'flip-x'
+  | 'flip-y'
+  | 'swing'
+  | 'typewriter'
+  | 'scramble';
 
 export interface Transitionish {
   enabled?: boolean;

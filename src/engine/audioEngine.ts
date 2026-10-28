@@ -3,17 +3,20 @@ import type { AudioClip, ProjectAudio } from '../model/types';
 
 // Audio Context Singleton
 let audioCtx: AudioContext | null = null;
+let lastAudioContextClass: unknown = null;
 const audioBufferCache = new Map<string, AudioBuffer>();
 const inFlightDecodes = new Set<string>();
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const AudioContextClass =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtx || (AudioContextClass && AudioContextClass !== lastAudioContextClass)) {
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
+      lastAudioContextClass = AudioContextClass;
+      masterGainNode = null;
     }
   }
   if (audioCtx && audioCtx.state === 'suspended') {
@@ -31,6 +34,7 @@ let activeSources: ActivePlaybackSource[] = [];
 let masterGainNode: GainNode | null = null;
 let lastSyncedTimeMs = -1;
 let isCurrentlyPlaying = false;
+let lastAudioStateKey = '';
 
 // Waveform Peak Amplitudes LRU Cache
 const waveformPeakCache = new Map<string, number[]>();
@@ -160,8 +164,19 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
   }
 }
 
+function computeAudioStateKey(audio: ProjectAudio): string {
+  const clipsKey = audio.clips
+    .map((c) => {
+      const ready = c.dataUrl && audioBufferCache.has(c.dataUrl) ? '1' : '0';
+      return `${c.id}:${c.startMs}:${c.durationMs}:${c.offsetMs}:${c.volume}:${c.muted ? 1 : 0}:${getUrlCompactId(c.dataUrl)}:${ready}`;
+    })
+    .join('|');
+  return `${audio.muted ? 1 : 0}:${audio.masterVolume}:${clipsKey}`;
+}
+
 /**
- * Synchronizes audio playback with current timeline time and play state
+ * Synchronizes audio playback with current timeline time and play state.
+ * Schedules both currently overlapping clips and future lookahead clips via Web Audio timestamps.
  */
 export function syncAudioPlayback(
   audio: ProjectAudio | undefined,
@@ -172,15 +187,21 @@ export function syncAudioPlayback(
     stopAudioPlayback();
     isCurrentlyPlaying = isPlaying;
     lastSyncedTimeMs = currentTimeMs;
+    lastAudioStateKey = '';
     return;
   }
 
   const ctx = getAudioContext();
   if (!ctx) return;
 
-  // Check if play state changed or playhead jumped significantly (> 180ms)
+  const audioStateKey = computeAudioStateKey(audio);
+  const audioStateChanged = audioStateKey !== lastAudioStateKey;
   const playStateChanged = isCurrentlyPlaying !== isPlaying;
-  const playheadJumped = Math.abs(currentTimeMs - lastSyncedTimeMs) > 180;
+  // Detect timeline seeks, loops (currentTimeMs < lastSyncedTimeMs), or jumps (> 180ms)
+  const playheadJumped =
+    lastSyncedTimeMs < 0 ||
+    currentTimeMs < lastSyncedTimeMs - 5 ||
+    Math.abs(currentTimeMs - lastSyncedTimeMs) > 180;
 
   if (!isPlaying) {
     if (isCurrentlyPlaying) {
@@ -188,10 +209,11 @@ export function syncAudioPlayback(
     }
     isCurrentlyPlaying = false;
     lastSyncedTimeMs = currentTimeMs;
+    lastAudioStateKey = audioStateKey;
     return;
   }
 
-  if (!playStateChanged && !playheadJumped) {
+  if (!playStateChanged && !playheadJumped && !audioStateChanged) {
     lastSyncedTimeMs = currentTimeMs;
     return;
   }
@@ -200,62 +222,79 @@ export function syncAudioPlayback(
   stopAudioPlayback();
   isCurrentlyPlaying = true;
   lastSyncedTimeMs = currentTimeMs;
+  lastAudioStateKey = audioStateKey;
 
   // Set up Master Gain
   if (!masterGainNode) {
     masterGainNode = ctx.createGain();
     masterGainNode.connect(ctx.destination);
   }
-  masterGainNode.gain.setValueAtTime(audio.muted ? 0 : audio.masterVolume, ctx.currentTime);
+  const nowSec = ctx.currentTime ?? 0;
+  if (typeof masterGainNode.gain.setValueAtTime === 'function') {
+    masterGainNode.gain.setValueAtTime(audio.muted ? 0 : audio.masterVolume, nowSec);
+  } else {
+    masterGainNode.gain.value = audio.muted ? 0 : audio.masterVolume;
+  }
 
-  // Schedule each eligible clip
+  // Schedule each eligible clip (active now OR starting in the future)
   for (const clip of audio.clips) {
-    if (clip.muted || clip.volume <= 0) continue;
+    if (clip.muted || clip.volume <= 0 || clip.durationMs <= 0) continue;
 
     const clipStart = clip.startMs;
     const clipEnd = clip.startMs + clip.durationMs;
 
-    // Clip is active if playhead is within clip or ahead of clip start
-    if (currentTimeMs >= clipStart && currentTimeMs < clipEnd) {
-      const clipOffsetSec = (clip.offsetMs + (currentTimeMs - clipStart)) / 1000;
-      const remainingDurationSec = (clipEnd - currentTimeMs) / 1000;
+    // Skip clips that have already finished before the current playhead
+    if (clipEnd <= currentTimeMs) continue;
 
-      if (clip.dataUrl) {
-        if (!audioBufferCache.has(clip.dataUrl)) {
-          // Preload into cache so it will be ready to play on upcoming playback ticks
-          if (!inFlightDecodes.has(clip.dataUrl)) {
-            inFlightDecodes.add(clip.dataUrl);
-            void decodeAudioFromDataUrl(clip.dataUrl).finally(() => {
-              inFlightDecodes.delete(clip.dataUrl!);
-              lastSyncedTimeMs = -1;
-            });
-          }
-        } else {
-          // Play decoded user audio
-          const buffer = audioBufferCache.get(clip.dataUrl)!;
-          if (clipOffsetSec < buffer.duration) {
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            const gain = ctx.createGain();
-            gain.gain.value = clip.volume;
-            source.connect(gain);
-            gain.connect(masterGainNode);
+    if (!clip.dataUrl) continue;
 
-            source.start(ctx.currentTime, clipOffsetSec, remainingDurationSec);
-            activeSources.push({
-              stop: () => {
-                try {
-                  source.stop();
-                  source.disconnect();
-                  gain.disconnect();
-                } catch {
-                  // Source might already be stopped or disconnected
-                }
-              },
-            });
-          }
-        }
+    if (!audioBufferCache.has(clip.dataUrl)) {
+      // Preload into cache so it will be ready to schedule as soon as decoding completes
+      if (!inFlightDecodes.has(clip.dataUrl)) {
+        inFlightDecodes.add(clip.dataUrl);
+        void decodeAudioFromDataUrl(clip.dataUrl).finally(() => {
+          inFlightDecodes.delete(clip.dataUrl!);
+          lastSyncedTimeMs = -1;
+        });
       }
+      continue;
+    }
+
+    const buffer = audioBufferCache.get(clip.dataUrl)!;
+    const isFutureClip = clipStart > currentTimeMs;
+    const startWhenSec = isFutureClip
+      ? nowSec + (clipStart - currentTimeMs) / 1000
+      : nowSec;
+    const clipOffsetSec = isFutureClip
+      ? Math.max(0, clip.offsetMs / 1000)
+      : Math.max(0, (clip.offsetMs + (currentTimeMs - clipStart)) / 1000);
+    const requestedDurationSec = isFutureClip
+      ? clip.durationMs / 1000
+      : (clipEnd - currentTimeMs) / 1000;
+
+    if (clipOffsetSec < buffer.duration && requestedDurationSec > 0) {
+      const playDurationSec = Math.min(requestedDurationSec, buffer.duration - clipOffsetSec);
+      if (playDurationSec <= 0) continue;
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = clip.volume;
+      source.connect(gain);
+      gain.connect(masterGainNode);
+
+      source.start(startWhenSec, clipOffsetSec, playDurationSec);
+      activeSources.push({
+        stop: () => {
+          try {
+            source.stop();
+            source.disconnect();
+            gain.disconnect();
+          } catch {
+            // Source might already be stopped or disconnected
+          }
+        },
+      });
     }
   }
 }

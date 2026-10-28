@@ -13,9 +13,10 @@ import type {
   LightRig,
 } from '../model/types';
 import { resolveShotBackground } from '../model/types';
-import type {
-  EvaluatedProjectFrame,
-  EvaluatedLayerWithEffects,
+import {
+  evaluateProjectAtTime,
+  type EvaluatedProjectFrame,
+  type EvaluatedLayerWithEffects,
 } from './evaluateShot';
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
@@ -30,11 +31,15 @@ const MAX_VIDEO_CACHE_SIZE = 20;
 const videoElementCache = new Map<string, HTMLVideoElement>();
 
 
-export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
-  let video = videoElementCache.get(dataUrl);
+export function getOrCreateVideoElement(
+  dataUrl: string,
+  instanceKey?: string
+): HTMLVideoElement {
+  const cacheKey = instanceKey ? `${dataUrl}::${instanceKey}` : dataUrl;
+  let video = videoElementCache.get(cacheKey);
   if (video) {
-    videoElementCache.delete(dataUrl);
-    videoElementCache.set(dataUrl, video);
+    videoElementCache.delete(cacheKey);
+    videoElementCache.set(cacheKey, video);
     return video;
   }
   if (videoElementCache.size >= MAX_VIDEO_CACHE_SIZE) {
@@ -56,7 +61,10 @@ export function getOrCreateVideoElement(dataUrl: string): HTMLVideoElement {
   video.preload = 'auto';
   video.src = dataUrl;
   video.load();
-  videoElementCache.set(dataUrl, video);
+  videoElementCache.set(cacheKey, video);
+  if (instanceKey && !videoElementCache.has(dataUrl)) {
+    videoElementCache.set(dataUrl, video);
+  }
   return video;
 }
 
@@ -147,12 +155,19 @@ export function seekVideoElement(
     timer = setTimeout(() => {
       if (isSettled) return;
       cleanup();
-      if (Math.abs(video.currentTime - targetSec) <= tolerance) {
-        resolve();
-      } else {
-        console.warn(`[Raylight] Video seek to ${targetSec}s timed out (current: ${video.currentTime}s)`);
-        resolve(); // Documented fallback to avoid indefinitely stalling export pipeline
+      if ((video as { error?: MediaError | null }).error) {
+        reject(new Error(`Video decode error while seeking to ${targetSec}s.`));
+        return;
       }
+      if (Math.abs(video.currentTime - targetSec) > tolerance) {
+        try {
+          video.currentTime = targetSec;
+        } catch {
+          // Ignore synchronous reassignment failure on timeout fallback
+        }
+        console.warn(`[Raylight] Video seek to ${targetSec}s timed out (current: ${video.currentTime}s)`);
+      }
+      resolve(); // Documented fallback to avoid indefinitely stalling export pipeline
     }, timeoutMs);
 
     try {
@@ -169,20 +184,27 @@ export async function syncAndSeekAllProjectVideos(
   timeMs: number
 ): Promise<void> {
   const seekPromises: Promise<void>[] = [];
+  const frame = evaluateProjectAtTime(project, timeMs);
 
-  for (const shot of project.shots || []) {
-    for (const layer of shot.layers || []) {
+  const seekShotFrameVideos = (evalFrame: EvaluatedProjectFrame) => {
+    for (const evalLayer of evalFrame.layers || []) {
+      const layer = evalLayer.layer;
       if (layer.kind === 'video' || layer.kind === 'image') {
         const asset = project.assets[(layer as ImageLayer | VideoLayer).assetId];
         if (asset?.dataUrl && (layer.kind === 'video' || asset.mimeType?.startsWith('video/'))) {
-          const video = getOrCreateVideoElement(asset.dataUrl);
-          const targetSec = Math.max(0, (timeMs - layer.inMs) / 1000);
+          const video = getOrCreateVideoElement(asset.dataUrl, layer.id);
+          const targetSec = Math.max(0, (evalFrame.shotLocalTimeMs - layer.inMs) / 1000);
           if (Number.isFinite(targetSec)) {
             seekPromises.push(seekVideoElement(video, targetSec));
           }
         }
       }
     }
+  };
+
+  seekShotFrameVideos(frame);
+  if (frame.shotTransition.isTransitioning && frame.shotTransition.outgoingFrame) {
+    seekShotFrameVideos(frame.shotTransition.outgoingFrame);
   }
 
   await Promise.all(seekPromises);
@@ -685,7 +707,7 @@ async function drawLayerContentOnCanvas(
       }
       const asset = project.assets[imageLayer.assetId];
       const isVideo = layer.kind === 'video' || Boolean(asset?.mimeType?.startsWith('video/'));
-      const video = isVideo && asset?.dataUrl ? getOrCreateVideoElement(asset.dataUrl) : undefined;
+      const video = isVideo && asset?.dataUrl ? getOrCreateVideoElement(asset.dataUrl, layer.id) : undefined;
       const image = !isVideo && asset?.dataUrl ? getOrCreateImageElement(asset.dataUrl) : undefined;
       const crop = imageLayer.crop ?? { x: 0, y: 0, width: 1, height: 1 };
       if (video?.videoWidth && video.videoHeight) {
@@ -1083,19 +1105,26 @@ export async function renderProjectFrameToCanvas(
   canvasW: number,
   canvasH: number
 ): Promise<void> {
-  // Sync any video layers to the exact frame time
-  for (const evalLayer of frame.layers) {
-    const layer = evalLayer.layer;
-    if (layer.kind === 'image' || layer.kind === 'video') {
-      const asset = project.assets[layer.assetId];
-      if (asset?.mimeType?.startsWith('video/') && asset.dataUrl) {
-        const video = getOrCreateVideoElement(asset.dataUrl);
-        const targetSec = Math.max(0, (frame.globalTimeMs - layer.inMs) / 1000);
-        if (Number.isFinite(targetSec) && Math.abs(video.currentTime - targetSec) > 0.04) {
-          video.currentTime = targetSec;
+  const syncFrameVideoLayers = (evalFrame: EvaluatedProjectFrame) => {
+    for (const evalLayer of evalFrame.layers) {
+      const layer = evalLayer.layer;
+      if (layer.kind === 'image' || layer.kind === 'video') {
+        const asset = project.assets[layer.assetId];
+        if ((layer.kind === 'video' || asset?.mimeType?.startsWith('video/')) && asset?.dataUrl) {
+          const video = getOrCreateVideoElement(asset.dataUrl, layer.id);
+          const targetSec = Math.max(0, (evalFrame.shotLocalTimeMs - layer.inMs) / 1000);
+          if (Number.isFinite(targetSec) && Math.abs(video.currentTime - targetSec) > 0.04) {
+            video.currentTime = targetSec;
+          }
         }
       }
     }
+  };
+
+  // Sync any video layers to the exact shot-local frame time
+  syncFrameVideoLayers(frame);
+  if (frame.shotTransition.isTransitioning && frame.shotTransition.outgoingFrame) {
+    syncFrameVideoLayers(frame.shotTransition.outgoingFrame);
   }
 
   ctx.save();

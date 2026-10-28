@@ -3,9 +3,10 @@ import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project, Background } from '../../model/types';
 import { resolveShotBackground } from '../../model/types';
-import type {
-    EvaluatedProjectFrame,
-    EvaluatedLayerWithEffects,
+import {
+    getShotTransitionCompositeState,
+    type EvaluatedProjectFrame,
+    type EvaluatedLayerWithEffects,
 } from '../../engine/evaluateShot';
 import { SceneBackground } from './SceneBackground';
 import { SceneLighting } from './SceneLighting';
@@ -212,7 +213,9 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     cameraRef,
 }) => {
     const activeShot = frame.activeShot;
-    const layers: EvaluatedLayerWithEffects[] = frame.layers;
+    const transitionState = getShotTransitionCompositeState(frame);
+    const layers: EvaluatedLayerWithEffects[] = transitionState.incomingLayers;
+    const outgoingLayers: EvaluatedLayerWithEffects[] = transitionState.outgoingLayers;
     const activeBackground = resolveShotBackground(project, activeShot);
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
@@ -275,8 +278,18 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 {/* 3. Screen-Space Shot-Aware Background with Transition Support */}
                 <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} />
 
-                {/* 4. 3D Scene Objects / Layers with Depth Awareness */}
+                {/* 4. 3D Scene Objects / Layers with Depth Awareness & Shot Transition Parity */}
                 <group name="raylight_layers_root">
+                    {outgoingLayers.map((outLayer) => (
+                        <ThreeLayerObject
+                            key={`outgoing-${outLayer.id}`}
+                            evalLayer={outLayer}
+                            project={project}
+                            evaluatedCamera={transitionState.outgoingCamera ?? frame.camera}
+                            onSelect={() => {}}
+                            shotStartMs={transitionState.outgoingShotStartMs}
+                        />
+                    ))}
                     {layers.map((evalLayer) => (
                         <ThreeLayerObject
                             key={evalLayer.id}
@@ -284,6 +297,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             project={project}
                             evaluatedCamera={frame.camera}
                             onSelect={onSelectLayer}
+                            shotStartMs={activeShot?.startMs ?? 0}
                         />
                     ))}
                 </group>

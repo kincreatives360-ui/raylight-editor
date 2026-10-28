@@ -26,6 +26,7 @@ interface ThreeLayerObjectProps {
     project: Project;
     evaluatedCamera: EvaluatedCamera;
     onSelect: (layerId: string, multiSelect?: boolean) => void;
+    shotStartMs?: number;
 }
 
 /**
@@ -169,6 +170,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     project,
     evaluatedCamera,
     onSelect,
+    shotStartMs = 0,
 }) => {
     const { layer } = evalLayer;
     const { invalidate, gl, size } = useThree();
@@ -320,20 +322,21 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const videoElement = useMemo(() => {
         if (!isVideoAsset || !assetUrl) return null;
-        return getOrCreateVideoElement(assetUrl);
-    }, [isVideoAsset, assetUrl]);
+        return getOrCreateVideoElement(assetUrl, layer.id);
+    }, [isVideoAsset, assetUrl, layer.id]);
 
-    // Keep video currentTime synchronized with timeline playhead
+    // Keep video currentTime synchronized with shot-local timeline playhead
     useEffect(() => {
         if (!isVideoAsset || !assetUrl) return;
-        const vid = getOrCreateVideoElement(assetUrl);
-        const targetSec = Math.max(0, (currentTimeMs - layer.inMs) / 1000);
+        const vid = getOrCreateVideoElement(assetUrl, layer.id);
+        const shotLocalTimeMs = Math.max(0, currentTimeMs - shotStartMs);
+        const targetSec = Math.max(0, (shotLocalTimeMs - layer.inMs) / 1000);
         if (Number.isFinite(targetSec)) {
             if (Math.abs(vid.currentTime - targetSec) > 0.04) {
                 vid.currentTime = targetSec;
             }
         }
-    }, [isVideoAsset, assetUrl, currentTimeMs, layer.inMs]);
+    }, [isVideoAsset, assetUrl, currentTimeMs, shotStartMs, layer.inMs, layer.id]);
 
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {

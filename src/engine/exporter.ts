@@ -224,7 +224,7 @@ export async function runVideoExportPipeline(
         const scale = longEdge > maxLongEdge ? maxLongEdge / longEdge : 1;
         const gifW = scale < 1 ? Math.round((rawDims.width * scale) / 2) * 2 : rawDims.width;
         const gifH = scale < 1 ? Math.round((rawDims.height * scale) / 2) * 2 : rawDims.height;
-        const gifFps = 12;
+        const gifFps = 15;
         const totalFrames = Math.max(2, Math.floor((durationMs / 1000) * gifFps));
 
         const canvas = document.createElement('canvas');

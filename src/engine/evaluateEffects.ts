@@ -14,6 +14,30 @@ export interface EvaluatedEffects {
     state: Effects;
     orderedEnabledPasses: ActiveEffectPass[];
     deterministicSeed: number; // Driven by frameNumber so two exports always match
+    motionVector?: { x: number; y: number };
+}
+
+/**
+ * Resolves the Depth-of-Field focus plane Z coordinate.
+ * When auto-resolving from visible layers without an explicit selected layer,
+ * prioritizes the foreground hero layer (topmost in layer order) over the background.
+ */
+export function resolveDepthOfFieldFocusZ(
+    dofTargetZ: number | undefined,
+    visibleLayers: ReadonlyArray<{ id?: string; position: { z: number } }>,
+    selectedLayerId?: string
+): number {
+    if (selectedLayerId) {
+        const matched = visibleLayers.find((l) => l.id === selectedLayerId);
+        if (matched) return Number(matched.position.z.toFixed(4));
+    }
+    if (dofTargetZ !== undefined && Number.isFinite(dofTargetZ)) {
+        return Number(dofTargetZ.toFixed(4));
+    }
+    if (visibleLayers.length > 0) {
+        return Number(visibleLayers[visibleLayers.length - 1].position.z.toFixed(4));
+    }
+    return 0;
 }
 
 // Pure Function: Calculates exact Depth-of-Field blur in pixels for a layer at layerZ

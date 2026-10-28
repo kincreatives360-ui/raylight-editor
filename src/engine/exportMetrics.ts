@@ -53,8 +53,8 @@ export function estimateExportMetrics(
         ? 1
         : Math.max(1, Math.floor(durationSec * effectiveFps));
     const bitrateMbps = settings.quality === 'studio'
-        ? 16
-        : settings.quality === 'social' ? 8 : 4;
+        ? 18
+        : settings.quality === 'social' ? 10 : 5;
     const resScale = (width * height) / (1920 * 1080);
     const estimatedSizeMb = settings.format === 'png'
         ? 1.4 * resScale
