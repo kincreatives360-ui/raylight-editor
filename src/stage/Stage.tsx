@@ -1817,13 +1817,13 @@ const StageComponent: React.FC<StageProps> = ({
             )}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
-            {activeTool !== 'camera' && <CanvasToolbar
+            <CanvasToolbar
                 selectedLayer={selectedLayer}
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}
                 onOpenShortcuts={onOpenShortcuts}
                 onFrameSelection={handleFrameSelectedLayers}
-            />}
+            />
         </div>
     );
 };

@@ -42,7 +42,7 @@ export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZo
         return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape, true); };
     }, [menu]);
     const button = 'flex items-center gap-2 rounded-lg px-3 py-3 text-sm hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white/60';
-    return <div ref={root} aria-label="Orbit camera controls" onMouseDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} className="absolute bottom-3 left-1/2 -translate-x-1/2 z-50 flex items-center rounded-2xl bg-[#242424] p-1 text-[#eeeeee] shadow-lg whitespace-nowrap">
+    return <div ref={root} aria-label="Orbit camera controls" onMouseDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} className="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-50 flex items-center rounded-2xl bg-[#242424] p-1 text-[#eeeeee] shadow-lg whitespace-nowrap">
         <div className="relative">
             <button className={button} aria-expanded={menu === 'angle'} aria-haspopup="menu" onClick={() => setMenu(menu === 'angle' ? null : 'angle')}><Crosshair size={16} />Angle<ChevronDown size={12} /></button>
             {menu === 'angle' && <div role="menu" aria-label="Camera angle" className="absolute bottom-full left-0 mb-2 w-44 rounded-2xl bg-[#242424] p-2 shadow-xl">{CAMERA_ANGLE_VIEWS.map(view => <button role="menuitem" key={view.id} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:bg-white/10" onClick={() => { onAngle(view.orbit, view.tilt, view.roll); setMenu(null); }}>{view.label}</button>)}</div>}

@@ -389,7 +389,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* Floating Crop Pill (visible when Image/Video layer selected) */}
-            {(selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
+            {activeTool !== 'camera' && (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
                 <button
                     onClick={() => setIsCropping(!isCropping)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition-colors duration-100 ${
