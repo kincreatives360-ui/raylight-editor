@@ -1,6 +1,6 @@
 import { ModalShell } from './ui/ModalShell';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sparkles, Download, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
+import { Sparkles, Download, Upload, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
 import { createDefaultShot } from './model/defaults';
 import { useProjectStore } from './store/useProjectStore';
@@ -24,7 +24,7 @@ const Stage = lazy(() => import('./stage/Stage').then(({ Stage }) => ({ default:
 import { LeftPanel } from './panels/LeftPanel/LeftPanel';
 import { RightSidebar } from './panels/Inspector/RightSidebar';
 import { Timeline } from './panels/Timeline/Timeline';
-import { saveProjectToBrowser, loadProjectFromIndexedDB } from './storage/projectIO';
+import { saveProjectToBrowser, loadProjectFromIndexedDB, exportProjectToFile, importProjectFromFile } from './storage/projectIO';
 import type { ExportSettings } from './engine/exporter';
 import { isMediaRecorderMp4Supported } from './engine/exportCapabilities';
 import { estimateExportMetrics } from './engine/exportMetrics';
@@ -241,6 +241,7 @@ export default function App() {
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const audioInputRef = useRef<HTMLInputElement | null>(null);
+  const projectFileInputRef = useRef<HTMLInputElement | null>(null);
   const copiedLayersRef = useRef<Layer[]>([]);
 
   const totalDurationMs = useMemo(
@@ -629,9 +630,23 @@ export default function App() {
       const key = e.key.toLowerCase();
 
       // Cmd/Ctrl + E: Export Video / GIF / Frame (Detail 4)
-      if ((e.metaKey || e.ctrlKey) && key === 'e') {
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && key === 'e') {
         e.preventDefault();
         handleOpenExportModal();
+        return;
+      }
+
+      // Cmd/Ctrl + Shift + S: Export Project (.raylight.json)
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && key === 's') {
+        e.preventDefault();
+        exportProjectToFile(project);
+        return;
+      }
+
+      // Cmd/Ctrl + O: Import Project (.raylight.json)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && key === 'o') {
+        e.preventDefault();
+        projectFileInputRef.current?.click();
         return;
       }
 
@@ -904,6 +919,7 @@ export default function App() {
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [
+    project,
     selectedLayer,
     selectedLayerIds,
     selectedLayerSet,
@@ -1227,6 +1243,24 @@ export default function App() {
       action: handleOpenExportModal,
     },
     {
+      id: 'export-project-file',
+      title: 'Export Project (.raylight.json)',
+      subtitle: 'Save complete project document to JSON file',
+      category: 'Project',
+      icon: Download,
+      shortcut: ['Mod', 'Shift', 'S'],
+      action: () => exportProjectToFile(project),
+    },
+    {
+      id: 'import-project-file',
+      title: 'Import Project (.raylight.json)...',
+      subtitle: 'Open an existing .raylight.json project file',
+      category: 'Project',
+      icon: Upload,
+      shortcut: ['Mod', 'O'],
+      action: () => projectFileInputRef.current?.click(),
+    },
+    {
       id: 'toggle-zen',
       title: 'Toggle Zen Mode',
       subtitle: 'Maximize viewport workspace',
@@ -1298,11 +1332,29 @@ export default function App() {
       shortcut: ['?'],
       action: () => setShortcutsModalOpen(true),
     },
-  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, setActiveTool, undo, redo, project.audio?.muted, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, toggleLeftPanel, toggleRightSidebar, handleOpenExportModal, setShortcutsModalOpen]);
+  ], [isPlaying, togglePlay, splitAtPlayhead, addLayerToShot, activeShot.id, setActiveTool, undo, redo, project, toggleProjectAudioMuted, leftPanelOpen, rightSidebarOpen, setLeftPanelOpen, setRightSidebarOpen, toggleLeftPanel, toggleRightSidebar, handleOpenExportModal, setShortcutsModalOpen]);
 
   return (
     <div className="flex h-full w-full flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
+      <input
+        ref={projectFileInputRef}
+        type="file"
+        accept=".json,.raylight.json,application/json"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          if (!f) return;
+          e.target.value = '';
+          const res = await importProjectFromFile(f);
+          if (res.success) {
+            updateProject(() => res.project, { skipHistory: false });
+          } else {
+            console.error('Failed to import project file:', res.errors);
+            alert('Failed to import project: ' + (res.errors?.[0] || 'Invalid file format'));
+          }
+        }}
+        className="hidden"
+      />
       <input
         ref={fileInputRef}
         type="file"

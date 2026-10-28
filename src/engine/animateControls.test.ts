@@ -6,7 +6,7 @@ import type { AnimationBlock, Transitionish } from '../model/types';
 const easing = { kind: 'preset', name: 'linear' } as const;
 const transition = (type: string, extra = {}) => ({ type, durationMs: 1000, delayMs: 0, distance: .2, easing, ...extra }) as Transitionish;
 const textLayer = () => createDefaultTextLayer({ content: 'Hello world\nNext line', inMs: 0, outMs: 4000, entrance: transition('none'), exit: transition('none') });
-const block = (property: string, extra = {}) => ({ id: 'b', label: property, property, startMs: 0, durationMs: 1000, amount: .15, easing, ...extra }) as AnimationBlock;
+const block = (property: string, extra = {}) => ({ id: `b-${property}`, label: property, property, startMs: 0, durationMs: 1000, amount: .15, easing, ...extra }) as AnimationBlock;
 describe('Animate controls', () => {
  it('persists new options', () => {
   const t = transition('rack-focus', { enabled: false, blur: 64, fade: false, stagger: 'word' }); expect(TransitionishSchema.parse(t)).toEqual(t);

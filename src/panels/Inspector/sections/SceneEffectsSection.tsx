@@ -25,7 +25,7 @@ import {
   ChevronDown,
 } from 'lucide-react';
 
-export const EFFECT_NAMES: Record<EffectKey, string> = {
+const EFFECT_NAMES: Record<EffectKey, string> = {
   depthOfField: 'Depth of field',
   bloom: 'Bloom',
   chromaticAberration: 'Color split',
@@ -38,7 +38,7 @@ export const EFFECT_NAMES: Record<EffectKey, string> = {
   glitch: 'Glitch',
 };
 
-export const EFFECT_DEFAULTS: Record<EffectKey, Record<string, number>> = {
+const EFFECT_DEFAULTS: Record<EffectKey, Record<string, number>> = {
   bloom: { intensity: 0.35, threshold: 0.75 },
   vignette: { intensity: 0.42 },
   motionBlur: { shutterAngle: 180, samples: 8 },

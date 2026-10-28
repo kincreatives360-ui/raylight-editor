@@ -7,8 +7,11 @@ import {
   exportProjectToFile,
   saveProjectToIndexedDB,
   loadProjectFromIndexedDB,
+  getStorageStatus,
+  subscribeStorageStatus,
 } from './projectIO';
-import { DEFAULT_PROJECT, createDefaultShot } from '../model/defaults';
+import { validateProject } from '../model/schema';
+import { DEFAULT_PROJECT, createDefaultShot, createDefaultImageLayer, createDefaultTextLayer } from '../model/defaults';
 import type { Project } from '../model/types';
 import * as opfsStorage from './opfsStorage';
 
@@ -461,6 +464,89 @@ describe('Project IO Storage & File Operations', () => {
     expect(mockAssetStore.put).toHaveBeenCalledWith(project.assets['asset-fail']);
 
     saveOpfsSpy.mockRestore();
+  });
+
+  it('13. getStorageStatus & subscribeStorageStatus track save state transitions', async () => {
+    const statuses: string[] = [];
+    const unsubscribe = subscribeStorageStatus((state) => {
+      statuses.push(state.status);
+    });
+
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      name: 'Status Tracking Project',
+    };
+
+    saveProjectToBrowser(project);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    unsubscribe();
+
+    expect(statuses).toContain('saving');
+    expect(statuses).toContain('saved');
+    expect(getStorageStatus().status).toBe('saved');
+  });
+
+  it('14. validateProject repairs referential integrity and duplicate IDs', () => {
+    const corruptProject: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-corrupt',
+      assets: {}, // Empty assets
+      shots: [
+        {
+          ...createDefaultShot(),
+          id: 'shot-1',
+          groups: [
+            { id: 'group-1', name: 'Group 1', parentGroupId: 'group-2', collapsed: false, hidden: false, locked: false },
+            { id: 'group-2', name: 'Group 2', parentGroupId: 'group-1', collapsed: false, hidden: false, locked: false }, // Circular reference!
+          ],
+          layers: [
+            createDefaultImageLayer({
+              id: 'layer-duplicate',
+              name: 'Hero Image',
+              assetId: 'missing-asset-id', // Dangling asset reference
+              maskLayerId: 'non-existent-mask', // Dangling mask
+              groupId: 'non-existent-group', // Dangling group
+            }),
+          ],
+        },
+        {
+          ...createDefaultShot(),
+          id: 'shot-2',
+          layers: [
+            createDefaultTextLayer({
+              id: 'layer-duplicate', // Duplicate ID across shots!
+              name: 'Duplicate Text Layer',
+              content: 'Hello',
+            }),
+          ],
+        },
+      ],
+    };
+
+    const result = validateProject(corruptProject);
+    expect(result.success).toBe(true);
+    if (!result.success) throw new Error('Expected validation success');
+    expect(result.project).toBeDefined();
+
+    const repaired = result.project;
+    // 1. Duplicate layer ID was repaired
+    const shot1LayerId = repaired.shots[0].layers[0].id;
+    const shot2LayerId = repaired.shots[1].layers[0].id;
+    expect(shot1LayerId).not.toBe(shot2LayerId);
+
+    // 2. Dangling asset was stubbed
+    expect(repaired.assets['missing-asset-id']).toBeDefined();
+    expect(repaired.assets['missing-asset-id'].name).toBe('Hero Image');
+
+    // 3. Dangling maskLayerId was cleared
+    expect(repaired.shots[0].layers[0].maskLayerId).toBeUndefined();
+
+    // 4. Dangling groupId was cleared
+    expect(repaired.shots[0].layers[0].groupId).toBeUndefined();
+
+    // 5. Circular parentGroupId in group-2 was severed
+    const g2 = repaired.shots[0].groups?.find((g: { id: string; parentGroupId?: string }) => g.id === 'group-2');
+    expect(g2?.parentGroupId).toBeUndefined();
   });
 });
 

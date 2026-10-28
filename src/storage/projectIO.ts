@@ -1,4 +1,5 @@
 // src/storage/projectIO.ts
+import { useState, useEffect } from 'react';
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { DEFAULT_PROJECT } from '../model/defaults';
@@ -242,17 +243,54 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
     });
 }
 
+export type StoragePersistenceStatus = 'saved' | 'saving' | 'warning' | 'error';
+
+export interface StorageStatusState {
+    status: StoragePersistenceStatus;
+    message: string;
+    lastSavedAt?: Date;
+}
+
+type StatusListener = (state: StorageStatusState) => void;
+const statusListeners = new Set<StatusListener>();
+let currentStorageState: StorageStatusState = {
+    status: 'saved',
+    message: 'All changes saved locally',
+    lastSavedAt: new Date(),
+};
+
+export function getStorageStatus(): StorageStatusState {
+    return currentStorageState;
+}
+
+export function subscribeStorageStatus(listener: StatusListener): () => void {
+    statusListeners.add(listener);
+    listener(currentStorageState);
+    return () => statusListeners.delete(listener);
+}
+
+function updateStorageStatus(status: StoragePersistenceStatus, message: string) {
+    currentStorageState = {
+        status,
+        message,
+        lastSavedAt: status === 'saved' || status === 'warning' ? new Date() : currentStorageState.lastSavedAt,
+    };
+    statusListeners.forEach((fn) => fn(currentStorageState));
+}
+
+export function useStorageStatus(): StorageStatusState {
+    const [state, setState] = useState<StorageStatusState>(getStorageStatus);
+    useEffect(() => subscribeStorageStatus(setState), []);
+    return state;
+}
+
 // Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
 export function saveProjectToBrowser(project: Project): void {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    // 1. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
-    void saveProjectToIndexedDB(project).then(saved => {
-        if (!saved && window.indexedDB) {
-            console.error('[Raylight Storage] IndexedDB project save failed. Local backup may not contain media.');
-        }
-    });
+    updateStorageStatus('saving', 'Saving changes...');
 
-    // 2. Synchronous LocalStorage save with payload truncation guard
+    let localStorageFailed = false;
+    // 1. Synchronous LocalStorage save with payload truncation guard
     try {
         const payload = JSON.stringify({
             ...project,
@@ -260,6 +298,7 @@ export function saveProjectToBrowser(project: Project): void {
         });
         localStorage.setItem(AUTO_SAVE_KEY, payload);
     } catch {
+        localStorageFailed = true;
         // If localStorage throws QuotaExceededError, fallback to saving without heavy asset base64s
         try {
             const lightweightAssets: Record<string, AssetRecord> = {};
@@ -286,6 +325,28 @@ export function saveProjectToBrowser(project: Project): void {
             console.warn('[Raylight Storage] LocalStorage fallback also exceeded quota, relying on IndexedDB:', fallbackErr);
         }
     }
+
+    // 2. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
+    void saveProjectToIndexedDB(project).then((saved) => {
+        if (saved) {
+            if (localStorageFailed) {
+                updateStorageStatus('warning', 'Media saved to IndexedDB (localStorage quota exceeded)');
+            } else {
+                updateStorageStatus('saved', 'All changes saved locally');
+            }
+        } else {
+            if (window.indexedDB) {
+                console.error('[Raylight Storage] IndexedDB project save failed. Local backup may not contain media.');
+                updateStorageStatus('error', 'IndexedDB save failed; media may not persist');
+            } else if (!localStorageFailed) {
+                updateStorageStatus('saved', 'Saved to localStorage');
+            } else {
+                updateStorageStatus('error', 'Storage quota exceeded');
+            }
+        }
+    }).catch((err) => {
+        updateStorageStatus('error', `Save error: ${err instanceof Error ? err.message : 'Unknown'}`);
+    });
 }
 
 // Load auto-saved project from browser local storage (synchronous initial load)

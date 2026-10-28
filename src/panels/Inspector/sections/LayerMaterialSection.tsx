@@ -16,7 +16,7 @@ const { updateLayer } = useProjectStore(); const activeShot = { id: shotId }; re
                     checked={
                         selectedLayer.receivesLight !== undefined
                             ? selectedLayer.receivesLight
-                            : selectedLayer.kind !== 'text'
+                            : selectedLayer.kind === 'image' || selectedLayer.kind === 'video'
                     }
                     onChange={(e) => {
                         const receivesLight = e.target.checked;
@@ -29,7 +29,7 @@ const { updateLayer } = useProjectStore(); const activeShot = { id: shotId }; re
                 />
             </div>
 
-            {(selectedLayer.receivesLight ?? (selectedLayer.kind !== 'text')) && (
+            {(selectedLayer.receivesLight ?? (selectedLayer.kind === 'image' || selectedLayer.kind === 'video')) && (
                 <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between gap-1 text-[10px] text-[#a1a1aa] tracking-tight">
                         <span>Material Presets:</span>

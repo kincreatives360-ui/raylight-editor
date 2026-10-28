@@ -34,13 +34,13 @@ npm run dev
 
 ### Testing & Validation
 ```sh
-# Run unit test suite (18 Vitest tests)
+# Run unit test suite (90+ test suites, 500+ unit & integration tests)
 npm test
 
 # Type-check and build production bundle
 npm run build
 
-# Run ESLint validation
+# Run ESLint validation (0 errors, 0 warnings)
 npm run lint
 ```
 
@@ -95,6 +95,10 @@ raylight-editor/
 | `[` | Collapse Left Navigation Panel |
 | `]` | Collapse Right Inspector Panel |
 | `Cmd/Ctrl + A` | Select all layers in active shot |
+| `Cmd/Ctrl + Shift + S` | Export Project document (`.raylight.json`) |
+| `Cmd/Ctrl + O` | Import Project file (`.raylight.json`) |
+| `Cmd/Ctrl + E` | Export Video / GIF / Frame modal |
+| `Cmd/Ctrl + K` | Open Command Menu |
 | `Escape` | Clear layer selection / Close modal |
 | `?` | Open **Keyboard Shortcuts** modal |
 

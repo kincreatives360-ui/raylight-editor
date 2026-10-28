@@ -110,7 +110,7 @@ export function getLayerSurfaceState(layer: Layer, framed: boolean, opacity: num
   const alpha = Math.max(0, Math.min(1, Number.isFinite(opacity) ? opacity : 1));
   return {
     visible: visible && !layer.hidden && alpha > 0,
-    receivesLight: framed ? false : layer.receivesLight ?? layer.kind !== 'text',
+    receivesLight: framed ? false : layer.receivesLight ?? (layer.kind === 'image' || layer.kind === 'video'),
     surfaceOpacity: framed ? 1 : alpha,
     assemblyOpacity: framed ? alpha : 1,
   };

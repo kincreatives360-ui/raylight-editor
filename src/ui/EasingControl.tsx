@@ -13,7 +13,7 @@ import { FigmaSelect } from './FigmaSelect';
 import { IconButton } from './primitives';
 import { ScrubInput } from './ScrubInput';
 
-export function easingCurvePath(easing: Easing): string {
+function easingCurvePath(easing: Easing): string {
   const samples = 24;
   const points: string[] = [];
   for (let i = 0; i <= samples; i++) {

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { DEFAULT_DEVICE_FRAME_SETTINGS, resolveDeviceFrameSettings } from '../../model/deviceFrame';
 import { drawMediaFrame, getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';
-import { createDefaultImageLayer } from '../../model/defaults';
+import { createDefaultImageLayer, createDefaultShapeLayer } from '../../model/defaults';
 
 function context() {
   return { save: vi.fn(), restore: vi.fn(), clearRect: vi.fn(), fillRect: vi.fn(), drawImage: vi.fn(), filter: 'none', fillStyle: '' };
@@ -95,6 +95,12 @@ describe('device media surfaces', () => {
     const layer = createDefaultImageLayer({ receivesLight: true });
     expect(getLayerSurfaceState(layer, true, 0.25)).toMatchObject({ receivesLight: false, surfaceOpacity: 1, assemblyOpacity: 0.25 });
     expect(getLayerSurfaceState(layer, false, 0.25)).toMatchObject({ receivesLight: true, surfaceOpacity: 0.25, assemblyOpacity: 1 });
+  });
+
+  it('keeps vector shapes flat by default while preserving explicit lighting', () => {
+    const shape = createDefaultShapeLayer();
+    expect(getLayerSurfaceState(shape, false, 1).receivesLight).toBe(false);
+    expect(getLayerSurfaceState({ ...shape, receivesLight: true }, false, 1).receivesLight).toBe(true);
   });
 
   it('does not resurrect hidden or zero-opacity layers for editing', () => {

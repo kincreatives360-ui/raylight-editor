@@ -143,4 +143,13 @@ interface Project {
 
 ### 7.4 Save Durability & Undo Grouping Contract
 * **Undo Grouping:** Continuous pointer drags (stage move/resize/rotate, `ScrubInput` drags, timeline bar/block trims) call `beginDragTransaction()` on first movement beyond deadzone, apply intermediate updates with `{ skipHistory: true }`, and call `commitDragTransaction()` on pointer release to record exactly one undo step.
-* **Save Durability:** Browser autosave writes lightweight metadata to `localStorage` and full asset blobs transactionally to `IndexedDB` (with `OPFS` supplementary disk streaming), preserving the last-known-good snapshot if quota limits are reached.
+* **Save Durability:** Browser autosave writes lightweight metadata to `localStorage` and full asset blobs transactionally to `IndexedDB` (with `OPFS` supplementary disk streaming), preserving the last-known-good snapshot if quota limits are reached. Persistence status is tracked (`saved`, `saving`, `warning`, `error`) and surfaced via a subtle non-disruptive indicator in the project header.
+
+### 7.5 Document-Level Referential Integrity & Project Portability Contract
+* **Entity ID Uniqueness:** Every `shot`, `layer`, `group`, `animationBlock`, `cameraBlock`, `lightBlock`, `effectBlock`, `audio.clip`, and `asset` in a project document MUST possess a globally unique identifier within the document. `validateProject` runs `repairProjectReferentialIntegrity` to automatically detect and repair ID collisions without data loss.
+* **Referential Hierarchy Repair:**
+  - `layer.groupId`: If pointing to a non-existent group ID, it is stripped (`undefined`).
+  - `group.parentGroupId`: If pointing to a non-existent group or introducing a circular ancestry cycle (`A -> B -> A`), the cyclic link is severed (`undefined`).
+  - `layer.maskLayerId`: If pointing to a missing layer ID or referencing the layer itself, it is cleared (`undefined`).
+  - `layer.assetId`: If an image or video layer references an asset ID missing from `project.assets`, `repairProjectReferentialIntegrity` provisions a safe fallback asset stub `{ id, name, mimeType, dataUrl: '', width: 1920, height: 1080 }` preventing null runtime crashes during rendering or inspection.
+* **Portable Project Format:** The canonical document exchange format is `.raylight.json`. Exporting generates a self-contained, validated JSON package; importing parses, migrates, and repairs schema and referential integrity before committing into application state.

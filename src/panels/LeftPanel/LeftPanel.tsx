@@ -3,7 +3,7 @@ import { IconButton } from '../../ui/primitives';
 import { SearchField } from '../../ui/SearchField';
 import { InlineRenameInput } from '../../ui/InlineRenameInput';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Trash2, Copy, Image as ImageIcon, Square, Circle, Type, Hash, Music, Activity, Video, Sun, Volume2, VolumeX, PanelLeftClose, Play, Pause, Upload } from 'lucide-react';
+import { Search, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Trash2, Copy, Image as ImageIcon, Square, Circle, Type, Hash, Music, Activity, Video, Sun, Volume2, VolumeX, PanelLeftClose, Play, Pause, Upload, Download, FolderOpen, RotateCcw } from 'lucide-react';
 import { isBlankProjectState, type Shot, type Layer, type Group, type AudioClip } from '../../model/types';
 import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -12,6 +12,8 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { BUILTIN_SOUND_PACKS } from '../../engine/soundPacks';
 import { CURATED_SOUNDS } from '../../data/curatedSounds';
 import { getSoundCategoryLabels, normalizeSoundCategory } from '../../data/soundCategories';
+import { exportProjectToFile, importProjectFromFile, useStorageStatus } from '../../storage/projectIO';
+import { createDefaultProject } from '../../model/defaults';
 import {
     SHADER_PRESETS,
     SHADER_PRESET_METADATA,
@@ -82,11 +84,31 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     const setCurrentTimeMs = usePlayheadStore((s) => s.setCurrentTimeMs);
 
     const [activeTab, setActiveTab] = useState<'file' | 'assets'>('file');
+    const [projectMenuOpen, setProjectMenuOpen] = useState(false);
     const [assetCategory, setAssetCategory] = useState<'uploads' | 'shaders' | 'sfx'>('uploads');
     const [selectedSfxCategory, setSelectedSfxCategory] = useState<string>('All');
     const [soundSearchQuery, setSoundSearchQuery] = useState<string>('');
     const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
     const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+    const projectFileInputRef = useRef<HTMLInputElement | null>(null);
+    const storage = useStorageStatus();
+
+    const handleImportProjectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+        e.target.value = '';
+        try {
+            const result = await importProjectFromFile(file);
+            if (result.success) {
+                updateProject(() => result.data);
+                setProjectMenuOpen(false);
+            } else {
+                alert(`Could not load project: ${result.errors[0] || 'Invalid file format'}`);
+            }
+        } catch (err) {
+            alert(`Error reading project file: ${err instanceof Error ? err.message : 'Unknown error'}`);
+        }
+    };
 
     useEffect(() => {
         return () => {
@@ -577,18 +599,108 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         >
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
+                {/* Hidden Project JSON File Input */}
+                <input
+                    ref={projectFileInputRef}
+                    type="file"
+                    accept=".json,.raylight.json,application/json"
+                    onChange={handleImportProjectFile}
+                    className="hidden"
+                    aria-hidden="true"
+                />
+
                 <button
-                    onClick={() =>
-                        setTimelineView(timelineView === 'video' ? 'scene' : 'video')
-                    }
-                    className="px-2.5 py-1 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/[0.07] flex items-center gap-1.5 text-[11px] font-semibold text-white cursor-pointer transition"
+                    onClick={() => setProjectMenuOpen((v) => !v)}
+                    aria-expanded={projectMenuOpen}
+                    aria-haspopup="menu"
+                    title={`Project Menu • ${storage.message}`}
+                    className="px-2.5 py-1 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/[0.07] flex items-center gap-1.5 text-[11px] font-semibold text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
                 >
                     <span className="font-bold tracking-tight text-sm leading-none">
                         R
                     </span>
                     <span>Canvas</span>
+                    <span
+                        className={`w-1.5 h-1.5 rounded-full shrink-0 transition-colors ${
+                            storage.status === 'saved'
+                                ? 'bg-emerald-400'
+                                : storage.status === 'saving'
+                                ? 'bg-sky-400 animate-pulse'
+                                : storage.status === 'warning'
+                                ? 'bg-amber-400'
+                                : 'bg-rose-400'
+                        }`}
+                        title={storage.message}
+                    />
                     <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
                 </button>
+
+                {projectMenuOpen && (
+                    <MenuSurface className="absolute top-11 left-3 w-60 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
+                        <div className="px-2.5 py-1.5 border-b border-white/[0.08] mb-1">
+                            <div className="font-semibold text-white truncate text-[11px]">{project.name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-[#a1a1aa]">
+                                <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                                    storage.status === 'saved'
+                                        ? 'bg-emerald-400'
+                                        : storage.status === 'saving'
+                                        ? 'bg-sky-400 animate-pulse'
+                                        : storage.status === 'warning'
+                                        ? 'bg-amber-400'
+                                        : 'bg-rose-400'
+                                }`} />
+                                <span className="truncate">{storage.message}</span>
+                            </div>
+                        </div>
+                        <MenuItem
+                            unstyled
+                            onClick={() => {
+                                exportProjectToFile(project);
+                                setProjectMenuOpen(false);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                        >
+                            <Download className="w-3.5 h-3.5 text-[#38bdf8]" />
+                            <span>Export Project (.raylight.json)</span>
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
+                            onClick={() => {
+                                projectFileInputRef.current?.click();
+                                setProjectMenuOpen(false);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                        >
+                            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                            <span>Import Project File...</span>
+                        </MenuItem>
+                        <div className="my-1 border-t border-white/[0.08]" />
+                        <MenuItem
+                            unstyled
+                            onClick={() => {
+                                setTimelineView(timelineView === 'video' ? 'scene' : 'video');
+                                setProjectMenuOpen(false);
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#a1a1aa] hover:text-white hover:bg-white/5 cursor-pointer"
+                        >
+                            <Activity className="w-3.5 h-3.5" />
+                            <span>Switch to {timelineView === 'video' ? 'Scene (3D Layers)' : 'Video (Timeline Clips)'}</span>
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
+                            onClick={() => {
+                                if (window.confirm('Reset this project to a fresh blank canvas? Unsaved changes will be replaced.')) {
+                                    updateProject(() => createDefaultProject());
+                                    setProjectMenuOpen(false);
+                                }
+                            }}
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-rose-400 hover:bg-rose-500/10 cursor-pointer"
+                        >
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            <span>New Blank Project</span>
+                        </MenuItem>
+                    </MenuSurface>
+                )}
 
                 <div className="flex items-center gap-1">
                     <IconButton

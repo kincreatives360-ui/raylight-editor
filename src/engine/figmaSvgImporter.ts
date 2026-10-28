@@ -68,6 +68,67 @@ export function readImageFileWithThumbnail(
     });
 }
 
+// Reads a video file and resolves its natural dimensions and duration in ms
+export function readVideoFile(
+    file: File
+): Promise<AssetRecord & { durationMs: number }> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Failed to read video file'));
+        reader.onload = () => {
+            const dataUrl = String(reader.result);
+            const video = document.createElement('video');
+            video.preload = 'metadata';
+            video.muted = true;
+            video.onerror = () => reject(new Error(`Unable to decode video: ${file.name || 'video'}`));
+            video.onloadedmetadata = () => {
+                const natW = video.videoWidth || 1920;
+                const natH = video.videoHeight || 1080;
+                const duration = video.duration && Number.isFinite(video.duration) ? video.duration : 5;
+                const durationMs = Math.round(duration * 1000);
+
+                resolve({
+                    id: `asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    name: file.name.replace(/\.[^/.]+$/, '') || 'Dropped video',
+                    mimeType: file.type || 'video/mp4',
+                    dataUrl,
+                    width: natW,
+                    height: natH,
+                    durationMs,
+                });
+            };
+            video.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Reads an audio file and resolves an audio asset with duration in ms
+export function readAudioFile(
+    file: File
+): Promise<{ id: string; name: string; dataUrl: string; durationMs: number }> {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error('Failed to read audio file'));
+        reader.onload = () => {
+            const dataUrl = String(reader.result);
+            const audio = new Audio();
+            audio.onerror = () => reject(new Error(`Unable to decode audio: ${file.name || 'audio'}`));
+            audio.onloadedmetadata = () => {
+                const duration = audio.duration && Number.isFinite(audio.duration) ? audio.duration : 5;
+                resolve({
+                    id: `audio-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+                    name: file.name.replace(/\.[^/.]+$/, '') || 'Dropped audio',
+                    dataUrl,
+                    durationMs: Math.round(duration * 1000),
+                });
+            };
+            audio.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
 function parseNumericAttr(
     el: Element,
     attr: string,
@@ -386,6 +447,14 @@ export function parseFigmaSvgToLayers(
             const href =
                 el.getAttribute('href') || el.getAttribute('xlink:href') || '';
             if (!href) continue;
+
+            const isDataUri = href.startsWith('data:image/');
+            const isBlobUri = href.startsWith('blob:');
+            if (!isDataUri && !isBlobUri) {
+                // Security & Privacy: Ignore untrusted remote HTTP/HTTPS URLs inside SVG to prevent SSRF and tracking
+                console.warn('[Raylight Importer] Ignored external SVG image reference:', href.slice(0, 48));
+                continue;
+            }
 
             const x = parseNumericAttr(el, 'x', 0);
             const y = parseNumericAttr(el, 'y', 0);

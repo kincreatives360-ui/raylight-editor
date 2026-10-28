@@ -9,7 +9,7 @@ import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { useProjectStore } from '../store/useProjectStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useSelectionStore } from '../store/useSelectionStore';
-import { readImageFileWithThumbnail, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
+import { readImageFileWithThumbnail, readVideoFile, readAudioFile, parseFigmaSvgToLayers } from '../engine/figmaSvgImporter';
 import { SelectionOverlay } from './SelectionOverlay';
 import { LightingOverlay } from './LightingOverlay';
 import { Guides } from './Guides';
@@ -1079,6 +1079,57 @@ const StageComponent: React.FC<StageProps> = ({
                     }
                 } catch (err) {
                     console.error('Failed to parse dropped SVG:', err);
+                }
+            } else if (file.type.startsWith('video/') || /\.(mp4|webm|mov|m4v|ogg)$/i.test(file.name)) {
+                try {
+                    const assetRecord = await readVideoFile(file);
+                    updateProject(
+                        (p) => ({
+                            ...p,
+                            assets: { ...p.assets, [assetRecord.id]: assetRecord },
+                        }),
+                        { skipHistory: true }
+                    );
+
+                    const size = computeFittedImageDimensions(assetRecord.width, assetRecord.height);
+
+                    const newLayer = addLayerToShot(frame.activeShot.id, 'video', {
+                        name: file.name.replace(/\.[^/.]+$/, '') || 'Dropped video',
+                        assetId: assetRecord.id,
+                        position: { x: dropX, y: dropY, z: 0 },
+                        size,
+                        rotation: { x: 0, y: 0, z: 0 },
+                        cornerRadius: 0,
+                    });
+                    selectLayer(newLayer.id, false);
+                } catch (err) {
+                    console.error('Failed to load dropped video:', err);
+                }
+            } else if (file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name)) {
+                try {
+                    const audioRecord = await readAudioFile(file);
+                    const clipDuration = audioRecord.durationMs || 5000;
+                    updateProject((p) => ({
+                        ...p,
+                        audio: {
+                            ...(p.audio || { muted: false, masterVolume: 1 }),
+                            clips: [
+                                ...(p.audio?.clips || []),
+                                {
+                                    id: audioRecord.id,
+                                    name: audioRecord.name,
+                                    dataUrl: audioRecord.dataUrl,
+                                    startMs: Math.max(0, frame.globalTimeMs || 0),
+                                    durationMs: clipDuration,
+                                    offsetMs: 0,
+                                    volume: 1,
+                                    muted: false,
+                                },
+                            ],
+                        },
+                    }));
+                } catch (err) {
+                    console.error('Failed to load dropped audio:', err);
                 }
             } else if (file.type.startsWith('image/')) {
                 try {
