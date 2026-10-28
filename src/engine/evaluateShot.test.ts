@@ -7,7 +7,10 @@ import {
   createDefaultShapeLayer,
   createDefaultTextLayer,
   createDefaultImageLayer,
+  createMultiShotContractFixture,
 } from '../model/defaults';
+import { validateProject } from '../model/schema';
+import { useProjectStore } from '../store/useProjectStore';
 import type { Project, Shot } from '../model/types';
 
 describe('evaluateProjectAtTime', () => {
@@ -302,5 +305,123 @@ describe('evaluateProjectAtTime', () => {
     const frameAt1000 = evaluateProjectAtTime(project, 1000);
     const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
     expect(layerAt1000.dofBlurPx).toBe(0);
+  });
+
+  it('8. Phase 0 Contract Fixture: validates multi-shot timebase, transition outgoingFrame, reused video assets, and future audio cues', () => {
+    const fixture = createMultiShotContractFixture();
+    const validation = validateProject(fixture);
+    expect(validation.success).toBe(true);
+
+    // Verify fixture contains audio clips at t=0 and after initial playhead (t=1200ms, t=3200ms)
+    const audioStarts = fixture.audio?.clips.map((c) => c.startMs) ?? [];
+    expect(audioStarts).toEqual([0, 1200, 3200]);
+
+    // Verify Shot 1 evaluation at t=1500ms (shotLocalTimeMs = 1500ms)
+    const frameShot1 = evaluateProjectAtTime(fixture, 1500);
+    expect(frameShot1.activeShot.id).toBe('shot-1');
+    expect(frameShot1.shotLocalTimeMs).toBe(1500);
+    const vidShot1 = frameShot1.layers.find((l) => l.id === 'vid-shot1')!;
+    expect(vidShot1.visible).toBe(true);
+
+    // Verify Transition Midpoint at t=3500ms (Shot 2 startMs=3000ms, shotLocalTimeMs=500ms, 50% through 1000ms crossfade)
+    const frameTransition = evaluateProjectAtTime(fixture, 3500);
+    expect(frameTransition.activeShot.id).toBe('shot-2');
+    expect(frameTransition.shotLocalTimeMs).toBe(500);
+    expect(frameTransition.shotTransition.isTransitioning).toBe(true);
+    expect(frameTransition.shotTransition.type).toBe('crossfade');
+    expect(frameTransition.shotTransition.progress).toBeCloseTo(0.5, 3);
+    expect(frameTransition.shotTransition.outgoingFrame).toBeDefined();
+    expect(frameTransition.shotTransition.outgoingFrame?.activeShot.id).toBe('shot-1');
+    expect(frameTransition.shotTransition.outgoingFrame?.layers.length).toBe(3);
+
+    // Verify Shot-Local Video Timebase Contract in Shot 2 at global t=3600ms:
+    // Shot 2 starts at 3000ms -> shotLocalTimeMs = 600ms.
+    // 'vid-shot2-shared' has inMs = 400ms (shot-local), so its media offset is (600 - 400) = 200ms (0.2s), NOT (3600 - 400) = 3200ms!
+    const frameShot2 = evaluateProjectAtTime(fixture, 3600);
+    const sharedVidInShot2 = frameShot2.layers.find((l) => l.id === 'vid-shot2-shared')!;
+    expect(sharedVidInShot2.visible).toBe(true);
+    const expectedShotLocalVideoSec = (frameShot2.shotLocalTimeMs - sharedVidInShot2.layer.inMs) / 1000;
+    const buggyGlobalVideoSec = (3600 - sharedVidInShot2.layer.inMs) / 1000;
+    expect(expectedShotLocalVideoSec).toBeCloseTo(0.2, 3);
+    expect(buggyGlobalVideoSec).toBeCloseTo(3.2, 3);
+  });
+
+  it('9. Phase 0 End-to-End Lifecycle Route: create shot -> add media -> edit/animate -> drag transaction undo -> evaluate', () => {
+    const store = useProjectStore.getState();
+    store.resetProject();
+
+    // 1. Create Shot 1 (replaces blank placeholder) & Shot 2
+    const s1 = store.addShot();
+    const s2 = store.addShot();
+    expect(useProjectStore.getState().project.shots.map((s) => s.id)).toEqual([s1.id, s2.id]);
+
+    // 2. Add media & text layers to Shot 1
+    const vidLayer = store.addLayerToShot(s1.id, 'video', { name: 'Demo Recording' });
+    const txtLayer = store.addLayerToShot(s1.id, 'text', { name: 'Launch Title' });
+    expect(useProjectStore.getState().project.shots[0].layers).toHaveLength(2);
+
+    // 3. Perform a bracketed drag transaction on the text layer and verify single-step undo grouping
+    const historyBeforeDrag = useProjectStore.getState().past.length;
+    store.beginDragTransaction();
+    store.updateLayer(s1.id, txtLayer.id, (l) => ({ ...l, position: { x: 0.1, y: 0.1, z: 0 } }), { skipHistory: true });
+    store.updateLayer(s1.id, txtLayer.id, (l) => ({ ...l, position: { x: 0.25, y: 0.2, z: 0 } }), { skipHistory: true });
+    store.commitDragTransaction();
+    expect(useProjectStore.getState().past.length).toBe(historyBeforeDrag + 1);
+
+    // 4. Evaluate across both shots and verify Undo restores pre-drag position
+    const evalMoved = evaluateProjectAtTime(useProjectStore.getState().project, 500);
+    expect(evalMoved.layers.find((l) => l.id === txtLayer.id)?.position.x).toBeCloseTo(0.25, 3);
+
+    store.undo();
+    const evalUndone = evaluateProjectAtTime(useProjectStore.getState().project, 500);
+    expect(evalUndone.layers.find((l) => l.id === txtLayer.id)?.position.x).toBeCloseTo(0, 3);
+    expect(vidLayer.kind).toBe('video');
+  });
+
+  it('10. Phase 0 Baseline Scale Benchmarks: records repeatable evaluation and serialization timings at 10, 100, and 500 layers', () => {
+    const buildScaledProject = (shotCount: number, totalLayers: number): Project => {
+      const layersPerShot = Math.ceil(totalLayers / shotCount);
+      const shots: Shot[] = Array.from({ length: shotCount }, (_, sIdx) =>
+        createDefaultShot({
+          id: `scale-shot-${sIdx}`,
+          name: `Shot ${sIdx + 1}`,
+          startMs: sIdx * 3000,
+          durationMs: 3000,
+          layers: Array.from({ length: layersPerShot }, (__, lIdx) =>
+            createDefaultShapeLayer({
+              id: `layer-${sIdx}-${lIdx}`,
+              name: `Layer ${lIdx}`,
+              order: lIdx,
+              inMs: 0,
+              outMs: 3000,
+              position: { x: (lIdx % 10) * 0.05 - 0.25, y: Math.floor(lIdx / 10) * 0.05 - 0.25, z: lIdx * 0.001 },
+            })
+          ),
+        })
+      );
+      return { ...createMultiShotContractFixture(), shots };
+    };
+
+    const scales = [
+      { label: 'small-10', shots: 1, layers: 10, maxEvalMs: 25 },
+      { label: 'medium-100', shots: 3, layers: 100, maxEvalMs: 50 },
+      { label: 'large-500', shots: 5, layers: 500, maxEvalMs: 120 },
+    ];
+
+    for (const scale of scales) {
+      const proj = buildScaledProject(scale.shots, scale.layers);
+      const t0 = performance.now();
+      const frame = evaluateProjectAtTime(proj, 1500);
+      const evalMs = performance.now() - t0;
+
+      const s0 = performance.now();
+      const json = JSON.stringify(proj);
+      const serializeMs = performance.now() - s0;
+
+      expect(frame.layers.length).toBeGreaterThan(0);
+      expect(json.length).toBeGreaterThan(100);
+      expect(evalMs).toBeLessThan(scale.maxEvalMs);
+      expect(serializeMs).toBeLessThan(250);
+    }
   });
 });

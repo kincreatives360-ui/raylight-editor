@@ -434,6 +434,193 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
 
 export const DEFAULT_PROJECT: Project = createDefaultProject();
 
+/**
+ * Canonical Phase 0 deterministic multi-shot fixture exercising:
+ * - Multiple shots (Shot 1: 0..3000ms, Shot 2: 3000..7000ms) with a 1000ms crossfade transition
+ * - Video layers in Shot 1 and Shot 2 (including a reused/shared video asset across both shots)
+ * - Audio clips before/at t=0ms and future audio clips starting after t=0ms (1200ms, 3200ms)
+ * - 3D device-framed image layers, shape layers, text layers, camera blocks, lights, and effects
+ */
+export function createMultiShotContractFixture(): Project {
+  const sharedVideoAssetId = 'asset-shared-video';
+  const shot2VideoAssetId = 'asset-shot2-video';
+  const mockupImageAssetId = 'asset-mockup-img';
+
+  const shot1 = createDefaultShot({
+    id: 'shot-1',
+    name: 'Intro Shot',
+    isPlaceholder: false,
+    startMs: 0,
+    durationMs: 3000,
+    useProjectBackground: true,
+    layers: [
+      createDefaultVideoLayer({
+        id: 'vid-shot1',
+        name: 'Intro Shared Video',
+        order: 0,
+        assetId: sharedVideoAssetId,
+        inMs: 500,
+        outMs: 2800,
+        position: { x: -0.18, y: 0, z: 0 },
+      }),
+      createDefaultImageLayer({
+        id: 'img-shot1-device',
+        name: 'Hero Device Mockup',
+        order: 1,
+        assetId: mockupImageAssetId,
+        inMs: 0,
+        outMs: 3000,
+        position: { x: 0.16, y: 0, z: 0.25 },
+      }),
+      createDefaultTextLayer({
+        id: 'txt-shot1-title',
+        name: 'Intro Headline',
+        order: 2,
+        content: 'RAYLIGHT PHASE 0',
+        inMs: 0,
+        outMs: 3000,
+        entrance: {
+          ...DEFAULT_TRANSITION_IN,
+          type: 'slide-up',
+          durationMs: 600,
+        },
+      }),
+    ],
+    cameraBlocks: [
+      createDefaultCameraBlock('cam-shot1-push', 0, 2500, 'f1', 'f2', 'Intro Push'),
+    ],
+  });
+
+  const shot2 = createDefaultShot({
+    id: 'shot-2',
+    name: 'Feature Shot',
+    isPlaceholder: false,
+    startMs: 3000,
+    durationMs: 4000,
+    useProjectBackground: false,
+    background: {
+      kind: 'solid',
+      color: '#111827',
+    },
+    transition: {
+      type: 'crossfade',
+      durationMs: 1000,
+      easing: { kind: 'preset', name: 'linear' },
+    },
+    layers: [
+      createDefaultVideoLayer({
+        id: 'vid-shot2-shared',
+        name: 'Reused Video in Shot 2',
+        order: 0,
+        assetId: sharedVideoAssetId,
+        inMs: 400,
+        outMs: 3600,
+        position: { x: -0.2, y: 0, z: -0.1 },
+      }),
+      createDefaultVideoLayer({
+        id: 'vid-shot2-unique',
+        name: 'Unique Video in Shot 2',
+        order: 1,
+        assetId: shot2VideoAssetId,
+        inMs: 0,
+        outMs: 4000,
+        position: { x: 0.2, y: 0, z: 0.3 },
+      }),
+      createDefaultShapeLayer({
+        id: 'shp-shot2-badge',
+        name: 'Feature Card',
+        order: 2,
+        inMs: 200,
+        outMs: 3800,
+        position: { x: 0, y: -0.25, z: 0.45 },
+      }),
+    ],
+    effects: {
+      ...createDefaultEffects(),
+      bloom: { enabled: true, intensity: 0.6, threshold: 0.7 },
+      depthOfField: {
+        enabled: true,
+        target: { x: 0, y: 0, z: 0.3 },
+        focusRange: 0.25,
+        aperture: 2.8,
+        bokehScale: 3.0,
+        bokehShape: 'spherical',
+      },
+      motionBlur: { enabled: true, shutterAngle: 180, samples: 8 },
+    },
+  });
+
+  return createDefaultProject({
+    id: 'project-phase0-fixture',
+    name: 'Phase 0 Multi-Shot Contract Fixture',
+    fps: 60,
+    assets: {
+      [sharedVideoAssetId]: {
+        id: sharedVideoAssetId,
+        name: 'shared-demo.mp4',
+        mimeType: 'video/mp4',
+        dataUrl: 'data:video/mp4;base64,AAAAIGZ0eXBpc29t',
+        width: 1920,
+        height: 1080,
+      },
+      [shot2VideoAssetId]: {
+        id: shot2VideoAssetId,
+        name: 'shot2-clip.mp4',
+        mimeType: 'video/mp4',
+        dataUrl: 'data:video/mp4;base64,BBBBIGZ0eXBpc29t',
+        width: 1920,
+        height: 1080,
+      },
+      [mockupImageAssetId]: {
+        id: mockupImageAssetId,
+        name: 'mockup.png',
+        mimeType: 'image/png',
+        dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 1179,
+        height: 2556,
+      },
+    },
+    audio: {
+      muted: false,
+      masterVolume: 1.0,
+      clips: [
+        {
+          id: 'clip-intro-at-zero',
+          name: 'Intro Chime (t=0)',
+          startMs: 0,
+          durationMs: 800,
+          offsetMs: 0,
+          volume: 0.9,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+        {
+          id: 'clip-future-shot1',
+          name: 'Future Whoosh (t=1200ms)',
+          startMs: 1200,
+          durationMs: 600,
+          offsetMs: 0,
+          volume: 0.85,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+        {
+          id: 'clip-future-shot2',
+          name: 'Shot 2 Impact (t=3200ms)',
+          startMs: 3200,
+          durationMs: 1500,
+          offsetMs: 100,
+          volume: 1.0,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+      ],
+    },
+    shots: [shot1, shot2],
+  });
+}
+
+
 
 
 

@@ -40,7 +40,7 @@ State management is decoupled into three high-performance Zustand stores:
    - Tracks multi-layer selection (`selectedLayerIds`), active shot, selected camera block, active inspector tabs, guide toggles, and panel collapse states.
 
 ### Data Schema & Validation (`src/model/schema.ts`)
-All projects conform to a validated schema (`CURRENT_SCHEMA_VERSION = 1`). Defensive migration and repair algorithms automatically reconcile older documents or partial JSON imports:
+All projects conform to a validated schema (`CURRENT_SCHEMA_VERSION = 2`). Defensive migration and repair algorithms automatically reconcile older documents or partial JSON imports:
 ```typescript
 interface Project {
   id: string;
@@ -121,3 +121,26 @@ interface Project {
 1. **Client-Side Autonomy:** All state, rendering, physics calculations, and video transcoding execute entirely within the client's browser. No private user media or project data is sent to external processing servers.
 2. **Local Persistence:** Active session state is serialized to `localStorage` with defense against quota limits. Media assets are kept in memory and IndexedDB.
 3. **Project File Interchange:** Portable `.raylight.json` format allows instant backup, team sharing, and cross-machine restoration.
+
+---
+
+## 7. Deterministic Behavior Contracts (Phase 0 Baseline)
+
+### 7.1 Global vs. Shot-Local Timebase Contract
+* **Global Time (`globalTimeMs`):** Ranges from `0` to `totalProjectDurationMs = sum(shot.durationMs)`. Audio clips on the project audio track (`project.audio.clips`) are authored in global project time (`clip.startMs`, `clip.durationMs`).
+* **Active Shot Resolution:** Shots occupy contiguous half-open intervals `[shot.startMs, shot.startMs + shot.durationMs)` for non-terminal shots, and a closed interval `[shot.startMs, shot.startMs + shot.durationMs]` for the terminal shot so the final frame remains evaluable.
+* **Shot-Local Time (`shotLocalTimeMs`):** Defined strictly as `clamp(globalTimeMs - activeShot.startMs, 0, activeShot.durationMs)`.
+* **Layer & Media Timebase Invariant:** All shot-owned entities—including `layer.inMs`, `layer.outMs`, entrance/exit transitions, `layer.blocks`, `shot.cameraBlocks`, `shot.lightBlocks`, `shot.effectBlocks`, `shot.focusBlocks`, and **video element seeking (`targetSec = Math.max(0, (shotLocalTimeMs - layer.inMs) / 1000)`)**—MUST be evaluated against `shotLocalTimeMs`, never raw `globalTimeMs`.
+
+### 7.2 Shot Transition Composition Contract
+* When `activeShotIndex > 0` and `activeShot.transition.type !== 'none'` with `shotLocalTimeMs < activeShot.transition.durationMs`, `evaluateProjectAtTime` sets `shotTransition.isTransitioning = true`, computes eased `progress` $\in [0, 1)$, and evaluates `outgoingFrame` from the immediately preceding shot.
+* Both the WebGL stage (`ViewportCanvas`) and the 2D Canvas renderer (`canvasRenderer`) must composite `outgoingFrame` (backgrounds, visible layers, and lights) alongside the incoming `frame` using identical opacity/slide transforms (`crossfade`, `push`, `slide`).
+
+### 7.3 Preview, Fallback & Export Parity Contract
+* **WebGL Preview (`ViewportCanvas`):** Primary interactive and stage-capture renderer.
+* **Canvas 2D Fallback (`canvasRenderer`):** Deterministic software fallback when WebGL context is unavailable or bypassed; receives the exact same `EvaluatedFrame` contract (including scene/camera motion vectors for `motionBlur`).
+* **Export (`exporter`):** Steps deterministically across the target frame range, seeks only active incoming/outgoing video layers using `shotLocalTimeMs`, verifies decoded video frame readiness before capture, and mixes scheduled audio clips across the export range.
+
+### 7.4 Save Durability & Undo Grouping Contract
+* **Undo Grouping:** Continuous pointer drags (stage move/resize/rotate, `ScrubInput` drags, timeline bar/block trims) call `beginDragTransaction()` on first movement beyond deadzone, apply intermediate updates with `{ skipHistory: true }`, and call `commitDragTransaction()` on pointer release to record exactly one undo step.
+* **Save Durability:** Browser autosave writes lightweight metadata to `localStorage` and full asset blobs transactionally to `IndexedDB` (with `OPFS` supplementary disk streaming), preserving the last-known-good snapshot if quota limits are reached.
