@@ -80,6 +80,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     }, [gl, scene, camera, size.width, size.height, dpr]);
 
     const prevCameraPosRef = useRef<{ x: number; y: number } | null>(null);
+    const activePassKeyRef = useRef<string>('');
 
     // Update passes and uniforms from evaluated effects state
     useLayoutEffect(() => {
@@ -98,29 +99,47 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         prevCameraPosRef.current = { x: camera.position.x, y: camera.position.y };
         const cameraMotion = { x: deltaX * 0.15, y: deltaY * 0.15 };
 
-        // Reconstruct active passes in evaluated order
-        composer.passes = [renderPass];
-        renderPass.renderToScreen = false;
+        const currentPassKey = effects.orderedEnabledPasses
+            .map((p) => p.key)
+            .filter((k) => k !== 'depthOfField')
+            .join(',');
+        const passListChanged = activePassKeyRef.current !== currentPassKey;
 
-        for (const { key } of effects.orderedEnabledPasses) {
-            if (key === 'depthOfField') continue; // Handled in 3D layer evaluation / bokeh blur
-            let pass = passMapRef.current.get(key);
-            if (!pass) {
-                pass = createSceneEffectPass(key);
-                passMapRef.current.set(key, pass);
+        if (passListChanged) {
+            activePassKeyRef.current = currentPassKey;
+            // Reconstruct active passes in evaluated order
+            composer.passes = [renderPass];
+            renderPass.renderToScreen = false;
+
+            for (const { key } of effects.orderedEnabledPasses) {
+                if (key === 'depthOfField') continue; // Handled in 3D layer evaluation / bokeh blur
+                let pass = passMapRef.current.get(key);
+                if (!pass) {
+                    pass = createSceneEffectPass(key);
+                    passMapRef.current.set(key, pass);
+                }
+                pass.renderToScreen = false;
+                configureSceneEffectPass(pass, key, effects, pixelW, pixelH, cameraMotion);
+                composer.addPass(pass);
             }
-            pass.renderToScreen = false;
-            configureSceneEffectPass(pass, key, effects, pixelW, pixelH, cameraMotion);
-            composer.addPass(pass);
+
+            // Convert linear RGB to display sRGB
+            encodingPass.renderToScreen = false;
+            composer.addPass(encodingPass);
+
+            // Run FXAA on sRGB perceptual samples and output to canvas
+            fxaaPass.renderToScreen = true;
+            composer.addPass(fxaaPass);
+        } else {
+            // Uniform-only fast path: update in place without rebuilding passes graph
+            for (const { key } of effects.orderedEnabledPasses) {
+                if (key === 'depthOfField') continue;
+                const pass = passMapRef.current.get(key);
+                if (pass) {
+                    configureSceneEffectPass(pass, key, effects, pixelW, pixelH, cameraMotion);
+                }
+            }
         }
-
-        // Convert linear RGB to display sRGB
-        encodingPass.renderToScreen = false;
-        composer.addPass(encodingPass);
-
-        // Run FXAA on sRGB perceptual samples and output to canvas
-        fxaaPass.renderToScreen = true;
-        composer.addPass(fxaaPass);
     }, [effects, size.width, size.height, dpr, camera.position.x, camera.position.y]);
 
     // Deterministic frame render

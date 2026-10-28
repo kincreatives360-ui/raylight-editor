@@ -83,10 +83,13 @@ const StageCaptureBridge: React.FC<{ frame: EvaluatedProjectFrame }> = ({ frame 
             const size = gl.getSize(new THREE.Vector2());
             const pixelRatio = gl.getPixelRatio();
             const renderTarget = gl.getRenderTarget();
+            const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
             try {
-                gl.setRenderTarget(null);
-                gl.setPixelRatio(1);
-                gl.setSize(width, height, false);
+                if (needsResize) {
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(1);
+                    gl.setSize(width, height, false);
+                }
                 invalidate();
                 await nextFrame();
                 await nextFrame();
@@ -98,11 +101,13 @@ const StageCaptureBridge: React.FC<{ frame: EvaluatedProjectFrame }> = ({ frame 
                 context.drawImage(gl.domElement, 0, 0, width, height);
                 return captured;
             } finally {
-                gl.setRenderTarget(null);
-                gl.setPixelRatio(pixelRatio);
-                gl.setSize(size.x, size.y, false);
-                gl.setRenderTarget(renderTarget);
-                invalidate();
+                if (needsResize) {
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(pixelRatio);
+                    gl.setSize(size.x, size.y, false);
+                    gl.setRenderTarget(renderTarget);
+                    invalidate();
+                }
             }
         });
         return unregister;

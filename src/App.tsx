@@ -14,7 +14,7 @@ import {
   MAX_RIGHT_SIDEBAR_WIDTH,
   DEFAULT_RIGHT_SIDEBAR_WIDTH,
 } from './store/useSelectionStore';
-import { evaluateProjectAtTime, isLayerEffectivelyLocked } from './engine/evaluateShot';
+import { isLayerEffectivelyLocked } from './engine/evaluateShot';
 import {
   parseFigmaSvgToLayers,
   readImageFileWithThumbnail,
@@ -163,7 +163,6 @@ export default function App() {
   } = useProjectStore();
 
   const {
-    currentTimeMs,
     hoverTimeMs,
     isPlaying,
     loop,
@@ -173,6 +172,7 @@ export default function App() {
   } = usePlayheadStore();
 
   const {
+    selectedShotId,
     selectedLayerIds,
     selectedBlockId,
     selectedCameraBlockId,
@@ -276,19 +276,11 @@ export default function App() {
     [project.shots]
   );
 
-  // Skimmer support: Canvas renders skimTime ?? playheadTime
-  const effectiveTimeMs = hoverTimeMs !== null ? hoverTimeMs : currentTimeMs;
-
-  const frame = useMemo(
-    () => evaluateProjectAtTime(project, effectiveTimeMs),
-    [project, effectiveTimeMs]
+  const activeShot = useMemo(
+    () => project.shots.find((s) => s.id === selectedShotId) || project.shots[0],
+    [project.shots, selectedShotId]
   );
-
-  const activeShot = frame.activeShot;
-  const projectActiveShot = useMemo(
-    () => project.shots.find((s) => s.id === frame.activeShot.id) || project.shots[0] || frame.activeShot,
-    [project.shots, frame.activeShot]
-  );
+  const projectActiveShot = activeShot;
 
   const selectedLayerSet = useMemo(
     () => new Set(selectedLayerIds),
@@ -973,12 +965,14 @@ export default function App() {
           e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
 
         if (isAnimateMode && selectedLayer && !isLayerEffectivelyLocked(selectedLayer, activeShot.groups)) {
+          const playheadTimeMs = usePlayheadStore.getState().currentTimeMs;
+          const shotLocalTimeMs = Math.max(0, playheadTimeMs - activeShot.startMs);
           const blkId = recordAnimatedBlockAtPlayhead(
             activeShot.id,
             selectedLayer.id,
             'position',
             { x: dx, y: dy, z: 0 },
-            frame.shotLocalTimeMs,
+            shotLocalTimeMs,
             'Nudge'
           );
           if (blkId) {
@@ -1017,7 +1011,6 @@ export default function App() {
     activeShot.layers,
     activeShot.groups,
     isAnimateMode,
-    frame.shotLocalTimeMs,
     updateShot,
     restackLayerInShot,
     recordAnimatedBlockAtPlayhead,
@@ -1562,7 +1555,6 @@ export default function App() {
             <Suspense fallback={<StageSkeletonLoader />}>
               <Stage
                 project={project}
-                frame={frame}
                 selectedLayerIds={selectedLayerIds}
                 onSelectLayer={handleSelectLayer}
                 showSafeArea={showSafeArea}

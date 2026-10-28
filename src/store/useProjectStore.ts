@@ -256,11 +256,9 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 updatedAt: new Date().toISOString(),
             };
             const nextRevision = state.hydrationRevision + 1;
-            // Pointer-move updates inside a drag are transient. Validate the committed
-            // project once at pointer-up instead of reparsing the full asset graph per frame.
-            const validation = state.dragSnapshot === null
-                ? validateProject(updated)
-                : state.validation;
+            // Hot internal mutations retain validation state.
+            // Full schema validation is scoped to I/O boundaries (load, import, reset, migration).
+            const validation = state.validation;
 
             if (options?.skipHistory || state.dragSnapshot !== null) {
                 return { project: updated, validation, hydrationRevision: nextRevision };
@@ -1008,7 +1006,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 past: state.past.slice(0, -1),
                 future: [state.project, ...state.future].slice(0, MAX_HISTORY_STEPS),
                 dragSnapshot: null,
-                validation: validateProject(previous),
+                validation: state.validation,
             };
         }),
 
@@ -1021,7 +1019,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
                 future: state.future.slice(1),
                 dragSnapshot: null,
-                validation: validateProject(next),
+                validation: state.validation,
             };
         }),
 

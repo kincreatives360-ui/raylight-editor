@@ -4,7 +4,7 @@ import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers, Camera, Focus } from 'lucide-react';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
-import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
+import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { useProjectStore } from '../store/useProjectStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
@@ -31,7 +31,7 @@ import {
 
 interface StageProps {
     project: Project;
-    frame: EvaluatedProjectFrame;
+    frame?: EvaluatedProjectFrame;
     selectedLayerIds: string[];
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     showSafeArea?: boolean;
@@ -42,7 +42,7 @@ interface StageProps {
 
 const StageComponent: React.FC<StageProps> = ({
     project,
-    frame,
+    frame: propFrame,
     selectedLayerIds,
     onSelectLayer,
     showSafeArea = true,
@@ -50,6 +50,15 @@ const StageComponent: React.FC<StageProps> = ({
     onToggleSafeArea,
     onOpenShortcuts,
 }) => {
+    const storeCurrentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
+    const storeHoverTimeMs = usePlayheadStore((s) => s.hoverTimeMs);
+    const effectiveTimeMs = storeHoverTimeMs !== null ? storeHoverTimeMs : storeCurrentTimeMs;
+    const evaluatedFrame = useMemo(
+        () => propFrame ?? evaluateProjectAtTime(project, effectiveTimeMs),
+        [propFrame, project, effectiveTimeMs]
+    );
+    const frame = evaluatedFrame;
+
     const {
         addLayerToShot,
         updateProject,

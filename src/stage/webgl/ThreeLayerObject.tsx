@@ -338,15 +338,24 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         }
     }, [isVideoAsset, assetUrl, currentTimeMs, shotStartMs, layer.inMs, layer.id]);
 
+    const canvasRef = useRef<HTMLCanvasElement | null>(null);
+    const textureRef = useRef<THREE.CanvasTexture | null>(null);
+
     // Generate proportional CanvasTexture with Crop, Stroke, Shimmer & DoF Blur
     const texture = useMemo(() => {
         if (!surface.visible) return null;
 
-        const canvas = document.createElement('canvas');
-        canvas.width = paddedTextureW;
-        canvas.height = paddedTextureH;
+        if (!canvasRef.current) {
+            canvasRef.current = document.createElement('canvas');
+        }
+        const canvas = canvasRef.current;
+        if (canvas.width !== paddedTextureW || canvas.height !== paddedTextureH) {
+            canvas.width = paddedTextureW;
+            canvas.height = paddedTextureH;
+        }
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
+        ctx.clearRect(0, 0, paddedTextureW, paddedTextureH);
         // Keep authored layout, padding and strokes in their original coordinate space.
         ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
         if (blurPadding > 0) {
@@ -559,10 +568,15 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
         applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
 
-        const tex = new THREE.CanvasTexture(canvas);
-        const maxAniso = gl.capabilities?.getMaxAnisotropy?.() ?? 16;
-        configureLayerTexture(tex, maxAniso);
-        return tex;
+        if (!textureRef.current) {
+            const tex = new THREE.CanvasTexture(canvas);
+            const maxAniso = gl.capabilities?.getMaxAnisotropy?.() ?? 16;
+            configureLayerTexture(tex, maxAniso);
+            textureRef.current = tex;
+        } else {
+            textureRef.current.needsUpdate = true;
+        }
+        return textureRef.current;
     }, [
         layer,
         project,
@@ -605,14 +619,16 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     }, [texture, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl]);
     useEffect(() => () => { halo?.texture.dispose(); }, [halo]);
 
-    // Dispose previous texture whenever a new one is generated or component unmounts
+    // Dispose persistent texture only when layer unmounts
     useEffect(() => {
         return () => {
-            if (texture) {
-                texture.dispose();
+            if (textureRef.current) {
+                textureRef.current.dispose();
+                textureRef.current = null;
             }
+            canvasRef.current = null;
         };
-    }, [texture]);
+    }, []);
 
     // Seek completion and decoded-frame events use exactly the same mapping as static media.
     useEffect(() => {
