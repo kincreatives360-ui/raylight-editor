@@ -70,6 +70,13 @@ export const GradientStopSchema = z.object({
   opacity: z.number().min(0).max(1).optional(),
 });
 
+export const MeshGradientPointSchema = z.object({
+  x: z.number().min(0).max(1),
+  y: z.number().min(0).max(1),
+  color: z.string(),
+  opacity: z.number().min(0).max(1),
+});
+
 export const FillSchema = z.discriminatedUnion('kind', [
   z.object({
     kind: z.literal('solid'),
@@ -80,7 +87,12 @@ export const FillSchema = z.discriminatedUnion('kind', [
     kind: z.literal('gradient'),
     angle: z.number(),
     stops: z.array(GradientStopSchema).min(2),
-    gradientType: z.enum(['linear', 'radial']).optional(),
+    gradientType: z.enum(['linear', 'radial', 'angular', 'diamond', 'mesh']).optional(),
+    mesh: z.array(MeshGradientPointSchema).length(9).optional(),
+  }).superRefine((fill, ctx) => {
+    if (fill.gradientType === 'mesh' && fill.mesh?.length !== 9) {
+      ctx.addIssue({ code: 'custom', path: ['mesh'], message: 'Mesh gradients require exactly nine control points.' });
+    }
   }),
 ]);
 

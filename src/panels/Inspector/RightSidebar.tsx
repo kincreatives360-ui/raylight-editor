@@ -743,10 +743,11 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                 color={bg.kind === 'solid' ? bg.color : (bg.kind === 'gradient' ? bg.stops[0]?.color || '#090a12' : '#000000')}
                                 gradientValue={bg.kind === 'gradient' ? {
                                     angle: bg.angle || 135,
-                                    gradientType: (bg.gradientType === 'angular' ? 'linear' : bg.gradientType) || 'linear',
+                                    gradientType: bg.gradientType || 'linear',
                                     stops: bg.stops,
                                 } : undefined}
                                 showGradientMode={true}
+                                gradientTypes={['linear', 'radial', 'angular']}
                                 onChange={(c) => {
                                     setProjectBackground({ kind: 'solid', color: c });
                                 }}
@@ -754,7 +755,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                     setProjectBackground({
                                         kind: 'gradient',
                                         angle: g.angle,
-                                        gradientType: g.gradientType || 'linear',
+                                        gradientType: ['linear', 'radial', 'angular'].includes(g.gradientType ?? 'linear') ? g.gradientType as 'linear' | 'radial' | 'angular' : 'linear',
                                         stops: g.stops,
                                     });
                                 }}

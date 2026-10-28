@@ -5,14 +5,16 @@ import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Pipette, Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
 import { useProjectStore } from '../../store/useProjectStore';
-import type { GradientStop } from '../../model/types';
+import type { GradientStop, MeshGradientPoint } from '../../model/types';
 import { RAYLIGHT_COLOR_PALETTE } from '../../model/types';
+import { createCanvasFillStyle } from '../../engine/canvasRenderer';
 
 type Hsv = { h: number; s: number; v: number };
 export interface GradientValue {
     angle: number;
     stops: GradientStop[];
-    gradientType?: 'linear' | 'radial';
+    gradientType?: 'linear' | 'radial' | 'angular' | 'diamond' | 'mesh';
+    mesh?: MeshGradientPoint[];
 }
 
 function normalizeHex(value: string): string | null {
@@ -60,6 +62,7 @@ interface ColorPickerProps {
     onExitGradient?: () => void;
     compact?: boolean;
     showGradientMode?: boolean;
+    gradientTypes?: GradientValue['gradientType'][];
     className?: string;
     children?: React.ReactNode;
     disabled?: boolean;
@@ -87,12 +90,14 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     onExitGradient,
     compact = false,
     showGradientMode = true,
+    gradientTypes = ['linear', 'radial', 'angular', 'diamond', 'mesh'],
     className = '',
     children,
     disabled = false,
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
+    const gradientPreviewRef = useRef<HTMLCanvasElement>(null);
     const squareRef = useRef<HTMLDivElement>(null);
     const hexInputRef = useRef<HTMLInputElement>(null);
     const hueBarRef = useRef<HTMLDivElement>(null);
@@ -130,6 +135,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const pickerId = useId();
     const [open, setOpen] = useState(false);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
+    const [selectedMeshPoint, setSelectedMeshPoint] = useState(4);
     const [hexDraft, setHexDraft] = useState(color);
     const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color));
     const [position, setPosition] = useState({ left: 0, top: 0 });
@@ -140,11 +146,22 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const onExitGradientRef = useRef(onExitGradient);
 
     const hueColor = useMemo(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }), [hsv.h]);
-    const gradient = gradientValue ?? {
+    const gradient = useMemo(() => gradientValue ?? {
         angle: 0,
         gradientType: 'linear' as const,
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
-    };
+    }, [gradientValue, color]);
+
+    useEffect(() => {
+        const canvas = gradientPreviewRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx) return;
+        canvas.width = 300;
+        canvas.height = 36;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = createCanvasFillStyle(ctx, { kind: 'gradient', ...gradient }, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }, [gradient]);
 
     useEffect(() => {
         hsvRef.current = hsv;
@@ -326,6 +343,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const updateGradient = (next: GradientValue) => onGradientChange?.(next);
+    const ensureMesh = (value: GradientValue): MeshGradientPoint[] => value.mesh?.length === 9 ? value.mesh : Array.from({ length: 9 }, (_, index) => ({
+        x: (index % 3) / 2, y: Math.floor(index / 3) / 2,
+        color: gradient.stops[Math.round(index / 8 * (gradient.stops.length - 1))]?.color ?? color,
+        opacity: gradient.stops[Math.round(index / 8 * (gradient.stops.length - 1))]?.opacity ?? 1,
+    }));
     const updateStop = (index: number, patch: Partial<GradientStop>) => {
         const oldStop = gradient.stops[index];
         const stableId = oldStop ? getStopId(oldStop) : `stop-id-${nextStopId++}`;
@@ -333,6 +355,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stopIdMap.set(newStop, stableId);
         const stops = gradient.stops.map((stop, stopIndex) => (stopIndex === index ? newStop : stop));
         updateGradient({ ...gradient, stops });
+    };
+    const updateMeshPoint = (index: number, patch: Partial<MeshGradientPoint>) => {
+        const mesh = ensureMesh(gradient).map((point, pointIndex) => pointIndex === index ? { ...point, ...patch } : point);
+        updateGradient({ ...gradient, gradientType: 'mesh', mesh });
     };
     const enterGradientMode = () => {
         setPickerMode('gradient');
@@ -538,11 +564,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                         <FigmaSelect
                             aria-label="Gradient type"
                             value={gradient.gradientType ?? 'linear'}
-                            onChange={(event) => updateGradient({ ...gradient, gradientType: event.target.value as 'linear' | 'radial' })}
+                            onChange={(event) => {
+                                const gradientType = event.target.value as GradientValue['gradientType'];
+                                updateGradient({ ...gradient, gradientType, mesh: gradientType === 'mesh' ? ensureMesh(gradient) : gradient.mesh });
+                            }}
                             className="h-8 flex-1 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-[11px] text-[var(--text-primary,#f4f4f5)] outline-none"
                         >
-                            <option value="linear">Linear</option>
-                            <option value="radial">Radial</option>
+                            {gradientTypes.map(type => type && <option key={type} value={type}>{type[0].toUpperCase() + type.slice(1)}</option>)}
                         </FigmaSelect>
                         <IconButton
                             unstyled
@@ -567,12 +595,25 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--bg-subtle,#1c1c1f)] text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100"
                         />
                     </div>
-                    <div
+                    {gradient.gradientType === 'mesh' ? <div className="grid grid-cols-3 gap-2 rounded-lg border border-white/10 bg-black/20 p-3 touch-none" onPointerDown={event => {
+                        const index = Number((event.target as HTMLElement).closest('[data-mesh-point]')?.getAttribute('data-mesh-point'));
+                        if (!Number.isInteger(index)) return;
+                        setSelectedMeshPoint(index);
+                        event.currentTarget.dataset.dragMeshPoint = String(index);
+                        event.currentTarget.setPointerCapture(event.pointerId);
+                    }} onPointerMove={event => {
+                        const index = Number(event.currentTarget.dataset.dragMeshPoint);
+                        if (!event.currentTarget.dataset.dragMeshPoint || !(event.buttons & 1)) return;
+                        const rect = event.currentTarget.getBoundingClientRect();
+                        updateMeshPoint(index, { x: Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)), y: Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height)) });
+                    }} onPointerUp={event => { delete event.currentTarget.dataset.dragMeshPoint; }} onPointerCancel={event => { delete event.currentTarget.dataset.dragMeshPoint; }}>
+                        {ensureMesh(gradient).map((point, index) => <button key={index} data-mesh-point={index} type="button" aria-label={`Mesh point ${index + 1}`} onClick={() => setSelectedMeshPoint(index)} className={`aspect-square rounded-md border ${selectedMeshPoint === index ? 'border-white ring-1 ring-white/50' : 'border-white/15'}`} style={{ backgroundColor: point.color, opacity: point.opacity }} />)}
+                    </div> : <div
                         className="relative h-9 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-canvas,#07080d)] shadow-inner"
                         style={{ background: `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color}${Math.round((stop.opacity ?? 1) * 255).toString(16).padStart(2, '0')} ${stop.at * 100}%`).join(', ')})` }}
                     >
                         <div className="absolute inset-0 rounded-lg bg-[linear-gradient(45deg,#333_25%,transparent_25%,transparent_75%,#333_75%),linear-gradient(45deg,#333_25%,#111_25%,#111_75%,#333_75%)] bg-[length:12px_12px] bg-[position:0_0,6px_6px] opacity-20 pointer-events-none overflow-hidden rounded-lg" />
-                        <div className="absolute inset-0 rounded-lg pointer-events-none overflow-hidden" style={{ background: gradient.gradientType === 'radial' ? `radial-gradient(circle, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` }} />
+                        <canvas ref={gradientPreviewRef} aria-label="Gradient preview" className="absolute inset-0 h-full w-full rounded-lg" />
                         <svg
                             className="absolute inset-0 h-full w-full touch-none overflow-visible"
                             viewBox="0 0 300 36"
@@ -623,7 +664,16 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 );
                             })}
                         </svg>
-                    </div>
+                    </div>}
+                    {gradient.gradientType === 'mesh' ? (() => {
+                        const point = ensureMesh(gradient)[selectedMeshPoint];
+                        return <div className="grid grid-cols-[1fr_1fr_auto] gap-2 rounded-lg border border-white/10 bg-black/20 p-2">
+                            <label className="text-[10px] text-zinc-400">X<input aria-label="Mesh point X" type="number" min="0" max="100" value={Math.round(point.x * 100)} onChange={event => updateMeshPoint(selectedMeshPoint, { x: Math.max(0, Math.min(100, Number(event.target.value) || 0)) / 100 })} className="mt-1 w-full rounded bg-zinc-900 p-1 text-white" /></label>
+                            <label className="text-[10px] text-zinc-400">Y<input aria-label="Mesh point Y" type="number" min="0" max="100" value={Math.round(point.y * 100)} onChange={event => updateMeshPoint(selectedMeshPoint, { y: Math.max(0, Math.min(100, Number(event.target.value) || 0)) / 100 })} className="mt-1 w-full rounded bg-zinc-900 p-1 text-white" /></label>
+                            <label className="text-[10px] text-zinc-400">Color<input aria-label="Mesh point color" type="color" value={normalizeHex(point.color) ?? '#000000'} onChange={event => updateMeshPoint(selectedMeshPoint, { color: event.target.value })} className="mt-1 h-7 w-9 rounded bg-zinc-900" /></label>
+                            <label className="col-span-3 text-[10px] text-zinc-400">Opacity {Math.round(point.opacity * 100)}%<input aria-label="Mesh point opacity" type="range" min="0" max="100" value={Math.round(point.opacity * 100)} onChange={event => updateMeshPoint(selectedMeshPoint, { opacity: Number(event.target.value) / 100 })} className="mt-1 w-full" /></label>
+                        </div>;
+                    })() : <>
                     <div className="flex items-center justify-between text-[11px] text-[var(--text-muted,#a1a1aa)]">
                         <span>Stops</span>
                         <IconButton
@@ -727,6 +777,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             </div>
                         ))}
                     </div>
+                    </>}
                     <div className="text-right text-[10px] text-[var(--text-muted,#a1a1aa)]">Angle {gradient.angle}°</div>
                 </div>
             )}

@@ -16,6 +16,7 @@ import React from 'react';
 import type { AnimationBlockProperty } from '../../../model/schema';
 import type { ShapeLayer, ShapeMask } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { ColorPicker } from '../ColorPicker';
 
@@ -137,8 +138,10 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                 {hasFill && (
                     <div className="object-design-color-row"><ColorPicker
                         color={fillColor}
-                        gradientValue={layer.fill.kind === 'gradient' ? { angle: layer.fill.angle, stops: layer.fill.stops, gradientType: layer.fill.gradientType } : undefined}
-                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: { kind: 'gradient', angle: gradient.angle, stops: gradient.stops, gradientType: gradient.gradientType } } : l)}
+                        gradientValue={layer.fill.kind === 'gradient' ? { angle: layer.fill.angle, stops: layer.fill.stops, gradientType: layer.fill.gradientType, mesh: layer.fill.mesh } : undefined}
+                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: { kind: 'gradient', angle: gradient.angle, stops: gradient.stops, gradientType: gradient.gradientType, mesh: gradient.mesh } } : l)}
+                        onEnterGradient={() => useSelectionStore.getState().setGradientEditor(true, layer.fill.kind === 'gradient' ? layer.fill.angle : 0, layer.id)}
+                        onExitGradient={() => useSelectionStore.getState().setGradientEditor(false)}
                         onChange={(newColor) =>
                             updateLayer(activeShotId, layer.id, (l) => {
                                 if (l.kind !== 'shape') return l;

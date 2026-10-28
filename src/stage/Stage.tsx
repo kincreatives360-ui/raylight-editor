@@ -88,6 +88,7 @@ const StageComponent: React.FC<StageProps> = ({
         clearLayerSelection,
         gradientEditorActive,
         gradientEditorAngle,
+        gradientEditorLayerId,
         setGradientEditorAngle,
         selectedCameraBlockId,
     } = useSelectionStore();
@@ -422,9 +423,32 @@ const StageComponent: React.FC<StageProps> = ({
 
     const effectiveBackground = resolveShotBackground(project, frame.activeShot);
     const isTransparentBg = effectiveBackground.kind === 'transparent';
-    const showGradientAngleControl = gradientEditorActive
+    const gradientShapeLayer = gradientEditorLayerId
+        ? frame.activeShot.layers.find((layer) => layer.id === gradientEditorLayerId && layer.kind === 'shape')
+        : undefined;
+    const showShapeGradientAngleControl = gradientEditorActive
+        && gradientShapeLayer?.kind === 'shape'
+        && gradientShapeLayer.fill.kind === 'gradient'
+        && !['radial', 'mesh'].includes(gradientShapeLayer.fill.gradientType ?? 'linear');
+    const showGradientAngleControl = showShapeGradientAngleControl || (gradientEditorActive
+        && !gradientEditorLayerId
         && effectiveBackground.kind === 'gradient'
-        && effectiveBackground.gradientType !== 'radial';
+        && effectiveBackground.gradientType !== 'radial');
+    const gradientShapeFrameLayer = gradientEditorLayerId
+        ? frame.layers.find((layer) => layer.id === gradientEditorLayerId)
+        : undefined;
+    const gradientReferenceCamera = project.defaultCamera || {
+        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+        rotation: { x: 0, y: 0, z: 0 },
+        focalLength: DEFAULT_FOCAL_LENGTH,
+    };
+    const gradientCameraPose = evaluateCameraPose(effectiveViewportFrame.camera, gradientReferenceCamera, targetAspect);
+    const gradientShapeCenter = gradientShapeFrameLayer
+        ? (() => {
+            const corners = getLayerProjectedCorners(gradientShapeFrameLayer, frameWidth, frameHeight, targetAspect, gradientCameraPose, gradientReferenceCamera.position.z ?? DEFAULT_CAMERA_Z, gradientReferenceCamera.focalLength ?? DEFAULT_FOCAL_LENGTH).corners;
+            return { x: corners.reduce((sum, point) => sum + point.x, 0) / corners.length, y: corners.reduce((sum, point) => sum + point.y, 0) / corners.length };
+        })()
+        : { x: frameWidth / 2, y: frameHeight / 2 };
 
     const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGGElement>) => {
         event.stopPropagation();
@@ -432,8 +456,8 @@ const StageComponent: React.FC<StageProps> = ({
         if (!svgEl) return;
         const rect = svgEl.getBoundingClientRect();
         if (!rect.width || !rect.height) return;
-        const x = ((event.clientX - rect.left) / rect.width) * frameWidth - frameWidth / 2;
-        const y = ((event.clientY - rect.top) / rect.height) * frameHeight - frameHeight / 2;
+        const x = ((event.clientX - rect.left) / rect.width) * frameWidth - gradientShapeCenter.x;
+        const y = ((event.clientY - rect.top) / rect.height) * frameHeight - gradientShapeCenter.y;
         if (Math.hypot(x, y) < 8) return;
         const angle = Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360);
         setGradientEditorAngle(angle);
@@ -449,21 +473,27 @@ const StageComponent: React.FC<StageProps> = ({
             end: { x: (cx + dx) / frameWidth, y: (cy + dy) / frameHeight },
         };
 
-        const currentShot = frame.activeShot;
-        if (currentShot.useProjectBackground === false && currentShot.background?.kind === 'gradient') {
-            updateShot(currentShot.id, (s) => ({
-                ...s,
-                background: s.background?.kind === 'gradient'
-                    ? { ...s.background, angle, handles }
-                    : s.background,
-            }));
-        } else if (project.background.kind === 'gradient') {
-            updateProject((p) => ({
-                ...p,
-                background: p.background.kind === 'gradient'
-                    ? { ...p.background, angle, handles }
-                    : p.background,
-            }));
+        if (gradientEditorLayerId) {
+            updateLayer(frame.activeShot.id, gradientEditorLayerId, (layer) => layer.kind === 'shape' && layer.fill.kind === 'gradient'
+                ? { ...layer, fill: { ...layer.fill, angle } }
+                : layer);
+        } else {
+            const currentShot = frame.activeShot;
+            if (currentShot.useProjectBackground === false && currentShot.background?.kind === 'gradient') {
+                updateShot(currentShot.id, (s) => ({
+                    ...s,
+                    background: s.background?.kind === 'gradient'
+                        ? { ...s.background, angle, handles }
+                        : s.background,
+                }));
+            } else if (project.background.kind === 'gradient') {
+                updateProject((p) => ({
+                    ...p,
+                    background: p.background.kind === 'gradient'
+                        ? { ...p.background, angle, handles }
+                        : p.background,
+                }));
+            }
         }
     };
 
@@ -1293,8 +1323,8 @@ const StageComponent: React.FC<StageProps> = ({
                                 const halfLength = Math.hypot(frameWidth, frameHeight) / 2;
                                 const dx = Math.sin(radians) * halfLength;
                                 const dy = -Math.cos(radians) * halfLength;
-                                const cx = frameWidth / 2;
-                                const cy = frameHeight / 2;
+                                const cx = gradientShapeCenter.x;
+                                const cy = gradientShapeCenter.y;
                                 const x1 = cx - dx;
                                 const y1 = cy - dy;
                                 const x2 = cx + dx;
@@ -1311,7 +1341,7 @@ const StageComponent: React.FC<StageProps> = ({
                                         <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" className="pointer-events-none drop-shadow" />
                                         <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
                                         <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
-                                        <text x={frameWidth / 2 + 10} y={frameHeight / 2 - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
+                                        <text x={cx + 10} y={cy - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
                                     </g>
                                 );
                             })()}

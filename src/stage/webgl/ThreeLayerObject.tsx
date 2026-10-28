@@ -14,7 +14,7 @@ import type {
     VideoLayer,
 } from '../../model/types';
 import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout } from './cameraMath';
-import { hexToRgba, getOrCreateVideoElement } from '../../engine/canvasRenderer';
+import { getOrCreateVideoElement, createCanvasFillStyle } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
@@ -437,29 +437,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 ctx.fillStyle = shapeL.fill.color || '#6366f1';
                 ctx.globalAlpha = shapeL.fill.opacity ?? 1;
             } else {
-                const isRadial = shapeL.fill.gradientType === 'radial';
-                const cx = canvasW / 2;
-                const cy = canvasH / 2;
-                const len = Math.hypot(canvasW, canvasH) / 2;
-                let grad: CanvasGradient;
-                if (isRadial) {
-                    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
-                } else {
-                    const rad = (((shapeL.fill.angle ?? 135) - 90) * Math.PI) / 180;
-                    grad = ctx.createLinearGradient(
-                        cx - Math.cos(rad) * len,
-                        cy - Math.sin(rad) * len,
-                        cx + Math.cos(rad) * len,
-                        cy + Math.sin(rad) * len
-                    );
-                }
-                for (const st of shapeL.fill.stops || []) {
-                    grad.addColorStop(
-                        Math.max(0, Math.min(1, st.at)),
-                        hexToRgba(st.color, st.opacity ?? 1)
-                    );
-                }
-                ctx.fillStyle = grad;
+                ctx.fillStyle = createCanvasFillStyle(ctx, shapeL.fill, canvasW, canvasH, 1);
             }
 
             const strokePx = shapeL.stroke?.width

@@ -87,6 +87,13 @@ export interface GradientStop {
   opacity?: number;
 }
 
+export interface MeshGradientPoint {
+  x: number;
+  y: number;
+  color: string;
+  opacity: number;
+}
+
 export type Fill =
   | {
     kind: 'solid';
@@ -97,7 +104,8 @@ export type Fill =
     kind: 'gradient';
     angle: number;
     stops: GradientStop[];
-    gradientType?: 'linear' | 'radial';
+    gradientType?: 'linear' | 'radial' | 'angular' | 'diamond' | 'mesh';
+    mesh?: MeshGradientPoint[];
   };
 
 import type { ShaderPreset } from './backgroundPresets';

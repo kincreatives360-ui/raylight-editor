@@ -52,6 +52,7 @@ interface SelectionStore {
     canvasPan: { x: number; y: number };
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
+    gradientEditorLayerId: string | null;
 
     leftPanelOpen: boolean;
     rightSidebarOpen: boolean;
@@ -98,7 +99,7 @@ interface SelectionStore {
             | ((prev: { x: number; y: number }) => { x: number; y: number })
     ) => void;
     resetCanvasView: () => void;
-    setGradientEditor: (active: boolean, angle?: number) => void;
+    setGradientEditor: (active: boolean, angle?: number, layerId?: string | null) => void;
     setGradientEditorAngle: (angle: number) => void;
 }
 
@@ -153,6 +154,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     canvasPan: { x: 0, y: 0 },
     gradientEditorActive: false,
     gradientEditorAngle: 0,
+    gradientEditorLayerId: null,
 
     leftPanelOpen: true,
     rightSidebarOpen: true,
@@ -385,10 +387,11 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             canvasPan: { x: 0, y: 0 },
         }),
 
-    setGradientEditor: (gradientEditorActive, gradientEditorAngle) =>
+    setGradientEditor: (gradientEditorActive, gradientEditorAngle, gradientEditorLayerId = null) =>
         set((state) => ({
             gradientEditorActive,
             gradientEditorAngle: gradientEditorAngle ?? state.gradientEditorAngle,
+            gradientEditorLayerId,
         })),
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
