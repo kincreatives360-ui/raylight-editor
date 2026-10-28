@@ -4,7 +4,17 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
-import { getSafeMsaaSampleCount } from './SceneEffectsPipeline';
+import { getSafeMsaaSampleCount, shouldRebuildPassList } from './SceneEffectsPipeline';
+
+describe('SceneEffectsPipeline pass initialization', () => {
+  it('builds the render chain on first render when no effects are enabled', () => {
+    expect(shouldRebuildPassList(null, '')).toBe(true);
+  });
+
+  it('does not rebuild an already initialized empty effect pass list', () => {
+    expect(shouldRebuildPassList('', '')).toBe(false);
+  });
+});
 
 describe('SceneEffectsPipeline anti-aliasing setup', () => {
   it('correctly creates FXAAPass with resolution uniform matching pixel dimensions', () => {

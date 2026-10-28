@@ -99,6 +99,10 @@ export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, 
     return hwCap;
 }
 
+export function shouldRebuildPassList(activePassKey: string | null, currentPassKey: string): boolean {
+    return activePassKey !== currentPassKey;
+}
+
 export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress }) => {
     const effectiveEffects = (outgoingEffects && transitionProgress !== undefined && transitionProgress < 1)
         ? blendEvaluatedEffects(outgoingEffects, effects, transitionProgress)
@@ -155,7 +159,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     }, [gl, scene, camera, size.width, size.height, dpr]);
 
     const prevCameraPosRef = useRef<{ x: number; y: number } | null>(null);
-    const activePassKeyRef = useRef<string>('');
+    const activePassKeyRef = useRef<string | null>(null);
 
     // Update passes and uniforms from evaluated effects state
     useLayoutEffect(() => {
@@ -177,7 +181,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const currentPassKey = effectiveEffects.orderedEnabledPasses
             .map((p) => p.key)
             .join(',');
-        const passListChanged = activePassKeyRef.current !== currentPassKey;
+        const passListChanged = shouldRebuildPassList(activePassKeyRef.current, currentPassKey);
 
         if (passListChanged) {
             activePassKeyRef.current = currentPassKey;
