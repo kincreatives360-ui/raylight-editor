@@ -56,9 +56,19 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
     const { width: artboardWidth, height: artboardHeight } = getArtboardDimensions(project.aspectRatio);
     const halfW = artboardWidth / 2;
     const halfH = artboardHeight / 2;
-    const [fromCollapsed, setFromCollapsed] = useState(false);
-    const [toCollapsed, setToCollapsed] = useState(false);
+    const [activeEndpointTab, setActiveEndpointTab] = useState<'from' | 'to'>('from');
     const [movementFlyoutOpen, setMovementFlyoutOpen] = useState(false);
+
+    const handleSwapEndpoints = () => {
+        updateCameraBlock(activeCameraBlock.id, (cb) => {
+            if (!cb.from || !cb.to) return cb;
+            return {
+                ...cb,
+                from: { ...cb.to },
+                to: { ...cb.from },
+            };
+        });
+    };
 
 
     const updateCameraBlock = (
@@ -490,11 +500,47 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                 </div>
             </div>
 
-            {/* 1. FROM SECTION */}
-            {renderCameraEndpoint('from', fromCollapsed, () => setFromCollapsed((v) => !v))}
+            {/* ENDPOINT SEGMENTED SELECTOR [ From | To | Swap ⇄ ] */}
+            <div className="p-3 pb-0">
+                <div className="flex items-center gap-1.5 p-1 bg-[#141416] rounded-lg border border-white/[0.08]">
+                    <button
+                        type="button"
+                        aria-pressed={activeEndpointTab === 'from'}
+                        onClick={() => setActiveEndpointTab('from')}
+                        className={`flex-1 py-1 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
+                            activeEndpointTab === 'from'
+                                ? 'bg-[#222226] text-emerald-400 border border-emerald-500/30 shadow-xs'
+                                : 'text-zinc-400 hover:text-white'
+                        }`}
+                    >
+                        From (Start)
+                    </button>
+                    <button
+                        type="button"
+                        aria-pressed={activeEndpointTab === 'to'}
+                        onClick={() => setActiveEndpointTab('to')}
+                        className={`flex-1 py-1 rounded-md text-[11px] font-medium transition cursor-pointer text-center ${
+                            activeEndpointTab === 'to'
+                                ? 'bg-[#222226] text-sky-400 border border-sky-500/30 shadow-xs'
+                                : 'text-zinc-400 hover:text-white'
+                        }`}
+                    >
+                        To (End)
+                    </button>
+                    <button
+                        type="button"
+                        aria-label="Swap from and to endpoints"
+                        onClick={handleSwapEndpoints}
+                        title="Swap Start and End Framing"
+                        className="px-2 py-1 rounded-md text-[11px] text-zinc-400 hover:text-white hover:bg-white/10 transition cursor-pointer"
+                    >
+                        ⇄
+                    </button>
+                </div>
+            </div>
 
-            {/* 2. TO SECTION */}
-            {renderCameraEndpoint('to', toCollapsed, () => setToCollapsed((v) => !v))}
+            {/* ACTIVE ENDPOINT SECTION */}
+            {renderCameraEndpoint(activeEndpointTab, false, () => {})}
 
             {/* 3. MOVEMENT PRESETS & MOVE MODE */}
             <div className="p-3.5 space-y-3">

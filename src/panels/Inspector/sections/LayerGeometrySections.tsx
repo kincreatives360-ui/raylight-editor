@@ -23,6 +23,8 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
     const stageH = fixedFrame ? artboard.height : 1080;
     const size = layer.kind !== 'text' ? layer.size : undefined;
     const displaySize = size && fixedFrame ? getDevicePlacementSize(size, fixedFrame, projectAspect) : size;
+    const has3D = Math.abs(layer.rotation.x) > 0.001 || Math.abs(layer.rotation.y) > 0.001 || Math.abs(layer.position.z) > 0.001;
+
     const align = (axis: 'x' | 'y', value: number) => {
         const selected = new Set(selectedLayerIds);
         updateShot(shot.id, (s) => ({ ...s, layers: s.layers.map((l) => selected.has(l.id) && !isLayerEffectivelyLocked(l, s.groups) ? { ...l, position: { ...l.position, [axis]: value } } : l) }));
@@ -35,6 +37,7 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
         return { ...l, size: { width: axis === 'width' ? normalized : aspectLocked ? l.size.width * ratio : l.size.width, height: axis === 'height' ? normalized : aspectLocked ? l.size.height * ratio : l.size.height } };
     });
     const rotate = (axis: 'x' | 'y' | 'z', degrees: number) => update((l) => ({ ...l, rotation: { ...l.rotation, [axis]: degToRad(degrees) } }));
+
     return <>
         <DesignSection title="Position">
             <InspectorRow label="Alignment" stacked><div className="object-design-alignment">
@@ -60,7 +63,7 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
                 <IconButton label="Flip Vertically" icon={<FlipVertical />} onClick={() => update((l) => ({ ...l, scale: { ...l.scale, y: -l.scale.y } }))} />
             </div><IconButton label="Reset rotation" icon={<Scan />} onClick={() => rotate('z', 0)} /></div></InspectorRow>
         </DesignSection>
-        <DesignSection title="Tilt">
+        <DesignSection title="Tilt" collapsible defaultOpen={has3D}>
             <InspectorRow label="Tilt" stacked><AxisFields
                 className="object-design-pair object-design-action-space"
                 fields={(['x', 'y'] as const).map((axis) => ({"key": axis, "label": axis.toUpperCase(), "value": radToDeg(layer.rotation[axis]), "min": -360, "max": 360, "step": 1, "unit": "°", "onChange": (value) => rotate(axis, value)}))}

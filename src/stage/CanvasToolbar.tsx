@@ -4,7 +4,7 @@ import { useFloatingPanel } from '../ui/useFloatingPanel';
 import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
 import React, { useState, useRef } from 'react';
-import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, Tag, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus } from 'lucide-react';
+import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus } from 'lucide-react';
 import type { Layer, SceneLight } from '../model/types';
 import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
@@ -84,7 +84,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const activeShot = project.shots.find((s) => s.id === selectedShotId) || project.shots[0];
 
     // Close menus on outside click
-    useFloatingPanel({ open: !!openMenu, surfaceRef: menuRef, onClose: () => setOpenMenu(null), outsideEvent: 'mousedown', escape: false });
+    useFloatingPanel({ open: !!openMenu, surfaceRef: menuRef, onClose: () => setOpenMenu(null), outsideEvent: 'mousedown', escape: true });
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -577,18 +577,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     className={toolBtn(activeTool === 'text')}
                 />
 
-                {/* 5 ─ Tag / Label */}
-                <IconButton
-                    unstyled
-                    tooltip={false}
-                    label="Tag Tool"
-                    icon={<>
-                        <Tag className="w-3.5 h-3.5" />
-                    </>}
-                    onClick={() => showToast('Tag tool — coming soon')}
-                    title="Tag / Label annotations"
-                    className={toolBtn(false)}
-                />
+
 
                 {/* 6 ─ Grid / Alignment */}
                 <IconButton
@@ -740,15 +729,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     )}
                 </div>
 
-                {/* 9 ─ Upgrade CTA */}
-                <button
-                    type="button"
-                    onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium assets')}
-                    aria-label="Upgrade to Pro"
-                    className="ml-1 px-3 py-1 rounded-lg text-sky-400 text-[11px] font-semibold hover:bg-sky-400/10 transition cursor-pointer"
-                >
-                    Upgrade
-                </button>
+
             </div>
         </div>
     );

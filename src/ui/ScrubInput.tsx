@@ -32,6 +32,88 @@ function inferStepDecimals(stepValue: number): number {
     return 0;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
+export function evaluateMathExpression(expr: string): number | null {
+    const cleaned = expr.trim().replace(/,/g, '');
+    if (!cleaned) return null;
+    const direct = Number(cleaned);
+    if (!Number.isNaN(direct)) return direct;
+
+    const tokens: string[] = [];
+    let i = 0;
+    while (i < cleaned.length) {
+        const ch = cleaned[i];
+        if (/\s/.test(ch)) {
+            i++;
+        } else if ('+-*/()'.includes(ch)) {
+            tokens.push(ch);
+            i++;
+        } else if (/[\d.]/.test(ch)) {
+            let numStr = '';
+            while (i < cleaned.length && /[\d.]/.test(cleaned[i])) {
+                numStr += cleaned[i];
+                i++;
+            }
+            tokens.push(numStr);
+        } else {
+            return null;
+        }
+    }
+
+    let pos = 0;
+    function parsePrimary(): number {
+        const token = tokens[pos++];
+        if (!token) throw new Error('Unexpected end');
+        if (token === '(') {
+            const val = parseAddSub();
+            if (tokens[pos++] !== ')') throw new Error('Expected )');
+            return val;
+        }
+        if (token === '-') {
+            return -parsePrimary();
+        }
+        if (token === '+') {
+            return parsePrimary();
+        }
+        const num = parseFloat(token);
+        if (Number.isNaN(num)) throw new Error('Invalid number');
+        return num;
+    }
+
+    function parseMulDiv(): number {
+        let left = parsePrimary();
+        while (pos < tokens.length && (tokens[pos] === '*' || tokens[pos] === '/')) {
+            const op = tokens[pos++];
+            const right = parsePrimary();
+            if (op === '*') left *= right;
+            else if (op === '/') {
+                if (right === 0) return 0;
+                left /= right;
+            }
+        }
+        return left;
+    }
+
+    function parseAddSub(): number {
+        let left = parseMulDiv();
+        while (pos < tokens.length && (tokens[pos] === '+' || tokens[pos] === '-')) {
+            const op = tokens[pos++];
+            const right = parseMulDiv();
+            if (op === '+') left += right;
+            else if (op === '-') left -= right;
+        }
+        return left;
+    }
+
+    try {
+        const res = parseAddSub();
+        return pos === tokens.length && Number.isFinite(res) ? res : null;
+    } catch {
+        const fallback = parseFloat(cleaned);
+        return Number.isFinite(fallback) ? fallback : null;
+    }
+}
+
 export const ScrubInput: React.FC<ScrubInputProps> = ({
     'aria-label': ariaLabel,
     label,
@@ -108,9 +190,9 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         isCommittedRef.current = true;
         setIsEditing(false);
 
-        const parsed = parseFloat(inputText);
-        if (Number.isFinite(parsed)) {
-            onChange(clampAndRound(parsed));
+        const evaluated = evaluateMathExpression(inputText);
+        if (evaluated !== null && Number.isFinite(evaluated)) {
+            onChange(clampAndRound(evaluated));
         }
     };
 

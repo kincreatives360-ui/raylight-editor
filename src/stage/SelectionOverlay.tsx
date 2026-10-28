@@ -1,7 +1,7 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Move, RotateCw, Compass, Lock, Crop, Type } from 'lucide-react';
+import { RotateCw, Compass, Lock, Crop } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import {
@@ -756,20 +756,35 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 )}
             </svg>
 
-            {/* TOP 2D ROTATION LOLLIPOP KNOB */}
+            {/* TOP 2D ROTATION LOLLIPOP KNOB & PERIMETER 3D TILT BADGE */}
             {!isLocked && !isCropping && !isEditingInlineText && (
-                <div
-                    style={{
-                        left: `${primaryProj.pRot.x}px`,
-                        top: `${primaryProj.pRot.y}px`,
-                        transform: 'translate(-50%, -50%)',
-                    }}
-                    onPointerDown={handleStartRotateZ}
-                    title="Drag around object to Spin / Rotate (Roll Z)"
-                    className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
-                >
-                    <RotateCw className="w-2.5 h-2.5 text-white" />
-                </div>
+                <>
+                    <div
+                        style={{
+                            left: `${primaryProj.pRot.x}px`,
+                            top: `${primaryProj.pRot.y}px`,
+                            transform: 'translate(-50%, -50%)',
+                        }}
+                        onPointerDown={handleStartRotateZ}
+                        title="Drag around object to Spin / Rotate (Roll Z)"
+                        className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
+                    >
+                        <RotateCw className="w-2.5 h-2.5 text-white" />
+                    </div>
+                    <div
+                        style={{
+                            left: `${primaryProj.pRot.x + 28}px`,
+                            top: `${primaryProj.pRot.y}px`,
+                            transform: 'translate(-50%, -50%)',
+                        }}
+                        onPointerDown={handleStart3DTilt}
+                        title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
+                        className="absolute pointer-events-auto h-5 px-1.5 rounded-full bg-[#18181b]/95 hover:bg-[#27272a] border border-white/20 shadow-xl flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-medium text-white/90 hover:text-white transition-all duration-100 ease-out hover:scale-105"
+                    >
+                        <Compass className="w-2.5 h-2.5 text-sky-400" />
+                        <span>3D</span>
+                    </div>
+                </>
             )}
 
             {/* 8 RESIZE / CROP HANDLES */}
@@ -794,83 +809,53 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         />
                 ))}
 
-            {/* INLINE TEXT EDITOR OR CENTER PILLS */}
-            <div
-                style={{
-                    left: `${primaryProj.pCenter.x}px`,
-                    top: `${primaryProj.pCenter.y}px`,
-                    transform: 'translate(-50%, -50%)',
-                }}
-                className="absolute flex items-center justify-center pointer-events-auto"
-            >
-                {isEditingInlineText && layer.kind === 'text' ? (
-                    <div
-                        className="p-1 z-40"
-                        style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
-                    >
-                        <textarea
-                            autoFocus
-                            value={(layer as TextLayer).content}
-                            onChange={(e) =>
-                                updateLayer(activeShot.id, layer.id, (l) =>
-                                    l.kind === 'text' ? { ...l, content: e.target.value } : l
-                                )
-                            }
-                            onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (
-                                    e.key === 'Escape' ||
-                                    (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
-                                ) {
-                                    setIsEditingInlineText(false);
+            {/* INLINE TEXT EDITOR OR STATUS BADGES (unobstructed interior) */}
+            {((isEditingInlineText && layer.kind === 'text') || isLocked || isCropping) && (
+                <div
+                    style={{
+                        left: `${primaryProj.pCenter.x}px`,
+                        top: `${primaryProj.pCenter.y}px`,
+                        transform: 'translate(-50%, -50%)',
+                    }}
+                    className="absolute flex items-center justify-center pointer-events-auto"
+                >
+                    {isEditingInlineText && layer.kind === 'text' ? (
+                        <div
+                            className="p-1 z-40"
+                            style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
+                        >
+                            <textarea
+                                autoFocus
+                                value={(layer as TextLayer).content}
+                                onChange={(e) =>
+                                    updateLayer(activeShot.id, layer.id, (l) =>
+                                        l.kind === 'text' ? { ...l, content: e.target.value } : l
+                                    )
                                 }
-                            }}
-                            onBlur={() => setIsEditingInlineText(false)}
-                            className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
-                        />
-                    </div>
-                ) : isLocked ? (
-                    <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[11px] font-mono flex items-center gap-1 shadow-lg">
-                        <Lock className="w-3 h-3" /> Locked
-                    </div>
-                ) : isCropping ? (
-                    <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[11px] font-semibold flex items-center gap-1 shadow-lg">
-                        <Crop className="w-3 h-3" /> Drag Corners to Crop
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity duration-100">
-                        {layer.kind === 'text' && (
-                            <button
-                                onPointerDown={(e) => {
+                                onKeyDown={(e) => {
                                     e.stopPropagation();
-                                    setIsEditingInlineText(true);
+                                    if (
+                                        e.key === 'Escape' ||
+                                        (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
+                                    ) {
+                                        setIsEditingInlineText(false);
+                                    }
                                 }}
-                                className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--accent-primary,#0088ff)] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[11px] font-medium text-white transition-colors duration-100"
-                            >
-                                <Type className="w-3 h-3" />
-                                <span>Edit</span>
-                            </button>
-                        )}
-
-                        <div
-                            onPointerDown={handleStartMove}
-                            title="Drag to move in 3D space"
-                            className="w-6 h-6 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition-colors duration-100"
-                        >
-                            <Move className="w-3 h-3 text-white" />
+                                onBlur={() => setIsEditingInlineText(false)}
+                                className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
+                            />
                         </div>
-
-                        <div
-                            onPointerDown={handleStart3DTilt}
-                            title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
-                            className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-medium,rgba(255,255,255,0.12))] shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[11px] font-medium text-white transition-colors duration-100"
-                        >
-                            <Compass className="w-3 h-3" />
-                            <span>Tilt</span>
+                    ) : isLocked ? (
+                        <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[11px] font-mono flex items-center gap-1 shadow-lg">
+                            <Lock className="w-3 h-3" /> Locked
                         </div>
-                    </div>
-                )}
-            </div>
+                    ) : isCropping ? (
+                        <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[11px] font-semibold flex items-center gap-1 shadow-lg">
+                            <Crop className="w-3 h-3" /> Drag Corners to Crop
+                        </div>
+                    ) : null}
+                </div>
+            )}
 
         </div>
     );

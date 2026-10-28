@@ -202,7 +202,21 @@ export default function App() {
   } = useSelectionStore();
 
   const [audioLabel, setAudioLabel] = useState<string>('');
-  const [showSafeArea, setShowSafeArea] = useState<boolean>(false);
+  const [showSafeArea, setShowSafeArea] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('raylight_safe_area') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('raylight_safe_area', String(showSafeArea));
+    } catch {
+      // ignore
+    }
+  }, [showSafeArea]);
   const [shortcutsModalOpen, setShortcutsModalOpen] = useState<boolean>(false);
   const [commandMenuOpen, setCommandMenuOpen] = useState<boolean>(false);
   const [undoToast, setUndoToast] = useState<{ message: string; isOpen: boolean; historyLength?: number }>({ message: '', isOpen: false });

@@ -38,8 +38,7 @@ import { SceneEffectsSection } from './sections/SceneEffectsSection';
 
 
 
-const DEFAULT_AVATAR_PLACEHOLDER =
-    "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='%239ca3af'%3E%3Cpath fill-rule='evenodd' d='M18.685 19.097A9.723 9.723 0 0021.75 12c0-5.385-4.365-9.75-9.75-9.75S2.25 6.615 2.25 12a9.723 9.723 0 003.065 7.097A9.716 9.716 0 0012 21.75a9.716 9.716 0 006.685-2.653zm-12.54-1.285A7.486 7.486 0 0112 15a7.486 7.486 0 015.855 2.812A8.224 8.224 0 0112 20.25a8.224 8.224 0 01-5.855-2.438zM15.75 9a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0z' clip-rule='evenodd' /%3E%3C/svg%3E";
+
 
 interface ShaderPreviewCanvasProps {
     preset: ShaderPreset;
@@ -1399,14 +1398,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-3">
-                    {/* User Profile Avatar with Teal Ring */}
-                    <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm cursor-pointer hover:opacity-90 transition">
-                        <img
-                            src={DEFAULT_AVATAR_PLACEHOLDER}
-                            alt="User Profile"
-                            className="w-full h-full object-cover"
-                        />
-                    </div>
+
 
                     <IconButton
                         unstyled

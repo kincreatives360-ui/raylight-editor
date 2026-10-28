@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ScrubInput } from './ScrubInput';
+import { ScrubInput, evaluateMathExpression } from './ScrubInput';
 
 interface MockDomElement {
     tagName: string;
@@ -272,5 +272,13 @@ describe('ScrubInput Component', () => {
             root.unmount();
         });
     });
-});
 
+    it('accurately evaluates arithmetic expressions like 1920/2 and 100+48', () => {
+        expect(evaluateMathExpression('1920/2')).toBe(960);
+        expect(evaluateMathExpression('100+48')).toBe(148);
+        expect(evaluateMathExpression('50*1.5')).toBe(75);
+        expect(evaluateMathExpression('(100 - 20) / 2')).toBe(40);
+        expect(evaluateMathExpression('-10 + 5')).toBe(-5);
+        expect(evaluateMathExpression('invalid')).toBeNull();
+    });
+});

@@ -3,7 +3,8 @@ import { useFloatingPanel } from '../../ui/useFloatingPanel';
 import { FigmaSelect } from '../../ui/FigmaSelect';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
+import { Pipette, Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
+import { useProjectStore } from '../../store/useProjectStore';
 import type { GradientStop } from '../../model/types';
 import { RAYLIGHT_COLOR_PALETTE } from '../../model/types';
 
@@ -95,6 +96,37 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const squareRef = useRef<HTMLDivElement>(null);
     const hexInputRef = useRef<HTMLInputElement>(null);
     const hueBarRef = useRef<HTMLDivElement>(null);
+
+    const hasEyeDropper = typeof window !== 'undefined' && 'EyeDropper' in window;
+    const handleEyeDropper = async () => {
+        if (typeof window === 'undefined') return;
+        const EyeDropperClass = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+        if (!EyeDropperClass) return;
+        try {
+            const ed = new EyeDropperClass();
+            const res = await ed.open();
+            if (res?.sRGBHex) {
+                commitHex(res.sRGBHex);
+            }
+        } catch {
+            // Cancelled
+        }
+    };
+
+    const project = useProjectStore.getState().project;
+    const documentColors = useMemo(() => {
+        const colors = new Set<string>();
+        if (project.background?.kind === 'solid' && project.background.color) {
+            colors.add(project.background.color.toLowerCase());
+        }
+        for (const shot of project.shots) {
+            for (const l of shot.layers) {
+                if (l.kind === 'text' && l.font?.color) colors.add(l.font.color.toLowerCase());
+                if (l.kind === 'shape' && l.fill?.kind === 'solid' && l.fill.color) colors.add(l.fill.color.toLowerCase());
+            }
+        }
+        return Array.from(colors).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 7);
+    }, [project]);
     const pickerId = useId();
     const [open, setOpen] = useState(false);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
@@ -401,6 +433,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             className="min-w-0 w-[86px] bg-transparent font-mono text-[var(--text-primary,#f4f4f5)] outline-none"
                             spellCheck={false}
                         />
+                        {hasEyeDropper && (
+                            <button
+                                type="button"
+                                aria-label="Pick color from screen"
+                                title="Pick color from screen (Eyedropper)"
+                                onClick={handleEyeDropper}
+                                className="ml-auto p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+                            >
+                                <Pipette className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </label>
                     <div className="flex h-[205px] gap-3">
                         <div
@@ -470,6 +513,24 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     <div className="mt-3 flex items-center justify-between gap-1.5">
                         {RAYLIGHT_COLOR_PALETTE.map((swatch) => <button key={swatch} type="button" aria-label={`Set color ${swatch}`} title={swatch} onClick={() => commitHex(swatch)} className={`h-6 w-6 shrink-0 rounded-full border transition hover:scale-110 ${hexDraft.toLowerCase() === swatch ? 'border-white ring-1 ring-white/50' : 'border-white/15'}`} style={{ backgroundColor: swatch }} />)}
                     </div>
+                    {documentColors.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/[0.06] flex items-center justify-between gap-1.5">
+                            <span className="text-[10px] text-zinc-500 font-mono">DOC</span>
+                            <div className="flex items-center gap-1.5">
+                                {documentColors.map((swatch) => (
+                                    <button
+                                        key={swatch}
+                                        type="button"
+                                        aria-label={`Set document color ${swatch}`}
+                                        title={swatch}
+                                        onClick={() => commitHex(swatch)}
+                                        className={`h-5 w-5 shrink-0 rounded-full border transition hover:scale-110 ${hexDraft.toLowerCase() === swatch ? 'border-white ring-1 ring-white/50' : 'border-white/15'}`}
+                                        style={{ backgroundColor: swatch }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </>
             ) : (
                 <div className="space-y-2.5">
