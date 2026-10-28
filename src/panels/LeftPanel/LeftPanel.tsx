@@ -1,30 +1,9 @@
+import { MenuSurface, MenuItem } from '../../ui/Menu';
+import { IconButton } from '../../ui/primitives';
+import { SearchField } from '../../ui/SearchField';
+import { InlineRenameInput } from '../../ui/InlineRenameInput';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import {
-    Search,
-    X,
-    Plus,
-    ChevronRight,
-    ChevronDown,
-    Eye,
-    EyeOff,
-    Trash2,
-    Copy,
-    Image as ImageIcon,
-    Square,
-    Circle,
-    Type,
-    Hash,
-    Music,
-    Activity,
-    Video,
-    Sun,
-    Volume2,
-    VolumeX,
-    PanelLeftClose,
-    Play,
-    Pause,
-    Upload,
-} from 'lucide-react';
+import { Search, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Trash2, Copy, Image as ImageIcon, Square, Circle, Type, Hash, Music, Activity, Video, Sun, Volume2, VolumeX, PanelLeftClose, Play, Pause, Upload } from 'lucide-react';
 import { isBlankProjectState, type Shot, type Layer, type Group, type AudioClip } from '../../model/types';
 import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -435,18 +414,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                     {renderLayerIcon(layer, isSelected)}
                     {isEditing ? (
-                        <input
-                            autoFocus
+                        <InlineRenameInput
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
-                            onBlur={() => commitLayerRename(shot.id, layer.id)}
-                            onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (e.key === 'Enter') commitLayerRename(shot.id, layer.id);
-                                if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
-                            }}
-                            onClick={(e) => e.stopPropagation()}
                             className="w-full bg-black/90 border border-[#0088ff] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                            onCommit={() => commitLayerRename(shot.id, layer.id)}
+                            onCancel={() => setEditingId(null)}
                         />
                     ) : (
                         <span className="truncate">{layer.name}</span>
@@ -454,7 +427,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-                    <button
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label={layer.hidden ? `Show ${layer.name}` : `Hide ${layer.name}`}
+                        icon={<>
+                            {layer.hidden ? (
+                                <EyeOff className="w-3 h-3 text-rose-400" />
+                            ) : (
+                                <Eye className="w-3 h-3" />
+                            )}
+                        </>}
                         onClick={(e) => {
                             e.stopPropagation();
                             updateLayer(shot.id, layer.id, (l) => ({
@@ -462,27 +445,23 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 hidden: !l.hidden,
                             }));
                         }}
-                        aria-label={layer.hidden ? `Show ${layer.name}` : `Hide ${layer.name}`}
                         title={layer.hidden ? "Show layer" : "Hide layer"}
                         className="p-1 rounded hover:bg-white/10 text-gray-300 cursor-pointer"
-                    >
-                        {layer.hidden ? (
-                            <EyeOff className="w-3 h-3 text-rose-400" />
-                        ) : (
-                            <Eye className="w-3 h-3" />
-                        )}
-                    </button>
-                    <button
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label={`Delete ${layer.name}`}
+                        icon={<>
+                            <Trash2 className="w-3 h-3" />
+                        </>}
                         onClick={(e) => {
                             e.stopPropagation();
                             deleteLayerFromShot(shot.id, layer.id);
                         }}
-                        aria-label={`Delete ${layer.name}`}
                         title="Delete layer"
                         className="p-1 rounded hover:bg-rose-500/20 text-gray-300 hover:text-rose-400 cursor-pointer"
-                    >
-                        <Trash2 className="w-3 h-3" />
-                    </button>
+                    />
                 </div>
             </div>
         );
@@ -532,9 +511,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         }`}
                 >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                        <button
-                            type="button"
-                            aria-label={group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`}
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label={group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`}
+                            icon={<>
+                                {group.collapsed ? (
+                                    <ChevronRight className="w-3 h-3 opacity-70" />
+                                ) : (
+                                    <ChevronDown className="w-3 h-3 opacity-70" />
+                                )}
+                            </>}
                             onClick={(e) => {
                                 e.stopPropagation();
                                 updateGroupInShot(shot.id, group.id, (g) => ({
@@ -543,30 +530,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 }));
                             }}
                             className="p-0.5 cursor-pointer"
-                        >
-                            {group.collapsed ? (
-                                <ChevronRight className="w-3 h-3 opacity-70" />
-                            ) : (
-                                <ChevronDown className="w-3 h-3 opacity-70" />
-                            )}
-                        </button>
+                        />
                         <Hash
                             className={`w-3.5 h-3.5 shrink-0 ${isGroupSelected ? 'text-white' : 'text-[#0088ff]'
                                 }`}
                         />
                         {isEditing ? (
-                            <input
-                                autoFocus
+                            <InlineRenameInput
                                 value={editingText}
                                 onChange={(e) => setEditingText(e.target.value)}
-                                onBlur={() => commitGroupRename(shot.id, group.id)}
-                                onKeyDown={(e) => {
-                                    e.stopPropagation();
-                                    if (e.key === 'Enter') commitGroupRename(shot.id, group.id);
-                                    if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
-                                }}
-                                onClick={(e) => e.stopPropagation()}
                                 className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                                onCommit={() => commitGroupRename(shot.id, group.id)}
+                                onCancel={() => setEditingId(null)}
                             />
                         ) : (
                             <span className="truncate">{group.name}</span>
@@ -616,32 +591,39 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 </button>
 
                 <div className="flex items-center gap-1">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Add blank shot, layer, or camera"
+                        icon={<>
+                            <Plus className="w-3.5 h-3.5" />
+                        </>}
                         onClick={() => setAddMenuOpen((v) => !v)}
-                        aria-label="Add blank shot, layer, or camera"
                         aria-expanded={addMenuOpen}
                         aria-haspopup="menu"
                         className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#242429] border border-white/[0.07] flex items-center justify-center text-[#d4d4d8] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
                         title="Add Blank Shot, Layer, or Camera"
-                    >
-                        <Plus className="w-3.5 h-3.5" />
-                    </button>
+                    />
 
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Collapse Left Panel ( [ )"
+                        icon={<>
+                            <PanelLeftClose className="w-3.5 h-3.5" />
+                        </>}
                         onClick={toggleLeftPanel}
-                        aria-label="Collapse Left Panel ( [ )"
                         className="w-7 h-7 rounded-full hover:bg-[#18181b] border border-transparent hover:border-white/[0.07] flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
                         title="Collapse Left Panel ( [ )"
-                    >
-                        <PanelLeftClose className="w-3.5 h-3.5" />
-                    </button>
+                    />
                 </div>
 
                 {addMenuOpen && (
-                    <div className="absolute top-11 right-3 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
-                        <button
+                    <MenuSurface
+                        className="absolute top-11 right-3 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50"
+                    >
+                        <MenuItem
+                            unstyled
                             onClick={() => {
                                 const created = addShot();
                                 selectShot(created.id);
@@ -651,8 +633,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
                         >
                             + Blank Shot (Scene)
-                        </button>
-                        <button
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'image');
                                 selectLayer(l.id);
@@ -662,8 +645,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
                         >
                             + Image Layer
-                        </button>
-                        <button
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'shape');
                                 selectLayer(l.id);
@@ -673,8 +657,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
                         >
                             + Rectangle Shape
-                        </button>
-                        <button
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
                             onClick={() => {
                                 const l = addLayerToShot(activeShot.id, 'text');
                                 selectLayer(l.id);
@@ -684,8 +669,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
                         >
                             + 3D Text Layer
-                        </button>
-                        <button
+                        </MenuItem>
+                        <MenuItem
+                            unstyled
                             onClick={() => {
                                 const block = addCameraBlockToShot(activeShot.id);
                                 if (!block) return;
@@ -696,8 +682,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="w-full px-2.5 py-1.5 rounded-lg text-left text-emerald-400 hover:bg-white/5 cursor-pointer border-t border-white/10 mt-1 pt-1.5"
                         >
                             + Add Camera Move
-                        </button>
-                    </div>
+                        </MenuItem>
+                    </MenuSurface>
                 )}
             </div>
 
@@ -728,43 +714,36 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     </button>
                 </div>
 
-                <button
-                    type="button"
-                    aria-label="Search layers"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Search layers"
+                    icon={<>
+                        <Search className="w-3.5 h-3.5" />
+                    </>}
                     onClick={() => {
                         setSearchOpen((v) => !v);
                         if (searchOpen) setSearchQuery('');
                     }}
                     className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-[#0088ff]' : 'text-[#a1a1aa] hover:text-white'
-                        }`}
-                >
-                    <Search className="w-3.5 h-3.5" />
-                </button>
+                    }`}
+                />
             </div>
 
             {searchOpen && (
-                <div className="px-3 py-1.5 border-b border-white/[0.07] bg-[#111114] flex items-center gap-1.5">
-                    <Search className="w-3 h-3 text-[#a1a1aa]" />
-                    <input
-                        autoFocus
-                        type="text"
-                        value={searchQuery}
-                        onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder="Find layer..."
-                        aria-label="Filter layers by name"
-                        className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-[#a1a1aa]"
-                    />
-                    {searchQuery && (
-                        <button
-                            type="button"
-                            aria-label="Clear search"
-                            onClick={() => setSearchQuery('')}
-                            className="text-[#a1a1aa] hover:text-white cursor-pointer"
-                        >
-                            <X className="w-3 h-3" />
-                        </button>
-                    )}
-                </div>
+                <SearchField
+                    containerClassName="px-3 py-1.5 border-b border-white/[0.07] bg-[#111114] flex items-center gap-1.5"
+                    iconClassName="w-3 h-3 text-[#a1a1aa]"
+                    autoFocus
+                    type="text"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    placeholder="Find layer..."
+                    aria-label="Filter layers by name"
+                    className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-[#a1a1aa]"
+                    onClear={() => setSearchQuery('')}
+                    clearButtonClassName="text-[#a1a1aa] hover:text-white cursor-pointer"
+                ></SearchField>
             )}
 
             {/* =================================================================== */}
@@ -816,7 +795,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             }`}
                                     >
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                            <button
+                                            <IconButton
+                                                unstyled
+                                                tooltip={false}
+                                                label={`${isCollapsed ? 'Expand' : 'Collapse'} ${shot.name} layers`}
+                                                icon={<>
+                                                    {isCollapsed ? (
+                                                        <ChevronRight className="w-3 h-3 opacity-70" />
+                                                    ) : (
+                                                        <ChevronDown className="w-3 h-3 opacity-70" />
+                                                    )}
+                                                </>}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setCollapsedShots((prev) => ({
@@ -825,13 +814,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     }));
                                                 }}
                                                 className="p-0.5 cursor-pointer"
-                                            >
-                                                {isCollapsed ? (
-                                                    <ChevronRight className="w-3 h-3 opacity-70" />
-                                                ) : (
-                                                    <ChevronDown className="w-3 h-3 opacity-70" />
-                                                )}
-                                            </button>
+                                            />
                                             <Hash
                                                 className={`w-3.5 h-3.5 shrink-0 ${isShotSelected
                                                     ? 'text-white'
@@ -839,18 +822,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     }`}
                                             />
                                             {isEditingShot ? (
-                                                <input
-                                                    autoFocus
+                                                <InlineRenameInput
                                                     value={editingText}
                                                     onChange={(e) => setEditingText(e.target.value)}
-                                                    onBlur={() => commitShotRename(shot.id)}
-                                                    onKeyDown={(e) => {
-                                                        e.stopPropagation();
-                                                        if (e.key === 'Enter') commitShotRename(shot.id);
-                                                        if (e.key === 'Escape') { e.preventDefault(); setEditingId(null); }
-                                                    }}
-                                                    onClick={(e) => e.stopPropagation()}
                                                     className="w-full bg-black/90 border border-white rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                                                    onCommit={() => commitShotRename(shot.id)}
+                                                    onCancel={() => setEditingId(null)}
                                                 />
                                             ) : (
                                                 <span className="truncate">{shot.name}</span>
@@ -858,8 +835,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         </div>
 
                                         <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
-                                            <button
-                                                type="button"
+                                            <IconButton
+                                                unstyled
+                                                tooltip={false}
+                                                label={`Duplicate shot ${shot.name}`}
+                                                icon={<>
+                                                    <Copy className="w-3 h-3" />
+                                                </>}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     const copy = duplicateShot(shot.id);
@@ -869,25 +851,24 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         setCurrentTimeMs(copy.startMs + 100);
                                                     }
                                                 }}
-                                                aria-label={`Duplicate shot ${shot.name}`}
                                                 title="Duplicate Shot"
                                                 className="p-1 rounded hover:bg-black/20 cursor-pointer"
-                                            >
-                                                <Copy className="w-3 h-3" />
-                                            </button>
+                                            />
                                             {project.shots.length > 1 && (
-                                                <button
-                                                    type="button"
+                                                <IconButton
+                                                    unstyled
+                                                    tooltip={false}
+                                                    label={`Delete shot ${shot.name}`}
+                                                    icon={<>
+                                                        <Trash2 className="w-3 h-3" />
+                                                    </>}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         deleteShot(shot.id);
                                                     }}
-                                                    aria-label={`Delete shot ${shot.name}`}
                                                     title="Delete Shot"
                                                     className="p-1 rounded hover:bg-rose-500/40 cursor-pointer"
-                                                >
-                                                    <Trash2 className="w-3 h-3" />
-                                                </button>
+                                                />
                                             )}
                                         </div>
                                     </div>
@@ -963,21 +944,24 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             <Music className="w-3.5 h-3.5 shrink-0 text-sky-400" />
                                             <span className="truncate">Media</span>
                                         </div>
-                                        <button
-                                            type="button"
+                                        <IconButton
+                                            unstyled
+                                            tooltip={false}
+                                            label={project.audio?.muted ? "Unmute audio" : "Mute audio"}
+                                            icon={<>
+                                                {project.audio?.muted ? (
+                                                    <VolumeX className="w-3 h-3 text-rose-400" />
+                                                ) : (
+                                                    <Volume2 className="w-3 h-3 text-slate-300" />
+                                                )}
+                                            </>}
                                             onClick={(e) => {
                                                 e.stopPropagation();
                                                 toggleProjectAudioMuted();
                                             }}
                                             title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                             className="p-1 hover:text-white cursor-pointer"
-                                        >
-                                            {project.audio?.muted ? (
-                                                <VolumeX className="w-3 h-3 text-rose-400" />
-                                            ) : (
-                                                <Volume2 className="w-3 h-3 text-slate-300" />
-                                            )}
-                                        </button>
+                                        />
                                     </div>
                                 )}
 
@@ -1052,36 +1036,44 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                                        <button
+                                                        <IconButton
+                                                            unstyled
+                                                            tooltip={false}
+                                                            label="Open options"
+                                                            icon={<>
+                                                                {isExpanded ? (
+                                                                    <ChevronDown className="w-3 h-3" />
+                                                                ) : (
+                                                                    <ChevronRight className="w-3 h-3" />
+                                                                )}
+                                                            </>}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 toggleTimelineLayerExpanded(layer.id);
                                                             }}
                                                             className="p-0.5 cursor-pointer"
-                                                        >
-                                                            {isExpanded ? (
-                                                                <ChevronDown className="w-3 h-3" />
-                                                            ) : (
-                                                                <ChevronRight className="w-3 h-3" />
-                                                            )}
-                                                        </button>
+                                                        />
                                                         {renderLayerIcon(layer, isSelected)}
                                                         <span className="truncate">{layer.name}</span>
                                                     </div>
 
                                                     {hasAnimItems && (
-                                                        <button
+                                                        <IconButton
+                                                            unstyled
+                                                            tooltip={false}
+                                                            label={`Toggle ${layer.name} animations`}
+                                                            icon={<>
+                                                                <Activity className="w-3 h-3" />
+                                                            </>}
                                                             onClick={(e) => {
                                                                 e.stopPropagation();
                                                                 toggleTimelineLayerExpanded(layer.id);
                                                             }}
                                                             className={`p-0.5 rounded ${isSelected
-                                                                ? 'text-white'
-                                                                : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
-                                                                }`}
-                                                        >
-                                                            <Activity className="w-3 h-3" />
-                                                        </button>
+                                                            ? 'text-white'
+                                                            : 'text-[#8b5cf6] bg-[#8b5cf6]/15'
+                                                            }`}
+                                                        />
                                                     )}
                                                 </div>
 
@@ -1341,25 +1333,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             )}
 
                             {/* Sound Search Bar */}
-                            <div className="relative">
-                                <Search className="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                                <input
-                                    type="text"
-                                    placeholder="Search 150+ sound effects..."
-                                    value={soundSearchQuery}
-                                    onChange={(e) => setSoundSearchQuery(e.target.value)}
-                                    className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
-                                />
-                                {soundSearchQuery && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setSoundSearchQuery('')}
-                                        className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
-                                    >
-                                        <X className="w-3 h-3" />
-                                    </button>
-                                )}
-                            </div>
+                            <SearchField
+                                containerClassName="relative"
+                                iconClassName="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                type="text"
+                                placeholder="Search 150+ sound effects..."
+                                value={soundSearchQuery}
+                                onChange={(e) => setSoundSearchQuery(e.target.value)}
+                                className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
+                                onClear={() => setSoundSearchQuery('')}
+                                clearButtonClassName="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
+                            ></SearchField>
 
                             {/* Category Filter Pills */}
                             <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[10px] no-scrollbar shrink-0">
@@ -1409,25 +1393,32 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             </div>
 
                                             <div className="flex items-center gap-1 shrink-0">
-                                                <button
-                                                    type="button"
+                                                <IconButton
+                                                    unstyled
+                                                    tooltip={false}
+                                                    label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
+                                                    icon={<>
+                                                        {isPlaying ? (
+                                                            <Pause className="w-3.5 h-3.5 fill-current" />
+                                                        ) : (
+                                                            <Play className="w-3.5 h-3.5 fill-current" />
+                                                        )}
+                                                    </>}
                                                     onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
                                                     title={isPlaying ? "Pause Preview" : "Preview Sound"}
-                                                    aria-label={`${isPlaying ? 'Pause' : 'Preview'} ${sound.name}`}
                                                     className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
-                                                        ? 'bg-[#0088ff] text-white border-[#38bdf8]'
-                                                        : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
-                                                        }`}
-                                                >
-                                                    {isPlaying ? (
-                                                        <Pause className="w-3.5 h-3.5 fill-current" />
-                                                    ) : (
-                                                        <Play className="w-3.5 h-3.5 fill-current" />
-                                                    )}
-                                                </button>
+                                                    ? 'bg-[#0088ff] text-white border-[#38bdf8]'
+                                                    : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
+                                                    }`}
+                                                />
 
-                                                <button
-                                                    type="button"
+                                                <IconButton
+                                                    unstyled
+                                                    tooltip={false}
+                                                    label={`Add ${sound.name} to Timeline at playhead`}
+                                                    icon={<>
+                                                        <Plus className="w-3.5 h-3.5" />
+                                                    </>}
                                                     onClick={() => {
                                                         const clip: AudioClip = {
                                                             id: `sfx-${sound.id}-${Date.now()}`,
@@ -1449,11 +1440,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         }));
                                                     }}
                                                     title="Add to Timeline at Playhead"
-                                                    aria-label={`Add ${sound.name} to Timeline at playhead`}
                                                     className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
-                                                >
-                                                    <Plus className="w-3.5 h-3.5" />
-                                                </button>
+                                                />
                                             </div>
                                         </div>
                                     );

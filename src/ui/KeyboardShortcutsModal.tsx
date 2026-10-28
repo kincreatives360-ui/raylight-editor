@@ -1,6 +1,10 @@
+import { IconButton } from './primitives';
+import { ShortcutKey } from './ShortcutKey';
+import { SearchField } from './SearchField';
+import { ModalShell } from './ModalShell';
 // src/ui/KeyboardShortcutsModal.tsx
 import React, { useState, useMemo } from 'react';
-import { X, Search, Command, Keyboard } from 'lucide-react';
+import { X, Command, Keyboard } from 'lucide-react';
 import { getModifierKey } from '../utils/shortcuts';
 
 export interface ShortcutItem {
@@ -95,24 +99,16 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="shortcuts-title"
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150"
-      onClick={handleClose}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') {
-          e.preventDefault();
-          e.stopPropagation();
-          handleClose();
-        }
-      }}
+    <ModalShell
+        backdropProps={{"role": "dialog", "aria-modal": "true", "aria-labelledby": "shortcuts-title", "className": "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150", "onClick": handleClose, "onKeyDown": (e) => {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            handleClose();
+          }
+        }}}
+        surfaceProps={{"className": "w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs", "onClick": (e) => e.stopPropagation()}}
     >
-      <div
-        className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs"
-        onClick={(e) => e.stopPropagation()}
-      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-[#18181e]/80">
           <div className="flex items-center gap-3">
@@ -128,29 +124,30 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            type="button"
-            onClick={handleClose}
-            aria-label="Close shortcuts guide"
-            className="p-1.5 rounded-lg text-[#a1a1aa] hover:text-white hover:bg-white/10 transition cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Close shortcuts guide"
+              icon={<>
+                <X className="w-4 h-4" />
+              </>}
+              onClick={handleClose}
+              className="p-1.5 rounded-lg text-[#a1a1aa] hover:text-white hover:bg-white/10 transition cursor-pointer"
+          />
         </div>
 
         {/* Search & Category Filter Pills */}
         <div className="p-4 border-b border-white/[0.06] bg-[#15151a] space-y-3">
-          <div className="relative">
-            <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#71717a]" />
-            <input
+          <SearchField
+              containerClassName="relative"
+              iconClassName="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#71717a]"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search shortcuts by action or key (e.g. animate, nudge, group, safe)..."
               className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#0e0e11] border border-white/10 text-white placeholder-[#71717a] text-xs focus:outline-none focus:border-[#0088ff] focus:ring-1 focus:ring-[#0088ff] transition"
               autoFocus
-            />
-          </div>
+          ></SearchField>
 
           <div className="flex flex-wrap gap-1.5">
             {categories.map((cat) => (
@@ -188,12 +185,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                   </span>
                   <div className="flex items-center gap-1 shrink-0">
                     {sc.keys.map((k, kidx) => (
-                      <kbd
+                      <ShortcutKey
                         key={`${k}-${kidx}`}
                         className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[11px] font-semibold tracking-tight shadow-xs select-none"
                       >
                         {k === '⌘/Ctrl' ? getModifierKey() : k}
-                      </kbd>
+                      </ShortcutKey>
                     ))}
                   </div>
                 </div>
@@ -206,7 +203,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         <div className="px-6 py-3 border-t border-white/[0.08] bg-[#16161b] flex items-center justify-between text-[11px] text-[#8e8e96]">
           <div className="flex items-center gap-1.5">
             <Command className="w-3.5 h-3.5 text-[#0070e0]" />
-            <span>Press <kbd className="px-1.5 py-0.5 rounded bg-[#27272a] text-white text-[11px]">?</kbd> anywhere to toggle this guide</span>
+            <span>Press <ShortcutKey className="px-1.5 py-0.5 rounded bg-[#27272a] text-white text-[11px]">?</ShortcutKey> anywhere to toggle this guide</span>
           </div>
           <button
             type="button"
@@ -216,7 +213,6 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
             Done
           </button>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 };

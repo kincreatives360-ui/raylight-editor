@@ -1,9 +1,10 @@
-import { Copy, Droplet, Eye, Layers, Minus, Plus, Spline, Zap } from 'lucide-react';
+import { Copy, Droplet, Eye, Layers, Plus, Spline, Zap } from 'lucide-react';
 import type { Layer } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { ColorPicker } from '../ColorPicker';
+import { LayerEffectCard } from './LayerEffectCard';
 const refStageW = 1920;
 const refStageH = 1080;
 export function LayerEffectsSection({ activeShotId, layer }: {
@@ -87,16 +88,7 @@ export function LayerEffectsSection({ activeShotId, layer }: {
             {/* Active Effects Cards */}
             <div className="space-y-2">
                 {/* Drop Shadow */}
-                {layer.effects?.dropShadow?.enabled && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Copy className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Drop shadow</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('dropShadow'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Drop Shadow">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {layer.effects?.dropShadow?.enabled && (<LayerEffectCard title="Drop shadow" icon={<Copy className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Drop Shadow" onRemove={() => handleRemoveEffect('dropShadow')}>
                     <div className="grid grid-cols-2 gap-2"><ColorPicker label="Shadow color" color={layer.effects.dropShadow.color} onChange={(color) => updateLayer(activeShotId, layer.id, l => l.effects.dropShadow ? { ...l, effects: { ...l.effects, dropShadow: { ...l.effects.dropShadow, color } } } : l)} /><ScrubInput label="Opacity" value={Math.round(layer.effects.dropShadow.opacity * 100)} min={0} max={100} unit=" %" onChange={(v) => updateLayer(activeShotId, layer.id, l => l.effects.dropShadow ? { ...l, effects: { ...l.effects, dropShadow: { ...l.effects.dropShadow, opacity: v / 100 } } } : l)} /></div>                            <div className="grid grid-cols-3 gap-1.5">
                         <ScrubInput label="Blur" value={layer.effects.dropShadow.blur * refStageW} min={0} max={100} step={1} unit=" px" onChange={(blur) => updateLayer(activeShotId, layer.id, (l) => l.effects.dropShadow
                             ? {
@@ -126,19 +118,10 @@ export function LayerEffectsSection({ activeShotId, layer }: {
                             }
                             : l)} />
                     </div>
-                </details>)}
+                </LayerEffectCard>)}
 
                 {/* Glow */}
-                {layer.effects?.glow?.enabled && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Zap className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Glow</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('glow'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Glow">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {layer.effects?.glow?.enabled && (<LayerEffectCard title="Glow" icon={<Zap className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Glow" onRemove={() => handleRemoveEffect('glow')}>
                     <ColorPicker label="Glow color" color={layer.effects.glow.color} onChange={(color) => updateLayer(activeShotId, layer.id, l => l.effects.glow ? { ...l, effects: { ...l.effects, glow: { ...l.effects.glow, color } } } : l)} />                            <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput label="Radius" value={layer.effects.glow.radius * refStageW} min={0} max={100} step={1} unit=" px" onChange={(radius) => updateLayer(activeShotId, layer.id, (l) => l.effects.glow
                             ? {
@@ -162,53 +145,26 @@ export function LayerEffectsSection({ activeShotId, layer }: {
                             }
                             : l)} />
                     </div>
-                </details>)}
+                </LayerEffectCard>)}
 
                 {/* Backdrop Blur */}
-                {(layer.effects?.backdropBlur ?? 0) > 0 && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Eye className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Backdrop blur</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('backdropBlur'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Backdrop Blur">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {(layer.effects?.backdropBlur ?? 0) > 0 && (<LayerEffectCard title="Backdrop blur" icon={<Eye className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Backdrop Blur" onRemove={() => handleRemoveEffect('backdropBlur')}>
                     <ScrubInput label="Blur" value={(layer.effects.backdropBlur ?? 0) * 100} min={0} max={100} step={1} unit=" px" onChange={(blur) => updateLayer(activeShotId, layer.id, (l) => ({
                         ...l,
                         effects: { ...l.effects, backdropBlur: blur / 100 },
                     }))} />
-                </details>)}
+                </LayerEffectCard>)}
 
                 {/* Layer Blur */}
-                {(layer.effects?.layerBlur ?? 0) > 0 && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Layers className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Layer blur</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('layerBlur'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Layer Blur">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {(layer.effects?.layerBlur ?? 0) > 0 && (<LayerEffectCard title="Layer blur" icon={<Layers className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Layer Blur" onRemove={() => handleRemoveEffect('layerBlur')}>
                     <ScrubInput label="Blur" value={(layer.effects.layerBlur ?? 0) * 100} min={0} max={100} step={1} unit=" px" onChange={(blur) => updateLayer(activeShotId, layer.id, (l) => ({
                         ...l,
                         effects: { ...l.effects, layerBlur: blur / 100 },
                     }))} />
-                </details>)}
+                </LayerEffectCard>)}
 
                 {/* Liquid Glass */}
-                {layer.effects?.liquidGlass?.enabled && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Droplet className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Liquid glass</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('liquidGlass'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Liquid Glass">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {layer.effects?.liquidGlass?.enabled && (<LayerEffectCard title="Liquid glass" icon={<Droplet className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Liquid Glass" onRemove={() => handleRemoveEffect('liquidGlass')}>
                     <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput label="Refract" value={Math.round((layer.effects.liquidGlass.refraction ?? 0.5) * 100)} min={0} max={100} step={1} unit=" %" onChange={(refr) => updateLayer(activeShotId, layer.id, (l) => l.effects.liquidGlass
                             ? {
@@ -235,19 +191,10 @@ export function LayerEffectsSection({ activeShotId, layer }: {
                             }
                             : l)} />
                     </div>
-                </details>)}
+                </LayerEffectCard>)}
 
                 {/* Warp */}
-                {layer.effects?.warp?.enabled && (<details className="object-design-effect">
-                    <summary className="flex items-center justify-between text-[11px] font-medium text-[#e4e4e7]">
-                        <div className="flex items-center gap-1.5">
-                            <Spline className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Warp</span>
-                        </div>
-                        <button type="button" onClick={(event) => { event.preventDefault(); handleRemoveEffect('warp'); }} className="p-0.5 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer" title="Remove Warp">
-                            <Minus className="w-3 h-3" />
-                        </button>
-                    </summary>
+                {layer.effects?.warp?.enabled && (<LayerEffectCard title="Warp" icon={<Spline className="w-3.5 h-3.5 text-[#a1a1aa]" />} removeLabel="Remove Warp" onRemove={() => handleRemoveEffect('warp')}>
                     <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput label="Amount" value={layer.effects.warp.amount ?? 10} min={0} max={100} step={1} unit=" px" onChange={(amount) => updateLayer(activeShotId, layer.id, (l) => l.effects.warp
                             ? {
@@ -268,7 +215,7 @@ export function LayerEffectsSection({ activeShotId, layer }: {
                             }
                             : l)} />
                     </div>
-                </details>)}
+                </LayerEffectCard>)}
             </div>
         </div>
     </section>;

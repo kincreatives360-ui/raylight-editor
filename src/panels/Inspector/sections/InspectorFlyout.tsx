@@ -1,4 +1,6 @@
-import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { MenuSurface } from '../../../ui/Menu';
+import { useFloatingPanel } from '../../../ui/useFloatingPanel';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 /** Anchored inspector surface shared by preset menus and preset settings. */
 export function InspectorFlyout({ anchor, label, menu = false, onClose, children }: {
@@ -10,8 +12,8 @@ export function InspectorFlyout({ anchor, label, menu = false, onClose, children
 }) {
     const ref = useRef<HTMLDivElement>(null);
     const [position, setPosition] = useState<{ left: number; top: number; transformOrigin?: string }>({ left: 0, top: 0, transformOrigin: 'top right' });
-    useLayoutEffect(() => {
-        const place = () => {
+    useFloatingPanel({ open: true, surfaceRef: ref, anchor, onClose, positionKey: children,
+        reposition: () => {
             const rect = anchor.getBoundingClientRect();
             const surface = ref.current;
             const width = surface?.offsetWidth ?? 280, height = surface?.offsetHeight ?? 300;
@@ -21,39 +23,15 @@ export function InspectorFlyout({ anchor, label, menu = false, onClose, children
             const originX = clampedLeft + width / 2 <= rect.left + rect.width / 2 ? 'right' : 'left';
             const originY = clampedTop >= rect.top ? 'top' : 'bottom';
             setPosition({ left: clampedLeft, top: clampedTop, transformOrigin: `${originY} ${originX}` });
-        };
-        place();
-        window.addEventListener('resize', place);
-        window.addEventListener('scroll', place, true);
-        return () => { window.removeEventListener('resize', place); window.removeEventListener('scroll', place, true); };
-    }, [anchor, menu, children]);
+        },
+        ignoreOutside: target => !!target.closest('.figma-select-menu'),
+        ignoreEscape: () => !!document.querySelector('.figma-select-menu'),
+        onEscape: () => { onClose(); if (anchor.isConnected) anchor.focus(); },
+    });
     useEffect(() => {
         const surface = ref.current;
         (surface?.querySelector<HTMLElement>('button,[role="combobox"],input') ?? surface)?.focus();
-        const outside = (event: PointerEvent) => {
-            const target = event.target as HTMLElement;
-            if (!surface?.contains(target) && !anchor.contains(target) && !target.closest('.figma-select-menu'))
-                onClose();
-        };
-        const escape = (event: KeyboardEvent) => {
-            if (event.key === 'Escape' && !document.querySelector('.figma-select-menu')) {
-                event.preventDefault();
-                event.stopPropagation();
-                onClose();
-                if (anchor.isConnected) anchor.focus();
-            }
-        };
-        document.addEventListener('pointerdown', outside);
-        document.addEventListener('keydown', escape);
-        return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', escape); };
     }, [anchor, onClose]);
-    return createPortal(<div ref={ref} role={menu ? 'menu' : 'dialog'} aria-label={label} tabIndex={-1} className={`animate-flyout ${menu ? 'animate-menu' : 'animate-settings'}`} style={position} onKeyDown={event => {
-            if (!menu || !['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key))
-                return;
-            event.preventDefault();
-            const buttons = Array.from(ref.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]:not(:disabled)') ?? []);
-            const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
-            const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1 : (current + (event.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length;
-            buttons[next]?.focus();
-        }}>{children}</div>, document.body);
+    const Surface = menu ? MenuSurface : 'div';
+    return createPortal(<Surface ref={ref} role={menu ? 'menu' : 'dialog'} aria-label={label} tabIndex={-1} className={`animate-flyout ${menu ? 'animate-menu' : 'animate-settings'}`} style={position} >{children}</Surface>, document.body);
 }

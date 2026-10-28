@@ -1,3 +1,7 @@
+import { MenuItem } from '../../../ui/Menu';
+import { AxisFields } from '../../../ui/AxisFields';
+import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
+import { SegmentedControl } from '../../../ui/primitives';
 import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { degToRad, radToDeg } from '../../../model/defaults';
@@ -34,7 +38,19 @@ function Directions({ value, onChange, vertical = false }: {
     onChange: (direction: 'left' | 'right' | 'up' | 'down') => void;
     vertical?: boolean;
 }) {
-    return <div className="animate-directions" role="group" aria-label="Direction">{(['left', 'right', ...(vertical ? ['up', 'down'] : [])] as const).map(direction => <button key={direction} type="button" aria-label={direction} aria-pressed={value === direction} onClick={() => onChange(direction as 'left' | 'right' | 'up' | 'down')}>{direction === 'left' ? <ArrowLeft /> : direction === 'right' ? <ArrowRight /> : direction === 'up' ? <ArrowUp /> : <ArrowDown />}</button>)}</div>;
+    return <SegmentedControl
+        unstyled
+        selectionMode="pressed"
+        className="animate-directions"
+        ariaLabel="Direction"
+        value={value as 'left' | 'right' | 'up' | 'down'}
+        onChange={onChange}
+        buttonClassName=""
+        options={(['left', 'right', ...(vertical ? ['up', 'down'] as const : [])] as const).map(direction => ({
+            value: direction, ariaLabel: direction,
+            icon: direction === 'left' ? <ArrowLeft /> : direction === 'right' ? <ArrowRight /> : direction === 'up' ? <ArrowUp /> : <ArrowDown />,
+        }))}
+    />;
 }
 function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
     preset: Transitionish;
@@ -66,7 +82,10 @@ function BlockSettings({ block, shot, onChange }: {
     const vec: Vec3 = typeof block.amount === 'number' ? { x: block.amount, y: 0, z: 0 } : block.amount;
     const amount = typeof block.amount === 'number' ? block.amount : block.amount.x;
     const scalar = (label: string, unit: string, multiplier: number, min: number, max: number) => <ScrubInput label={label} value={amount * multiplier} min={min} max={max} step={multiplier === 1 ? .01 : 1} unit={unit} onChange={value => onChange({ amount: value / multiplier })}/>;
-    const vector = (axes: ('x' | 'y' | 'z')[], rotation = false) => <div className="animate-pair">{axes.map(axis => <ScrubInput key={axis} label={axis.toUpperCase()} value={rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? 1080 : 1920)} min={rotation ? -3600 : -10000} max={rotation ? 3600 : 10000} unit={rotation ? '°' : ' px'} onChange={value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? 1080 : 1920) } })}/>)}</div>;
+    const vector = (axes: ('x' | 'y' | 'z')[], rotation = false) => <AxisFields
+        className="animate-pair"
+        fields={axes.map(axis => ({"key": axis, "label": axis.toUpperCase(), "value": rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? 1080 : 1920), "min": rotation ? -3600 : -10000, "max": rotation ? 3600 : 10000, "unit": rotation ? '°' : ' px', "onChange": value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? 1080 : 1920) } })}))}
+    />;
     return <div className="animate-block-fields">
         {block.property === 'shimmer' ? <>
             <Field label="Color"><ColorPicker color={settings.color ?? '#ffffff'} label="Shimmer color" showGradientMode={false} onChange={color => patchSettings({ color })}/></Field>
@@ -81,7 +100,11 @@ function BlockSettings({ block, shot, onChange }: {
                                 : block.property === 'glow' ? <Field label="Glow"><div className="animate-pair"><ScrubInput label="Intensity" value={vec.x} min={-5} max={10} step={.1} onChange={x => onChange({ amount: { ...vec, x } })}/><ScrubInput label="Radius" value={vec.y * 100} min={-100} max={200} unit=" %" onChange={y => onChange({ amount: { ...vec, y: y / 100 } })}/></div></Field>
                                     : <Field label={block.property === 'counter' ? 'Count by' : block.property === 'layerBlur' ? 'Blur' : block.property === 'wiggle' ? 'Distance' : 'Amount'}>{block.property === 'counter' ? scalar('Δ', '', 1, -1000000, 1000000) : block.property === 'layerBlur' ? scalar('Blur', ' px', 100, -100, 200) : block.property === 'wiggle' ? scalar('Offset', ' px', 1920, 0, 500) : block.property === 'cornerRadius' ? scalar('Radius', ' %', 100, 0, 200) : scalar('Amount', ' %', 100, -100, 1000)}</Field>}
         <EasingField value={block.easing} onChange={easing => onChange({ easing })}/>
-        <details className="animate-timing"><summary>Timing</summary><div className="animate-pair"><ScrubInput label="Start" value={block.startMs} min={0} max={Math.max(0, shot.durationMs - block.durationMs)} unit=" ms" onChange={startMs => onChange({ startMs })}/><ScrubInput label="Duration" value={block.durationMs} min={10} max={Math.max(10, shot.durationMs - block.startMs)} unit=" ms" onChange={durationMs => onChange({ durationMs })}/></div></details>
+        <details className="animate-timing"><summary>Timing</summary><AnimationTimingFields
+            className="animate-pair"
+            start={{"label": "Start", "value": block.startMs, "min": 0, "max": Math.max(0, shot.durationMs - block.durationMs), "unit": " ms", "onChange": startMs => onChange({ startMs })}}
+            duration={{"label": "Duration", "value": block.durationMs, "min": 10, "max": Math.max(10, shot.durationMs - block.startMs), "unit": " ms", "onChange": durationMs => onChange({ durationMs })}}
+        /></details>
     </div>;
 }
 // eslint-disable-next-line react-refresh/only-export-components
@@ -127,14 +150,19 @@ export function LayerAnimateInspector({ activeShot, selectedLayer, selectedLayer
     const updateBlock = (id: string, patch: Partial<AnimationBlock>) => updateShot(activeShot.id, shot => ({ ...shot, layers: shot.layers.map(layer => layer.id === selectedLayer.id && !layer.locked ? { ...layer, blocks: layer.blocks.map(block => block.id === id ? { ...block, ...patch } : block) } : layer) }));
     const add = (property: AnimationBlockProperty) => { addLayerAnimation(activeShot, selectedLayerIds, property); close(); };
     const animations = availableAnimations(editable);
-    const menuItem = (label: string, icon: ReactNode, onClick: () => void, more = false) => <button key={label} type="button" role="menuitem" onClick={onClick}>{icon}<span>{label}</span>{more && <ChevronRight className="animate-menu-chevron"/>}</button>;
+    const menuItem = (label: string, icon: ReactNode, onClick: () => void, more = false) => <MenuItem
+        unstyled
+        key={label}
+        role="menuitem"
+        onClick={onClick}
+    >{icon}<span>{label}</span>{more && <ChevronRight className="animate-menu-chevron"/>}</MenuItem>;
     const presets = flyout?.side ? presetList(selectedLayer, flyout.side) : [];
     const preset = flyout?.index !== undefined ? presets[flyout.index] : undefined;
     return <div className="layer-animate-inspector flex-1 min-h-0 overflow-y-auto" data-testid="layer-animate-inspector">
         <section aria-label="Animations" className="animate-overview"><header><span>Animations</span><IconButton label="Add animation" disabled={!editable.length} icon={<Plus />} onClick={event => open('animation', event.currentTarget)}/></header></section>
         {(['in', 'out'] as const).map(side => <section key={side} aria-label={side === 'in' ? 'In' : 'Out'} className={`animate-overview animate-${side}`}><header><span>{side === 'in' ? 'In' : 'Out'}</span><IconButton label={`Add ${side} preset`} disabled={!editable.length} icon={<Plus />} onClick={event => open(side, event.currentTarget)}/></header>
             {presetList(selectedLayer, side).map((preset, index) => <div key={preset.id ?? `${preset.type}-${index}`} className="animate-preset-row" data-muted={preset.enabled === false}>
-                <button type="button" disabled={selectedLayer.locked} className="animate-preset-pill" aria-label={`Edit ${side} ${presetLabel(preset.type)}`} aria-expanded={flyout?.kind === 'settings' && flyout.side === side && flyout.index === index} onClick={event => { const anchor = event.currentTarget; setFlyout(old => old?.kind === 'settings' && old.side === side && old.index === index ? null : { kind: 'settings', anchor, side, index }); }}><AnimationIcon property={preset.type}/><span>{presetLabel(preset.type)}</span></button>
+                <button type="button" aria-label={`Edit ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} className="animate-preset-pill" aria-expanded={flyout?.kind === 'settings' && flyout.side === side && flyout.index === index} onClick={event => { const anchor = event.currentTarget; setFlyout(old => old?.kind === 'settings' && old.side === side && old.index === index ? null : { kind: 'settings', anchor, side, index }); }}><AnimationIcon property={preset.type}/><span>{presetLabel(preset.type)}</span></button>
                 <IconButton label={`${preset.enabled === false ? 'Enable' : 'Disable'} ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} icon={preset.enabled === false ? <EyeOff /> : <Eye />} onClick={() => updatePreset(side, index, { enabled: preset.enabled === false })}/>
                 <IconButton label={`Remove ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} icon={<X />} onClick={() => { updateSelected(layer => replacePresets(layer, side, presetList(layer, side).filter((item, i) => i !== index || item.type !== preset.type))); close(); }}/>
             </div>)}

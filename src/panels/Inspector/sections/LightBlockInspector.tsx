@@ -1,8 +1,6 @@
 // src/panels/Inspector/sections/LightBlockInspector.tsx
 import React, { useState } from 'react';
 import {
-    ChevronDown,
-    ChevronUp,
     Sparkles,
     Trash2,
     X,
@@ -11,6 +9,10 @@ import type { LightAnimationBlock } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { EasingControl } from '../../../ui/EasingControl';
 import { ScrubInput } from '../../../ui/ScrubInput';
+import { IconButton } from '../../../ui/primitives';
+import { InspectorDisclosure } from '../../../ui/InspectorDisclosure';
+import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
+import { AxisFields } from '../../../ui/AxisFields';
 
 interface LightBlockInspectorProps {
     activeShotId: string;
@@ -24,10 +26,10 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
     onDone,
 }) => {
     const { updateShot } = useProjectStore();
-    const [timingCollapsed, setTimingCollapsed] = useState(false);
-    const [posCollapsed, setPosCollapsed] = useState(false);
-    const [intensityCollapsed, setIntensityCollapsed] = useState(false);
-    const [tempCollapsed, setTempCollapsed] = useState(false);
+    const [timingOpen, setTimingOpen] = useState(true);
+    const [positionOpen, setPositionOpen] = useState(true);
+    const [intensityOpen, setIntensityOpen] = useState(true);
+    const [temperatureOpen, setTemperatureOpen] = useState(true);
 
     const updateBlock = (updater: (lb: LightAnimationBlock) => LightAnimationBlock) => {
         updateShot(activeShotId, (s) => ({
@@ -66,136 +68,62 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                         </span>
                     </div>
                 </div>
-                <button
-                    type="button"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Done"
                     onClick={onDone}
                     title="Done"
                     className="w-6 h-6 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
+                    icon={<X className="w-3.5 h-3.5" />}
+                />
             </div>
 
             {/* Timing Section */}
-            <div className="p-3.5 space-y-3">
-                <button
-                    type="button"
-                    onClick={() => setTimingCollapsed(!timingCollapsed)}
-                    className="flex items-center justify-between cursor-pointer w-full text-left"
-                >
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Timing</span>
-                    {timingCollapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    )}
-                </button>
-                {!timingCollapsed && (
-                    <div className="grid grid-cols-2 gap-2">
-                        <ScrubInput
-                            label="Start"
-                            value={activeLightBlock.startMs}
-                            min={0}
-                            step={50}
-                            decimals={0}
-                            onChange={(val) => updateBlock((lb) => ({ ...lb, startMs: Math.max(0, val) }))}
-                        />
-                        <ScrubInput
-                            label="Duration"
-                            value={activeLightBlock.durationMs}
-                            min={50}
-                            step={50}
-                            decimals={0}
-                            onChange={(val) => updateBlock((lb) => ({ ...lb, durationMs: Math.max(50, val) }))}
-                        />
-                    </div>
-                )}
-            </div>
+            <InspectorDisclosure
+                title="Timing"
+                open={timingOpen}
+                onOpenChange={setTimingOpen}
+            >
+                    <AnimationTimingFields
+                        start={{ label: "Start", value: activeLightBlock.startMs, min: 0, step: 50, decimals: 0, onChange: (val) => updateBlock((lb) => ({ ...lb, startMs: Math.max(0, val) })) }}
+                        duration={{ label: "Duration", value: activeLightBlock.durationMs, min: 50, step: 50, decimals: 0, onChange: (val) => updateBlock((lb) => ({ ...lb, durationMs: Math.max(50, val) })) }}
+                    />
+            </InspectorDisclosure>
 
             {/* Position Section: From & To */}
-            {(!blockProperty || blockProperty === 'position') && <div className="p-3.5 space-y-3">
-                <button
-                    type="button"
-                    onClick={() => setPosCollapsed(!posCollapsed)}
-                    className="flex items-center justify-between cursor-pointer w-full text-left"
-                >
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Position</span>
-                    {posCollapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    )}
-                </button>
-                {!posCollapsed && (
+            {(!blockProperty || blockProperty === 'position') && <InspectorDisclosure
+                title="Position"
+                open={positionOpen}
+                onOpenChange={setPositionOpen}
+            >
                     <div className="space-y-2">
                         <span className="text-[10px] text-[#a1a1aa] font-mono">From (X, Y, Z)</span>
-                        <div className="grid grid-cols-3 gap-2">
-                            <ScrubInput
-                                label="From X"
-                                value={activeLightBlock.fromX}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, fromX: val }))}
-                            />
-                            <ScrubInput
-                                label="From Y"
-                                value={activeLightBlock.fromY}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, fromY: val }))}
-                            />
-                            <ScrubInput
-                                label="From Z"
-                                value={activeLightBlock.fromZ ?? 1.0}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, fromZ: val }))}
-                            />
-                        </div>
+                        <AxisFields
+                            fields={[
+                                { key: "0", label: "From X", value: activeLightBlock.fromX, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, fromX: val })) },
+                                { key: "1", label: "From Y", value: activeLightBlock.fromY, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, fromY: val })) },
+                                { key: "2", label: "From Z", value: activeLightBlock.fromZ ?? 1.0, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, fromZ: val })) }
+                            ]}
+                        />
 
                         <span className="text-[10px] text-[#a1a1aa] font-mono">To (X, Y, Z)</span>
-                        <div className="grid grid-cols-3 gap-2">
-                            <ScrubInput
-                                label="To X"
-                                value={activeLightBlock.toX}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, toX: val }))}
-                            />
-                            <ScrubInput
-                                label="To Y"
-                                value={activeLightBlock.toY}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, toY: val }))}
-                            />
-                            <ScrubInput
-                                label="To Z"
-                                value={activeLightBlock.toZ ?? 1.0}
-                                step={0.05}
-                                decimals={2}
-                                onChange={(val) => updateBlock((lb) => ({ ...lb, toZ: val }))}
-                            />
-                        </div>
+                        <AxisFields
+                            fields={[
+                                { key: "0", label: "To X", value: activeLightBlock.toX, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, toX: val })) },
+                                { key: "1", label: "To Y", value: activeLightBlock.toY, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, toY: val })) },
+                                { key: "2", label: "To Z", value: activeLightBlock.toZ ?? 1.0, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, toZ: val })) }
+                            ]}
+                        />
                     </div>
-                )}
-            </div>}
+            </InspectorDisclosure>}
 
             {/* Intensity Section: From & To */}
-            {(!blockProperty || blockProperty === 'intensity' || blockProperty === 'ambience') && <div className="p-3.5 space-y-3">
-                <button
-                    type="button"
-                    onClick={() => setIntensityCollapsed(!intensityCollapsed)}
-                    className="flex items-center justify-between cursor-pointer w-full text-left"
-                >
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">{isRoomAnimation ? 'Ambience' : 'Intensity'}</span>
-                    {intensityCollapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    )}
-                </button>
-                {!intensityCollapsed && (
+            {(!blockProperty || blockProperty === 'intensity' || blockProperty === 'ambience') && <InspectorDisclosure
+                title={isRoomAnimation ? 'Ambience' : 'Intensity'}
+                open={intensityOpen}
+                onOpenChange={setIntensityOpen}
+            >
                     <div className="grid grid-cols-2 gap-2">
                         <ScrubInput
                             label={isRoomAnimation ? 'From' : 'From Int'}
@@ -216,24 +144,14 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             onChange={(val) => updateBlock((lb) => ({ ...lb, toIntensity: Math.max(0, val) }))}
                         />
                     </div>
-                )}
-            </div>}
+            </InspectorDisclosure>}
 
             {/* Temperature Section */}
-            {(!blockProperty || blockProperty === 'temperature') && <div className="p-3.5 space-y-3">
-                <button
-                    type="button"
-                    onClick={() => setTempCollapsed(!tempCollapsed)}
-                    className="flex items-center justify-between cursor-pointer w-full text-left"
-                >
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Temperature</span>
-                    {tempCollapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                    )}
-                </button>
-                {!tempCollapsed && (
+            {(!blockProperty || blockProperty === 'temperature') && <InspectorDisclosure
+                title="Temperature"
+                open={temperatureOpen}
+                onOpenChange={setTemperatureOpen}
+            >
                     <div className="grid grid-cols-2 gap-2">
                         <ScrubInput
                             label="From Temp"
@@ -254,8 +172,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             onChange={(val) => updateBlock((lb) => ({ ...lb, toTemperature: val }))}
                         />
                     </div>
-                )}
-            </div>}
+            </InspectorDisclosure>}
 
             {/* Easing Selection */}
             <div className="p-3.5 space-y-2">

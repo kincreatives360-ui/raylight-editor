@@ -1,3 +1,6 @@
+import { IconButton } from '../../ui/primitives';
+import { InspectorRow } from '../../ui/primitives';
+import { SegmentedControl } from '../../ui/primitives';
 import { PanelRightClose, SlidersHorizontal, Sparkles, Trash2, Upload } from 'lucide-react';
 import React,{ useEffect,useRef,useState } from 'react';
 import {
@@ -648,8 +651,13 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                 <h2 className="text-[13px] font-semibold text-white tracking-wide">Project Settings</h2>
 
                 {/* Name */}
-                <div className="space-y-1.5">
-                    <label className="text-[11px] text-[#8e8e93] block font-normal">Name</label>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="label"
+                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    label={<>Name</>}
+                >
                     <input
                         type="text"
                         value={project.name}
@@ -657,11 +665,16 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                         placeholder="Untitled project"
                         className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
                     />
-                </div>
+                </InspectorRow>
 
                 {/* Aspect Ratio */}
-                <div className="space-y-1.5">
-                    <label className="text-[11px] text-[#8e8e93] block font-normal">Aspect Ratio</label>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="label"
+                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    label={<>Aspect Ratio</>}
+                >
                     <div className="relative">
                         <FigmaSelect
                             value={project.aspectRatio}
@@ -677,11 +690,16 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                             <option value="4:5">Social 4:5</option>
                         </FigmaSelect>
                     </div>
-                </div>
+                </InspectorRow>
 
                 {/* Lens */}
-                <div className="space-y-1.5">
-                    <label className="text-[11px] text-[#8e8e93] block font-normal">Lens</label>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="label"
+                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    label={<>Lens</>}
+                >
                     <ScrubInput
                         label={<span className="text-[#71717a] font-medium mr-1.5">F</span>}
                         value={project.defaultCamera?.focalLength ?? 50}
@@ -701,48 +719,22 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                         }}
                         className="h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[12px] text-white hover:border-white/20 transition cursor-ew-resize"
                     />
-                </div>
+                </InspectorRow>
 
                 </>}
                 {/* Background Section */}
                 <div className="space-y-2.5">
                     {!backgroundOnly && <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>}
                     {/* 3-segmented button */}
-                    <div className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5">
-                        <button
-                            type="button"
-                            onClick={() => handleModeChange('color')}
-                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
-                                bgMode === 'color'
-                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
-                                    : 'text-[#8e8e93] hover:text-white'
-                            }`}
-                        >
-                            Color
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleModeChange('image')}
-                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
-                                bgMode === 'image'
-                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
-                                    : 'text-[#8e8e93] hover:text-white'
-                            }`}
-                        >
-                            Image
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => handleModeChange('shader')}
-                            className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
-                                bgMode === 'shader'
-                                    ? 'border border-white/30 bg-[#222226] text-white shadow-sm'
-                                    : 'text-[#8e8e93] hover:text-white'
-                            }`}
-                        >
-                            Shader
-                        </button>
-                    </div>
+                    <SegmentedControl
+                        unstyled
+                        ariaLabel="Background mode"
+                        value={bgMode}
+                        onChange={handleModeChange}
+                        className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5"
+                        buttonClassName={(_, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${selected ? 'border border-white/30 bg-[#222226] text-white shadow-sm' : 'text-[#8e8e93] hover:text-white'}`}
+                        options={[{ value: 'color', label: 'Color' }, { value: 'image', label: 'Image' }, { value: 'shader', label: 'Shader' }]}
+                    />
 
                     {/* Mode == 'color' */}
                     {bgMode === 'color' && (
@@ -798,8 +790,13 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                             />
 
                             {/* Image Header & Preview Card */}
-                            <div className="space-y-1.5">
-                                <label className="text-[11px] text-[#8e8e93] block font-normal">Image</label>
+                            <InspectorRow
+                                unstyled
+                                className="space-y-1.5"
+                                labelTag="label"
+                                labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                label={<>Image</>}
+                            >
                                 {bg.kind === 'image' && (bg.src || (bg.assetId && project.assets[bg.assetId]?.dataUrl)) ? (
                                     <div
                                         className="relative group rounded-xl overflow-hidden border border-white/[0.08] bg-[#141416] aspect-[16/9] max-h-36 cursor-pointer shadow-inner"
@@ -821,8 +818,13 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                             >
                                                 Replace
                                             </button>
-                                            <button
-                                                type="button"
+                                            <IconButton
+                                                unstyled
+                                                tooltip={false}
+                                                label="Remove image"
+                                                icon={<>
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </>}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     setProjectBackground({
@@ -838,9 +840,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                                 }}
                                                 className="p-1 rounded-md bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 transition"
                                                 title="Remove image"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5" />
-                                            </button>
+                                            />
                                         </div>
                                     </div>
                                 ) : (
@@ -891,13 +891,18 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         )}
                                     </div>
                                 )}
-                            </div>
+                            </InspectorRow>
 
                             {bg.kind === 'image' && (
                                 <>
                                     {/* Fit: Fill (cover) / Fit (contain) */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Fit</label>
+                                    <InspectorRow
+                                        unstyled
+                                        className="space-y-1.5"
+                                        labelTag="label"
+                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        label={<>Fit</>}
+                                    >
                                         <div className="relative">
                                             <FigmaSelect
                                                 value={(bg.fit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
@@ -908,7 +913,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                                 <option value="contain">Fit</option>
                                             </FigmaSelect>
                                         </div>
-                                    </div>
+                                    </InspectorRow>
 
                                     {/* Dim & Blur */}
                                     <div className="grid grid-cols-2 gap-2">
@@ -935,14 +940,19 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                     </div>
 
                                     {/* Backdrop Color */}
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Backdrop</label>
+                                    <InspectorRow
+                                        unstyled
+                                        className="space-y-1.5"
+                                        labelTag="label"
+                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        label={<>Backdrop</>}
+                                    >
                                         <ColorPicker
                                             color={bg.color || '#000000'}
                                             showGradientMode={false}
                                             onChange={(c) => setProjectBackground({ ...bg, color: c })}
                                         />
-                                    </div>
+                                    </InspectorRow>
                                 </>
                             )}
                         </div>
@@ -988,8 +998,13 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
 
                             {/* Shader Colors matching Raylight: Color & Accent */}
                             <div className="space-y-2 pt-1 border-t border-white/[0.06]">
-                                <div className="space-y-1.5">
-                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Color</label>
+                                <InspectorRow
+                                    unstyled
+                                    className="space-y-1.5"
+                                    labelTag="label"
+                                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                    label={<>Color</>}
+                                >
                                     <ColorPicker
                                         label="Color"
                                         color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
@@ -997,10 +1012,15 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         onChange={(c) => updateShaderColors(c, undefined, undefined)}
                                         className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
                                     />
-                                </div>
+                                </InspectorRow>
 
-                                <div className="space-y-1.5">
-                                    <label className="text-[11px] text-[#8e8e93] block font-normal">Accent</label>
+                                <InspectorRow
+                                    unstyled
+                                    className="space-y-1.5"
+                                    labelTag="label"
+                                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                    label={<>Accent</>}
+                                >
                                     <ColorPicker
                                         label="Accent"
                                         color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
@@ -1008,11 +1028,16 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         onChange={(c) => updateShaderColors(undefined, c, undefined)}
                                         className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
                                     />
-                                </div>
+                                </InspectorRow>
 
                                 {isPalette && (
-                                    <div className="space-y-1.5">
-                                        <label className="text-[11px] text-[#8e8e93] block font-normal">Color 3</label>
+                                    <InspectorRow
+                                        unstyled
+                                        className="space-y-1.5"
+                                        labelTag="label"
+                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        label={<>Color 3</>}
+                                    >
                                         <ColorPicker
                                             label="Color 3"
                                             color={shaderColor3.startsWith('#') ? shaderColor3 : `#${shaderColor3}`}
@@ -1020,7 +1045,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                             onChange={(c) => updateShaderColors(undefined, undefined, c)}
                                             className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
                                         />
-                                    </div>
+                                    </InspectorRow>
                                 )}
                             </div>
 
@@ -1196,8 +1221,13 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                         <div className="border-t border-white/[0.08]" />
 
                         {/* Export Section */}
-                        <div className="space-y-2">
-                            <span className="text-[11px] text-[#8e8e93] block font-normal">Export</span>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-2"
+                            labelTag="span"
+                            labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                            label={<>Export</>}
+                        >
                             {onOpenExportModal && (
                                 <button
                                     type="button"
@@ -1207,7 +1237,7 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                                     Export shot
                                 </button>
                             )}
-                        </div>
+                        </InspectorRow>
 
 
                     </>
@@ -1355,15 +1385,17 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             {/* 1. TOP HEADER BAR */}
             <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
                 <div className="flex items-center">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Collapse Inspector sidebar ( ] )"
+                        icon={<>
+                            <PanelRightClose className="w-3.5 h-3.5" />
+                        </>}
                         onClick={toggleRightSidebar}
-                        aria-label="Collapse Inspector sidebar ( ] )"
                         title="Collapse Inspector sidebar ( ] )"
                         className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition opacity-0 hover:opacity-100"
-                    >
-                        <PanelRightClose className="w-3.5 h-3.5" />
-                    </button>
+                    />
                 </div>
 
                 <div className="flex items-center gap-3">
@@ -1376,21 +1408,29 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         />
                     </div>
 
-                    <button
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Project Settings"
+                        icon={<>
+                            <SlidersHorizontal className="w-4 h-4" />
+                        </>}
                         onClick={() => clearLayerSelection()}
                         title="Project Settings"
                         className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                    >
-                        <SlidersHorizontal className="w-4 h-4" />
-                    </button>
+                    />
 
-                    <button
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Export MP4 Video or GIF"
+                        icon={<>
+                            <Upload className="w-4 h-4" />
+                        </>}
                         onClick={onOpenExportModal}
                         title="Export MP4 Video or GIF"
                         className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
-                    >
-                        <Upload className="w-4 h-4" />
-                    </button>
+                    />
 
                     <button
                         onClick={() => {

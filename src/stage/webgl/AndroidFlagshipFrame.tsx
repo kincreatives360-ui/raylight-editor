@@ -1,3 +1,5 @@
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import type { DeviceFrameSettings } from '../../model/types';
@@ -43,8 +45,6 @@ export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }:
   const rightX = metrics.bodyWidth / 2;
 
   // Geometries
-  const shadowTexture = useMemo(() => createDeviceShadowTexture(), []);
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 64), []);
   const bodyGeometry = useMemo(
     () => createBodyGeometry(metrics.bodyWidth, metrics.bodyHeight, metrics.bodyCornerRadius, metrics.bodyDepth, true),
     [metrics]
@@ -145,17 +145,6 @@ export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }:
     [settings.glassOpacity, settings.glassRoughness]
   );
 
-  const shadowMaterial = useMemo(
-    () => new THREE.MeshBasicMaterial({
-      map: shadowTexture,
-      transparent: true,
-      opacity: settings.shadowOpacity,
-      depthWrite: false,
-      side: THREE.DoubleSide,
-    }),
-    [settings.shadowOpacity, shadowTexture]
-  );
-
   useDisposable(bodyGeometry);
   useDisposable(bezelGeometry);
   useDisposable(screenGlassGeometry);
@@ -166,10 +155,7 @@ export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }:
   useDisposable(flashGeometry);
   useDisposable(powerButtonGeometry);
   useDisposable(volumeButtonGeometry);
-  useDisposable(shadowGeometry);
 
-  useDisposable(shadowTexture);
-  useDisposable(shadowMaterial);
   useDisposable(metalMaterial);
   useDisposable(rearGlassMaterial);
   useDisposable(bezelMaterial);
@@ -181,16 +167,17 @@ export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }:
 
   return (
     <group name="android-flagship-frame">
-      {settings.shadowEnabled && (
-        <mesh
-          name="android-device-shadow"
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[metrics.bodyWidth * 0.02, -metrics.bodyHeight * settings.shadowOffset, bodyZ - metrics.bodyDepth * 0.08]}
-          scale={[metrics.bodyWidth * (1.18 + settings.shadowBlur * 0.55), metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16), 1]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled}
+        opacity={settings.shadowOpacity}
+        segments={64}
+        textureFactory={createDeviceShadowTexture}
+        side={THREE.DoubleSide}
+        name="android-device-shadow"
+        position={[metrics.bodyWidth * 0.02, -metrics.bodyHeight * settings.shadowOffset, bodyZ - metrics.bodyDepth * 0.08]}
+        scale={[metrics.bodyWidth * (1.18 + settings.shadowBlur * 0.55), metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16), 1]}
+        renderOrder={-2}
+      />
 
       {/* Main Aluminum / Titanium Chassis */}
       <mesh name="android-chassis" geometry={bodyGeometry} material={metalMaterial} position={[0, 0, bodyZ]} castShadow receiveShadow />
@@ -199,7 +186,10 @@ export function AndroidFlagshipFrame({ metrics, settings, rotation: _rotation }:
       <mesh name="android-bezel" geometry={bezelGeometry} material={bezelMaterial} position={[0, 0, SCREEN_PLANE_Z + proud - bezelDepth]} castShadow receiveShadow />
 
       {/* Front Screen Glass Overlay */}
-      <mesh name="android-screen-glass" geometry={screenGlassGeometry} material={glassMaterial} position={[0, 0, SCREEN_PLANE_Z + proud * 0.35]} renderOrder={3} />
+      <DeviceScreenSurface
+        geometry={screenGlassGeometry}
+        glass={{ name: 'android-screen-glass', material: glassMaterial, position: [0, 0, SCREEN_PLANE_Z + proud * 0.35], renderOrder: 3 }}
+      />
 
       {/* Centered Punch Hole Selfie Camera */}
       <mesh

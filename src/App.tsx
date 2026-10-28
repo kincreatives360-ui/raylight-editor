@@ -1,3 +1,4 @@
+import { ModalShell } from './ui/ModalShell';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Sparkles, Download, PanelLeftOpen, PanelRightOpen, Camera } from 'lucide-react';
 import type { Layer, VideoLayer } from './model/types';
@@ -35,6 +36,8 @@ const ExportModal = lazy(() =>
   import('./ui/ExportModal').then((m) => ({ default: m.ExportModal }))
 );
 import { CommandMenu, type CommandItem } from './ui/CommandMenu';
+import { SidebarResizeHandle } from './ui/SidebarResizeHandle';
+import { IconButton } from './ui/primitives';
 import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
 import { isEditableElement } from './utils/shortcuts';
@@ -109,8 +112,10 @@ class ModalErrorBoundary extends React.Component<ModalErrorBoundaryProps, ModalE
   render() {
     if (this.state.hasError) {
       return (
-        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-[#121216] border border-red-500/30 p-5 space-y-3 text-center text-xs">
+        <ModalShell
+            backdropProps={{ className: "fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4" }}
+            surfaceProps={{ className: "w-full max-w-sm rounded-2xl bg-[#121216] border border-red-500/30 p-5 space-y-3 text-center text-xs" }}
+        >
             <div className="text-sm font-semibold text-white">Failed to load {this.props.title}</div>
             <p className="text-zinc-400 text-[11px]">
               {this.state.error?.message || 'A network error occurred while loading this dialog.'}
@@ -125,8 +130,7 @@ class ModalErrorBoundary extends React.Component<ModalErrorBoundaryProps, ModalE
             >
               Close
             </button>
-          </div>
-        </div>
+        </ModalShell>
       );
     }
     return this.props.children;
@@ -315,78 +319,6 @@ export default function App() {
   const handleOpenShortcuts = useCallback(() => {
     setShortcutsModalOpen(true);
   }, []);
-
-  const handleStartResizeLeftPanel = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const pointerId = e.pointerId;
-      const startX = e.clientX;
-      const startW = leftPanelWidth;
-      const currentTarget = e.currentTarget;
-      currentTarget.setPointerCapture(pointerId);
-
-      const handlePointerMove = (ev: PointerEvent) => {
-        const deltaX = ev.clientX - startX;
-        const maxAllowed = Math.min(
-          MAX_LEFT_PANEL_WIDTH,
-          window.innerWidth - (rightSidebarOpen ? rightSidebarWidth : 0) - 340
-        );
-        const newWidth = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(maxAllowed, startW + deltaX));
-        setLeftPanelWidth(newWidth);
-      };
-
-      const handlePointerUp = () => {
-        if (currentTarget.hasPointerCapture(pointerId)) {
-          currentTarget.releasePointerCapture(pointerId);
-        }
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', handlePointerUp);
-        window.removeEventListener('pointercancel', handlePointerUp);
-      };
-
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-      window.addEventListener('pointercancel', handlePointerUp);
-    },
-    [leftPanelWidth, rightSidebarOpen, rightSidebarWidth, setLeftPanelWidth]
-  );
-
-  const handleStartResizeRightSidebar = useCallback(
-    (e: React.PointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.stopPropagation();
-      const pointerId = e.pointerId;
-      const startX = e.clientX;
-      const startW = rightSidebarWidth;
-      const currentTarget = e.currentTarget;
-      currentTarget.setPointerCapture(pointerId);
-
-      const handlePointerMove = (ev: PointerEvent) => {
-        const deltaX = startX - ev.clientX; // Dragging left increases right sidebar width
-        const maxAllowed = Math.min(
-          MAX_RIGHT_SIDEBAR_WIDTH,
-          window.innerWidth - (leftPanelOpen ? leftPanelWidth : 0) - 340
-        );
-        const newWidth = Math.max(MIN_RIGHT_SIDEBAR_WIDTH, Math.min(maxAllowed, startW + deltaX));
-        setRightSidebarWidth(newWidth);
-      };
-
-      const handlePointerUp = () => {
-        if (currentTarget.hasPointerCapture(pointerId)) {
-          currentTarget.releasePointerCapture(pointerId);
-        }
-        window.removeEventListener('pointermove', handlePointerMove);
-        window.removeEventListener('pointerup', handlePointerUp);
-        window.removeEventListener('pointercancel', handlePointerUp);
-      };
-
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-      window.addEventListener('pointercancel', handlePointerUp);
-    },
-    [rightSidebarWidth, leftPanelOpen, leftPanelWidth, setRightSidebarWidth]
-  );
 
   useEffect(() => {
     if (isHydrating) return;
@@ -1433,48 +1365,28 @@ export default function App() {
               onSelectAudioClick={handleSelectAudioClick}
             />
             {/* Draggable vertical splitter for Left Panel */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize left panel"
-              aria-valuenow={leftPanelWidth}
-              aria-valuemin={MIN_LEFT_PANEL_WIDTH}
-              aria-valuemax={MAX_LEFT_PANEL_WIDTH}
-              tabIndex={0}
-              onPointerDown={handleStartResizeLeftPanel}
-              onDoubleClick={() => setLeftPanelWidth(DEFAULT_LEFT_PANEL_WIDTH)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  setLeftPanelWidth(leftPanelWidth - 10);
-                } else if (e.key === 'ArrowRight') {
-                  e.preventDefault();
-                  setLeftPanelWidth(leftPanelWidth + 10);
-                } else if (e.key === 'Home') {
-                  e.preventDefault();
-                  setLeftPanelWidth(MIN_LEFT_PANEL_WIDTH);
-                } else if (e.key === 'End') {
-                  e.preventDefault();
-                  setLeftPanelWidth(MAX_LEFT_PANEL_WIDTH);
-                }
-              }}
-              className="w-1.5 -mx-[3px] relative flex items-center justify-center cursor-col-resize group select-none shrink-0 z-20 hover:bg-[#0088ff]/40 active:bg-[#0088ff] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
-              title="Drag to resize left panel (double-click to reset)"
-            >
-              <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-[#0088ff] transition-colors" />
-            </div>
+            <SidebarResizeHandle
+              side="left" width={leftPanelWidth}
+              minWidth={MIN_LEFT_PANEL_WIDTH} maxWidth={MAX_LEFT_PANEL_WIDTH}
+              resetWidth={DEFAULT_LEFT_PANEL_WIDTH}
+              getMaxWidth={() => window.innerWidth - (rightSidebarOpen ? rightSidebarWidth : 0) - 340}
+              onResize={setLeftPanelWidth} label="Resize left panel" title="Drag to resize left panel (double-click to reset)"
+            />
           </>
         ) : (
-          <button
-            type="button"
-            onClick={toggleLeftPanel}
-            title="Expand Left Panel ( [ )"
-            aria-label="Expand Left Panel"
-            className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
-          >
-            <PanelLeftOpen className="w-3.5 h-3.5 text-[#0088ff]" />
-            <span className="hidden sm:inline">Panels</span>
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Expand Left Panel"
+              type="button"
+              onClick={toggleLeftPanel}
+              title="Expand Left Panel ( [ )"
+              className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+              icon={<>
+                <PanelLeftOpen className="w-3.5 h-3.5 text-[#0088ff]" />
+                <span className="hidden sm:inline">Panels</span>
+              </>}
+          />
         )}
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
@@ -1501,36 +1413,13 @@ export default function App() {
         {rightSidebarOpen ? (
           <>
             {/* Draggable vertical splitter for Right Sidebar */}
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize right inspector"
-              aria-valuenow={rightSidebarWidth}
-              aria-valuemin={MIN_RIGHT_SIDEBAR_WIDTH}
-              aria-valuemax={MAX_RIGHT_SIDEBAR_WIDTH}
-              tabIndex={0}
-              onPointerDown={handleStartResizeRightSidebar}
-              onDoubleClick={() => setRightSidebarWidth(DEFAULT_RIGHT_SIDEBAR_WIDTH)}
-              onKeyDown={(e) => {
-                if (e.key === 'ArrowLeft') {
-                  e.preventDefault();
-                  setRightSidebarWidth(rightSidebarWidth + 10);
-                } else if (e.key === 'ArrowRight') {
-                  e.preventDefault();
-                  setRightSidebarWidth(rightSidebarWidth - 10);
-                } else if (e.key === 'Home') {
-                  e.preventDefault();
-                  setRightSidebarWidth(MIN_RIGHT_SIDEBAR_WIDTH);
-                } else if (e.key === 'End') {
-                  e.preventDefault();
-                  setRightSidebarWidth(MAX_RIGHT_SIDEBAR_WIDTH);
-                }
-              }}
-              className="w-1.5 -mx-[3px] relative flex items-center justify-center cursor-col-resize group select-none shrink-0 z-20 hover:bg-[#0088ff]/40 active:bg-[#0088ff] transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
-              title="Drag to resize inspector (double-click to reset)"
-            >
-              <div className="w-0.5 h-8 rounded-full bg-white/20 group-hover:bg-[#0088ff] transition-colors" />
-            </div>
+            <SidebarResizeHandle
+              side="right" width={rightSidebarWidth}
+              minWidth={MIN_RIGHT_SIDEBAR_WIDTH} maxWidth={MAX_RIGHT_SIDEBAR_WIDTH}
+              resetWidth={DEFAULT_RIGHT_SIDEBAR_WIDTH}
+              getMaxWidth={() => window.innerWidth - (leftPanelOpen ? leftPanelWidth : 0) - 340}
+              onResize={setRightSidebarWidth} label="Resize right inspector" title="Drag to resize inspector (double-click to reset)"
+            />
             <RightSidebar
               activeShot={projectActiveShot}
               selectedLayer={selectedLayer}
@@ -1541,16 +1430,19 @@ export default function App() {
             />
           </>
         ) : (
-          <button
-            type="button"
-            onClick={toggleRightSidebar}
-            title="Expand Inspector ( ] )"
-            aria-label="Expand Inspector"
-            className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
-          >
-            <PanelRightOpen className="w-3.5 h-3.5 text-[#0088ff]" />
-            <span className="hidden sm:inline">Inspector</span>
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Expand Inspector"
+              type="button"
+              onClick={toggleRightSidebar}
+              title="Expand Inspector ( ] )"
+              className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
+              icon={<>
+                <PanelRightOpen className="w-3.5 h-3.5 text-[#0088ff]" />
+                <span className="hidden sm:inline">Inspector</span>
+              </>}
+          />
         )}
 
       </div>

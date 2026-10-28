@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -8,7 +12,6 @@ import {
   createScreenGeometry,
 } from './phoneGeometry';
 import { useDisposable } from './useDisposable';
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export function SamsungGalaxyFrame({
   metrics,
@@ -19,15 +22,9 @@ export function SamsungGalaxyFrame({
   settings: DeviceFrameSettings;
   rotation?: { x: number; y: number; z: number };
 }) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings);
   const depth = metrics.bodyDepth;
-
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
 
   const shellMaterial = useMemo(
     () =>
@@ -47,32 +44,6 @@ export function SamsungGalaxyFrame({
         color: '#050507',
       }),
     []
-  );
-
-  const screenGlassMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: settings.glassTint,
-        transparent: true,
-        opacity: settings.glassOpacity,
-        roughness: settings.glassRoughness,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: settings.glassRoughness,
-        depthWrite: false,
-      }),
-    [settings.glassTint, settings.glassOpacity, settings.glassRoughness]
-  );
-
-  const reflectionMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: reflectionTexture,
-        transparent: true,
-        opacity: settings.reflection * 0.75,
-        depthWrite: false,
-      }),
-    [reflectionTexture, settings.reflection]
   );
 
   const lensRingMaterial = useMemo(
@@ -102,18 +73,6 @@ export function SamsungGalaxyFrame({
         color: '#020204',
       }),
     []
-  );
-
-  const shadowMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture,
-        transparent: true,
-        opacity: effectiveShadowOpacity,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    [shadowTexture, effectiveShadowOpacity]
   );
 
   // Geometries
@@ -176,8 +135,6 @@ export function SamsungGalaxyFrame({
     [metrics.bodyWidth, metrics.bodyHeight, depth]
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-
   useDisposable(bodyGeometry);
   useDisposable(bezelGeometry);
   useDisposable(screenGeometry);
@@ -185,17 +142,11 @@ export function SamsungGalaxyFrame({
   useDisposable(lensGeometry);
   useDisposable(lensGlassGeo);
   useDisposable(buttonGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
   useDisposable(bezelMaterial);
-  useDisposable(screenGlassMaterial);
-  useDisposable(reflectionMaterial);
   useDisposable(lensRingMaterial);
   useDisposable(lensGlassMaterial);
   useDisposable(cutoutMaterial);
-  useDisposable(shadowMaterial);
 
   // Camera column positions on rear left
   const camX = -metrics.bodyWidth * 0.29;
@@ -206,20 +157,18 @@ export function SamsungGalaxyFrame({
   return (
     <group name="samsung-galaxy-frame">
       {/* Contact Studio Shadow */}
-      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-        <mesh
-          name="galaxy-device-shadow"
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
-          scale={[
-            metrics.bodyWidth * (1.15 + settings.shadowBlur * 0.45),
-            metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16),
-            1,
-          ]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+        opacity={effectiveShadowOpacity}
+        name="galaxy-device-shadow"
+        position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
+        scale={[
+          metrics.bodyWidth * (1.15 + settings.shadowBlur * 0.45),
+          metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16),
+          1,
+        ]}
+        renderOrder={-2}
+      />
 
       {/* Titanium Chassis */}
       <mesh
@@ -241,17 +190,10 @@ export function SamsungGalaxyFrame({
       />
 
       {/* Screen Glass & Reflection */}
-      <mesh
-        name="galaxy-screen-glass"
+      <DeviceScreenSurface
         geometry={screenGeometry}
-        material={screenGlassMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.0005]}
-      />
-      <mesh
-        name="galaxy-screen-reflection"
-        geometry={screenGeometry}
-        material={reflectionMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.001]}
+        glass={{ name: 'galaxy-screen-glass', material: glassMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.0005] }}
+        reflection={{ name: 'galaxy-screen-reflection', material: reflectionMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.001] }}
       />
 
       {/* Centered Punch-Hole Selfie Camera */}

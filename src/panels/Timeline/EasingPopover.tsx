@@ -1,5 +1,7 @@
+import { IconButton } from '../../ui/primitives';
+import { useFloatingPanel } from '../../ui/useFloatingPanel';
 // src/panels/Timeline/EasingPopover.tsx
-import React, { useCallback, useEffect, useRef } from 'react';
+import React, { useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
 import type { Easing } from '../../model/types';
 import { ScrubInput } from '../../ui/ScrubInput';
@@ -76,26 +78,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
     );
 
     // Close on click outside or Escape
-    useEffect(() => {
-        const handleClickOutside = (e: MouseEvent) => {
-            if (popoverRef.current && !popoverRef.current.contains(e.target as Node)) {
-                onClose();
-            }
-        };
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
-                e.stopPropagation();
-                onClose();
-            }
-        };
-        window.addEventListener('mousedown', handleClickOutside);
-        window.addEventListener('keydown', handleKeyDown);
-        return () => {
-            window.removeEventListener('mousedown', handleClickOutside);
-            window.removeEventListener('keydown', handleKeyDown);
-        };
-    }, [onClose]);
+    useFloatingPanel({ open: true, surfaceRef: popoverRef, onClose, outsideEvent: 'mousedown' });
 
     // Graph geometry
     const svgW = 216;
@@ -197,13 +180,17 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                 <span className="text-[12px] font-semibold text-[#f4f4f5] tracking-tight">
                     Easing curve
                 </span>
-                <button
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Close"
+                    icon={<>
+                        <X className="w-3.5 h-3.5" />
+                    </>}
                     onClick={onClose}
                     className="p-1 rounded-md text-[#a1a1aa] hover:text-white hover:bg-white/10 transition cursor-pointer"
                     title="Close"
-                >
-                    <X className="w-3.5 h-3.5" />
-                </button>
+                />
             </div>
 
             {/* Interactive SVG Curve Box */}

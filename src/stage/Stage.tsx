@@ -1,26 +1,7 @@
+import { MenuSurface, MenuItem } from '../ui/Menu';
+
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import {
-    RotateCcw,
-    UploadCloud,
-    Copy,
-    Trash2,
-    FolderPlus,
-    FolderMinus,
-    ChevronsUp,
-    ChevronsDown,
-    ChevronUp,
-    ChevronDown,
-    Lock,
-    Unlock,
-    Eye,
-    EyeOff,
-    Type,
-    Square,
-    Circle,
-    Layers,
-    Camera,
-    Focus,
-} from 'lucide-react';
+import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers, Camera, Focus } from 'lucide-react';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
@@ -1432,7 +1413,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* RAYLIGHT RIGHT-CLICK CONTEXT MENU (Audit Section 6.4) */}
             {contextMenu && (
-                <div
+                <MenuSurface
                     onMouseDown={(e) => e.stopPropagation()}
                     onClick={(e) => e.stopPropagation()}
                     style={{
@@ -1449,7 +1430,8 @@ const StageComponent: React.FC<StageProps> = ({
                             <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider truncate border-b border-white/10 mb-0.5">
                                 {contextMenuLayer.name}
                             </div>
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     const dup = duplicateLayerInShot(
                                         frame.activeShot.id,
@@ -1459,16 +1441,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Copy className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Duplicate</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={Copy}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Duplicate</>}
+                                shortcut={<>
                                     ⌘D
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     const idsToGroup = selectedLayerSet.has(
                                         contextMenuLayer.id
@@ -1479,17 +1462,18 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <FolderPlus className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Group</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={FolderPlus}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Group</>}
+                                shortcut={<>
                                     ⌘G
-                                </span>
-                            </button>
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
                             {contextMenuLayer.groupId && (
-                                <button
+                                <MenuItem
+                                    unstyled
                                     onClick={() => {
                                         if (contextMenuLayer.groupId) {
                                             ungroupInShot(
@@ -1500,18 +1484,19 @@ const StageComponent: React.FC<StageProps> = ({
                                         setContextMenu(null);
                                     }}
                                     className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-amber-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                >
-                                    <div className="flex items-center gap-2">
-                                        <FolderMinus className="w-3.5 h-3.5 text-amber-400" />
-                                        <span>Ungroup</span>
-                                    </div>
-                                    <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                    icon={FolderMinus}
+                                    iconClassName="w-3.5 h-3.5 text-amber-400"
+                                    contentClassName="flex items-center gap-2"
+                                    label={<>Ungroup</>}
+                                    shortcut={<>
                                         ⌘⇧G
-                                    </span>
-                                </button>
+                                    </>}
+                                    shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                                />
                             )}
                             <div className="my-1 border-t border-white/10" />
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     restackLayerInShot(
                                         frame.activeShot.id,
@@ -1521,16 +1506,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <ChevronsUp className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Bring to Front</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={ChevronsUp}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Bring to Front</>}
+                                shortcut={<>
                                     ⌘⇧]
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     restackLayerInShot(
                                         frame.activeShot.id,
@@ -1540,16 +1526,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <ChevronUp className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Bring Forward</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={ChevronUp}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Bring Forward</>}
+                                shortcut={<>
                                     ⌘]
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     restackLayerInShot(
                                         frame.activeShot.id,
@@ -1559,16 +1546,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <ChevronDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Send Backward</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={ChevronDown}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Send Backward</>}
+                                shortcut={<>
                                     ⌘[
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     restackLayerInShot(
                                         frame.activeShot.id,
@@ -1578,17 +1566,18 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <ChevronsDown className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Send to Back</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={ChevronsDown}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Send to Back</>}
+                                shortcut={<>
                                     ⌘⇧[
-                                </span>
-                            </button>
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
                             <div className="my-1 border-t border-white/10" />
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     updateLayer(
                                         frame.activeShot.id,
@@ -1609,8 +1598,9 @@ const StageComponent: React.FC<StageProps> = ({
                                         {contextMenuLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
                                     </span>
                                 </div>
-                            </button>
-                            <button
+                            </MenuItem>
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     updateLayer(
                                         frame.activeShot.id,
@@ -1620,23 +1610,20 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    {contextMenuLayer.hidden ? (
-                                        <Eye className="w-3.5 h-3.5 text-emerald-400" />
-                                    ) : (
-                                        <EyeOff className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    )}
-                                    <span>
-                                        {contextMenuLayer.hidden ? 'Show Layer' : 'Hide Layer'}
-                                    </span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={contextMenuLayer.hidden ? Eye : EyeOff}
+                                iconClassName={contextMenuLayer.hidden ? 'w-3.5 h-3.5 text-emerald-400' : 'w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300'}
+                                contentClassName="flex items-center gap-2"
+                                label={<>
+                                    {contextMenuLayer.hidden ? 'Show Layer' : 'Hide Layer'}
+                                </>}
+                                shortcut={<>
                                     ⌘⇧H
-                                </span>
-                            </button>
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
                             <div className="my-1 border-t border-white/10" />
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     deleteLayerFromShot(
                                         frame.activeShot.id,
@@ -1645,22 +1632,23 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Trash2 className="w-3.5 h-3.5 text-rose-400" />
-                                    <span>Delete</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-rose-400/80">
+                                icon={Trash2}
+                                iconClassName="w-3.5 h-3.5 text-rose-400"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Delete</>}
+                                shortcut={<>
                                     Del
-                                </span>
-                            </button>
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-rose-400/80"
+                            />
                         </>
                     ) : (
                         <>
                             <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider border-b border-white/10 mb-0.5">
                                 Canvas
                             </div>
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     const l = addLayerToShot(frame.activeShot.id, 'text', {
                                         position: { x: 0, y: 0, z: 0 },
@@ -1669,16 +1657,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Type className="w-3.5 h-3.5 text-sky-400" />
-                                    <span>Add Text</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={Type}
+                                iconClassName="w-3.5 h-3.5 text-sky-400"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Add Text</>}
+                                shortcut={<>
                                     T
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     const l = addLayerToShot(frame.activeShot.id, 'shape', {
                                         shape: 'rectangle',
@@ -1688,16 +1677,17 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Square className="w-3.5 h-3.5 text-amber-400" />
-                                    <span>Add Rectangle</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={Square}
+                                iconClassName="w-3.5 h-3.5 text-amber-400"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Add Rectangle</>}
+                                shortcut={<>
                                     R
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     const l = addLayerToShot(frame.activeShot.id, 'shape', {
                                         shape: 'ellipse',
@@ -1707,17 +1697,18 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Circle className="w-3.5 h-3.5 text-emerald-400" />
-                                    <span>Add Ellipse</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={Circle}
+                                iconClassName="w-3.5 h-3.5 text-emerald-400"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Add Ellipse</>}
+                                shortcut={<>
                                     O
-                                </span>
-                            </button>
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
                             <div className="my-1 border-t border-white/10" />
-                            <button
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     setSelectedLayerIds(
                                         frame.activeShot.layers.map((l) => l.id)
@@ -1725,30 +1716,30 @@ const StageComponent: React.FC<StageProps> = ({
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <Layers className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Select All Layers</span>
-                                </div>
-                                <span className="text-[11px] font-mono text-gray-500 group-hover:text-gray-300">
+                                icon={Layers}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Select All Layers</>}
+                                shortcut={<>
                                     ⌘A
-                                </span>
-                            </button>
-                            <button
+                                </>}
+                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
+                            />
+                            <MenuItem
+                                unstyled
                                 onClick={() => {
                                     resetCanvasView();
                                     setContextMenu(null);
                                 }}
                                 className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    <RotateCcw className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    <span>Reset View to Fit</span>
-                                </div>
-                            </button>
+                                icon={RotateCcw}
+                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
+                                contentClassName="flex items-center gap-2"
+                                label={<>Reset View to Fit</>}
+                            />
                         </>
                     )}
-                </div>
+                </MenuSurface>
             )}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}

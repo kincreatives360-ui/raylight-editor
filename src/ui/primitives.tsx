@@ -1,6 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { ScrubInput } from './ScrubInput';
-import { ColorPicker, type GradientValue } from '../panels/Inspector/ColorPicker';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
 /* -------------------------------------------------------------------------- */
@@ -82,7 +81,8 @@ export const Tooltip: React.FC<TooltipProps> = ({
 export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
     icon: React.ReactNode;
     label: string; // Required per Section 11.9 accessible name spec
-    tooltip?: string;
+    tooltip?: string | false;
+    unstyled?: boolean;
     active?: boolean;
     variant?: 'ghost' | 'panel' | 'subtle';
     size?: 'xs' | 'sm' | 'md';
@@ -94,6 +94,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
             icon,
             label,
             tooltip,
+            unstyled = false,
             active = false,
             variant = 'ghost',
             size = 'sm',
@@ -128,14 +129,14 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
                 role="button"
                 aria-label={label}
                 disabled={disabled}
-                className={`inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${sizeClasses} ${variantClasses} ${className}`}
+                className={unstyled ? className : `inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${sizeClasses} ${variantClasses} ${className}`}
                 {...props}
             >
                 {icon}
             </button>
         );
 
-        return <Tooltip content={tooltip || label}>{buttonElement}</Tooltip>;
+        return tooltip === false ? buttonElement : <Tooltip content={tooltip || label}>{buttonElement}</Tooltip>;
     }
 );
 IconButton.displayName = 'IconButton';
@@ -189,54 +190,6 @@ export const NumericField: React.FC<NumericFieldProps> = ({
     }
 
     return inputContent;
-};
-
-/* -------------------------------------------------------------------------- */
-/* ColorField                                                                 */
-/* -------------------------------------------------------------------------- */
-
-export interface ColorFieldProps {
-    value: string;
-    onChange: (color: string) => void;
-    onChangeEvent?: (event: { target: { value: string } }) => void;
-    label?: string;
-    title?: string;
-    gradientValue?: GradientValue;
-    onGradientChange?: (gradient: GradientValue) => void;
-    compact?: boolean;
-    showGradientMode?: boolean;
-    className?: string;
-}
-
-export const ColorField: React.FC<ColorFieldProps> = ({
-    value,
-    onChange,
-    onChangeEvent,
-    label = 'Color',
-    title,
-    gradientValue,
-    onGradientChange,
-    compact = false,
-    showGradientMode = false,
-    className = '',
-}) => {
-    const handleChange = (newColor: string) => {
-        onChange(newColor);
-        onChangeEvent?.({ target: { value: newColor } });
-    };
-
-    return (
-        <ColorPicker
-            color={value}
-            label={label || title || 'Color'}
-            gradientValue={gradientValue}
-            onGradientChange={onGradientChange}
-            compact={compact}
-            showGradientMode={showGradientMode}
-            className={className}
-            onChange={handleChange}
-        />
-    );
 };
 
 /* -------------------------------------------------------------------------- */
@@ -298,6 +251,9 @@ export interface InspectorRowProps {
     tooltip?: string;
     stacked?: boolean;
     className?: string;
+    unstyled?: boolean;
+    labelClassName?: string;
+    labelTag?: 'label' | 'span';
 }
 
 export const InspectorRow: React.FC<InspectorRowProps> = ({
@@ -307,7 +263,13 @@ export const InspectorRow: React.FC<InspectorRowProps> = ({
     tooltip,
     stacked = false,
     className = '',
+    unstyled = false,
+    labelClassName,
+    labelTag: Label = 'span',
 }) => {
+    if (unstyled) return <div className={className}>
+        {label && <Label className={labelClassName}>{label}</Label>}{children}
+    </div>;
     if (stacked) {
         return (
             <div className={`flex flex-col gap-1 py-1 ${className}`}>
@@ -348,6 +310,7 @@ export interface SegmentedControlOption<T extends string = string> {
     tooltip?: string;
     ariaLabel?: string;
     disabled?: boolean;
+    title?: string;
 }
 
 export interface SegmentedControlProps<T extends string = string> {
@@ -356,6 +319,10 @@ export interface SegmentedControlProps<T extends string = string> {
     onChange: (value: T) => void;
     size?: 'sm' | 'md';
     className?: string;
+    unstyled?: boolean;
+    ariaLabel?: string;
+    buttonClassName?: string | ((option: SegmentedControlOption<T>, selected: boolean) => string);
+    selectionMode?: 'radio' | 'pressed';
 }
 
 export function SegmentedControl<T extends string = string>({
@@ -364,13 +331,18 @@ export function SegmentedControl<T extends string = string>({
     onChange,
     size = 'sm',
     className = '',
+    unstyled = false,
+    ariaLabel,
+    buttonClassName,
+    selectionMode = 'radio',
 }: SegmentedControlProps<T>) {
     const heightClass = size === 'sm' ? 'h-[var(--control-height)]' : 'h-8';
 
     return (
         <div
-            role="radiogroup"
-            className={`inline-flex w-full items-center rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--panel-bg)] p-0.5 select-none ${heightClass} ${className}`}
+            role={selectionMode === 'radio' ? 'radiogroup' : 'group'}
+            aria-label={ariaLabel}
+            className={unstyled ? className : `inline-flex w-full items-center rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--panel-bg)] p-0.5 select-none ${heightClass} ${className}`}
         >
             {options.map((opt) => {
                 const isSelected = opt.value === value;
@@ -378,19 +350,23 @@ export function SegmentedControl<T extends string = string>({
                     <button
                         key={opt.value}
                         type="button"
-                        role="radio"
-                        aria-checked={isSelected}
+                        role={selectionMode === 'radio' ? 'radio' : undefined}
+                        aria-checked={selectionMode === 'radio' ? isSelected : undefined}
                         aria-label={opt.ariaLabel || (typeof opt.label === 'string' ? opt.label : undefined)}
+                        aria-pressed={selectionMode === 'pressed' ? isSelected : undefined}
+                        title={opt.title}
                         disabled={opt.disabled}
                         onClick={() => !opt.disabled && onChange(opt.value)}
-                        className={`flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${
+                        className={buttonClassName !== undefined ? (typeof buttonClassName === 'function' ? buttonClassName(opt, isSelected) : buttonClassName) : `flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${
                             isSelected
                                 ? 'bg-[var(--panel-active)] text-white shadow-sm font-semibold'
                                 : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--panel-hover)]'
                         }`}
                     >
-                        {opt.icon && <span className="shrink-0">{opt.icon}</span>}
-                        {opt.label && <span className="truncate">{opt.label}</span>}
+                        {unstyled ? <>{opt.icon}{opt.label}</> : <>
+                            {opt.icon && <span className="shrink-0">{opt.icon}</span>}
+                            {opt.label && <span className="truncate">{opt.label}</span>}
+                        </>}
                     </button>
                 );
 

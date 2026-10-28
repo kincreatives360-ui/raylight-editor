@@ -1,3 +1,5 @@
+import { IconButton } from '../../ui/primitives';
+import { useFloatingPanel } from '../../ui/useFloatingPanel';
 import { FigmaSelect } from '../../ui/FigmaSelect';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -129,9 +131,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         }
     }, [color]);
 
-    useEffect(() => {
-        if (!open) return;
-        const updatePosition = () => {
+    useFloatingPanel({ open, surfaceRef: popupRef, anchorRef, positionKey: pickerMode,
+        reposition: () => {
             const rect = anchorRef.current?.getBoundingClientRect();
             if (!rect) return;
             const width = 312;
@@ -139,29 +140,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
             const below = rect.bottom + 8;
             setPosition({ left, top: below + height < window.innerHeight ? below : Math.max(8, rect.top - height - 8) });
-        };
-        updatePosition();
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-        const onPointerDown = (event: PointerEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (!target) return;
-            if (anchorRef.current?.contains(target) || popupRef.current?.contains(target)) {
-                return;
-            }
-            if (target.closest && target.closest('[data-raylight-color-picker]')) {
-                return;
-            }
-            setOpen(false);
-            onExitGradientRef.current?.();
-        };
-        window.addEventListener('pointerdown', onPointerDown);
-        return () => {
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-            window.removeEventListener('pointerdown', onPointerDown);
-        };
-    }, [open, pickerMode]);
+        },
+        onClose: () => { setOpen(false); onExitGradientRef.current?.(); }, escape: false,
+        ignoreOutside: target => !!target.closest?.('[data-raylight-color-picker]'),
+    });
 
     const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -501,24 +483,28 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             <option value="linear">Linear</option>
                             <option value="radial">Radial</option>
                         </FigmaSelect>
-                        <button
-                            type="button"
-                            aria-label="Reverse gradient"
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label="Reverse gradient"
+                            icon={<>
+                                <RotateCcw className="h-4 w-4" />
+                            </>}
                             title="Reverse gradient"
                             onClick={() => updateGradient({ ...gradient, stops: [...gradient.stops].reverse().map((stop) => ({ ...stop, at: 1 - stop.at })).sort((a, b) => a.at - b.at) })}
                             className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--bg-subtle,#1c1c1f)] text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100"
-                        >
-                            <RotateCcw className="h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            aria-label="Rotate gradient 90 degrees"
+                        />
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label="Rotate gradient 90 degrees"
+                            icon={<>
+                                <RotateCw className="h-4 w-4" />
+                            </>}
                             title="Rotate gradient 90°"
                             onClick={() => updateGradient({ ...gradient, angle: (gradient.angle + 90) % 360 })}
                             className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--bg-subtle,#1c1c1f)] text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100"
-                        >
-                            <RotateCw className="h-4 w-4" />
-                        </button>
+                        />
                     </div>
                     <div
                         className="relative h-9 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-canvas,#07080d)] shadow-inner"
@@ -579,9 +565,13 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     </div>
                     <div className="flex items-center justify-between text-[11px] text-[var(--text-muted,#a1a1aa)]">
                         <span>Stops</span>
-                        <button
-                            type="button"
-                            aria-label="Add gradient stop"
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label="Add gradient stop"
+                            icon={<>
+                                <Plus className="h-4 w-4" />
+                            </>}
                             title="Add stop"
                             onClick={() => {
                                 const sorted = [...gradient.stops].sort((a, b) => a.at - b.at);
@@ -596,9 +586,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 updateGradient({ ...gradient, stops: [...gradient.stops, newStop].sort((a, b) => a.at - b.at) });
                             }}
                             className="grid h-7 w-7 place-items-center rounded-md bg-[var(--bg-subtle,#1c1c1f)] text-white hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100"
-                        >
-                            <Plus className="h-4 w-4" />
-                        </button>
+                        />
                     </div>
                     <div className="max-h-[180px] space-y-1 overflow-y-auto">
                         {gradient.stops.map((stop, index) => (
@@ -664,15 +652,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                     />
                                     <span>%</span>
                                 </label>
-                                <button
-                                    type="button"
-                                    aria-label={`Remove stop ${index + 1}`}
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label={`Remove stop ${index + 1}`}
+                                    icon={<>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </>}
                                     disabled={gradient.stops.length <= 2}
                                     onClick={() => updateGradient({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })}
                                     className="grid h-6 w-6 place-items-center rounded text-[var(--text-muted,#a1a1aa)] hover:text-[var(--accent-danger,#f43f5e)] disabled:opacity-40 transition-colors duration-100"
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </button>
+                                />
                             </div>
                         ))}
                     </div>

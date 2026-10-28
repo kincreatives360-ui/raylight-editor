@@ -1,3 +1,5 @@
+import { IconButton } from '../ui/primitives';
+import { ShortcutKey } from '../ui/ShortcutKey';
 // src/stage/OrientationGizmo.tsx
 import React, { useMemo, useState } from 'react';
 import * as THREE from 'three';
@@ -271,16 +273,19 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 </button>
 
                 {/* Screen settings trigger for presets and framing */}
-                <button
-                    type="button"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Camera angles and framing presets"
+                    icon={<>
+                        {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                    </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
                     title="Camera angles and framing presets"
                     className={`p-1 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition shadow-sm ${
                         menuOpen ? 'bg-white/20 text-white' : ''
                     }`}
-                >
-                    {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
-                </button>
+                />
             </div>
 
             {/* Hidden-by-default Screen Settings Popover (Keeps canvas clean) */}
@@ -334,7 +339,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                             <Focus className="w-3 h-3 text-sky-400" />
                             <span>{hasSelection ? 'Frame Selection' : 'Frame Scene'}</span>
                         </span>
-                        <kbd className="text-[10px] text-white/40 font-mono">F</kbd>
+                        <ShortcutKey className="text-[10px] text-white/40 font-mono">F</ShortcutKey>
                     </button>
                 )}
             </div>

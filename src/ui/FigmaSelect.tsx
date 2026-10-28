@@ -1,3 +1,5 @@
+
+import { useFloatingPanel } from './useFloatingPanel';
 import React, { Children, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
@@ -50,19 +52,8 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         setActive(Math.max(0, options.findIndex((option) => option.value === selectedValue && !option.disabled)));
         setOpen(true);
     };
-    useEffect(() => {
-        if (!open) return;
-        menu.current?.focus();
-        const outside = (event: PointerEvent) => {
-            if (!menu.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
-        };
-        const dismiss = () => setOpen(false);
-        document.addEventListener('pointerdown', outside);
-        window.addEventListener('resize', dismiss);
-        const scroll = (event: Event) => { if (!menu.current?.contains(event.target as Node)) dismiss(); };
-        window.addEventListener('scroll', scroll, true);
-        return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', scroll, true); };
-    }, [open]);
+    useFloatingPanel({ open, surfaceRef: menu, anchorRef: trigger, onClose: () => setOpen(false), dismissOnViewportChange: true, escape: false });
+    useEffect(() => { if (open) menu.current?.focus(); }, [open]);
     useEffect(() => { if (open) document.getElementById(`${menuId}-${active}`)?.scrollIntoView({ block: 'nearest' }); }, [active, open, menuId]);
     const move = (direction: number) => {
         for (let step = 1; step <= options.length; step++) {
@@ -71,11 +62,7 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         }
     };
     return <>
-        <button ref={trigger} type="button" role="combobox" id={id} title={title} disabled={disabled}
-            aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))}
-            aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined}
-            className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()}
-            onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
+        <button type="button" aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))} ref={trigger} role="combobox" id={id} title={title} disabled={disabled} aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined} className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()} onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
             <span className="min-w-0 flex-1 truncate text-left">{selected?.label ?? 'Choose option'}</span><ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0 opacity-60" />
         </button>
         {open && createPortal(<div ref={menu} id={menuId} role="listbox" tabIndex={-1} aria-label={ariaLabel ?? (label || title || 'Options')}

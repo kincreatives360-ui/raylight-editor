@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sun, Flashlight, Lightbulb, Square } from 'lucide-react';
+import { LightTypeIcon } from '../ui/LightTypeIcon';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { SceneLight, LightSourceType } from '../model/types';
 import { useProjectStore } from '../store/useProjectStore';
@@ -42,21 +42,6 @@ interface UnifiedLight {
     height?: number;
     distance?: number;
 }
-
-const LightIcon: React.FC<{ type: LightSourceType }> = ({ type }) => {
-    switch (type) {
-        case 'directional':
-            return <Sun className="w-3.5 h-3.5 text-white" />;
-        case 'spot':
-            return <Flashlight className="w-3.5 h-3.5 text-white" />;
-        case 'point':
-            return <Lightbulb className="w-3.5 h-3.5 text-white" />;
-        case 'area':
-            return <Square className="w-3.5 h-3.5 text-white" />;
-        default:
-            return <Sun className="w-3.5 h-3.5 text-white" />;
-    }
-};
 
 interface SelectedLightGizmoProps {
     selectedLight: UnifiedLight;
@@ -402,7 +387,7 @@ const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                 />
                 <foreignObject x="-9" y="-9" width="18" height="18" className="pointer-events-none">
                     <div className="w-full h-full flex items-center justify-center">
-                        <LightIcon type={selectedLight.type} />
+                        <LightTypeIcon type={selectedLight.type} className="w-3.5 h-3.5 text-white" />
                     </div>
                 </foreignObject>
             </g>
@@ -795,7 +780,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                             />
                             <foreignObject x="-7" y="-7" width="14" height="14" className="pointer-events-none">
                                 <div className="w-full h-full flex items-center justify-center opacity-80 group-hover:opacity-100">
-                                    <LightIcon type={l.type} />
+                                    <LightTypeIcon type={l.type} className="w-3.5 h-3.5 text-white" />
                                 </div>
                             </foreignObject>
                             <text

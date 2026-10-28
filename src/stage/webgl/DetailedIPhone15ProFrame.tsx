@@ -1,3 +1,6 @@
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -28,8 +31,7 @@ export function DetailedIPhone15ProFrame({
   rotation?: { x: number; y: number; z: number };
 }) {
   const scaleFactor = Math.max(0.000001, Number.isFinite(metrics.bodyHeight) ? metrics.bodyHeight : 1);
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
 
   const { cutoutStyle, cutoutWidth, cutoutHeight } = settings;
   // Unit cutout layout only recomputes when cutout style/dimensions change
@@ -71,8 +73,6 @@ export function DetailedIPhone15ProFrame({
       reflection,
     ]
   );
-
-  const shadowTexture = useMemo(() => createDeviceShadowTexture(), []);
 
   // Fixed unit hardware geometries: instantiated once on mount and scaled via Three.js <group scale>.
   // Zero re-extrusion or GPU buffer thrashing at 60 FPS playback.
@@ -214,18 +214,6 @@ export function DetailedIPhone15ProFrame({
     []
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-  const shadowMaterial = useMemo(
-    () => new THREE.MeshBasicMaterial({
-      map: shadowTexture,
-      transparent: true,
-      opacity: effectiveShadowOpacity,
-      depthWrite: false,
-      side: THREE.FrontSide,
-    }),
-    [effectiveShadowOpacity, shadowTexture]
-  );
-
   useDisposable(bodyGeometry);
   useDisposable(bezelGeometry);
   useDisposable(screenGeometry);
@@ -240,9 +228,6 @@ export function DetailedIPhone15ProFrame({
   useDisposable(actionGeometry);
   useDisposable(volumeGeometry);
   useDisposable(sideGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(shadowTexture);
-  useDisposable(shadowMaterial);
   useDisposable(materials.reflectionTexture);
   useDisposable(materials.titanium);
   useDisposable(materials.rearGlass);
@@ -261,24 +246,23 @@ export function DetailedIPhone15ProFrame({
       position={[0, 0, SCREEN_PLANE_Z]}
       scale={[scaleFactor, scaleFactor, scaleFactor]}
     >
-      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-        <mesh
-          name="iphone-device-shadow"
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[
-            BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.width * 0.025,
-            -BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.height * settings.shadowOffset,
-            BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.z - SCREEN_PLANE_Z - BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.depth * 0.08,
-          ]}
-          scale={[
-            BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.width * (1.18 + settings.shadowBlur * 0.55),
-            BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.height * (0.32 + settings.shadowBlur * 0.16),
-            1,
-          ]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+        opacity={effectiveShadowOpacity}
+        textureFactory={createDeviceShadowTexture}
+        name="iphone-device-shadow"
+        position={[
+          BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.width * 0.025,
+          -BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.height * settings.shadowOffset,
+          BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.z - SCREEN_PLANE_Z - BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.depth * 0.08,
+        ]}
+        scale={[
+          BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.width * (1.18 + settings.shadowBlur * 0.55),
+          BASE_UNIT_IPHONE_15_PRO_LAYOUT.body.height * (0.32 + settings.shadowBlur * 0.16),
+          1,
+        ]}
+        renderOrder={-2}
+      />
       <mesh
         name="iphone-titanium-chassis"
         geometry={bodyGeometry}
@@ -304,19 +288,10 @@ export function DetailedIPhone15ProFrame({
         castShadow
         receiveShadow
       />
-      <mesh
-        name="iphone-screen-glass"
+      <DeviceScreenSurface
         geometry={screenGeometry}
-        material={materials.screenGlass}
-        position={[0, 0, BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.glassZ - SCREEN_PLANE_Z]}
-        renderOrder={materials.policy.renderOrder.screenGlass}
-      />
-      <mesh
-        name="iphone-screen-reflection"
-        geometry={screenGeometry}
-        material={materials.reflection}
-        position={[0, 0, BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.reflectionZ - SCREEN_PLANE_Z]}
-        renderOrder={materials.policy.renderOrder.reflection}
+        glass={{ name: 'iphone-screen-glass', material: materials.screenGlass, position: [0, 0, BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.glassZ - SCREEN_PLANE_Z], renderOrder: materials.policy.renderOrder.screenGlass }}
+        reflection={{ name: 'iphone-screen-reflection', material: materials.reflection, position: [0, 0, BASE_UNIT_IPHONE_15_PRO_LAYOUT.front.reflectionZ - SCREEN_PLANE_Z], renderOrder: materials.policy.renderOrder.reflection }}
       />
       {settings.cutoutStyle !== 'none' && (
         <mesh

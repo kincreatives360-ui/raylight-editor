@@ -1,5 +1,10 @@
+import { CheckboxRow } from '../../../ui/CheckboxRow';
+import { InspectorRow } from '../../../ui/primitives';
+import { LIGHT_TYPE_META } from '../../../ui/lightTypes';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
-import { InspectorModeTabs } from '../../../ui/primitives';
+import { AxisFields } from '../../../ui/AxisFields';
+import { MenuSurface, MenuItem } from '../../../ui/Menu';
+import { IconButton, InspectorModeTabs } from '../../../ui/primitives';
 import React, { useCallback, useState } from 'react';
 import { X, Sun, Thermometer, Sparkles, Plus, ChevronDown } from 'lucide-react';
 import type { Shot, SceneLight, LightSourceType, LightAnimationBlock, LightRig } from '../../../model/types';
@@ -119,13 +124,6 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         return null;
     }
 
-    const typeDisplayNames: Record<LightSourceType, string> = {
-        directional: 'Sun',
-        spot: 'Spot',
-        point: 'Point',
-        area: 'Area',
-        ambient: 'Ambient',
-    };
 
     const hasTarget =
         currentLight.type === 'directional' ||
@@ -186,15 +184,15 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     actions={
                         <>
                             <span className="flex-1" />
-                            <button
-                                type="button"
+                            <IconButton
+                                unstyled
+                                tooltip={false}
+                                label="Close Inspector"
                                 onClick={onClose}
-                                aria-label="Close Inspector"
                                 title="Close Inspector"
                                 className="w-7 h-7 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                            >
-                                <X className="w-3.5 h-3.5" />
-                            </button>
+                                icon={<X className="w-3.5 h-3.5" />}
+                            />
                         </>
                     }
                 />
@@ -203,40 +201,70 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Animations</span>
                     <div className="relative">
-                        <button type="button" aria-label="Add light animation" aria-expanded={addAnimationOpen} onClick={() => setAddAnimationOpen((open) => !open)} className="w-7 h-7 rounded-md bg-[#222226] hover:bg-[#303035] border border-white/10 text-white flex items-center justify-center cursor-pointer"><Plus className="w-4 h-4" /></button>
-                        {addAnimationOpen && <div className="absolute right-0 top-full mt-1 w-40 rounded-xl bg-[#1c1c1f]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-1 z-30 origin-top-right">
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label="Add light animation"
+                            aria-expanded={addAnimationOpen}
+                            onClick={() => setAddAnimationOpen((open) => !open)}
+                            className="w-7 h-7 rounded-md bg-[#222226] hover:bg-[#303035] border border-white/10 text-white flex items-center justify-center cursor-pointer"
+                            icon={<Plus className="w-4 h-4" />}
+                        />
+                        {addAnimationOpen && <MenuSurface
+                            className="absolute right-0 top-full mt-1 w-40 rounded-xl bg-[#1c1c1f]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-1 z-30 origin-top-right"
+                        >
                             <span className="block px-2.5 pt-1.5 pb-1 text-[10px] text-[#8e8e93]">Custom</span>
-                            {(isRoom ? [['ambience', 'Ambience']] : [['position', 'Position'], ['intensity', 'Power'], ['temperature', 'Temp']]).map(([property, label]) => <button key={property} type="button" onClick={() => handleAnimateLight(property as NonNullable<LightAnimationBlock['property']>)} className="w-full px-2.5 py-2 rounded-lg text-left text-[11px] text-white hover:bg-white/10 cursor-pointer">{label}</button>)}
-                        </div>}
+                            {(isRoom ? [['ambience', 'Ambience']] : [['position', 'Position'], ['intensity', 'Power'], ['temperature', 'Temp']]).map(([property, label]) => <MenuItem
+                                unstyled
+                                key={property}
+                                onClick={() => handleAnimateLight(property as NonNullable<LightAnimationBlock['property']>)}
+                                className="w-full px-2.5 py-2 rounded-lg text-left text-[11px] text-white hover:bg-white/10 cursor-pointer"
+                            >{label}</MenuItem>)}
+                        </MenuSurface>}
                     </div>
                 </div>
-                {animations.length ? <div className="divide-y divide-white/[0.07]">{animations.map((block) => <button key={block.id} type="button" onClick={() => selectLightBlock(block.id)} className="w-full py-3 flex items-center justify-between text-left text-[11px] text-white hover:text-[#38bdf8] cursor-pointer"><span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#a1a1aa]" />{block.label}</span><ChevronDown className="w-3.5 h-3.5 text-[#71717a] -rotate-90" /></button>)}</div> : <div className="py-5 text-center text-[11px] text-[#71717a]">No animations yet</div>}
+                {animations.length ? <div className="divide-y divide-white/[0.07]">{animations.map((block) => <button type="button"  key={block.id} onClick={() => selectLightBlock(block.id)} className="w-full py-3 flex items-center justify-between text-left text-[11px] text-white hover:text-[#38bdf8] cursor-pointer"><span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5 text-[#a1a1aa]" />{block.label}</span><ChevronDown className="w-3.5 h-3.5 text-[#71717a] -rotate-90" /></button>)}</div> : <div className="py-5 text-center text-[11px] text-[#71717a]">No animations yet</div>}
                 <div className="pt-2 border-t border-white/[0.07]"><SceneLightsList activeShot={activeShot} selectedLightId={selectedLightId} onSelectLight={(id) => { if (id) selectLight(id); else onClose(); }} /></div>
             </div> : <>
             {/* Header: Light Title + Close X */}
             <div className="p-3.5 flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-white tracking-wide">{isRoom ? 'Room' : isKey ? 'Light' : typeDisplayNames[currentLight.type] || currentLight.name}</span>
+                <span className="text-[12px] font-semibold text-white tracking-wide">{isRoom ? 'Room' : isKey ? 'Light' : LIGHT_TYPE_META[currentLight.type].label || currentLight.name}</span>
             </div>
 
 
             {isRoom ? <div className="p-3.5 space-y-3">
-                <div className="space-y-2">
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Ambience</span>
+                <InspectorRow
+                    unstyled
+                    className="space-y-2"
+                    labelTag="span"
+                    labelClassName="text-[11px] font-medium text-[#e4e4e7]"
+                    label={<>Ambience</>}
+                >
                     <ScrubInput label={<Sun className="w-3.5 h-3.5 text-[#e4e4e7]" />} value={Math.round(currentLight.intensity * 100)} min={0} max={100} step={1} unit="%"
                         onChange={(intensity) => updateLight({ intensity: intensity / 100 })} />
-                </div>
-                <div className="space-y-2">
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Environment</span>
+                </InspectorRow>
+                <InspectorRow
+                    unstyled
+                    className="space-y-2"
+                    labelTag="span"
+                    labelClassName="text-[11px] font-medium text-[#e4e4e7]"
+                    label={<>Environment</>}
+                >
                     <FigmaSelect value={shotLight?.environment ?? (shotLight?.ambientColor ? 'studio' : 'custom')} onChange={(event) => updateLight({ environment: event.target.value as LightRig['environment'] })}
                         className="w-full h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition">
                         <option value="studio">Studio</option><option value="softbox">Softbox</option><option value="strip-light">Strip light</option><option value="daylight">Daylight</option><option value="night-city">Night city</option><option value="warehouse">Warehouse</option><option value="custom">Custom</option>
                     </FigmaSelect>
-                </div>
-                <div className="space-y-2">
-                    <span className="text-[11px] font-medium text-[#e4e4e7]">Color</span>
+                </InspectorRow>
+                <InspectorRow
+                    unstyled
+                    className="space-y-2"
+                    labelTag="span"
+                    labelClassName="text-[11px] font-medium text-[#e4e4e7]"
+                    label={<>Color</>}
+                >
                     <ColorPicker color={currentLight.color} label="Room color" compact={false} showGradientMode={false}
                         onChange={(color) => updateLight({ color, environment: 'custom' })} />
-                </div>
+                </InspectorRow>
             </div> : <>
             {/* Type Dropdown */}
             <div className="p-3.5 space-y-2">
@@ -259,26 +287,14 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             {/* Position: X, Y */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Position</span>
-                <div className="grid grid-cols-2 gap-2">
-                    <ScrubInput
-                        label="X"
-                        value={currentLight.position.x}
-                        step={0.05}
-                        decimals={2}
-                        onChange={(x) =>
-                            updateLight({ position: { ...currentLight.position, x } })
-                        }
-                    />
-                    <ScrubInput
-                        label="Y"
-                        value={currentLight.position.y}
-                        step={0.05}
-                        decimals={2}
-                        onChange={(y) =>
-                            updateLight({ position: { ...currentLight.position, y } })
-                        }
-                    />
-                </div>
+                <AxisFields
+                    className="grid grid-cols-2 gap-2"
+                    fields={[{ key: "0", label: "X", value: currentLight.position.x, step: 0.05, decimals: 2, onChange: (x) =>
+                       updateLight({ position: { ...currentLight.position, x } })
+                    }, { key: "1", label: "Y", value: currentLight.position.y, step: 0.05, decimals: 2, onChange: (y) =>
+                       updateLight({ position: { ...currentLight.position, y } })
+                    }]}
+                />
             </div>
 
             {/* Depth: Z */}
@@ -299,22 +315,10 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             {hasTarget && (
                 <div className="p-3.5 space-y-2">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Aim at</span>
-                    <div className="grid grid-cols-2 gap-2 mb-2">
-                        <ScrubInput
-                            label="X"
-                            value={target.x}
-                            step={0.05}
-                            decimals={2}
-                            onChange={(x) => updateLight({ target: { ...target, x } })}
-                        />
-                        <ScrubInput
-                            label="Y"
-                            value={target.y}
-                            step={0.05}
-                            decimals={2}
-                            onChange={(y) => updateLight({ target: { ...target, y } })}
-                        />
-                    </div>
+                    <AxisFields
+                        className="grid grid-cols-2 gap-2 mb-2"
+                        fields={[{ key: "0", label: "X", value: target.x, step: 0.05, decimals: 2, onChange: (x) => updateLight({ target: { ...target, x } }) }, { key: "1", label: "Y", value: target.y, step: 0.05, decimals: 2, onChange: (y) => updateLight({ target: { ...target, y } }) }]}
+                    />
                     <ScrubInput
                         label="Z"
                         value={target.z}
@@ -435,15 +439,13 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             {currentLight.type !== 'area' && currentLight.type !== 'ambient' && <div className="p-3.5 space-y-3">
                 <div className="flex items-center justify-between">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Shadows</span>
-                    <label className="flex items-center gap-2 cursor-pointer text-[10px] text-[#a1a1aa]">
-                        <span>Cast shadows</span>
-                        <input
-                            type="checkbox"
-                            checked={currentLight.castShadow !== false}
-                            onChange={(e) => updateLight({ castShadow: e.target.checked })}
-                            className="w-4 h-4 rounded accent-[#0088ff] cursor-pointer"
-                        />
-                    </label>
+                    <CheckboxRow
+                        label={<>Cast shadows</>}
+                        rowClassName="flex items-center gap-2 cursor-pointer text-[10px] text-[#a1a1aa]"
+                        checked={currentLight.castShadow !== false}
+                        onChange={(e) => updateLight({ castShadow: e.target.checked })}
+                        className="w-4 h-4 rounded accent-[#0088ff] cursor-pointer"
+                    />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
                     <ScrubInput label="Strength" value={Math.round(((isKey ? shotLight?.shadowStrength : currentLight.shadowStrength) ?? 0.7) * 100)} min={0} max={100} unit="%"

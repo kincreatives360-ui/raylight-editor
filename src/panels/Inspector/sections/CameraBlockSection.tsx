@@ -1,21 +1,14 @@
+import { IconButton } from '../../../ui/primitives';
+import { AxisFields } from '../../../ui/AxisFields';
+import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
+import { InspectorDisclosure } from '../../../ui/InspectorDisclosure';
+import { InspectorRow } from '../../../ui/primitives';
+import { SegmentedControl } from '../../../ui/primitives';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { EasingControl } from '../../../ui/EasingControl';
 // src/panels/Inspector/sections/CameraBlockSection.tsx
 import React, { useState } from 'react';
-import {
-    ChevronDown,
-    ChevronUp,
-    AlignLeft,
-    AlignCenterHorizontal,
-    AlignRight,
-    AlignStartVertical,
-    AlignCenterVertical,
-    AlignEndVertical,
-    Focus,
-    X,
-    Plus,
-    Minus,
-} from 'lucide-react';
+import { AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Focus, X, Plus, Minus } from 'lucide-react';
 import type {
     CameraBlock,
     CameraKeyframeEndpoint,
@@ -113,108 +106,120 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
             : 'bg-sky-500 text-black font-semibold shadow-xs';
 
         return (
-            <div className="p-3.5 space-y-3">
-                <button
-                    type="button"
-                    onClick={onToggle}
-                    aria-expanded={!collapsed}
-                    aria-label={`Toggle ${which} camera endpoint settings`}
-                    className="flex items-center justify-between cursor-pointer w-full text-left group"
-                >
-                    <div className="flex items-center gap-2">
-                        <span className="text-[11px] font-semibold text-[#e4e4e7] capitalize">
-                            {which}
-                        </span>
+            <InspectorDisclosure
+                title={which}
+                headerContent={<div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold text-[#e4e4e7] capitalize">
+                        {which}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-mono">
+                        {Number(ep.zoom.toFixed(2))}x
+                    </span>
+                    {(ep.focalLength ?? 50) !== 50 && (
                         <span className="text-[10px] text-zinc-400 font-mono">
-                            {Number(ep.zoom.toFixed(2))}x
+                            • {Math.round(ep.focalLength ?? 50)}mm
                         </span>
-                        {(ep.focalLength ?? 50) !== 50 && (
-                            <span className="text-[10px] text-zinc-400 font-mono">
-                                • {Math.round(ep.focalLength ?? 50)}mm
-                            </span>
-                        )}
-                    </div>
-                    {collapsed ? (
-                        <ChevronDown className="w-3.5 h-3.5 text-[#a1a1aa] group-hover:text-white transition-colors" />
-                    ) : (
-                        <ChevronUp className="w-3.5 h-3.5 text-[#a1a1aa] group-hover:text-white transition-colors" />
                     )}
-                </button>
-
-                {!collapsed && (
+                </div>}
+                toggleLabel={`Toggle ${which} camera endpoint settings`}
+                open={!collapsed}
+                onOpenChange={onToggle}
+                headerClassName="flex items-center justify-between cursor-pointer w-full text-left group"
+            >
                     <div className="space-y-3">
                         {/* Alignment & Framing Toolbar */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                Alignment
-                            </span>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-1.5"
+                            labelTag="span"
+                            labelClassName="text-[10px] text-[#a1a1aa] block font-medium"
+                            label={<>Alignment
+                            </>}
+                        >
                             <div className="grid grid-cols-2 gap-1.5" role="toolbar" aria-label={`${which} endpoint alignment and framing`}>
                                 <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
-                                    <button
-                                        type="button"
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Align Left"
+                                        icon={<>
+                                            <AlignLeft className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorX: Math.round(-halfW + halfW / Math.max(0.1, ep.zoom)) })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Align Left"
-                                        aria-label="Align Left"
-                                    >
-                                        <AlignLeft className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
+                                    />
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Center X"
+                                        icon={<>
+                                            <AlignCenterHorizontal className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorX: 0 })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Center X"
-                                        aria-label="Center X"
-                                    >
-                                        <AlignCenterHorizontal className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
+                                    />
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Align Right"
+                                        icon={<>
+                                            <AlignRight className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorX: Math.round(halfW - halfW / Math.max(0.1, ep.zoom)) })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Align Right"
-                                        aria-label="Align Right"
-                                    >
-                                        <AlignRight className="w-3.5 h-3.5" />
-                                    </button>
+                                    />
                                 </div>
                                 <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg">
-                                    <button
-                                        type="button"
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Align Top"
+                                        icon={<>
+                                            <AlignStartVertical className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorY: Math.round(halfH - halfH / Math.max(0.1, ep.zoom)) })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Align Top"
-                                        aria-label="Align Top"
-                                    >
-                                        <AlignStartVertical className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
+                                    />
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Center Y"
+                                        icon={<>
+                                            <AlignCenterVertical className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorY: 0 })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Center Y"
-                                        aria-label="Center Y"
-                                    >
-                                        <AlignCenterVertical className="w-3.5 h-3.5" />
-                                    </button>
-                                    <button
-                                        type="button"
+                                    />
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Align Bottom"
+                                        icon={<>
+                                            <AlignEndVertical className="w-3.5 h-3.5" />
+                                        </>}
                                         onClick={() => patchEndpoint({ anchorY: Math.round(-halfH + halfH / Math.max(0.1, ep.zoom)) })}
                                         className="h-6 rounded hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer"
                                         title="Align Bottom"
-                                        aria-label="Align Bottom"
-                                    >
-                                        <AlignEndVertical className="w-3.5 h-3.5" />
-                                    </button>
+                                    />
                                 </div>
                             </div>
-                        </div>
+                        </InspectorRow>
 
                         <details className="group space-y-2">
                             <summary className="cursor-pointer list-none text-[10px] font-medium text-[#a1a1aa] hover:text-white">Camera presets</summary>
                             <div className="flex justify-end">
-                                <button
-                                    type="button"
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label={`Frame selection for ${which} endpoint`}
+                                    icon={<>
+                                        <Focus className="w-3.5 h-3.5" />
+                                    </>}
                                     onClick={() => {
                                         const selectedLayers = (currentShot?.layers || []).filter((l) => selectedLayerIds.includes(l.id));
                                         const targetLayers = selectedLayers.length > 0
@@ -231,10 +236,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     }}
                                     className="h-6 rounded hover:bg-[#0088ff]/20 text-[#0088ff] hover:text-white flex items-center justify-center cursor-pointer transition-colors"
                                     title={selectedLayerIds.length > 0 ? "Frame Selected Layer(s)" : "Frame Scene Content"}
-                                    aria-label={`Frame selection for ${which} endpoint`}
-                                >
-                                    <Focus className="w-3.5 h-3.5" />
-                                </button>
+                                />
                             </div>
                             {/* Quick Preset Buttons */}
                             <div className="grid grid-cols-4 gap-1">
@@ -311,33 +313,16 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         {/* Anchor & 3D Depth */}
                         <div className="space-y-1.5">
                             <span className="text-[10px] text-[#a1a1aa] block font-medium">Anchor</span>
-                            <div className="grid grid-cols-2 gap-1.5">
-                                <ScrubInput
-                                    label="X"
-                                    value={Math.round(ep.anchorX)}
-                                    min={-10000}
-                                    max={10000}
-                                    step={1}
-                                    onChange={(pxX) =>
-                                        patchEndpoint({
-                                            anchorX: Math.round(pxX),
-                                        })
-                                    }
-                                />
-                                <ScrubInput
-                                    label="Y"
-                                    value={Math.round(ep.anchorY)}
-                                    min={-10000}
-                                    max={10000}
-                                    step={1}
-                                    onChange={(pxY) =>
-                                        patchEndpoint({
-                                            anchorY: Math.round(pxY),
-                                        })
-                                    }
-                                />
-
-                            </div>
+                            <AxisFields
+                                className="grid grid-cols-2 gap-1.5"
+                                fields={[{ key: "0", "label": "X", "value": Math.round(ep.anchorX), "min": -10000, "max": 10000, "step": 1, "onChange": (pxX) =>
+                                patchEndpoint({
+                                    anchorX: Math.round(pxX),
+                                }) }, { key: "1", "label": "Y", "value": Math.round(ep.anchorY), "min": -10000, "max": 10000, "step": 1, "onChange": (pxY) =>
+                                patchEndpoint({
+                                    anchorY: Math.round(pxY),
+                                }) }]}
+                            />
                             <details className="pt-1">
                                 <summary className="cursor-pointer list-none text-[10px] text-[#a1a1aa] hover:text-white">Depth</summary>
                                 <div className="pt-1">                                <ScrubInput
@@ -358,8 +343,13 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
 
                         {/* Zoom & Roll */}
                         <div className="grid grid-cols-2 gap-1.5">
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] text-[#a1a1aa] block font-medium">Zoom</span>
+                            <InspectorRow
+                                unstyled
+                                className="space-y-1.5"
+                                labelTag="span"
+                                labelClassName="text-[10px] text-[#a1a1aa] block font-medium"
+                                label={<>Zoom</>}
+                            >
                                 <ScrubInput
                                     label="⊕"
                                     value={Number(ep.zoom.toFixed(2))}
@@ -371,9 +361,14 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     onChange={(zoom) => patchEndpoint({ zoom: Number(zoom.toFixed(2)) })}
                                 />
 
-                            </div>
-                            <div className="space-y-1.5">
-                                <span className="text-[10px] text-[#a1a1aa] block font-medium">Roll</span>
+                            </InspectorRow>
+                            <InspectorRow
+                                unstyled
+                                className="space-y-1.5"
+                                labelTag="span"
+                                labelClassName="text-[10px] text-[#a1a1aa] block font-medium"
+                                label={<>Roll</>}
+                            >
                                 <ScrubInput
                                     label="∟"
                                     value={ep.roll}
@@ -383,14 +378,18 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     unit="°"
                                     onChange={(roll) => patchEndpoint({ roll })}
                                 />
-                            </div>
+                            </InspectorRow>
                         </div>
 
                         {/* Orbit & Tilt */}
-                        <div className="space-y-1.5">
-                            <span className="text-[10px] text-[#a1a1aa] block font-medium">
-                                Orbit &amp; tilt
-                            </span>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-1.5"
+                            labelTag="span"
+                            labelClassName="text-[10px] text-[#a1a1aa] block font-medium"
+                            label={<>Orbit &amp; tilt
+                            </>}
+                        >
                             <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
                                     label="◎"
@@ -411,7 +410,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                     onChange={(tilt) => patchEndpoint({ tilt })}
                                 />
                             </div>
-                        </div>
+                        </InspectorRow>
 
                         {/* Lens & Focal Length */}
                         <details className="space-y-1.5">
@@ -453,8 +452,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             </div>
                         </details>
                     </div>
-                )}
-            </div>
+                </InspectorDisclosure>
         );
     };
 
@@ -462,8 +460,13 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
         <div className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
             <div className="px-3.5 py-2.5 flex items-center justify-between bg-emerald-950/20">
                 <div className="flex items-center gap-1">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Delete Camera Move"
+                        icon={<>
+                            <X className="w-3.5 h-3.5" />
+                        </>}
                         onClick={() => {
                             updateShot(activeShotId, (s) => ({
                                 ...s,
@@ -474,11 +477,8 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             onDone();
                         }}
                         title="Delete Camera Move"
-                        aria-label="Delete Camera Move"
                         className="p-1.5 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
-                    >
-                        <X className="w-3.5 h-3.5" />
-                    </button>
+                    />
                     <button
                         type="button"
                         onClick={onDone}
@@ -506,29 +506,33 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         {(() => {
                             const selectedMovementId = getMovementPresetIdByLabel(activeCameraBlock.label);
                             return selectedMovementId ? (
-                                <button
-                                    type="button"
-                                    aria-label="Remove applied camera movement preset"
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label="Remove applied camera movement preset"
+                                    icon={<>
+                                        <Minus className="w-3.5 h-3.5" />
+                                    </>}
                                     title="Remove applied preset"
                                     onClick={() => updateCameraBlock(activeCameraBlock.id, (cb) => {
                                         const defaults = createDefaultCameraBlock(cb.id, cb.startMs, cb.durationMs, cb.fromFramingId, cb.toFramingId, 'Custom Move');
                                         return { ...cb, label: defaults.label, mode: defaults.mode, from: defaults.from, to: defaults.to, shake: defaults.shake };
                                     })}
                                     className="h-6 w-6 rounded-md flex items-center justify-center bg-[#222226] border border-white/10 text-[#a1a1aa] hover:text-rose-300 hover:border-rose-400/40 cursor-pointer"
-                                >
-                                    <Minus className="w-3.5 h-3.5" />
-                                </button>
+                                />
                             ) : null;
                         })()}
-                        <button
-                            type="button"
-                            aria-label="Add camera movement preset"
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label="Add camera movement preset"
+                            icon={<>
+                                <Plus className="w-3.5 h-3.5" />
+                            </>}
                             aria-expanded={movementFlyoutOpen}
                             onClick={() => setMovementFlyoutOpen((open) => !open)}
                             className={`h-6 w-6 rounded-md flex items-center justify-center border cursor-pointer transition-colors ${movementFlyoutOpen ? 'bg-sky-500 text-black border-sky-400' : 'bg-[#222226] border-white/10 text-[#a1a1aa] hover:text-white hover:border-white/20'}`}
-                        >
-                            <Plus className="w-3.5 h-3.5" />
-                        </button>
+                        />
                     </div>
                 </div>
 
@@ -565,34 +569,15 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                 )}
 
                 <div className="space-y-1 pt-1 border-t border-white/5">
-                    <div className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]" role="radiogroup" aria-label="Camera move mode">
-                        {(
-                            [
-                                { id: 'dolly', label: 'Dolly' },
-                                { id: 'zoom', label: 'Zoom' },
-                                { id: 'dollyzoom', label: 'Warp' },
-                            ] as const
-                        ).map((m) => (
-                            <button
-                                key={m.id}
-                                type="button"
-                                role="radio"
-                                aria-checked={activeCameraBlock.mode === m.id}
-                                onClick={() =>
-                                    updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                        ...cb,
-                                        mode: m.id,
-                                    }))
-                                }
-                                className={`py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${activeCameraBlock.mode === m.id
-                                        ? 'bg-[#2a2a30] text-white border border-white/15 shadow'
-                                        : 'text-[#a1a1aa] hover:text-white'
-                                    }`}
-                            >
-                                {m.label}
-                            </button>
-                        ))}
-                    </div>
+                    <SegmentedControl
+                        unstyled
+                        ariaLabel="Camera move mode"
+                        value={activeCameraBlock.mode}
+                        onChange={mode => updateCameraBlock(activeCameraBlock.id, cb => ({ ...cb, mode }))}
+                        className="grid grid-cols-3 gap-1 bg-[#161619] p-1 rounded-xl border border-white/[0.06]"
+                        buttonClassName={(_, selected) => `py-1.5 rounded-lg text-[11px] font-medium cursor-pointer transition ${selected ? 'bg-[#2a2a30] text-white border border-white/15 shadow' : 'text-[#a1a1aa] hover:text-white'}`}
+                        options={[{ value: 'dolly', label: 'Dolly' }, { value: 'zoom', label: 'Zoom' }, { value: 'dollyzoom', label: 'Warp' }]}
+                    />
                 </div>
             </div>
 
@@ -601,8 +586,13 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                 <span className="text-[11px] font-medium text-[#e4e4e7] block">
                     Shake
                 </span>
-                <div className="space-y-1.5">
-                    <span className="text-[10px] text-[#a1a1aa] block font-medium">Amount</span>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="span"
+                    labelClassName="text-[10px] text-[#a1a1aa] block font-medium"
+                    label={<>Amount</>}
+                >
                     <div className="grid grid-cols-2 gap-1.5">
                         <ScrubInput
                             label="From"
@@ -664,7 +654,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         </details>
 
                     </div>
-                </div>
+                </InspectorRow>
             </div>
 
             {/* 5. TIMING SECTION: Start & length + Easing */}
@@ -673,42 +663,35 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                     Timing
                 </span>
 
-                <div className="space-y-1.5">
-                    <span className="text-[10px] text-[#a1a1aa] block">Start &amp; length</span>
-                    <div className="grid grid-cols-2 gap-1.5">
-                        <ScrubInput
-                            label="Start"
-                            value={activeCameraBlock.startMs}
-                            min={0}
-                            max={30000}
-                            step={50}
-                            unit="ms"
-                            onChange={(startMs) =>
-                                updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                    ...cb,
-                                    startMs,
-                                }))
-                            }
-                        />
-                        <ScrubInput
-                            label="Length"
-                            value={activeCameraBlock.durationMs}
-                            min={100}
-                            max={10000}
-                            step={50}
-                            unit="ms"
-                            onChange={(durationMs) =>
-                                updateCameraBlock(activeCameraBlock.id, (cb) => ({
-                                    ...cb,
-                                    durationMs,
-                                }))
-                            }
-                        />
-                    </div>
-                </div>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="span"
+                    labelClassName="text-[10px] text-[#a1a1aa] block"
+                    label={<>Start &amp; length</>}
+                >
+                    <AnimationTimingFields
+                        className="grid grid-cols-2 gap-1.5"
+                        start={{"label": "Start", "value": activeCameraBlock.startMs, "min": 0, "max": 30000, "step": 50, "unit": "ms", "onChange": (startMs) =>
+                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                            ...cb,
+                            startMs,
+                        }))}}
+                        duration={{"label": "Length", "value": activeCameraBlock.durationMs, "min": 100, "max": 10000, "step": 50, "unit": "ms", "onChange": (durationMs) =>
+                        updateCameraBlock(activeCameraBlock.id, (cb) => ({
+                            ...cb,
+                            durationMs,
+                        }))}}
+                    />
+                </InspectorRow>
 
-                <div className="space-y-1.5">
-                    <span className="text-[10px] text-[#a1a1aa] block">Easing</span>
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="span"
+                    labelClassName="text-[10px] text-[#a1a1aa] block"
+                    label={<>Easing</>}
+                >
                     <EasingControl
                         value={activeCameraBlock.easing}
                         onChange={(easing) =>
@@ -725,7 +708,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                         popoverButtonLabel="Easing settings"
                         showInlineTuning
                     />
-                </div>
+                </InspectorRow>
             </div>
         </div>
     );

@@ -1,3 +1,5 @@
+import { NativeInspectorDisclosure } from '../../../ui/InspectorDisclosure';
+import { CheckboxRow } from '../../../ui/CheckboxRow';
 import { ChevronRight, Maximize2, Minus, PanelsTopLeft, Plus, Sun } from 'lucide-react';
 import React from 'react';
 import {
@@ -116,7 +118,11 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
             </div>
 
 
-            <details className="object-design-screen"><summary><Maximize2 /><span>Screen</span><span className="screen-fit-value">{settings.screenFit === 'stretch' ? 'Stretch' : settings.screenFit === 'contain' ? 'Fit' : 'Fill'}</span><ChevronRight /></summary><div className="object-design-screen-fields">          {/* Screen Fit & Letterbox Backing */}
+            <NativeInspectorDisclosure
+                className="object-design-screen"
+                summaryProps={{}}
+                summary={<><Maximize2 /><span>Screen</span><span className="screen-fit-value">{settings.screenFit === 'stretch' ? 'Stretch' : settings.screenFit === 'contain' ? 'Fit' : 'Fill'}</span><ChevronRight /></>}
+            ><div className="object-design-screen-fields">          {/* Screen Fit & Letterbox Backing */}
                 <div className="grid grid-cols-[1fr_auto] gap-2 items-center">
                     <label className="grid grid-cols-[72px_1fr] gap-2 items-center text-[10px] text-[#a1a1aa]">
                         <span>Screen fit</span>
@@ -189,15 +195,23 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                     </div>
                 </div>
 
-            </div></details>
+            </div></NativeInspectorDisclosure>
             <InspectorRow label="Gloss & reflection" stacked><div className="object-design-pair object-design-action-space"><ScrubInput label={<Sun />} aria-label="Gloss" value={Math.round(settings.gloss * 100)} min={0} max={100} unit=" %" onChange={(v) => update({ gloss: v / 100 })} /><ScrubInput label={<PanelsTopLeft />} aria-label="Reflection" value={Math.round(settings.reflection * 100)} min={0} max={100} unit=" %" onChange={(v) => update({ reflection: v / 100 })} /></div></InspectorRow>
-            <details className="group rounded-lg bg-[#17171a] border border-white/[0.06]">
-                <summary className="px-2.5 py-2 list-none flex items-center justify-between text-[10px] text-[#a1a1aa] cursor-pointer select-none">
+            <NativeInspectorDisclosure
+                className="group rounded-lg bg-[#17171a] border border-white/[0.06]"
+                summaryProps={{"className": "px-2.5 py-2 list-none flex items-center justify-between text-[10px] text-[#a1a1aa] cursor-pointer select-none"}}
+                summary={<>
                     <span>Hardware &amp; Optical Details</span>
                     <span className="text-[#71717a] group-open:rotate-180 transition-transform">⌄</span>
-                </summary>
-                <div className="px-2.5 pb-2.5 space-y-2">          <div className="space-y-1">
-                    <span className="block text-[10px] text-[#a1a1aa]">Finish presets</span>
+                </>}
+            >
+                <div className="px-2.5 pb-2.5 space-y-2">          <InspectorRow
+                    unstyled
+                    className="space-y-1"
+                    labelTag="span"
+                    labelClassName="block text-[10px] text-[#a1a1aa]"
+                    label={<>Finish presets</>}
+                >
                     <div className="flex flex-wrap gap-1">
                         {DEVICE_FINISH_PRESETS.map((preset) => {
                             const isSelected = settings.frameColor.toLowerCase() === preset.color.toLowerCase();
@@ -225,7 +239,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                             );
                         })}
                     </div>
-                </div>
+                </InspectorRow>
 
                     <div className={fixed && settings.deviceId !== 'macbook-pro' && settings.deviceId !== 'macbook-pro-16' && settings.deviceId !== 'studio-display' && settings.deviceId !== 'studio-display-27' ? 'grid grid-cols-1 gap-1.5' : 'grid grid-cols-2 gap-1.5'}>
                         {/* Scale & Bezel */}
@@ -317,35 +331,29 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                         </label>
                     )}
 
-                    <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                        <span>Physical buttons</span>
-                        <input
-                            type="checkbox"
-                            checked={settings.showSideButtons}
-                            onChange={(event) => update({ showSideButtons: event.target.checked })}
-                            className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
-                        />
-                    </label>
+                    <CheckboxRow
+                        label={<>Physical buttons</>}
+                        rowClassName="flex items-center justify-between text-[10px] text-[#a1a1aa]"
+                        checked={settings.showSideButtons}
+                        onChange={(event) => update({ showSideButtons: event.target.checked })}
+                        className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
+                    />
 
-                    <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                        <span>Rear camera system</span>
-                        <input
-                            type="checkbox"
-                            checked={settings.showRearCameras}
-                            onChange={(event) => update({ showRearCameras: event.target.checked })}
-                            className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
-                        />
-                    </label>
+                    <CheckboxRow
+                        label={<>Rear camera system</>}
+                        rowClassName="flex items-center justify-between text-[10px] text-[#a1a1aa]"
+                        checked={settings.showRearCameras}
+                        onChange={(event) => update({ showRearCameras: event.target.checked })}
+                        className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
+                    />
 
-                    <label className="flex items-center justify-between text-[10px] text-[#a1a1aa]">
-                        <span>Studio contact shadow</span>
-                        <input
-                            type="checkbox"
-                            checked={settings.shadowEnabled}
-                            onChange={(event) => update({ shadowEnabled: event.target.checked })}
-                            className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
-                        />
-                    </label>
+                    <CheckboxRow
+                        label={<>Studio contact shadow</>}
+                        rowClassName="flex items-center justify-between text-[10px] text-[#a1a1aa]"
+                        checked={settings.shadowEnabled}
+                        onChange={(event) => update({ shadowEnabled: event.target.checked })}
+                        className="w-3.5 h-3.5 accent-[#0088ff] cursor-pointer"
+                    />
 
                     {settings.shadowEnabled && (
                         <div className="grid grid-cols-2 gap-1.5">
@@ -372,7 +380,7 @@ export const DeviceFrameSection: React.FC<DeviceFrameSectionProps> = ({ layer, o
                         </div>
                     )}
                 </div>
-            </details>
+            </NativeInspectorDisclosure>
 
         </div>}
     </section>);

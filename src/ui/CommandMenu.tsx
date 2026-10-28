@@ -1,6 +1,9 @@
+import { ShortcutKey } from './ShortcutKey';
+import { SearchField } from './SearchField';
+import { ModalShell } from './ModalShell';
 // src/ui/CommandMenu.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search } from 'lucide-react';
+
 import { formatShortcut } from '../utils/shortcuts';
 
 export interface CommandItem {
@@ -96,23 +99,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command Menu"
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-      onClick={onClose}
+    <ModalShell
+        backdropProps={{"role": "dialog", "aria-modal": "true", "aria-label": "Command Menu", "className": "fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150", "onClick": onClose}}
+        surfaceProps={{"className": "w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
     >
-      <div
-        className="w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
-      >
         {/* Search Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08] bg-[#18181f]">
-          <Search className="w-4 h-4 text-zinc-400 shrink-0" />
-          <input
-            ref={inputRef}
+        <SearchField
+            containerClassName="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08] bg-[#18181f]"
+            iconClassName="w-4 h-4 text-zinc-400 shrink-0"
+            inputRef={inputRef}
             type="text"
             value={query}
             onChange={(e) => {
@@ -123,11 +118,9 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
             aria-autocomplete="list"
             aria-controls="command-list"
-          />
-          <kbd className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
+        ><ShortcutKey className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
             Esc
-          </kbd>
-        </div>
+          </ShortcutKey></SearchField>
 
         {/* Results List */}
         <div
@@ -194,7 +187,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                       {cmd.category}
                     </span>
                     {cmd.shortcut && cmd.shortcut.length > 0 && (
-                      <kbd
+                      <ShortcutKey
                         className={`font-mono text-[11px] px-1.5 py-0.5 rounded border ${
                           isSelected
                             ? 'bg-white/20 text-white border-white/30'
@@ -202,7 +195,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                         }`}
                       >
                         {formatShortcut(cmd.shortcut)}
-                      </kbd>
+                      </ShortcutKey>
                     )}
                   </div>
                 </div>
@@ -215,16 +208,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#121216] text-[11px] text-zinc-400">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</kbd>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↓</kbd>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</ShortcutKey>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↓</ShortcutKey>
             <span>Execute:</span>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">Enter</kbd>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">Enter</ShortcutKey>
           </div>
           <span className="font-mono text-[11px] tabular-nums">
             {filteredCommands.length} command{filteredCommands.length === 1 ? '' : 's'}
           </span>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 };

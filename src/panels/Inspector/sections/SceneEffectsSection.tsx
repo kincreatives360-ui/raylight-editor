@@ -1,3 +1,5 @@
+import { MenuSurface, MenuItem } from '../../../ui/Menu';
+import { IconButton } from '../../../ui/primitives';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { useState, useMemo } from 'react';
 import type { Shot, EffectKey } from '../../../model/types';
@@ -161,31 +163,37 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
           </span>
         </div>
         <div className="flex items-center gap-1 relative">
-          <button
-            type="button"
-            title="Add scene effect"
-            onClick={() => setAddMenuOpen((v) => !v)}
-            className={`w-6 h-6 rounded flex items-center justify-center transition cursor-pointer ${
-              addMenuOpen ? 'bg-white/20 text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Add scene effect"
+              icon={<>
+                <Plus className="w-3.5 h-3.5" />
+              </>}
+              title="Add scene effect"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              className={`w-6 h-6 rounded flex items-center justify-center transition cursor-pointer ${
+                addMenuOpen ? 'bg-white/20 text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/10'
+              }`}
+          />
 
           {/* Add Effect Flyout Menu */}
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/15 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right">
+            <MenuSurface
+                className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/15 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right"
+            >
               <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
                 Add Effect
               </div>
               {order.map((key) => {
                 const isAlreadyAdded = appliedKeys.includes(key);
                 return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => addEffect(key)}
-                    className="w-full h-7 px-2 rounded-lg flex items-center gap-2 hover:bg-white/10 text-left transition cursor-pointer group"
+                  <MenuItem
+                      unstyled
+                      key={key}
+                      type="button"
+                      onClick={() => addEffect(key)}
+                      className="w-full h-7 px-2 rounded-lg flex items-center gap-2 hover:bg-white/10 text-left transition cursor-pointer group"
                   >
                     <div className="text-[#a1a1aa] group-hover:text-white">
                       <EffectIcon effectKey={key} className="w-3.5 h-3.5" />
@@ -194,10 +202,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                     {isAlreadyAdded && (
                       <span className="text-[10px] text-[#71717a] font-medium">Added</span>
                     )}
-                  </button>
+                  </MenuItem>
                 );
               })}
-            </div>
+            </MenuSurface>
           )}
         </div>
       </div>
@@ -224,15 +232,11 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                   </div>
 
                   {/* Center Pill Button */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedKey(isExpanded ? null : key)}
-                    className={`flex-1 h-7 px-3 rounded-full border border-white/[0.08] flex items-center justify-between text-[11px] transition cursor-pointer ${
+                  <button type="button"  onClick={() => setExpandedKey(isExpanded ? null : key)} className={`flex-1 h-7 px-3 rounded-full border border-white/[0.08] flex items-center justify-between text-[11px] transition cursor-pointer ${
                       isExpanded
                         ? 'bg-[#222226] text-white shadow-xs border-white/20'
                         : 'bg-[#18181b] hover:bg-[#222226] text-white'
-                    }`}
-                  >
+                    }`}>
                     <span className="font-medium truncate">{EFFECT_NAMES[key]}</span>
                     <ChevronDown
                       className={`w-3 h-3 text-[#71717a] transition-transform ${
@@ -242,32 +246,38 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                   </button>
 
                   {/* Visibility Eye Button */}
-                  <button
-                    type="button"
-                    onClick={() => setValue(key, 'enabled', !isEnabled)}
-                    title={isEnabled ? 'Mute effect' : 'Enable effect'}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
-                      isEnabled
-                        ? 'text-white hover:bg-white/10'
-                        : 'text-[#52525b] hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {isEnabled ? (
-                      <Eye className="w-3.5 h-3.5 text-white" />
-                    ) : (
-                      <EyeOff className="w-3.5 h-3.5 text-[#71717a]" />
-                    )}
-                  </button>
+                  <IconButton
+                      unstyled
+                      tooltip={false}
+                      label={isEnabled ? 'Mute effect' : 'Enable effect'}
+                      icon={<>
+                        {isEnabled ? (
+                          <Eye className="w-3.5 h-3.5 text-white" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5 text-[#71717a]" />
+                        )}
+                      </>}
+                      onClick={() => setValue(key, 'enabled', !isEnabled)}
+                      title={isEnabled ? 'Mute effect' : 'Enable effect'}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                        isEnabled
+                          ? 'text-white hover:bg-white/10'
+                          : 'text-[#52525b] hover:text-white hover:bg-white/10'
+                      }`}
+                  />
 
                   {/* Minus (Remove) Button */}
-                  <button
-                    type="button"
-                    onClick={() => removeEffect(key)}
-                    title={`Remove ${EFFECT_NAMES[key]}`}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#71717a] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
+                  <IconButton
+                      unstyled
+                      tooltip={false}
+                      label={`Remove ${EFFECT_NAMES[key]}`}
+                      icon={<>
+                        <Minus className="w-3.5 h-3.5" />
+                      </>}
+                      onClick={() => removeEffect(key)}
+                      title={`Remove ${EFFECT_NAMES[key]}`}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-[#71717a] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                  />
                 </div>
 
                 {/* Expanded Parameter Inputs Card */}

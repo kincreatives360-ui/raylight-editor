@@ -1,3 +1,6 @@
+import { IconButton } from '../../ui/primitives';
+import { TimelineDragPreview } from './TimelineDragPreview';
+import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
 import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
@@ -12,55 +15,8 @@ import { PlayheadOverlay } from './PlayheadOverlay';
 import { EasingPopover } from './EasingPopover';
 import { TimelineEasingCurve } from './TimelineEasingCurve';
 import { getShotTimelineWidth } from './timelineBarGeometry';
-import { generateWaveformPeaks } from '../../engine/audioEngine';
-
-const AudioWaveform: React.FC<{
-    clip: AudioClip;
-    width: number;
-    muted?: boolean;
-}> = React.memo(
-    ({ clip, width, muted }) => {
-        const barCount = Math.max(12, Math.min(96, Math.floor(width / 5)));
-        const peaks = useMemo(
-            () => generateWaveformPeaks(clip, barCount),
-            [clip, barCount]
-        );
-
-        return (
-            <svg
-                className="absolute inset-0 w-full h-full pointer-events-none opacity-40 overflow-hidden"
-                preserveAspectRatio="none"
-                viewBox={`0 0 ${barCount * 4} 24`}
-            >
-                {peaks.map((p, idx) => {
-                    const barHeight = Math.max(2, p * 20);
-                    const y = (24 - barHeight) / 2;
-                    return (
-                        <rect
-                            key={idx}
-                            x={idx * 4 + 1}
-                            y={y}
-                            width={2.2}
-                            height={barHeight}
-                            rx={1}
-                            fill={muted ? '#94a3b8' : '#38bdf8'}
-                        />
-                    );
-                })}
-            </svg>
-        );
-    },
-    (prev, next) => {
-        if (prev.muted !== next.muted) return false;
-        if (prev.clip.id !== next.clip.id) return false;
-        if (prev.clip.durationMs !== next.clip.durationMs) return false;
-        if (prev.clip.offsetMs !== next.clip.offsetMs) return false;
-        if (prev.clip.dataUrl !== next.clip.dataUrl) return false;
-        const prevBars = Math.max(12, Math.min(96, Math.floor(prev.width / 5)));
-        const nextBars = Math.max(12, Math.min(96, Math.floor(next.width / 5)));
-        return prevBars === nextBars;
-    }
-);
+import { AudioClipBar } from './AudioClipBar';
+import { TransitionPill } from './TransitionPill';
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -1373,28 +1329,30 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             {/* 1. TOP CONTROL ROW (h-8 = 32px) */}
             <div className="h-8 px-4 flex items-center justify-between shrink-0">
                 <div className="flex items-center gap-3">
-                    <button
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label={isPlaying ? 'Pause playback' : 'Start playback'}
                         type="button"
                         onClick={togglePlay}
-                        aria-label={isPlaying ? 'Pause playback' : 'Start playback'}
                         title="Play / Pause (Space)"
                         className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
-                    >
-                        {isPlaying ? (
+                        icon={isPlaying ? (
                             <Pause className="w-2.5 h-2.5" />
                         ) : (
                             <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
                         )}
-                    </button>
-                    <button
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Split clip at playhead"
                         type="button"
                         onClick={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
-                        aria-label="Split clip at playhead"
                         title="Split Clip at Playhead (S)"
                         className="w-5 h-5 rounded-full border border-white/20 hover:border-white/60 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
-                    >
-                        <Scissors className="w-2.5 h-2.5" />
-                    </button>
+                        icon={<Scissors className="w-2.5 h-2.5" />}
+                    />
                     <TimelineTimecode totalDurationMs={totalDurationMs} />
                 </div>
 
@@ -1513,7 +1471,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     {(project.audio?.clips?.length || 0) > 0 && (
                         <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
                             <span className="absolute left-2 top-1 text-[10px] uppercase tracking-wider font-semibold text-slate-400 z-10">Media</span>
-                            <button
+                            <IconButton
+                                unstyled
+                                tooltip={false}
+                                label={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                 type="button"
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
@@ -1522,13 +1483,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 }}
                                 title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
                                 className="absolute right-2 top-1 text-[10px] text-slate-400 hover:text-white z-10 flex items-center gap-1 cursor-pointer"
-                            >
-                                {project.audio?.muted ? (
+                                icon={project.audio?.muted ? (
                                     <VolumeX className="w-3.5 h-3.5 text-rose-400" />
                                 ) : (
                                     <Volume2 className="w-3.5 h-3.5 text-slate-300" />
                                 )}
-                            </button>
+                            />
                             {(project.audio?.clips || []).map((clip) => {
                                 const clipStart = clip.startMs;
                                 const clipEnd = clip.startMs + clip.durationMs;
@@ -1541,107 +1501,21 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                     const left = (visibleStart - shotStart) * pxPerMs;
                                     const width = Math.max(18, (visibleEnd - visibleStart) * pxPerMs);
                                     return (
-                                        <div
-                                            key={clip.id}
-                                            title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
-                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'move')}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setCurrentTimeMs(visibleStart);
-                                            }}
-                                            style={{ left: `${left}px`, width: `${width}px` }}
-                                            className={`group/audioclip absolute top-1 bottom-1 rounded-md border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none overflow-hidden ${
-                                                clip.muted || project.audio?.muted
-                                                    ? 'border-slate-600/50 bg-slate-800/80 text-slate-300'
-                                                    : 'border-sky-500/50 bg-sky-950/80 text-sky-100 hover:border-sky-400'
-                                            }`}
-                                        >
-                                            {/* Procedural SVG Waveform */}
-                                            <AudioWaveform clip={clip} width={width} muted={clip.muted || project.audio?.muted} />
-
-                                            <span
-                                                onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
-                                                title="Trim audio start"
-                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-l z-10 transition-colors"
-                                            />
-                                            <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
-                                                <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
-                                                <span className="truncate drop-shadow-sm">{clip.name}</span>
-                                                <span className="text-[10px] font-mono text-sky-300/70 hidden sm:inline">
-                                                    {(clip.durationMs / 1000).toFixed(1)}s
-                                                </span>
-                                            </div>
-                                            <button
-                                                type="button"
-                                                onPointerDown={(e) => e.stopPropagation()}
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    deleteAudioClip(clip.id);
-                                                }}
-                                                title="Delete audio clip"
-                                                className="w-4 h-4 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-20 shrink-0"
-                                            >
-                                                &times;
-                                            </button>
-                                            <span
-                                                onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
-                                                title="Trim audio end"
-                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-r z-10 transition-colors"
-                                            />
-                                        </div>
+                                        <AudioClipBar key={clip.id} clip={clip} left={left} width={width}
+                                            muted={clip.muted || project.audio?.muted}
+                                            onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
+                                            onSeek={() => setCurrentTimeMs(visibleStart)}
+                                            onDelete={() => deleteAudioClip(clip.id)} />
                                     );
                                 }
                                 const left = Math.max(0, clipStart) * pxPerMs;
                                 const width = Math.max(18, clip.durationMs * pxPerMs);
                                 return (
-                                    <div
-                                        key={clip.id}
-                                        title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
-                                        onPointerDown={(e) => startAudioClipDrag(e, clip, 'move')}
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            setCurrentTimeMs(Math.max(0, clipStart));
-                                        }}
-                                        style={{ left: `${left}px`, width: `${width}px` }}
-                                        className={`group/audioclip absolute top-1 bottom-1 rounded-md border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none overflow-hidden ${
-                                            clip.muted || project.audio?.muted
-                                                ? 'border-slate-600/50 bg-slate-800/80 text-slate-300'
-                                                : 'border-sky-500/50 bg-sky-950/80 text-sky-100 hover:border-sky-400'
-                                        }`}
-                                    >
-                                        {/* Procedural SVG Waveform */}
-                                        <AudioWaveform clip={clip} width={width} muted={clip.muted || project.audio?.muted} />
-
-                                        <span
-                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'left')}
-                                            title="Trim audio start"
-                                            className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-l z-10 transition-colors"
-                                        />
-                                        <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
-                                            <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
-                                            <span className="truncate drop-shadow-sm">{clip.name}</span>
-                                            <span className="text-[10px] font-mono text-sky-300/70 hidden sm:inline">
-                                                {(clip.durationMs / 1000).toFixed(1)}s
-                                            </span>
-                                        </div>
-                                        <button
-                                            type="button"
-                                            onPointerDown={(e) => e.stopPropagation()}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                deleteAudioClip(clip.id);
-                                            }}
-                                            title="Delete audio clip"
-                                            className="w-4 h-4 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-20 shrink-0"
-                                        >
-                                            &times;
-                                        </button>
-                                        <span
-                                            onPointerDown={(e) => startAudioClipDrag(e, clip, 'right')}
-                                            title="Trim audio end"
-                                            className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/10 hover:bg-sky-400/80 rounded-r z-10 transition-colors"
-                                        />
-                                    </div>
+                                    <AudioClipBar key={clip.id} clip={clip} left={left} width={width}
+                                        muted={clip.muted || project.audio?.muted}
+                                        onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
+                                        onSeek={() => setCurrentTimeMs(Math.max(0, clipStart))}
+                                        onDelete={() => deleteAudioClip(clip.id)} />
                                 );
                             })}
                         </div>
@@ -1784,13 +1658,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 ? 'WARP'
                                                 : cb.mode.toUpperCase();
                                         return (
-                                            <div
+                                            <TimelineRangeBar
                                                 key={cb.id}
                                                 data-cam-pill="true"
                                                 onPointerDown={(e) =>
                                                     startCameraBlockDrag(e, activeShot, cb, 'move')
                                                 }
-                                                style={{ left: `${left}px`, width: `${width}px` }}
+                                                left={left} width={width}
                                                 title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
                                                 className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
                                                         ? 'border-emerald-300 bg-gradient-to-b from-[#073b28]/95 to-[#061b13]/95 text-emerald-100 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]'
@@ -1798,19 +1672,17 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     }`}
                                             >
                                                 <TimelineEasingCurve easing={cb.easing} color="#18c988" />
-                                                <span
+                                                <TrimHandle side="left"
                                                     onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'left')
                                                     }
-                                                    className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-l-full"
-                                                />
-                                                <span
+                                                    className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full" />
+                                                <TrimHandle side="right"
                                                     onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'right')
                                                     }
-                                                    className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-emerald-300 rounded-r-full"
-                                                />
-                                            </div>
+                                                    className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full" />
+                                            </TimelineRangeBar>
                                         );
                                     })}
                             </div>
@@ -1823,7 +1695,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         const left = lb.startMs * pxPerMs;
                                         const width = Math.max(36, lb.durationMs * pxPerMs);
                                         return (
-                                            <div
+                                            <TimelineRangeBar
                                                 key={lb.id}
                                                 data-light-pill="true"
                                                 onClick={(e) => {
@@ -1834,7 +1706,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 onPointerDown={(e) =>
                                                     startLightBlockDrag(e, activeShot, lb, 'move')
                                                 }
-                                                style={{ left: `${left}px`, width: `${width}px` }}
+                                                left={left} width={width}
                                                 title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
                                                 className={`group/light absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
                                                         ? 'border-[#ff402f] bg-gradient-to-b from-[#3a1713]/95 to-[#1e0e0c]/95 text-red-100 shadow-[inset_0_0_20px_rgba(248,62,43,0.12)]'
@@ -1842,7 +1714,10 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     }`}
                                             >
                                                 <TimelineEasingCurve easing={lb.easing} color="#ff493b" />
-                                                <button
+                                                <IconButton
+                                                    unstyled
+                                                    tooltip={false}
+                                                    label="Delete light block"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         updateShot(activeShot.id, (s) => ({
@@ -1857,22 +1732,19 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     }}
                                                     title="Delete light block"
                                                     className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1"
-                                                >
-                                                    &times;
-                                                </button>
-                                                <span
+                                                    icon={<>&times;</>}
+                                                />
+                                                <TrimHandle side="left"
                                                     onPointerDown={(e) =>
                                                         startLightBlockDrag(e, activeShot, lb, 'left')
                                                     }
-                                                    className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-l-full"
-                                                />
-                                                <span
+                                                    className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full" />
+                                                <TrimHandle side="right"
                                                     onPointerDown={(e) =>
                                                         startLightBlockDrag(e, activeShot, lb, 'right')
                                                     }
-                                                    className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize bg-white/20 hover:bg-amber-300 rounded-r-full"
-                                                />
-                                            </div>
+                                                    className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full" />
+                                            </TimelineRangeBar>
                                         );
                                     })}
                                 </div>
@@ -1918,49 +1790,34 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         <div key={layer.id} style={{ order: 10 }} className="space-y-0.5">
                                             {/* Main layer bars use the same 40px track height as the reference. */}
                                             <div className="h-10 relative flex items-center">
-                                                <div
+                                                <TimelineRangeBar
                                                     onPointerDown={(e) =>
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
-                                                    style={{ left: `${left}px`, width: `${width}px` }}
+                                                    left={left} width={width}
                                                     aria-label={`${layer.name} layer bar`}
                                                     title={`${layer.name} · ${(layer.outMs - layer.inMs) / 1000}s`}
                                                     className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border cursor-grab active:cursor-grabbing transition ${barStyle} ${
                                                         ghostDragPreview?.id === layer.id ? 'opacity-40' : ''
                                                     }`}
                                                 >
-                                                    <span
+                                                    <TrimHandle side="left"
                                                         onPointerDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'in')
                                                         }
                                                         title="Drag left edge to trim layer In point"
-                                                        className="absolute left-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-l-lg"
-                                                    />
-                                                    <span
+                                                        className="w-2.5 hover:bg-white/30 rounded-l-lg" />
+                                                    <TrimHandle side="right"
                                                         onPointerDown={(e) =>
                                                             startLayerBarDrag(e, activeShot, layer, 'out')
                                                         }
                                                         title="Drag right edge to trim layer Out point"
-                                                        className="absolute right-0 top-0 bottom-0 w-2.5 cursor-ew-resize hover:bg-white/30 rounded-r-lg"
-                                                    />
-                                                </div>
+                                                        className="w-2.5 hover:bg-white/30 rounded-r-lg" />
+                                                </TimelineRangeBar>
 
                                                 {/* Dashed Ghost Outline during Layer Drag */}
                                                 {ghostDragPreview && ghostDragPreview.id === layer.id && (
-                                                    <div
-                                                        style={{
-                                                            left: `${ghostDragPreview.startMs * pxPerMs}px`,
-                                                            width: `${Math.max(32, ghostDragPreview.durationMs * pxPerMs)}px`,
-                                                        }}
-                                                        className="absolute top-0.5 bottom-0.5 rounded-lg border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/20 pointer-events-none z-20 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
-                                                    >
-                                                        <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
-                                                            {ghostDragPreview.snapped && <span>🧲</span>}
-                                                            <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
-                                                            <span className="text-white/40">·</span>
-                                                            <span className="text-white/70">{(ghostDragPreview.startMs / 1000).toFixed(2)}s</span>
-                                                        </div>
-                                                    </div>
+                                                    <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={32} variant="layer" />
                                                 )}
                                             </div>
 
@@ -2004,161 +1861,36 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         title="Click anywhere on this row to place an In or Out transition"
                                                         className="h-9 relative flex items-center group"
                                                     >
-                                                        {/* Movable & Resizable IN Pill */}
-                                                        {getTimelineTransition(layer, 'entrance').type !== 'none' && (
-                                                            <div
-                                                                data-preset-pill="in"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (suppressPillClickRef.current === `${layer.id}-entrance`) {
+                                                        {/* Movable & resizable entrance / exit pills */}
+                                                        {(['entrance', 'exit'] as const).map(side => {
+                                                            const transition = getTimelineTransition(layer, side);
+                                                            if (transition.type === 'none') return null;
+                                                            const easing: Easing = transition.easing || { kind: 'preset', name: side === 'entrance' ? 'ease-out' : 'ease-in' };
+                                                            return <TransitionPill key={side} side={side}
+                                                                left={(side === 'entrance' ? entStartMs : extStartMs) * pxPerMs}
+                                                                width={Math.max(28, (side === 'entrance' ? entDurMs : extDurMs) * pxPerMs)}
+                                                                selected={isSelected && selectedPresetType === side}
+                                                                ghosted={ghostDragPreview?.id === `${layer.id}-${side}`}
+                                                                easing={easing}
+                                                                onDrag={(event, edge) => startPresetDrag(event, activeShot, layer, side, edge)}
+                                                                onClick={event => {
+                                                                    event.stopPropagation();
+                                                                    if (suppressPillClickRef.current === `${layer.id}-${side}`) {
                                                                         suppressPillClickRef.current = null;
                                                                         return;
                                                                     }
-                                                                    selectPreset('entrance', layer.id);
+                                                                    selectPreset(side, layer.id);
                                                                     setEasingPopoverTarget({
-                                                                        easing: getTimelineTransition(layer, 'entrance').easing || { kind: 'preset', name: 'ease-out' },
-                                                                        onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'entrance', { easing }));
-                                                                        },
-                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                        easing: transition.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        onChange: next => updateLayer(activeShot.id, layer.id, l => updateTimelineTransition(l, side, { easing: next })),
+                                                                        anchorRect: event.currentTarget.getBoundingClientRect(),
                                                                     });
-                                                                }}
-                                                                onPointerDown={(e) =>
-                                                                    startPresetDrag(
-                                                                        e,
-                                                                        activeShot,
-                                                                        layer,
-                                                                        'entrance',
-                                                                        'move'
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    left: `${entStartMs * pxPerMs}px`,
-                                                                    width: `${Math.max(28, entDurMs * pxPerMs)}px`,
-                                                                }}
-                                                            className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected &&
-                                                                        selectedPresetType === 'entrance'
-                                                                    ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
-                                                                    : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
-                                                                    } ${ghostDragPreview?.id === `${layer.id}-entrance` ? 'opacity-40' : ''}`}
-                                                            >
-                                                                <TimelineEasingCurve
-                                                                    easing={getTimelineTransition(layer, 'entrance').easing || { kind: 'preset', name: 'ease-out' }}
-                                                                    color="#bd70ff"
-                                                                />
-                                                                <span
-                                                                    onPointerDown={(e) =>
-                                                                        startPresetDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            'entrance',
-                                                                            'left'
-                                                                        )
-                                                                    }
-                                                                    title="Drag left edge to adjust In delay & length"
-                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
-                                                                />
-                                                                <span
-                                                                    onPointerDown={(e) =>
-                                                                        startPresetDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            'entrance',
-                                                                            'right'
-                                                                        )
-                                                                    }
-                                                                    title="Drag right edge to resize In duration"
-                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
-                                                                />
-                                                            </div>
-                                                        )}
-
-                                                        {/* Movable & Resizable OUT Pill */}
-                                                        {getTimelineTransition(layer, 'exit').type !== 'none' && (
-                                                            <div
-                                                                data-preset-pill="out"
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (suppressPillClickRef.current === `${layer.id}-exit`) {
-                                                                        suppressPillClickRef.current = null;
-                                                                        return;
-                                                                    }
-                                                                    selectPreset('exit', layer.id);
-                                                                    setEasingPopoverTarget({
-                                                                        easing: getTimelineTransition(layer, 'exit').easing || { kind: 'preset', name: 'ease-out' },
-                                                                        onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'exit', { easing }));
-                                                                        },
-                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
-                                                                    });
-                                                                }}
-                                                                onPointerDown={(e) =>
-                                                                    startPresetDrag(
-                                                                        e,
-                                                                        activeShot,
-                                                                        layer,
-                                                                        'exit',
-                                                                        'move'
-                                                                    )
-                                                                }
-                                                                style={{
-                                                                    left: `${extStartMs * pxPerMs}px`,
-                                                                    width: `${Math.max(28, extDurMs * pxPerMs)}px`,
-                                                                }}
-                                                            className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing transition ${isSelected && selectedPresetType === 'exit'
-                                                                    ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
-                                                                    : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
-                                                                    } ${ghostDragPreview?.id === `${layer.id}-exit` ? 'opacity-40' : ''}`}
-                                                            >
-                                                                <TimelineEasingCurve
-                                                                    easing={getTimelineTransition(layer, 'exit').easing || { kind: 'preset', name: 'ease-in' }}
-                                                                    color="#bd70ff"
-                                                                />
-                                                                <span
-                                                                    onPointerDown={(e) =>
-                                                                        startPresetDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            'exit',
-                                                                            'left'
-                                                                        )
-                                                                    }
-                                                                    title="Drag left edge to resize Out duration"
-                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
-                                                                />
-                                                                <span
-                                                                    onPointerDown={(e) =>
-                                                                        startPresetDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            'exit',
-                                                                            'right'
-                                                                        )
-                                                                    }
-                                                                    title="Drag right edge to adjust Out end point"
-                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
-                                                                />
-                                                            </div>
-                                                        )}
+                                                                }} />;
+                                                        })}
 
                                                         {/* Dashed Ghost Outline during Preset Drag */}
                                                         {ghostDragPreview && (ghostDragPreview.id === `${layer.id}-entrance` || ghostDragPreview.id === `${layer.id}-exit`) && (
-                                                            <div
-                                                                style={{
-                                                                    left: `${ghostDragPreview.startMs * pxPerMs}px`,
-                                                                    width: `${Math.max(28, ghostDragPreview.durationMs * pxPerMs)}px`,
-                                                                }}
-                                                                className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
-                                                            >
-                                                                <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
-                                                                    {ghostDragPreview.snapped && <span>🧲</span>}
-                                                                    <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
-                                                                </div>
-                                                            </div>
+                                                            <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={28} variant="pill" showStart={false} />
                                                         )}
                                                     </div>
 
@@ -2168,7 +1900,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             key={blk.id}
                                                             className="h-9 relative flex items-center"
                                                         >
-                                                            <div
+                                                            <TimelineRangeBar
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (suppressPillClickRef.current === blk.id) {
@@ -2198,13 +1930,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                         'move'
                                                                     )
                                                                 }
-                                                                style={{
-                                                                    left: `${blk.startMs * pxPerMs}px`,
-                                                                    width: `${Math.max(
-                                                                        36,
-                                                                        blk.durationMs * pxPerMs
-                                                                    )}px`,
-                                                                }}
+                                                                left={blk.startMs * pxPerMs} width={Math.max(36, blk.durationMs * pxPerMs)}
                                                                 title={`${blk.label} · ${(blk.durationMs / 1000).toFixed(2)}s · Click to edit easing`}
                                                                 aria-label={`${blk.label} animation bar`}
                                                                 className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition ${selectedBlockId === blk.id
@@ -2213,7 +1939,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     } ${ghostDragPreview?.id === blk.id ? 'opacity-40' : ''}`}
                                                             >
                                                                 <TimelineEasingCurve easing={blk.easing} color="#bd70ff" />
-                                                                <span
+                                                                <TrimHandle side="left"
                                                                     onPointerDown={(e) =>
                                                                         startBlockDrag(
                                                                             e,
@@ -2223,9 +1949,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                             'left'
                                                                         )
                                                                     }
-                                                                    className="absolute left-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-l-full"
-                                                                />
-                                                                <span
+                                                                    className="w-2 bg-white/25 hover:bg-amber-300 rounded-l-full" />
+                                                                <TrimHandle side="right"
                                                                     onPointerDown={(e) =>
                                                                         startBlockDrag(
                                                                             e,
@@ -2235,26 +1960,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                             'right'
                                                                         )
                                                                     }
-                                                                    className="absolute right-0 top-0 bottom-0 w-2 cursor-ew-resize bg-white/25 hover:bg-amber-300 rounded-r-full"
-                                                                />
-                                                            </div>
+                                                                    className="w-2 bg-white/25 hover:bg-amber-300 rounded-r-full" />
+                                                            </TimelineRangeBar>
 
                                                             {/* Dashed Ghost Outline during Block Drag */}
                                                             {ghostDragPreview && ghostDragPreview.id === blk.id && (
-                                                                <div
-                                                                    style={{
-                                                                        left: `${ghostDragPreview.startMs * pxPerMs}px`,
-                                                                        width: `${Math.max(36, ghostDragPreview.durationMs * pxPerMs)}px`,
-                                                                    }}
-                                                                    className="absolute h-4.5 -top-0.5 rounded-full border-2 border-dashed border-[#38bdf8] bg-[#0284c7]/25 pointer-events-none z-30 shadow-sm flex items-center justify-center animate-in fade-in duration-75"
-                                                                >
-                                                                    <div className="absolute -top-5 px-1.5 py-0.5 rounded bg-[#18181b] border border-sky-400/60 text-sky-300 font-mono tabular-nums text-[11px] shadow-sm flex items-center gap-1 whitespace-nowrap">
-                                                                        {ghostDragPreview.snapped && <span>🧲</span>}
-                                                                        <span>{(ghostDragPreview.durationMs / 1000).toFixed(2)}s</span>
-                                                                        <span className="text-white/40">·</span>
-                                                                        <span className="text-white/70">{(ghostDragPreview.startMs / 1000).toFixed(2)}s</span>
-                                                                    </div>
-                                                                </div>
+                                                                <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={36} variant="pill" />
                                                             )}
                                                         </div>
                                                     ))}

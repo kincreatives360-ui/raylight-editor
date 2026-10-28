@@ -1,3 +1,6 @@
+import { IconButton } from './primitives';
+import { SegmentedControl } from './primitives';
+import { ModalShell } from './ModalShell';
 // src/ui/ExportModal.tsx
 import React from 'react';
 import {
@@ -57,8 +60,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs">
+    <ModalShell
+        backdropProps={{"className": "fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"}}
+        surfaceProps={{"className": "w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs"}}
+    >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#0088ff]/20 border border-[#0088ff]/40 flex items-center justify-center text-[#0088ff]">
@@ -73,13 +78,17 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </p>
             </div>
           </div>
-          <button
-            disabled={exporting}
-            onClick={onClose}
-            className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
-          >
-            <X className="w-4 h-4" />
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Close"
+              icon={<>
+                <X className="w-4 h-4" />
+              </>}
+              disabled={exporting}
+              onClick={onClose}
+              className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
+          />
         </div>
 
         <div className="grid grid-cols-3 gap-2">
@@ -116,32 +125,18 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {/* Scope */}
         <div className="space-y-1.5">
           <span className="text-[11px] text-[#8e8e93] block font-medium">Scope</span>
-          <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-2 gap-0.5">
-            <button
-              type="button"
-              disabled={exporting || exportSettings.format === 'png'}
-              onClick={() => setExportSettings((s) => ({ ...s, scope: 'entire' }))}
-              className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
-                exportSettings.scope === 'entire'
-                  ? 'bg-[#0088ff] text-white shadow-xs'
-                  : 'text-[#8e8e93] hover:text-white'
-              }`}
-            >
-              Entire Timeline ({project.shots.length} shots)
-            </button>
-            <button
-              type="button"
-              disabled={exporting || exportSettings.format === 'png'}
-              onClick={() => setExportSettings((s) => ({ ...s, scope: 'shot' }))}
-              className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-2 ${
-                exportSettings.scope === 'shot'
-                  ? 'bg-[#0088ff] text-white shadow-xs'
-                  : 'text-[#8e8e93] hover:text-white'
-              }`}
-            >
-              Selected Shot ({activeShot.name})
-            </button>
-          </div>
+          <SegmentedControl
+              unstyled
+              ariaLabel="Export scope"
+              value={exportSettings.scope}
+              onChange={scope => setExportSettings(s => ({ ...s, scope }))}
+              className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-2 gap-0.5"
+              buttonClassName={(option, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center${option.value === 'shot' ? ' truncate px-2' : ''} ${selected ? 'bg-[#0088ff] text-white shadow-xs' : 'text-[#8e8e93] hover:text-white'}`}
+              options={[
+                { value: 'entire', label: <>Entire Timeline ({project.shots.length} shots)</>, disabled: exporting || exportSettings.format === 'png' },
+                { value: 'shot', label: <>Selected Shot ({activeShot.name})</>, disabled: exporting || exportSettings.format === 'png' },
+              ]}
+          />
         </div>
 
         {/* Resolution & Frame Rate Grid */}
@@ -285,11 +280,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           >
             {exporting ? 'Cancel' : 'Close'}
           </button>
-          <button
-            disabled={exporting}
-            onClick={onStartExport}
-            className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-semibold cursor-pointer"
-          >
+          <button type="button"  disabled={exporting} onClick={onStartExport} className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-semibold cursor-pointer">
             <Download className="w-3.5 h-3.5" />
             <span>
               {exporting
@@ -298,7 +289,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </span>
           </button>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 };
