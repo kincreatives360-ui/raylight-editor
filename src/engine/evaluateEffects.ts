@@ -103,8 +103,14 @@ export function evaluateEffectsAtTime(
     const deterministicSeed = seedRaw / 4294967296;
 
     const orderedEnabledPasses: ActiveEffectPass[] = [];
+    const configuredOrder = Array.isArray(shot.appliedEffects)
+        ? shot.appliedEffects
+        : [...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER];
+    const effectOrder = [...new Set(configuredOrder)].filter((key): key is EffectKey =>
+        DEFAULT_EFFECTS_ORDER.includes(key)
+    );
 
-    [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])].forEach((key, index) => {
+    effectOrder.forEach((key, index) => {
         const item = effects[key];
         if (!item || !item.enabled) return;
 
