@@ -125,7 +125,7 @@ export function evaluateProjectAtTime(
         }
     }
 
-    const baseShot = shots[shotIndex] || shots[0] || createDefaultShot();
+    const baseShot = shots[shotIndex] || shots[0] || createDefaultShot({ layers: [], cameraBlocks: [] });
     const shotLocalTimeMs = Math.max(
         0,
         Math.min(baseShot.durationMs, clampedGlobalMs - baseShot.startMs)

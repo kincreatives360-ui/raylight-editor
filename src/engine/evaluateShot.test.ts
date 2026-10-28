@@ -11,6 +11,12 @@ import {
 import type { Project, Shot } from '../model/types';
 
 describe('evaluateProjectAtTime', () => {
+  it('uses an empty render shot when a project has no shots', () => {
+    const frame = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [] }, 0);
+
+    expect(frame.activeShot.layers).toEqual([]);
+  });
+
   it('1. Computes active shot, local time, frame number, and progress across multi-shot project', () => {
     const shot1: Shot = createDefaultShot({
       id: 'shot-1',

@@ -282,8 +282,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 shots: proj.shots.map((s) =>
                     s.id === shotId
                         ? typeof updater === 'function'
-                            ? updater(s)
-                            : { ...s, ...updater }
+                            ? { ...updater(s), isPlaceholder: false }
+                            : { ...s, ...updater, isPlaceholder: false }
                         : s
                 ),
             }),
@@ -304,9 +304,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     addLayerToShot: (shotId, kind, customOverrides = {}) => {
         const state = get();
-        const targetShot =
-            state.project.shots.find((s) => s.id === shotId) ||
-            state.project.shots[0];
+        let targetShot = state.project.shots.find((s) => s.id === shotId) || state.project.shots[0];
+        if (!targetShot) targetShot = get().addShot();
         const nextOrder = targetShot.layers.length;
 
         const newLayer: Layer =
@@ -342,7 +341,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                             ...customOverrides,
                         });
 
-        get().updateShot(shotId, (shot) => ({
+        get().updateShot(targetShot.id, (shot) => ({
             ...shot,
             layers: [...shot.layers, newLayer],
         }));
@@ -721,10 +720,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
     // Every new shot created is completely BLANK (no default layers, no default camera move)
     addShot: () => {
         const state = get();
-        const count = state.project.shots.length;
+        const isReplacingPlaceholder = isBlankProjectState(state.project);
+        const realShots = isReplacingPlaceholder
+            ? []
+            : state.project.shots.filter((shot) => !shot.isPlaceholder);
+        const count = realShots.length;
         const newShot = createDefaultShot({
             id: generateId('shot'),
             name: `Shot ${count + 1}`,
+            isPlaceholder: false,
             durationMs: 3500,
             lane: count % 8,
             layers: [],
@@ -734,7 +738,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
         let addedShot = newShot;
         get().updateProject((proj) => {
             const nextShots = recalculateShotStartTimes(
-                isBlankProjectState(proj) ? [newShot] : [...proj.shots, newShot]
+                [
+                    ...proj.shots.filter((shot) => !shot.isPlaceholder && !isBlankProjectState(proj)),
+                    newShot,
+                ]
             );
             addedShot = nextShots.find((s) => s.id === newShot.id) || nextShots[nextShots.length - 1];
             return {
@@ -769,13 +776,15 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
 
     deleteShot: (shotId) => {
         get().updateProject((proj) => {
-            if (proj.shots.length <= 1) return proj;
+            if (!proj.shots.some((s) => s.id === shotId)) return proj;
             const filtered = proj.shots.filter((s) => s.id !== shotId);
             const remainingShots = recalculateShotStartTimes(filtered);
             try {
                 const sel = useSelectionStore.getState();
                 if (sel.selectedShotId === shotId && remainingShots.length > 0) {
                     sel.selectShot(remainingShots[0].id);
+                } else if (sel.selectedShotId === shotId) {
+                    sel.selectProject();
                 }
             } catch {
                 // Ignore in headless tests
@@ -1036,9 +1045,7 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
                 const repaired = {
                     ...DEFAULT_PROJECT,
                     ...partial,
-                    shots: Array.isArray(partial.shots) && partial.shots.length > 0
-                        ? partial.shots
-                        : DEFAULT_PROJECT.shots,
+                    shots: Array.isArray(partial.shots) ? partial.shots : DEFAULT_PROJECT.shots,
                     assets: { ...DEFAULT_PROJECT.assets, ...(partial.assets || {}) },
                     audio: partial.audio || DEFAULT_PROJECT.audio,
                 };

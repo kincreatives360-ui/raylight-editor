@@ -161,6 +161,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     selectProject: () =>
         set({
+            selectedShotId: '',
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,

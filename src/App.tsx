@@ -262,8 +262,8 @@ export default function App() {
 
   const activeShot = frame.activeShot;
   const projectActiveShot = useMemo(
-    () => project.shots.find((s) => s.id === frame.activeShot.id) || project.shots[0],
-    [project.shots, frame.activeShot.id]
+    () => project.shots.find((s) => s.id === frame.activeShot.id) || project.shots[0] || frame.activeShot,
+    [project.shots, frame.activeShot]
   );
 
   const selectedLayerSet = useMemo(

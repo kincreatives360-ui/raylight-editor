@@ -2,7 +2,7 @@
 
 Date: 28 October 2026
 
-Implementation update: findings 1–25 are addressed in the working tree. This includes reuse of LayerMaterialSection and shared timeline components, inspector controls, menu/modal/search primitives, floating-panel behavior, device frame surfaces and shadows, and timeline/sidebar presentation. Validation on 28 October 2026: 489 tests passed, production build passed, and lint reported zero errors with three Fast Refresh warnings in SceneEffectsSection.tsx and EasingControl.tsx. Source links below record pre-refactor audit locations and can shift after implementation. See docs/superpowers/plans/2026-10-28-component-reuse-first-batch.md and docs/superpowers/plans/2026-10-28-component-reuse-remaining.md for implementation details and limits.
+Implementation update: findings 1–25 were implemented in revision `e99583d6a2b049e2d9028ebca719577d0843b23b`. Validation commands run against that revision: `npm test` (489 tests passed), `npm run build` (passed), and `npm run lint` (0 errors; 3 Fast Refresh warnings in `SceneEffectsSection.tsx` and `EasingControl.tsx`). Source links below point to repository-relative paths and line anchors for the audited revision. See docs/superpowers/plans/2026-10-28-component-reuse-first-batch.md and docs/superpowers/plans/2026-10-28-component-reuse-remaining.md for implementation details and limits.
 
 The source scan found **25 families of copied UI implementation or missed reuse**. The first ten have concrete repeated blocks or overlapping component definitions. The remaining fifteen are consolidation opportunities with different degrees of variation.
 
@@ -14,7 +14,7 @@ Each location below identifies the start of the relevant implementation. Related
 
 ### 1. Layer material editor — high priority
 
-Locations: [LayerMaterialSection.tsx:4](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LayerMaterialSection.tsx:4>) and [LayerDesignInspector.tsx:75](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LayerDesignInspector.tsx:75>).
+Locations: [LayerMaterialSection.tsx:4](../../src/panels/Inspector/sections/LayerMaterialSection.tsx#L4) and [LayerDesignInspector.tsx:75](../../src/panels/Inspector/sections/LayerDesignInspector.tsx#L75).
 
 The text-only branch in `LayerDesignInspector` reproduces the material editor: Receives 3D Light checkbox, explanatory text, Glass/Matte/Metal presets, Roughness, and Metalness. The non-text branch already calls `LayerMaterialSection` at line 68. The existing component accepts a `Layer`, so this is the clearest missed reuse in the codebase.
 
@@ -254,7 +254,7 @@ Repeated checkbox rows:
 
 - [DeviceFrameSection.tsx:320](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/DeviceFrameSection.tsx:320>), 330, 340 — Physical buttons, rear cameras, contact shadow.
 - [LightInspector.tsx:440](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LightInspector.tsx:440>) — Cast shadow.
-- [LayerMaterialSection.tsx:7](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LayerMaterialSection.tsx:7>) and [LayerDesignInspector.tsx:77](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/LayerDesignInspector.tsx:77>) — Receives light, already part of finding 1.
+- [LayerMaterialSection.tsx:7](../../src/panels/Inspector/sections/LayerMaterialSection.tsx#L7) and [LayerDesignInspector.tsx:77](../../src/panels/Inspector/sections/LayerDesignInspector.tsx#L77) — Receives light, already part of finding 1.
 
 Also [ShapeSection.tsx:28](<C:/Users/Sam Akinkunmi/Downloads/Ray_New/raylight-editor/src/panels/Inspector/sections/ShapeSection.tsx:28>) defines a local `ToggleSwitch` implemented as a plus/minus `IconButton`, used for Invert and Show at lines 311 and 320. Its accessible labels are hard-coded to Add/Remove mask, illustrating semantic drift from local control implementations.
 

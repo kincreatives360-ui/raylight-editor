@@ -410,23 +410,16 @@ export const Switch: React.FC<SwitchProps> = ({
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
-        className={
-            className ||
-            `relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-                checked
-                    ? 'bg-[#0088ff] border-[#0088ff]'
-                    : 'bg-[#202020] border-[#333333]'
-            }`
-        }
+        className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
+            checked
+                ? 'bg-[#0088ff] border-[#0088ff]'
+                : 'bg-[#202020] border-[#333333]'
+        } ${className}`.trim()}
     >
         <span
-            className={
-                className
-                    ? undefined
-                    : `inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-150 ${
-                          checked ? 'translate-x-[15px]' : 'translate-x-[2px]'
-                      }`
-            }
+            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-150 ${
+                checked ? 'translate-x-[15px]' : 'translate-x-[2px]'
+            }`}
         />
     </button>
 );

@@ -550,6 +550,7 @@ export const FocusBlockSchema = z.object({
 
 export const ShotSchema = z.object({
   id: z.string(),
+  isPlaceholder: z.boolean().optional(),
   name: z.string(),
   startMs: z.number().min(0),
   durationMs: z.number().min(200),
@@ -730,7 +731,7 @@ export const ProjectSchema = z.object({
       height: z.number(),
     })
   ),
-  shots: z.array(ShotSchema).min(1),
+  shots: z.array(ShotSchema),
   audio: ProjectAudioSchema.optional(),
 });
 

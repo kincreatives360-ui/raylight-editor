@@ -157,10 +157,10 @@ describe('device surface compatibility', () => {
 
 describe('device contact shadow compatibility and ownership', () => {
   it.each([
-    [SamsungGalaxyFrame, 'galaxy-device-shadow'], [IPadProFrame, 'ipad-device-shadow'],
-    [BrowserFrame, 'browser-window-shadow'], [StudioDisplayFrame, 'display-foot-shadow'],
-    [MacBookProFrame, 'macbook-contact-shadow'], [DetailedIPhone15ProFrame, 'iphone-device-shadow'],
-  ] as const)('fades and hides the %s shadow at the existing threshold', (Frame, name) => {
+    ['Samsung Galaxy', SamsungGalaxyFrame, 'galaxy-device-shadow'], ['iPad Pro', IPadProFrame, 'ipad-device-shadow'],
+    ['Browser', BrowserFrame, 'browser-window-shadow'], ['Studio Display', StudioDisplayFrame, 'display-foot-shadow'],
+    ['MacBook Pro', MacBookProFrame, 'macbook-contact-shadow'], ['iPhone 15 Pro', DetailedIPhone15ProFrame, 'iphone-device-shadow'],
+  ] as const)('fades and hides the %s shadow at the existing threshold', (_label, Frame, name) => {
     const front = mesh(mount(<Frame {...common} />), name);
     expect(front.material).toMatchObject({ side: THREE.FrontSide, depthWrite: false, transparent: true });
     expect(front.material.opacity).toBeCloseTo(0.3);

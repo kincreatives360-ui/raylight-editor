@@ -761,7 +761,25 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             }
                         }}
                     >
-                        {project.shots.filter((shot) => !(isBlankProjectState(project) && shot.id === project.shots[0]?.id)).map((shot) => {
+                        {isBlankProjectState(project) && (
+                            <div className="rounded-lg border border-dashed border-white/10 p-3 text-center">
+                                <p className="mb-2 text-[11px] text-zinc-400">No shots yet</p>
+                                <button
+                                    type="button"
+                                    aria-label="Add shot"
+                                    onClick={() => {
+                                        const created = addShot();
+                                        selectShot(created.id);
+                                        setInspectorTab('shot');
+                                        setCurrentTimeMs(created.startMs + 100);
+                                    }}
+                                    className="rounded-md px-2 py-1 text-[11px] text-sky-300 hover:bg-white/5"
+                                >
+                                    + Add shot
+                                </button>
+                            </div>
+                        )}
+                        {project.shots.filter((shot) => !shot.isPlaceholder && !(isBlankProjectState(project) && shot === project.shots[0])).map((shot) => {
                             const isShotSelected = shot.id === activeShot.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
@@ -854,8 +872,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 title="Duplicate Shot"
                                                 className="p-1 rounded hover:bg-black/20 cursor-pointer"
                                             />
-                                            {project.shots.length > 1 && (
-                                                <IconButton
+                                            <IconButton
                                                     unstyled
                                                     tooltip={false}
                                                     label={`Delete shot ${shot.name}`}
@@ -868,8 +885,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     }}
                                                     title="Delete Shot"
                                                     className="p-1 rounded hover:bg-rose-500/40 cursor-pointer"
-                                                />
-                                            )}
+                                            />
                                         </div>
                                     </div>
 

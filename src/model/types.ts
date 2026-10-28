@@ -622,6 +622,8 @@ export interface ShotTransition {
 
 export interface Shot {
   id: string;
+  /** Internal startup shot, replaced when the user first adds content. */
+  isPlaceholder?: boolean;
   name: string;
   startMs: number;
   durationMs: number;
@@ -710,15 +712,16 @@ export interface Project {
   audio?: ProjectAudio;
 }
 
-/** True while a newly opened project contains only its implicit empty shot. */
+/** True while a project contains only its implicit startup shot (including pre-marker saves). */
 export function isBlankProjectState(project: Project): boolean {
-  if (project.shots.length !== 1) return false;
+  if (project.shots.length === 0 || project.shots.every((shot) => shot.isPlaceholder)) return true;
+  if (project.shots.length !== 1 || project.shots[0].isPlaceholder === false) return false;
+
   const [shot] = project.shots;
   return Boolean(
-    shot &&
     shot.layers.length === 0 &&
     shot.groups.length === 0 &&
-    (shot.cameraBlocks?.length ?? 0) === 0 &&
+    shot.cameraBlocks.length === 0 &&
     (shot.lightBlocks?.length ?? 0) === 0 &&
     (shot.effectBlocks?.length ?? 0) === 0 &&
     (shot.focusBlocks?.length ?? 0) === 0 &&

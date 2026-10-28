@@ -33,11 +33,13 @@ describe('Easing & Spring Engine', () => {
     expect(midVal).toBeGreaterThan(0.5);
     expect(midVal).toBeLessThan(1.5);
 
-    // Critically damped springs ('gentle', 'stiff') never overshoot 1.0
-    for (let i = 1; i < 20; i++) {
-      const sample = evaluateSpring('gentle', i / 20);
-      expect(sample).toBeGreaterThanOrEqual(0);
-      expect(sample).toBeLessThanOrEqual(1);
+    // Critically damped springs ('gentle', 'slow', 'stiff') never overshoot 1.0
+    for (const preset of ['gentle', 'slow', 'stiff'] as const) {
+      for (let i = 1; i < 20; i++) {
+        const sample = evaluateSpring(preset, i / 20);
+        expect(sample).toBeGreaterThanOrEqual(0);
+        expect(sample).toBeLessThanOrEqual(1);
+      }
     }
   });
 

@@ -1,10 +1,25 @@
 import type { KeyboardEvent, MouseEvent, ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SegmentedControl } from './primitives';
+import { SegmentedControl, Switch } from './primitives';
 import { ModalShell } from './ModalShell';
 import { navigateMenu } from './menuNavigation';
 
 describe('shared choice controls', () => {
+    it('keeps switch track and checked thumb styles when appending a caller class', () => {
+        const button = Switch({ checked: true, onChange: () => {}, ariaLabel: 'Test switch', className: 'custom-switch' }) as unknown as ReactElement<{
+            className: string;
+            children: ReactElement<{ className: string }>;
+            'aria-checked': boolean;
+        }>;
+        const thumb = button.props.children;
+
+        expect(button.props.className).toContain('relative');
+        expect(button.props.className).toContain('custom-switch');
+        expect(button.props['aria-checked']).toBe(true);
+        expect(thumb.props.className).toContain('rounded-full');
+        expect(thumb.props.className).toContain('translate-x-[15px]');
+    });
+
     it('does not select a disabled option and forwards the enabled value', () => {
         const onChange = vi.fn();
         const root = SegmentedControl({ value: 'one', onChange, options: [

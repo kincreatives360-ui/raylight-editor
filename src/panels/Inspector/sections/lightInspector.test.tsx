@@ -127,6 +127,17 @@ describe('LightInspector Component', () => {
         expect(html).toContain('Reach');
     });
 
+    it('falls back to the light name when its type has no metadata', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        Object.assign(shot.light.sources![0], { type: 'unknown' });
+
+        const html = renderToStaticMarkup(
+            <LightInspector activeShot={shot} selectedLightId="spot-1" onClose={() => {}} />
+        );
+
+        expect(html).toContain('>Spot 1</span>');
+    });
+
     it('renders inside RightSidebar when selectedLightId is set and no layer is selected', () => {
         const shot = useProjectStore.getState().project.shots[0];
         useSelectionStore.getState().selectLight('sun-key');

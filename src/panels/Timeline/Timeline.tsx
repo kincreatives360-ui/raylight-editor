@@ -4,7 +4,7 @@ import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
 import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX, Scissors } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Scissors, Trash2 } from 'lucide-react';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip, Easing } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
@@ -38,6 +38,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         updateShot,
         updateLayer,
         addShot,
+        deleteShot,
         addLayerToShot,
         addCameraBlockToShot,
         toggleProjectAudioMuted,
@@ -1353,6 +1354,18 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         className="w-5 h-5 rounded-full border border-white/20 hover:border-white/60 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
                         icon={<Scissors className="w-2.5 h-2.5" />}
                     />
+                    {activeShot && project.shots.some((shot) => shot.id === activeShot.id) && (
+                        <IconButton
+                            unstyled
+                            tooltip={false}
+                            label={`Delete shot ${activeShot.name}`}
+                            type="button"
+                            onClick={() => deleteShot(activeShot.id)}
+                            title={`Delete ${activeShot.name}`}
+                            className="w-5 h-5 rounded-full border border-white/20 hover:border-rose-400/70 flex items-center justify-center text-[#a1a1aa] hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                            icon={<Trash2 className="w-2.5 h-2.5" />}
+                        />
+                    )}
                     <TimelineTimecode totalDurationMs={totalDurationMs} />
                 </div>
 
@@ -1398,7 +1411,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     isDraggingPlayhead ? 'cursor-ew-resize' : dragging ? 'cursor-grabbing' : 'cursor-pointer'
                 }`}
             >
-                {isBlankState && timelineView === 'video' && (
+                {isBlankState && (
                     <button
                         type="button"
                         aria-label="Add shot"
@@ -1560,6 +1573,19 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 }`}
                                         >
                                             <span className="truncate">{shot.name}</span>
+                                            <IconButton
+                                                unstyled
+                                                tooltip={false}
+                                                label={`Delete shot ${shot.name}`}
+                                                icon={<Trash2 className="w-3 h-3" />}
+                                                onPointerDown={(event) => event.stopPropagation()}
+                                                onClick={(event) => {
+                                                    event.stopPropagation();
+                                                    deleteShot(shot.id);
+                                                }}
+                                                title="Delete shot"
+                                                className="z-10 rounded p-1 text-slate-400 opacity-0 transition hover:bg-rose-500/30 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
+                                            />
                                             <span
                                                 data-shot-trim="right"
                                                 onPointerDown={(e) => startShotTrim(e, shot)}
@@ -1881,7 +1907,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     }
                                                                     selectPreset(side, layer.id);
                                                                     setEasingPopoverTarget({
-                                                                        easing: transition.easing || { kind: 'preset', name: 'ease-out' },
+                                                                        easing,
                                                                         onChange: next => updateLayer(activeShot.id, layer.id, l => updateTimelineTransition(l, side, { easing: next })),
                                                                         anchorRect: event.currentTarget.getBoundingClientRect(),
                                                                     });

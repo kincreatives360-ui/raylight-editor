@@ -228,7 +228,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             </div> : <>
             {/* Header: Light Title + Close X */}
             <div className="p-3.5 flex items-center justify-between">
-                <span className="text-[12px] font-semibold text-white tracking-wide">{isRoom ? 'Room' : isKey ? 'Light' : LIGHT_TYPE_META[currentLight.type].label || currentLight.name}</span>
+                <span className="text-[12px] font-semibold text-white tracking-wide">{isRoom ? 'Room' : isKey ? 'Light' : LIGHT_TYPE_META[currentLight.type]?.label || currentLight.name}</span>
             </div>
 
 

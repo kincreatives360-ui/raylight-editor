@@ -73,7 +73,7 @@ export const radToDeg = (radians: number): number =>
   Number(((radians * 180) / Math.PI).toFixed(1));
 
 export const DEFAULT_TRANSITION_IN: Transitionish = {
-  type: 'fade',
+  type: 'none',
   durationMs: 650,
   delayMs: 0,
   distance: 0.16,
@@ -421,6 +421,7 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
       createDefaultShot({
         id: 'shot-1',
         name: 'Shot 1',
+        isPlaceholder: true,
         startMs: 0,
         durationMs: 4000,
         lane: 0,
