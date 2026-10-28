@@ -42,6 +42,7 @@ import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
 import { isEditableElement, isInteractiveElement } from './utils/shortcuts';
 import { withViewTransition } from './utils/viewTransitions';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 
 interface StageErrorBoundaryProps {
   children: React.ReactNode;
@@ -1654,6 +1655,7 @@ export default function App() {
           </Suspense>
         </ModalErrorBoundary>
       )}
+      <SpeedInsights />
     </div>
   );
 }
