@@ -41,6 +41,7 @@ import { IconButton } from './ui/primitives';
 import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
 import { isEditableElement, isInteractiveElement } from './utils/shortcuts';
+import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT, matchesCameraToolShortcut, matchesScissorsShortcut } from './utils/cameraShortcuts';
 import { withViewTransition } from './utils/viewTransitions';
 import { SpeedInsights } from '@vercel/speed-insights/react';
 
@@ -714,6 +715,17 @@ export default function App() {
         return;
       }
 
+      if (matchesCameraToolShortcut(e)) {
+        e.preventDefault();
+        setActiveTool('camera');
+        return;
+      }
+      if (matchesScissorsShortcut(e)) {
+        e.preventDefault();
+        splitAtPlayhead(usePlayheadStore.getState().currentTimeMs);
+        return;
+      }
+
       // Single-Key Tool Shortcuts (V, G, Y, H, T, I, R, O, L, Escape)
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         if (isInteractiveElement(el)) {
@@ -721,10 +733,6 @@ export default function App() {
         }
         if (key === 'v') {
           setActiveTool('select');
-          return;
-        }
-        if (key === 'c') {
-          setActiveTool('camera');
           return;
         }
         if (key === 'g') {
@@ -758,11 +766,6 @@ export default function App() {
         if (key === 'l') { setActiveTool('line'); return; }
         if (key === 'a') { setActiveTool('arrow'); return; }
         if (key === 'p') { setActiveTool('pen'); return; }
-        if (key === 's') {
-          e.preventDefault();
-          splitAtPlayhead(usePlayheadStore.getState().currentTimeMs);
-          return;
-        }
       }
 
       // ': Toggle Safe Zones & Rule of Thirds Grid (or Cmd/Ctrl + ')
@@ -1295,7 +1298,7 @@ export default function App() {
       subtitle: 'Cut current active shot into two clips',
       category: 'Editing',
       icon: Download,
-      shortcut: ['S'],
+      shortcut: [...SCISSORS_SHORTCUT.keys],
       action: () => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs),
     },
     {
@@ -1322,7 +1325,7 @@ export default function App() {
       subtitle: 'Orbit, pan, and dolly 3D scene camera',
       category: 'Tools',
       icon: Camera,
-      shortcut: ['C'],
+      shortcut: [...CAMERA_TOOL_SHORTCUT.keys],
       action: () => setActiveTool('camera'),
     },
     {

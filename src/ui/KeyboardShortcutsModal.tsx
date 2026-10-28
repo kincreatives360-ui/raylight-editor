@@ -6,6 +6,7 @@ import { ModalShell } from './ModalShell';
 import React, { useState, useMemo } from 'react';
 import { X, Command, Keyboard } from 'lucide-react';
 import { getModifierKey } from '../utils/shortcuts';
+import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
 
 export interface ShortcutItem {
   keys: string[];
@@ -26,11 +27,11 @@ const SHORTCUTS: ShortcutItem[] = [
   { keys: ['L'], description: 'Line Tool (Draw straight line)', category: 'Tools' },
   { keys: ['A'], description: 'Arrow Tool (Draw direction arrow)', category: 'Tools' },
   { keys: ['P'], description: 'Pen Tool (Vector path creation)', category: 'Tools' },
-  { keys: ['C'], description: 'Camera Navigation Tool (Orbit, Pan, Dolly)', category: 'Tools' },
+  { keys: [...CAMERA_TOOL_SHORTCUT.keys], description: 'Orbit Tool (Camera, Pan, Dolly)', category: 'Tools' },
+  { keys: [...SCISSORS_SHORTCUT.keys], description: 'Scissors (Split shot at playhead)', category: 'Tools' },
 
   // Playback & Animation
   { keys: ['Space'], description: 'Play / Pause timeline playback', category: 'Playback & Animation' },
-  { keys: ['S'], description: 'Split clip or shot at playhead', category: 'Playback & Animation' },
   { keys: ['Shift', 'A'], description: 'Toggle Live Motion Recording (Animate Mode)', category: 'Playback & Animation' },
   { keys: ['Arrow Keys'], description: 'Nudge selected layer position (0.005 units)', category: 'Playback & Animation' },
   { keys: ['Shift', 'Arrow Keys'], description: 'Fast nudge selected layer (0.025 units)', category: 'Playback & Animation' },

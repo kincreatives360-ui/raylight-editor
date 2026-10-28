@@ -10,6 +10,7 @@ import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
+import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
 import { SHAPE_TOOL_ITEMS } from './canvasToolItems';
 
 interface CanvasToolbarProps {
@@ -366,7 +367,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const pointerItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
         { id: 'select', label: 'Select', key: 'V', icon: MousePointer },
         { id: 'hand', label: 'Hand', key: 'H', icon: Hand },
-        { id: 'camera', label: 'Orbit', key: 'C', icon: Camera },
+        { id: 'camera', label: 'Orbit', key: CAMERA_TOOL_SHORTCUT.label, icon: Camera },
         { id: 'tilt', label: 'Tilt', key: 'Y', icon: Rotate3d },
         { id: 'move', label: 'Move', key: 'G', icon: Move },
     ];
@@ -455,7 +456,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             <MenuItem
                                 icon={Scissors}
                                 label="Scissors"
-                                shortcut="S"
+                                shortcut={SCISSORS_SHORTCUT.label}
                                 accent="text-amber-300"
                                 onClick={handleSplitShot}
                             />

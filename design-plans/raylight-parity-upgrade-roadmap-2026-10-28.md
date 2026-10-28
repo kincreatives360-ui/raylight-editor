@@ -109,6 +109,8 @@ P0/P1/P2 here mean user-facing severity and dependency order for this roadmap, n
 
 **Verification:** pose unit tests, orientation UI tests, manual orbit/pan/dolly/zoom sequences, authored-camera fixture playback and return behavior, keyboard shortcut parity.
 
+**Execution update (28 October 2026):** Implemented the seven audited angles, in-memory per-shot camera bookmarks with Back restoration, contextual Angle/Pin/Back controls, and Shift+F / Shift+C shortcut alignment. The original reference audit observed the controls and labels but did not exercise Pin/Back semantics; the local behavior is documented in the Phase 3 implementation plan as a reversible bookmark. Full verification passed: 532 tests, production build, and lint with one existing warning in `src/stage/webgl/SceneEffectsPipeline.tsx:102`. Browser interaction could not be run because browser use is disabled in the current Work environment.
+
 ## Phase 4 — Decide and close canvas creation-tool gaps (P2)
 
 **Owners:** `src/stage/CanvasToolbar.tsx`, `src/stage/Stage.tsx`, `src/model/types.ts`, selection overlays, command/help surfaces, undo/serialization/renderers according to the selected tools.

@@ -25,6 +25,17 @@ export type CanvasTool =
     | 'polygon'
     | 'pen';
 
+export interface CameraViewBookmark {
+    orbit: number;
+    tilt: number;
+    roll: number;
+    zoom: number;
+    targetX: number;
+    targetY: number;
+    targetZ: number;
+    focalLength: number;
+}
+
 interface SelectionStore {
     selectedShotId: string;
     selectedLayerIds: string[];
@@ -53,6 +64,7 @@ interface SelectionStore {
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
     gradientEditorLayerId: string | null;
+    cameraBookmarks: Record<string, CameraViewBookmark>;
 
     leftPanelOpen: boolean;
     rightSidebarOpen: boolean;
@@ -101,6 +113,7 @@ interface SelectionStore {
     resetCanvasView: () => void;
     setGradientEditor: (active: boolean, angle?: number, layerId?: string | null) => void;
     setGradientEditorAngle: (angle: number) => void;
+    setCameraBookmark: (shotId: string, bookmark: CameraViewBookmark | null) => void;
 }
 
 export const DEFAULT_LEFT_PANEL_WIDTH = 260;
@@ -155,6 +168,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     gradientEditorActive: false,
     gradientEditorAngle: 0,
     gradientEditorLayerId: null,
+    cameraBookmarks: {},
 
     leftPanelOpen: true,
     rightSidebarOpen: true,
@@ -395,6 +409,13 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         })),
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
+
+    setCameraBookmark: (shotId, bookmark) => set((state) => {
+        const cameraBookmarks = { ...state.cameraBookmarks };
+        if (bookmark) cameraBookmarks[shotId] = bookmark;
+        else delete cameraBookmarks[shotId];
+        return { cameraBookmarks };
+    }),
 
     toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
     toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),

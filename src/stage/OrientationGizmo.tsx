@@ -5,6 +5,7 @@ import React, { useMemo, useState } from 'react';
 import * as THREE from 'three';
 import { RotateCcw, Focus, ChevronDown, ChevronUp } from 'lucide-react';
 import { radToDeg } from '../model/defaults';
+import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 
 interface OrientationGizmoProps {
     cameraRotation: { x: number; y: number; z: number };
@@ -18,6 +19,18 @@ interface OrientationGizmoProps {
     currentZoom?: number;
     topInset?: number;
 }
+
+export const CameraWorkflowActions: React.FC<{
+    hasBookmark: boolean;
+    isPinned: boolean;
+    onPin: () => void;
+    onBack: () => void;
+}> = ({ hasBookmark, isPinned, onPin, onBack }) => (
+    <div className="flex items-center gap-1.5">
+        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-white/10 bg-[#18181c]/90 text-[#a1a1aa] hover:text-white'}`}>Pin</button>
+        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-white/10 bg-[#18181c]/90 px-2.5 py-0.5 text-[11px] text-[#a1a1aa] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
+    </div>
+);
 
 export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
     cameraRotation,
@@ -276,12 +289,13 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 <IconButton
                     unstyled
                     tooltip={false}
-                    label="Camera angles and framing presets"
+                    label="Angle menu"
                     icon={<>
                         {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+                        <span>Angle</span>
                     </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
-                    title="Camera angles and framing presets"
+                    title="Angle"
                     className={`p-1 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition shadow-sm ${
                         menuOpen ? 'bg-white/20 text-white' : ''
                     }`}
@@ -327,6 +341,16 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     >
                         Iso
                     </button>
+                    {CAMERA_ANGLE_VIEWS.filter((view) => view.id !== 'front').map((view) => (
+                        <button
+                            key={view.id}
+                            type="button"
+                            onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll); setMenuOpen(false); }}
+                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                        >
+                            {view.label}
+                        </button>
+                    ))}
                 </div>
 
                 {onFrameSelection && (

@@ -6,6 +6,8 @@
 - **Scope:** End-to-end editor shell, layer tree, canvas, tools, object inspector, solid and gradient color workflows, camera/orbit/zoom, timeline, assets, animation, lighting/effects, project settings, export/share, keyboard interaction, and rendering.
 
 > **Phase 2 audit correction (28 October 2026):** Source inspection after this audit found that the described on-canvas gradient angle control was wired only to the resolved scene background. Shape ColorPicker callbacks did not activate it. Phase 2 now adds a selected-shape target and routes angle changes to that shape fill; the earlier parity summary should not be read as evidence that layer-angle editing existed before this correction.
+
+> **Phase 3 behavior note (28 October 2026):** The reference UI visibly exposed Angle, Pin and Back to camera in Orbit mode, plus seven angle labels. The original interaction pass did not submit Pin or Back, so their product semantics were not observed. Local Phase 3 uses a per-shot in-memory camera bookmark and restores the evaluated pose through the current shot camera control path.
 - **Method:** Direct visual/interaction inspection of the provided reference project and the running local app; source tracing for local ownership and capability; checked `DESIGN.md`, `PRODUCT.md`, and the existing audit report. The reference project was inspected read-only. The local project was not edited. No tests were run for this audit.
 
 ## Executive summary

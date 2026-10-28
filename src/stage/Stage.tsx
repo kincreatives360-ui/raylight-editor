@@ -13,9 +13,10 @@ import { readImageFileWithThumbnail, readVideoFile, readAudioFile, parseFigmaSvg
 import { SelectionOverlay } from './SelectionOverlay';
 import { LightingOverlay } from './LightingOverlay';
 import { Guides } from './Guides';
-import { OrientationGizmo } from './OrientationGizmo';
+import { CameraWorkflowActions, OrientationGizmo } from './OrientationGizmo';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { ASPECT_RATIO_CONFIG, type SnapGuideLine } from './stageUtils';
+import { CAMERA_TOOL_SHORTCUT } from '../utils/cameraShortcuts';
 import { isInteractiveElement } from '../utils/shortcuts';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
@@ -89,6 +90,8 @@ const StageComponent: React.FC<StageProps> = ({
         gradientEditorActive,
         gradientEditorAngle,
         gradientEditorLayerId,
+        cameraBookmarks,
+        setCameraBookmark,
         setGradientEditorAngle,
         selectedCameraBlockId,
     } = useSelectionStore();
@@ -174,7 +177,7 @@ const StageComponent: React.FC<StageProps> = ({
 
             if (e.code === 'Space') setIsSpaceHeld(true);
             if (!e.metaKey && !e.ctrlKey) {
-                if (e.key === 'f' || e.key === 'F') {
+                if (!e.shiftKey && (e.key === 'f' || e.key === 'F')) {
                     e.preventDefault();
                     handleFrameSelectedLayersRef.current();
                 }
@@ -200,7 +203,9 @@ const StageComponent: React.FC<StageProps> = ({
         roll?: number;
         targetX?: number;
         targetY?: number;
+        targetZ?: number;
         zoom?: number;
+        focalLength?: number;
     }) => {
         const currentShot = frame.activeShot;
         const selectedCamBlock = currentShot.cameraBlocks?.find(
@@ -213,6 +218,7 @@ const StageComponent: React.FC<StageProps> = ({
             const ep = selectedCamBlock[which] || {
                 anchorX: 0,
                 anchorY: 0,
+                anchorZ: 0,
                 zoom: 1,
                 roll: 0,
                 orbit: 0,
@@ -231,7 +237,9 @@ const StageComponent: React.FC<StageProps> = ({
                                     ...ep,
                                     anchorX: patch.targetX !== undefined ? patch.targetX : ep.anchorX,
                                     anchorY: patch.targetY !== undefined ? patch.targetY : ep.anchorY,
+                                    anchorZ: patch.targetZ !== undefined ? patch.targetZ : (ep.anchorZ ?? 0),
                                     zoom: patch.zoom !== undefined ? patch.zoom : ep.zoom,
+                                    focalLength: patch.focalLength !== undefined ? patch.focalLength : ep.focalLength,
                                     orbit: patch.orbit !== undefined ? patch.orbit : ep.orbit,
                                     tilt: patch.tilt !== undefined ? patch.tilt : ep.tilt,
                                     roll: patch.roll !== undefined ? patch.roll : ep.roll,
@@ -263,6 +271,7 @@ const StageComponent: React.FC<StageProps> = ({
                             ...baseF.target,
                             x: patch.targetX !== undefined ? patch.targetX : baseF.target.x,
                             y: patch.targetY !== undefined ? patch.targetY : baseF.target.y,
+                            z: patch.targetZ !== undefined ? patch.targetZ : baseF.target.z,
                         },
                         zoom: patch.zoom !== undefined ? patch.zoom : baseF.zoom,
                         orbit: patch.orbit !== undefined ? patch.orbit : (baseF.orbit ?? 0),
@@ -554,6 +563,33 @@ const StageComponent: React.FC<StageProps> = ({
         });
         commitDragTransaction();
     }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
+
+    const currentShotCameraBookmark = cameraBookmarks[frame.activeShot.id];
+    const handlePinCameraView = useCallback(() => {
+        if (useSelectionStore.getState().cameraBookmarks[frame.activeShot.id]) {
+            setCameraBookmark(frame.activeShot.id, null);
+            return;
+        }
+        const camera = effectiveViewportFrame.camera;
+        setCameraBookmark(frame.activeShot.id, {
+            orbit: radToDeg(camera.rotation.y),
+            tilt: radToDeg(camera.rotation.x),
+            roll: radToDeg(camera.rotation.z),
+            zoom: camera.zoom,
+            targetX: camera.target.x,
+            targetY: camera.target.y,
+            targetZ: camera.target.z,
+            focalLength: camera.focalLength,
+        });
+    }, [effectiveViewportFrame.camera, frame.activeShot.id, setCameraBookmark]);
+
+    const handleBackToPinnedCameraView = useCallback(() => {
+        const bookmark = useSelectionStore.getState().cameraBookmarks[frame.activeShot.id];
+        if (!bookmark) return;
+        beginDragTransaction();
+        updateActiveShotCamera(bookmark);
+        commitDragTransaction();
+    }, [frame.activeShot.id, beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
 
     const handleFrameSelectedLayers = useCallback(() => {
         const selectedIds = useSelectionStore.getState().selectedLayerIds;
@@ -1450,7 +1486,7 @@ const StageComponent: React.FC<StageProps> = ({
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1.5 rounded-full bg-[var(--bg-surface,#161619)]/95 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] text-[11px] font-medium text-[var(--text-primary,#f4f4f5)] flex items-center gap-3 shadow-2xl z-30 pointer-events-auto">
                     <div className="flex items-center gap-1.5 text-[var(--accent-primary,#0070e0)]">
                         <Camera className="w-3.5 h-3.5" />
-                        <span className="font-semibold">Camera Tool (C)</span>
+                        <span className="font-semibold">Orbit ({CAMERA_TOOL_SHORTCUT.label})</span>
                     </div>
                     <div className="text-[11px] text-gray-400 font-mono hidden sm:flex items-center gap-2">
                         <span>Left-drag: Orbit</span>
@@ -1459,6 +1495,12 @@ const StageComponent: React.FC<StageProps> = ({
                         <span>•</span>
                         <span>Right: Dolly</span>
                     </div>
+                    <CameraWorkflowActions
+                        hasBookmark={Boolean(currentShotCameraBookmark)}
+                        isPinned={Boolean(currentShotCameraBookmark)}
+                        onPin={handlePinCameraView}
+                        onBack={handleBackToPinnedCameraView}
+                    />
                     <button
                         type="button"
                         onClick={handleFrameSelectedLayers}
