@@ -44,7 +44,7 @@ const AudioWaveform: React.FC<{
                             width={2.2}
                             height={barHeight}
                             rx={1}
-                            fill={muted ? '#94a3b8' : '#38bdf8'}
+                            fill={muted ? '#94a3b8' : 'var(--color-brand-orange)'}
                         />
                     );
                 })}
@@ -64,48 +64,58 @@ const AudioWaveform: React.FC<{
 );
 
 export function AudioClipBar({ clip, left, width, muted, onSeek, onDelete, onDrag }: AudioClipBarProps) {
-    return (<TimelineRangeBar
-        title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
-        onPointerDown={(e) => onDrag(e, 'move')}
-        onClick={(e) => {
-            e.stopPropagation();
-            onSeek();
-        }}
-        left={left} width={width}
-        className={`group/audioclip absolute top-1 bottom-1 rounded-md border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing transition select-none overflow-hidden ${
-            muted
-                ? 'border-slate-600/50 bg-slate-800/80 text-slate-300'
-                : 'border-sky-500/50 bg-sky-950/80 text-sky-100 hover:border-sky-400'
-        }`}
-    >
-        {/* Procedural SVG Waveform */}
-        <AudioWaveform clip={clip} width={width} muted={muted} />
-
-        <TrimHandle side="left"
-            onPointerDown={(e) => onDrag(e, 'left')}
-            title="Trim audio start"
-            className="w-2 bg-white/10 hover:bg-sky-400/80 rounded-l z-10 transition-colors" />
-        <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
-            <Volume2 className="w-3 h-3 text-sky-400 shrink-0 opacity-80" />
-            <span className="truncate drop-shadow-sm">{clip.name}</span>
-            <span className="text-[10px] font-mono text-sky-300/70 hidden sm:inline">
-                {(clip.durationMs / 1000).toFixed(1)}s
-            </span>
-        </div>
-        <IconButton unstyled tooltip={false} label="Delete audio clip"
-            type="button"
-            onPointerDown={(e) => e.stopPropagation()}
+    return (
+        <TimelineRangeBar
+            tone="audio"
+            selected={!muted}
+            title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
+            onPointerDown={(e) => onDrag(e, 'move')}
             onClick={(e) => {
                 e.stopPropagation();
-                onDelete();
+                onSeek();
             }}
-            title="Delete audio clip"
-            className="w-4 h-4 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer ml-1 z-20 shrink-0"
-            icon={<>&times;</>}
-        />
-        <TrimHandle side="right"
-            onPointerDown={(e) => onDrag(e, 'right')}
-            title="Trim audio end"
-            className="w-2 bg-white/10 hover:bg-sky-400/80 rounded-r z-10 transition-colors" />
-    </TimelineRangeBar>);
+            left={left}
+            width={width}
+            className={`group/audioclip absolute top-1 bottom-1 px-2 flex items-center justify-between text-[10px] font-medium tracking-tight truncate cursor-grab active:cursor-grabbing select-none overflow-hidden ${
+                muted ? 'opacity-50' : ''
+            }`}
+        >
+            {/* Procedural SVG Waveform */}
+            <AudioWaveform clip={clip} width={width} muted={muted} />
+
+            <TrimHandle
+                side="left"
+                onPointerDown={(e) => onDrag(e, 'left')}
+                title="Trim audio start"
+                className="w-2 bg-white/10 hover:bg-orange-400/80 rounded-l z-10"
+            />
+            <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
+                <Volume2 className="w-3 h-3 text-orange-400 shrink-0 opacity-80" />
+                <span className="truncate drop-shadow-sm">{clip.name}</span>
+                <span className="text-[10px] font-mono text-orange-300/70 hidden sm:inline">
+                    {(clip.durationMs / 1000).toFixed(1)}s
+                </span>
+            </div>
+            <IconButton
+                unstyled
+                tooltip={false}
+                label="Delete audio clip"
+                title="Delete audio clip"
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete();
+                }}
+                className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/audioclip:opacity-100 transition cursor-pointer z-10"
+                icon={<>&times;</>}
+            />
+            <TrimHandle
+                side="right"
+                onPointerDown={(e) => onDrag(e, 'right')}
+                title="Trim audio end"
+                className="w-2 bg-white/10 hover:bg-orange-400/80 rounded-r z-10"
+            />
+        </TimelineRangeBar>
+    );
 }

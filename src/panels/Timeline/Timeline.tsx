@@ -1854,27 +1854,29 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <React.Fragment key={cb.id}>
                                                 <TimelineRangeBar
                                                     data-cam-pill="true"
+                                                    tone="camera"
+                                                    selected={isCamSelected}
                                                     onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'move')
                                                     }
                                                     left={left} width={width}
                                                     title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
-                                                    className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
-                                                            ? 'border-emerald-300 bg-gradient-to-b from-[#073b28]/95 to-[#061b13]/95 text-emerald-100 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]'
-                                                            : 'border-emerald-600/90 bg-gradient-to-b from-[#08281d]/90 to-[#06160f]/95 text-emerald-200 hover:border-emerald-400'
-                                                        } ${ghostDragPreview?.id === cb.id ? 'opacity-40' : ''}`}
+                                                    className={`absolute top-0.5 bottom-0.5 px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab active:cursor-grabbing ${
+                                                        ghostDragPreview?.id === cb.id ? 'opacity-40' : ''
+                                                    }`}
                                                 >
-                                                    <TimelineEasingCurve easing={cb.easing} color="#18c988" />
+                                                    <TimelineEasingCurve easing={cb.easing} tone="camera" selected={isCamSelected} />
+                                                    <span className="relative z-10 pointer-events-none drop-shadow-sm">{modeLabel}</span>
                                                     <TrimHandle side="left"
                                                         onPointerDown={(e) =>
                                                             startCameraBlockDrag(e, activeShot, cb, 'left')
                                                         }
-                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full" />
+                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full z-10" />
                                                     <TrimHandle side="right"
                                                         onPointerDown={(e) =>
                                                             startCameraBlockDrag(e, activeShot, cb, 'right')
                                                         }
-                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full" />
+                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full z-10" />
                                                 </TimelineRangeBar>
                                                 {ghostDragPreview && ghostDragPreview.id === cb.id && (
                                                     <TimelineDragPreview
@@ -1902,6 +1904,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <React.Fragment key={lb.id}>
                                                 <TimelineRangeBar
                                                     data-light-pill="true"
+                                                    tone="light"
+                                                    selected={isLightSelected}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         selectLightBlock(lb.id);
@@ -1912,12 +1916,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     }
                                                     left={left} width={width}
                                                     title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
-                                                    className={`group/light absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
-                                                            ? 'border-[#ff402f] bg-gradient-to-b from-[#3a1713]/95 to-[#1e0e0c]/95 text-red-100 shadow-[inset_0_0_20px_rgba(248,62,43,0.12)]'
-                                                            : 'border-[#ff3829] bg-gradient-to-b from-[#321410]/90 to-[#1c0c0a]/95 text-red-200 hover:border-[#ff6b5c]'
-                                                        } ${ghostDragPreview?.id === lb.id ? 'opacity-40' : ''}`}
+                                                    className={`group/light absolute top-0.5 bottom-0.5 px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab active:cursor-grabbing ${
+                                                        ghostDragPreview?.id === lb.id ? 'opacity-40' : ''
+                                                    }`}
                                                 >
-                                                    <TimelineEasingCurve easing={lb.easing} color="#ff493b" />
+                                                    <TimelineEasingCurve easing={lb.easing} tone="light" selected={isLightSelected} />
+                                                    <span className="relative z-10 pointer-events-none drop-shadow-sm truncate max-w-[calc(100%-30px)]">{lb.label || 'Light'}</span>
                                                     <IconButton
                                                         unstyled
                                                         tooltip={false}
@@ -1935,19 +1939,19 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             }
                                                         }}
                                                         title="Delete light block"
-                                                        className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1"
+                                                        className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1 z-10"
                                                         icon={<>&times;</>}
                                                     />
                                                     <TrimHandle side="left"
                                                         onPointerDown={(e) =>
                                                             startLightBlockDrag(e, activeShot, lb, 'left')
                                                         }
-                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full" />
+                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full z-10" />
                                                     <TrimHandle side="right"
                                                         onPointerDown={(e) =>
                                                             startLightBlockDrag(e, activeShot, lb, 'right')
                                                         }
-                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full" />
+                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full z-10" />
                                                 </TimelineRangeBar>
                                                 {ghostDragPreview && ghostDragPreview.id === lb.id && (
                                                     <TimelineDragPreview
@@ -2116,6 +2120,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             className="h-9 relative flex items-center"
                                                         >
                                                             <TimelineRangeBar
+                                                                tone="animation"
+                                                                selected={selectedBlockId === blk.id}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (suppressPillClickRef.current === blk.id) {
@@ -2148,12 +2154,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                 left={blk.startMs * pxPerMs} width={Math.max(36, blk.durationMs * pxPerMs)}
                                                                 title={`${blk.label} · ${(blk.durationMs / 1000).toFixed(2)}s · Click to edit easing`}
                                                                 aria-label={`${blk.label} animation bar`}
-                                                                className={`absolute top-1/2 h-[90%] -translate-y-1/2 overflow-hidden rounded-lg border px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab transition ${selectedBlockId === blk.id
-                                                                        ? 'border-[#c084fc] bg-gradient-to-b from-[#351b53]/95 to-[#1a0f2b]/95 text-white shadow-[inset_0_0_18px_rgba(168,85,247,0.12)]'
-                                                                        : 'border-[#8c45cc] bg-gradient-to-b from-[#291442]/95 to-[#150b22]/95 text-purple-200 hover:border-[#bc70ff]'
-                                                                    } ${ghostDragPreview?.id === blk.id ? 'opacity-40' : ''}`}
+                                                                className={`absolute top-1/2 h-[90%] -translate-y-1/2 px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing ${
+                                                                    ghostDragPreview?.id === blk.id ? 'opacity-40' : ''
+                                                                }`}
                                                             >
-                                                                <TimelineEasingCurve easing={blk.easing} color="#bd70ff" />
+                                                                <TimelineEasingCurve easing={blk.easing} tone="animation" selected={selectedBlockId === blk.id} />
+                                                                <span className="relative z-10 pointer-events-none drop-shadow-sm truncate">{blk.label}</span>
                                                                 <TrimHandle side="left"
                                                                     onPointerDown={(e) =>
                                                                         startBlockDrag(
@@ -2164,7 +2170,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                             'left'
                                                                         )
                                                                     }
-                                                                    className="w-2 bg-white/25 hover:bg-amber-300 rounded-l-full" />
+                                                                    className="w-2 bg-white/25 hover:bg-purple-300 rounded-l-full z-10" />
                                                                 <TrimHandle side="right"
                                                                     onPointerDown={(e) =>
                                                                         startBlockDrag(
@@ -2175,7 +2181,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                             'right'
                                                                         )
                                                                     }
-                                                                    className="w-2 bg-white/25 hover:bg-amber-300 rounded-r-full" />
+                                                                    className="w-2 bg-white/25 hover:bg-purple-300 rounded-r-full z-10" />
                                                             </TimelineRangeBar>
 
                                                             {/* Dashed Ghost Outline during Block Drag */}
