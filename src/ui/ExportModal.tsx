@@ -61,7 +61,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
   return (
     <ModalShell
-        backdropProps={{"className": "fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4"}}
+        onClose={onClose}
+        backdropProps={{
+            "className": "fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4",
+            "aria-labelledby": "export-modal-title"
+        }}
         surfaceProps={{"className": "w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs"}}
     >
         <div className="flex items-center justify-between">
@@ -70,7 +74,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 id="export-modal-title" className="text-sm font-bold text-white">
                 Export &amp; Share Video
               </h3>
               <p className="text-xs text-[#a1a1aa]">

@@ -4,7 +4,7 @@ import { useFloatingPanel } from '../ui/useFloatingPanel';
 import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
 import React, { useState, useRef } from 'react';
-import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, Tag, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity } from 'lucide-react';
+import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, Tag, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus } from 'lucide-react';
 import type { Layer, SceneLight } from '../model/types';
 import { generateId } from '../model/id';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
@@ -20,6 +20,7 @@ interface CanvasToolbarProps {
     onToggleSafeArea?: () => void;
     onOpenShortcuts?: () => void;
     onSelectAudioClick?: () => void;
+    onFrameSelection?: () => void;
 }
 
 type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | null;
@@ -58,6 +59,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     onToggleSafeArea,
     onOpenShortcuts: _onOpenShortcuts,
     onSelectAudioClick,
+    onFrameSelection,
 }) => {
     const {
         activeTool,
@@ -363,7 +365,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const pointerItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
         { id: 'select', label: 'Select', key: 'V', icon: MousePointer },
         { id: 'hand', label: 'Hand', key: 'H', icon: Hand },
-        { id: 'camera', label: 'Orbit', key: '⇧F', icon: Camera },
+        { id: 'camera', label: 'Orbit', key: 'C', icon: Camera },
         { id: 'tilt', label: 'Tilt', key: 'Y', icon: Rotate3d },
         { id: 'move', label: 'Move', key: 'G', icon: Move },
     ];
@@ -460,10 +462,21 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             <MenuItem
                                 icon={Scissors}
                                 label="Scissors"
-                                shortcut="C"
+                                shortcut="S"
                                 accent="text-amber-300"
                                 onClick={handleSplitShot}
                             />
+                            {onFrameSelection && (
+                                <MenuItem
+                                    icon={Focus}
+                                    label="Frame Selection"
+                                    shortcut="F"
+                                    onClick={() => {
+                                        onFrameSelection();
+                                        setOpenMenu(null);
+                                    }}
+                                />
+                            )}
                         </DropdownMenu>
                     )}
                 </div>

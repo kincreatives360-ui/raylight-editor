@@ -42,6 +42,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         addCameraBlockToShot,
         toggleProjectAudioMuted,
         deleteLayerFromShot,
+        restackLayerInShot,
         moveLayerToOrderAndGroup,
         updateGroupInShot,
         addShot,
@@ -424,6 +425,32 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         e.preventDefault();
                         e.stopPropagation();
                         startRename(layer.id, layer.name);
+                    } else if (e.key === 'ArrowDown') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.altKey) {
+                            restackLayerInShot(shot.id, layer.id, 'backward');
+                        } else {
+                            const idx = orderedIdsInShot.indexOf(layer.id);
+                            if (idx >= 0 && idx < orderedIdsInShot.length - 1) {
+                                const nextId = orderedIdsInShot[idx + 1];
+                                selectLayer(nextId, false);
+                                rowRefs.current[nextId]?.focus();
+                            }
+                        }
+                    } else if (e.key === 'ArrowUp') {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        if (e.altKey) {
+                            restackLayerInShot(shot.id, layer.id, 'forward');
+                        } else {
+                            const idx = orderedIdsInShot.indexOf(layer.id);
+                            if (idx > 0) {
+                                const prevId = orderedIdsInShot[idx - 1];
+                                selectLayer(prevId, false);
+                                rowRefs.current[prevId]?.focus();
+                            }
+                        }
                     }
                 }}
                 style={{ paddingLeft: `${12 + indentLevel * 14}px` }}
@@ -448,7 +475,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     )}
                 </div>
 
-                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition">
                     <IconButton
                         unstyled
                         tooltip={false}
@@ -804,9 +831,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                 <div className="flex items-center gap-1.5">
                     <button
                         role="tab"
+                        id="left-panel-tab-file"
+                        aria-controls="left-panel-panel-file"
                         aria-selected={activeTab === 'file'}
+                        tabIndex={activeTab === 'file' ? 0 : -1}
                         onClick={() => setActiveTab('file')}
-                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'file'
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                setActiveTab('assets');
+                                document.getElementById('left-panel-tab-assets')?.focus();
+                            }
+                        }}
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTab === 'file'
                             ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
@@ -815,9 +852,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     </button>
                     <button
                         role="tab"
+                        id="left-panel-tab-assets"
+                        aria-controls="left-panel-panel-assets"
                         aria-selected={activeTab === 'assets'}
+                        tabIndex={activeTab === 'assets' ? 0 : -1}
                         onClick={() => setActiveTab('assets')}
-                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer ${activeTab === 'assets'
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                setActiveTab('file');
+                                document.getElementById('left-panel-tab-file')?.focus();
+                            }
+                        }}
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTab === 'assets'
                             ? 'bg-[#1f1f23] text-white shadow-xs'
                             : 'text-[#a1a1aa] hover:text-white'
                             }`}
@@ -862,7 +909,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
             {/* FILE TAB: UPPER TREE + LOWER SYNCHRONIZED TIMELINE TRACK RACK       */}
             {/* =================================================================== */}
             {activeTab === 'file' && (
-                <div className="flex-1 flex flex-col min-h-0">
+                <div id="left-panel-panel-file" role="tabpanel" aria-labelledby="left-panel-tab-file" className="flex-1 flex flex-col min-h-0">
                     <div
                         className="flex-1 overflow-y-auto p-2 space-y-1"
                         role="tree"
@@ -964,7 +1011,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             )}
                                         </div>
 
-                                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition">
+                                        <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-within:opacity-100 transition">
                                             <IconButton
                                                 unstyled
                                                 tooltip={false}
@@ -1262,7 +1309,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
             {/* ASSETS TAB: UNIFIED STUDIO ASSET LIBRARY                            */}
             {/* =================================================================== */}
             {activeTab === 'assets' && (
-                <div className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
+                <div id="left-panel-panel-assets" role="tabpanel" aria-labelledby="left-panel-tab-assets" className="flex-1 flex flex-col min-h-0 p-3 gap-2.5">
                     {/* Subcategory Navigation Pills */}
                     <div className="flex items-center gap-1 overflow-x-auto pb-1 text-[11px] no-scrollbar shrink-0 border-b border-white/[0.06]">
                         {([

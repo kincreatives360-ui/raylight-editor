@@ -142,23 +142,12 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         onChange={(newColor) =>
                             updateLayer(activeShotId, layer.id, (l) => {
                                 if (l.kind !== 'shape') return l;
-                                if (l.fill.kind === 'gradient') {
-                                    return {
-                                        ...l,
-                                        fill: {
-                                            ...l.fill,
-                                            stops: l.fill.stops.length > 0
-                                                ? [{ ...l.fill.stops[0], color: newColor }, ...l.fill.stops.slice(1)]
-                                                : [{ at: 0, color: newColor, opacity: 1 }, { at: 1, color: '#000000', opacity: 1 }],
-                                        },
-                                    };
-                                }
                                 return {
                                     ...l,
                                     fill: {
                                         kind: 'solid',
                                         color: newColor,
-                                        opacity: l.fill.opacity ?? 1,
+                                        opacity: l.fill.kind === 'solid' ? l.fill.opacity ?? 1 : 1,
                                     },
                                 };
                             })

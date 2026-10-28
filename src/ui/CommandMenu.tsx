@@ -100,6 +100,8 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   return (
     <ModalShell
+        onClose={onClose}
+        initialFocusRef={inputRef}
         backdropProps={{"role": "dialog", "aria-modal": "true", "aria-label": "Command Menu", "className": "fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150", "onClick": onClose}}
         surfaceProps={{"className": "w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
     >

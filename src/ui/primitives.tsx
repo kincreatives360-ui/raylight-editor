@@ -457,10 +457,29 @@ export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
                     key={tab}
                     type="button"
                     role="tab"
+                    id={`inspector-tab-${tab}`}
+                    aria-controls={`inspector-panel-${tab}`}
+                    tabIndex={isSelected ? 0 : -1}
                     aria-selected={isSelected}
                     data-testid={tab === 'design' ? designTestId : animateTestId}
                     onClick={() => onChange(tab)}
-                    className={`${fullWidth ? 'flex-1 text-center ' : ''}px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-[color,background-color,transform] duration-150 active:scale-[0.97] cursor-pointer ${
+                    onKeyDown={(e) => {
+                        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                            e.preventDefault();
+                            const nextTab = tab === 'design' ? 'animate' : 'design';
+                            onChange(nextTab);
+                            document.getElementById(`inspector-tab-${nextTab}`)?.focus();
+                        } else if (e.key === 'Home') {
+                            e.preventDefault();
+                            onChange('design');
+                            document.getElementById('inspector-tab-design')?.focus();
+                        } else if (e.key === 'End') {
+                            e.preventDefault();
+                            onChange('animate');
+                            document.getElementById('inspector-tab-animate')?.focus();
+                        }
+                    }}
+                    className={`${fullWidth ? 'flex-1 text-center ' : ''}px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-[color,background-color,transform] duration-150 active:scale-[0.97] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${
                         isSelected
                             ? 'bg-[#222226] text-white shadow-xs border border-white/15'
                             : 'text-[#8e8e93] hover:text-white'

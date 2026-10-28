@@ -100,13 +100,8 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
 
   return (
     <ModalShell
-        backdropProps={{"role": "dialog", "aria-modal": "true", "aria-labelledby": "shortcuts-title", "className": "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150", "onClick": handleClose, "onKeyDown": (e) => {
-          if (e.key === 'Escape') {
-            e.preventDefault();
-            e.stopPropagation();
-            handleClose();
-          }
-        }}}
+        onClose={handleClose}
+        backdropProps={{"role": "dialog", "aria-modal": "true", "aria-labelledby": "shortcuts-title", "className": "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150", "onClick": handleClose}}
         surfaceProps={{"className": "w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs", "onClick": (e) => e.stopPropagation()}}
     >
         {/* Header */}

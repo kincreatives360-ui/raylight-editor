@@ -17,6 +17,7 @@ import { TimelineEasingCurve } from './TimelineEasingCurve';
 import { getShotTimelineWidth } from './timelineBarGeometry';
 import { AudioClipBar } from './AudioClipBar';
 import { TransitionPill } from './TransitionPill';
+import { isInteractiveElement } from '../../utils/shortcuts';
 
 const MIN_TIMELINE_ZOOM = 0.8;
 const MAX_TIMELINE_ZOOM = 2.4;
@@ -153,7 +154,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     } | null>(null);
     const [ghostDragPreview, setGhostDragPreview] = useState<{
         id: string;
-        type: 'block' | 'entrance' | 'exit' | 'layer';
+        type: 'block' | 'entrance' | 'exit' | 'layer' | 'camera' | 'light';
         startMs: number;
         durationMs: number;
         label?: string;
@@ -193,6 +194,75 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             el.scrollTop = timelineScrollTop;
         }
     }, [timelineScrollTop]);
+
+    // ArrowLeft / ArrowRight keyboard nudge for selected timeline blocks (CameraBlock, LightBlock, AnimationBlock)
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+            if (isInteractiveElement(e.target as HTMLElement)) return;
+            if (!activeShot) return;
+
+            const stepMs = e.shiftKey ? 100 : 10;
+            const deltaMs = e.key === 'ArrowLeft' ? -stepMs : stepMs;
+
+            if (selectedCameraBlockId) {
+                const cb = activeShot.cameraBlocks.find((b) => b.id === selectedCameraBlockId);
+                if (cb) {
+                    e.preventDefault();
+                    const nextStart = Math.max(0, Math.min(activeShot.durationMs - cb.durationMs, cb.startMs + deltaMs));
+                    if (nextStart !== cb.startMs) {
+                        updateShot(activeShot.id, (s) => ({
+                            ...s,
+                            cameraBlocks: s.cameraBlocks.map((b) =>
+                                b.id === cb.id ? { ...b, startMs: nextStart } : b
+                            ),
+                        }));
+                    }
+                    return;
+                }
+            }
+
+            if (selectedLightBlockId) {
+                const lb = (activeShot.lightBlocks || []).find((b) => b.id === selectedLightBlockId);
+                if (lb) {
+                    e.preventDefault();
+                    const nextStart = Math.max(0, Math.min(activeShot.durationMs - lb.durationMs, lb.startMs + deltaMs));
+                    if (nextStart !== lb.startMs) {
+                        updateShot(activeShot.id, (s) => ({
+                            ...s,
+                            lightBlocks: (s.lightBlocks || []).map((b) =>
+                                b.id === lb.id ? { ...b, startMs: nextStart } : b
+                            ),
+                        }));
+                    }
+                    return;
+                }
+            }
+
+            if (selectedBlockId) {
+                for (const layer of activeShot.layers) {
+                    const blk = layer.blocks.find((b) => b.id === selectedBlockId);
+                    if (blk) {
+                        e.preventDefault();
+                        const layerSpan = layer.outMs - layer.inMs;
+                        const nextStart = Math.max(0, Math.min(layerSpan - blk.durationMs, blk.startMs + deltaMs));
+                        if (nextStart !== blk.startMs) {
+                            updateLayer(activeShot.id, layer.id, (l) => ({
+                                ...l,
+                                blocks: l.blocks.map((b) =>
+                                    b.id === blk.id ? { ...b, startMs: nextStart } : b
+                                ),
+                            }));
+                        }
+                        return;
+                    }
+                }
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedCameraBlockId, selectedLightBlockId, selectedBlockId, activeShot, updateShot, updateLayer]);
 
     const visibleDurationMs = isBlankState
         ? 0
@@ -932,22 +1002,70 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             let nextStart = origStart;
             let nextDur = origDur;
 
+            const snapThresholdMs = Math.round(10 / pxPerMs);
+            const snapTargets = [0, shot.durationMs];
+            if (activeShot) {
+                activeShot.cameraBlocks.forEach((b) => {
+                    if (b.id !== camBlock.id) {
+                        snapTargets.push(b.startMs, b.startMs + b.durationMs);
+                    }
+                });
+            }
+
             if (mode === 'left') {
+                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
                 nextStart = Math.max(
                     0,
-                    Math.min(origStart + origDur - 100, origStart + deltaMs)
+                    Math.min(origStart + origDur - 100, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                setGhostDragPreview({
+                    id: camBlock.id,
+                    type: 'camera',
+                    startMs: nextStart,
+                    durationMs: nextDur,
+                    label: camBlock.label,
+                    trimEdge: 'left',
+                    snapped: snap.snapped,
+                });
             } else if (mode === 'right') {
-                nextDur = Math.max(
-                    100,
-                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
+                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                const nextEnd = Math.max(
+                    origStart + 100,
+                    Math.min(shot.durationMs, snap.time)
                 );
+                nextDur = nextEnd - origStart;
+                setGhostDragPreview({
+                    id: camBlock.id,
+                    type: 'camera',
+                    startMs: origStart,
+                    durationMs: nextDur,
+                    label: camBlock.label,
+                    trimEdge: 'right',
+                    snapped: snap.snapped,
+                });
             } else {
-                nextStart = Math.max(
-                    0,
-                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
-                );
+                const dur = origDur;
+                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
+                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                let snapped = false;
+                if (snapStart.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
+                    snapped = true;
+                } else if (snapEnd.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
+                    snapped = true;
+                } else {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                }
+                setGhostDragPreview({
+                    id: camBlock.id,
+                    type: 'camera',
+                    startMs: nextStart,
+                    durationMs: origDur,
+                    label: camBlock.label,
+                    snapped,
+                });
             }
 
             updateShot(
@@ -966,6 +1084,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -1016,22 +1135,70 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             let nextStart = origStart;
             let nextDur = origDur;
 
+            const snapThresholdMs = Math.round(10 / pxPerMs);
+            const snapTargets = [0, shot.durationMs];
+            if (activeShot) {
+                (activeShot.lightBlocks || []).forEach((b) => {
+                    if (b.id !== lightBlock.id) {
+                        snapTargets.push(b.startMs, b.startMs + b.durationMs);
+                    }
+                });
+            }
+
             if (mode === 'left') {
+                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
                 nextStart = Math.max(
                     0,
-                    Math.min(origStart + origDur - 100, origStart + deltaMs)
+                    Math.min(origStart + origDur - 100, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                setGhostDragPreview({
+                    id: lightBlock.id,
+                    type: 'light',
+                    startMs: nextStart,
+                    durationMs: nextDur,
+                    label: lightBlock.label,
+                    trimEdge: 'left',
+                    snapped: snap.snapped,
+                });
             } else if (mode === 'right') {
-                nextDur = Math.max(
-                    100,
-                    Math.min(shot.durationMs - origStart, origDur + deltaMs)
+                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                const nextEnd = Math.max(
+                    origStart + 100,
+                    Math.min(shot.durationMs, snap.time)
                 );
+                nextDur = nextEnd - origStart;
+                setGhostDragPreview({
+                    id: lightBlock.id,
+                    type: 'light',
+                    startMs: origStart,
+                    durationMs: nextDur,
+                    label: lightBlock.label,
+                    trimEdge: 'right',
+                    snapped: snap.snapped,
+                });
             } else {
-                nextStart = Math.max(
-                    0,
-                    Math.min(shot.durationMs - origDur, origStart + deltaMs)
-                );
+                const dur = origDur;
+                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
+                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                let snapped = false;
+                if (snapStart.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
+                    snapped = true;
+                } else if (snapEnd.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
+                    snapped = true;
+                } else {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                }
+                setGhostDragPreview({
+                    id: lightBlock.id,
+                    type: 'light',
+                    startMs: nextStart,
+                    durationMs: origDur,
+                    label: lightBlock.label,
+                    snapped,
+                });
             }
 
             updateShot(
@@ -1050,6 +1217,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -1063,7 +1231,6 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         window.addEventListener('pointerup', onEnd);
         window.addEventListener('pointercancel', onEnd);
     };
-
     // 6. Shot Edge Trim (Hardened)
     const startShotTrim = (event: React.PointerEvent, shot: Shot) => {
         if (event.button !== 0 && event.pointerType === 'mouse') return;
@@ -1684,31 +1851,42 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                 ? 'WARP'
                                                 : cb.mode.toUpperCase();
                                         return (
-                                            <TimelineRangeBar
-                                                key={cb.id}
-                                                data-cam-pill="true"
-                                                onPointerDown={(e) =>
-                                                    startCameraBlockDrag(e, activeShot, cb, 'move')
-                                                }
-                                                left={left} width={width}
-                                                title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
-                                                className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
-                                                        ? 'border-emerald-300 bg-gradient-to-b from-[#073b28]/95 to-[#061b13]/95 text-emerald-100 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]'
-                                                        : 'border-emerald-600/90 bg-gradient-to-b from-[#08281d]/90 to-[#06160f]/95 text-emerald-200 hover:border-emerald-400'
-                                                    }`}
-                                            >
-                                                <TimelineEasingCurve easing={cb.easing} color="#18c988" />
-                                                <TrimHandle side="left"
+                                            <React.Fragment key={cb.id}>
+                                                <TimelineRangeBar
+                                                    data-cam-pill="true"
                                                     onPointerDown={(e) =>
-                                                        startCameraBlockDrag(e, activeShot, cb, 'left')
+                                                        startCameraBlockDrag(e, activeShot, cb, 'move')
                                                     }
-                                                    className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full" />
-                                                <TrimHandle side="right"
-                                                    onPointerDown={(e) =>
-                                                        startCameraBlockDrag(e, activeShot, cb, 'right')
-                                                    }
-                                                    className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full" />
-                                            </TimelineRangeBar>
+                                                    left={left} width={width}
+                                                    title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
+                                                    className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
+                                                            ? 'border-emerald-300 bg-gradient-to-b from-[#073b28]/95 to-[#061b13]/95 text-emerald-100 shadow-[inset_0_0_20px_rgba(16,185,129,0.12)]'
+                                                            : 'border-emerald-600/90 bg-gradient-to-b from-[#08281d]/90 to-[#06160f]/95 text-emerald-200 hover:border-emerald-400'
+                                                        } ${ghostDragPreview?.id === cb.id ? 'opacity-40' : ''}`}
+                                                >
+                                                    <TimelineEasingCurve easing={cb.easing} color="#18c988" />
+                                                    <TrimHandle side="left"
+                                                        onPointerDown={(e) =>
+                                                            startCameraBlockDrag(e, activeShot, cb, 'left')
+                                                        }
+                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full" />
+                                                    <TrimHandle side="right"
+                                                        onPointerDown={(e) =>
+                                                            startCameraBlockDrag(e, activeShot, cb, 'right')
+                                                        }
+                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full" />
+                                                </TimelineRangeBar>
+                                                {ghostDragPreview && ghostDragPreview.id === cb.id && (
+                                                    <TimelineDragPreview
+                                                        startMs={ghostDragPreview.startMs}
+                                                        durationMs={ghostDragPreview.durationMs}
+                                                        snapped={ghostDragPreview.snapped}
+                                                        pxPerMs={pxPerMs}
+                                                        minWidth={36}
+                                                        variant="pill"
+                                                    />
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
                             </div>
@@ -1721,56 +1899,67 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         const left = lb.startMs * pxPerMs;
                                         const width = Math.max(36, lb.durationMs * pxPerMs);
                                         return (
-                                            <TimelineRangeBar
-                                                key={lb.id}
-                                                data-light-pill="true"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    selectLightBlock(lb.id);
-                                                    setInspectorTab('shot');
-                                                }}
-                                                onPointerDown={(e) =>
-                                                    startLightBlockDrag(e, activeShot, lb, 'move')
-                                                }
-                                                left={left} width={width}
-                                                title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
-                                                className={`group/light absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
-                                                        ? 'border-[#ff402f] bg-gradient-to-b from-[#3a1713]/95 to-[#1e0e0c]/95 text-red-100 shadow-[inset_0_0_20px_rgba(248,62,43,0.12)]'
-                                                        : 'border-[#ff3829] bg-gradient-to-b from-[#321410]/90 to-[#1c0c0a]/95 text-red-200 hover:border-[#ff6b5c]'
-                                                    }`}
-                                            >
-                                                <TimelineEasingCurve easing={lb.easing} color="#ff493b" />
-                                                <IconButton
-                                                    unstyled
-                                                    tooltip={false}
-                                                    label="Delete light block"
+                                            <React.Fragment key={lb.id}>
+                                                <TimelineRangeBar
+                                                    data-light-pill="true"
                                                     onClick={(e) => {
                                                         e.stopPropagation();
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            lightBlocks: (s.lightBlocks || []).filter(
-                                                                (b) => b.id !== lb.id
-                                                            ),
-                                                        }));
-                                                        if (selectedLightBlockId === lb.id) {
-                                                            selectLightBlock(null);
-                                                        }
+                                                        selectLightBlock(lb.id);
+                                                        setInspectorTab('shot');
                                                     }}
-                                                    title="Delete light block"
-                                                    className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1"
-                                                    icon={<>&times;</>}
-                                                />
-                                                <TrimHandle side="left"
                                                     onPointerDown={(e) =>
-                                                        startLightBlockDrag(e, activeShot, lb, 'left')
+                                                        startLightBlockDrag(e, activeShot, lb, 'move')
                                                     }
-                                                    className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full" />
-                                                <TrimHandle side="right"
-                                                    onPointerDown={(e) =>
-                                                        startLightBlockDrag(e, activeShot, lb, 'right')
-                                                    }
-                                                    className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full" />
-                                            </TimelineRangeBar>
+                                                    left={left} width={width}
+                                                    title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
+                                                    className={`group/light absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
+                                                            ? 'border-[#ff402f] bg-gradient-to-b from-[#3a1713]/95 to-[#1e0e0c]/95 text-red-100 shadow-[inset_0_0_20px_rgba(248,62,43,0.12)]'
+                                                            : 'border-[#ff3829] bg-gradient-to-b from-[#321410]/90 to-[#1c0c0a]/95 text-red-200 hover:border-[#ff6b5c]'
+                                                        } ${ghostDragPreview?.id === lb.id ? 'opacity-40' : ''}`}
+                                                >
+                                                    <TimelineEasingCurve easing={lb.easing} color="#ff493b" />
+                                                    <IconButton
+                                                        unstyled
+                                                        tooltip={false}
+                                                        label="Delete light block"
+                                                        onClick={(e) => {
+                                                            e.stopPropagation();
+                                                            updateShot(activeShot.id, (s) => ({
+                                                                ...s,
+                                                                lightBlocks: (s.lightBlocks || []).filter(
+                                                                    (b) => b.id !== lb.id
+                                                                ),
+                                                            }));
+                                                            if (selectedLightBlockId === lb.id) {
+                                                                selectLightBlock(null);
+                                                            }
+                                                        }}
+                                                        title="Delete light block"
+                                                        className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1"
+                                                        icon={<>&times;</>}
+                                                    />
+                                                    <TrimHandle side="left"
+                                                        onPointerDown={(e) =>
+                                                            startLightBlockDrag(e, activeShot, lb, 'left')
+                                                        }
+                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full" />
+                                                    <TrimHandle side="right"
+                                                        onPointerDown={(e) =>
+                                                            startLightBlockDrag(e, activeShot, lb, 'right')
+                                                        }
+                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full" />
+                                                </TimelineRangeBar>
+                                                {ghostDragPreview && ghostDragPreview.id === lb.id && (
+                                                    <TimelineDragPreview
+                                                        startMs={ghostDragPreview.startMs}
+                                                        durationMs={ghostDragPreview.durationMs}
+                                                        snapped={ghostDragPreview.snapped}
+                                                        pxPerMs={pxPerMs}
+                                                        minWidth={36}
+                                                        variant="pill"
+                                                    />
+                                                )}
+                                            </React.Fragment>
                                         );
                                     })}
                                 </div>

@@ -40,7 +40,7 @@ import { SidebarResizeHandle } from './ui/SidebarResizeHandle';
 import { IconButton } from './ui/primitives';
 import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
-import { isEditableElement } from './utils/shortcuts';
+import { isEditableElement, isInteractiveElement } from './utils/shortcuts';
 import { withViewTransition } from './utils/viewTransitions';
 
 interface StageErrorBoundaryProps {
@@ -142,11 +142,13 @@ export default function App() {
     project,
     updateProject,
     updateShot,
+    updateLayer,
     addLayerToShot,
     addMultipleLayersToShot,
     duplicateLayerInShot,
     deleteLayerFromShot,
     deleteMultipleLayersFromShot,
+    deleteShot,
     restackLayerInShot,
     recordAnimatedBlockAtPlayhead,
     createGroupFromLayers,
@@ -171,8 +173,14 @@ export default function App() {
 
   const {
     selectedLayerIds,
+    selectedBlockId,
+    selectedCameraBlockId,
+    selectedLightBlockId,
+    selectCameraBlock,
+    selectLightBlock,
     isAnimateMode,
     selectLayer,
+    selectShot,
     setSelectedLayerIds,
     selectBlock,
     setTimelineLayerExpanded,
@@ -701,6 +709,9 @@ export default function App() {
 
       // Single-Key Tool Shortcuts (V, G, Y, H, T, I, R, O, L, Escape)
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
+        if (isInteractiveElement(el)) {
+          return;
+        }
         if (key === 'v') {
           setActiveTool('select');
           return;
@@ -846,26 +857,90 @@ export default function App() {
         return;
       }
 
-      // Delete / Backspace: Delete Selected Layer(s)
-      if (
-        (e.key === 'Backspace' || e.key === 'Delete') &&
-        selectedLayerIds.length > 0
-      ) {
-        e.preventDefault();
-        const count = selectedLayerIds.length;
-        deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
-        clearLayerSelection();
-        setInspectorTab('shot');
-        setUndoToast({
-          message: count === 1 ? 'Deleted layer' : `Deleted ${count} layers`,
-          isOpen: true,
-          historyLength: useProjectStore.getState().past.length,
-        });
-        return;
+      // Delete / Backspace: Delete Selected Layer(s), Block(s) or Active Shot
+      if (e.key === 'Backspace' || e.key === 'Delete') {
+        if (selectedCameraBlockId && activeShot) {
+          e.preventDefault();
+          updateShot(activeShot.id, (s) => ({
+            ...s,
+            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== selectedCameraBlockId),
+          }));
+          selectCameraBlock(null);
+          setUndoToast({
+            message: 'Deleted camera block',
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        }
+        if (selectedLightBlockId && activeShot) {
+          e.preventDefault();
+          updateShot(activeShot.id, (s) => ({
+            ...s,
+            lightBlocks: (s.lightBlocks || []).filter((b) => b.id !== selectedLightBlockId),
+          }));
+          selectLightBlock(null);
+          setUndoToast({
+            message: 'Deleted light block',
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        }
+        if (selectedBlockId && activeShot) {
+          e.preventDefault();
+          for (const layer of activeShot.layers) {
+            if (layer.blocks.some((b) => b.id === selectedBlockId)) {
+              updateLayer(activeShot.id, layer.id, (l) => ({
+                ...l,
+                blocks: l.blocks.filter((b) => b.id !== selectedBlockId),
+              }));
+              break;
+            }
+          }
+          selectBlock(null);
+          setUndoToast({
+            message: 'Deleted animation block',
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        }
+        if (selectedLayerIds.length > 0) {
+          e.preventDefault();
+          const count = selectedLayerIds.length;
+          deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
+          clearLayerSelection();
+          setInspectorTab('shot');
+          setUndoToast({
+            message: count === 1 ? 'Deleted layer' : `Deleted ${count} layers`,
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        } else if (project.shots.length > 1) {
+          e.preventDefault();
+          const shotIndex = project.shots.findIndex((s) => s.id === activeShot.id);
+          deleteShot(activeShot.id);
+          const remaining = project.shots.filter((s) => s.id !== activeShot.id);
+          const nextIndex = Math.max(0, Math.min(shotIndex - 1, remaining.length - 1));
+          if (remaining[nextIndex]) {
+            selectShot(remaining[nextIndex].id);
+          }
+          setUndoToast({
+            message: 'Deleted shot',
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        }
       }
 
-      // Space: Play / Pause
+      // Space: Play / Pause (preserves native button/tab activation)
       if (e.code === 'Space') {
+        if (isInteractiveElement(el)) {
+          return;
+        }
         e.preventDefault();
         togglePlay();
         return;
@@ -937,9 +1012,18 @@ export default function App() {
     duplicateLayerInShot,
     deleteLayerFromShot,
     deleteMultipleLayersFromShot,
+    deleteShot,
     selectLayer,
+    selectShot,
     setSelectedLayerIds,
     selectBlock,
+    selectCameraBlock,
+    selectLightBlock,
+    selectedBlockId,
+    selectedCameraBlockId,
+    selectedLightBlockId,
+    updateLayer,
+    activeShot,
     clearLayerSelection,
     setInspectorTab,
     setActiveTool,

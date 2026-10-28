@@ -16,6 +16,7 @@ import { Guides } from './Guides';
 import { OrientationGizmo } from './OrientationGizmo';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { ASPECT_RATIO_CONFIG, type SnapGuideLine } from './stageUtils';
+import { isInteractiveElement } from '../utils/shortcuts';
 import { CanvasToolbar } from './CanvasToolbar';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
@@ -159,24 +160,10 @@ const StageComponent: React.FC<StageProps> = ({
         const onKeyDown = (e: KeyboardEvent) => {
             if (e.defaultPrevented) return;
             const el = document.activeElement as HTMLElement | null;
-            if (!el) return;
-            const tag = el.tagName;
-            if (
-                tag === 'INPUT' ||
-                tag === 'TEXTAREA' ||
-                tag === 'SELECT' ||
-                el.isContentEditable ||
-                el.getAttribute('role') === 'spinbutton' ||
-                el.getAttribute('role') === 'textbox'
-            ) {
-                return;
-            }
+            if (isInteractiveElement(el)) return;
+
             if (e.code === 'Space') setIsSpaceHeld(true);
             if (!e.metaKey && !e.ctrlKey) {
-                if (e.key === 'c' || e.key === 'C') setActiveTool('camera');
-                if (e.key === 'v' || e.key === 'V') setActiveTool('select');
-                if (e.key === 'h' || e.key === 'H') setActiveTool('hand');
-                if (e.key === 'y' || e.key === 'Y') setActiveTool('tilt');
                 if (e.key === 'f' || e.key === 'F') {
                     e.preventDefault();
                     handleFrameSelectedLayersRef.current();
@@ -192,7 +179,7 @@ const StageComponent: React.FC<StageProps> = ({
             window.removeEventListener('keydown', onKeyDown);
             window.removeEventListener('keyup', onKeyUp);
         };
-    }, [setActiveTool]);
+    }, []);
 
     // ============================================================================
     // 3D CAMERA RIG CONTROLLER (Cinema 4D / Blender Style Viewport Navigation)
@@ -1799,6 +1786,7 @@ const StageComponent: React.FC<StageProps> = ({
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}
                 onOpenShortcuts={onOpenShortcuts}
+                onFrameSelection={handleFrameSelectedLayers}
             />
         </div>
     );

@@ -1,6 +1,6 @@
 // src/utils/shortcuts.test.ts
 import { describe, it, expect, afterEach } from 'vitest';
-import { isMac, getModifierKey, formatShortcut, isEditableElement } from './shortcuts';
+import { isMac, getModifierKey, formatShortcut, isEditableElement, isInteractiveElement } from './shortcuts';
 
 describe('Shortcuts Utility (Detail 4)', () => {
   const originalNavigator = globalThis.navigator;
@@ -54,5 +54,24 @@ describe('Shortcuts Utility (Detail 4)', () => {
     expect(isEditableElement(textboxMock)).toBe(true);
     expect(isEditableElement(normalDivMock)).toBe(false);
     expect(isEditableElement(null)).toBe(false);
+  });
+
+  it('correctly identifies interactive elements to preserve native key actions', () => {
+    const buttonMock = { tagName: 'BUTTON', isContentEditable: false, getAttribute: () => null };
+    const linkMock = { tagName: 'A', isContentEditable: false, getAttribute: () => null };
+    const summaryMock = { tagName: 'SUMMARY', isContentEditable: false, getAttribute: () => null };
+    const roleButtonMock = { tagName: 'DIV', isContentEditable: false, getAttribute: (attr: string) => attr === 'role' ? 'button' : null };
+    const roleTabMock = { tagName: 'DIV', isContentEditable: false, getAttribute: (attr: string) => attr === 'role' ? 'tab' : null };
+    const roleMenuItemMock = { tagName: 'DIV', isContentEditable: false, getAttribute: (attr: string) => attr === 'role' ? 'menuitem' : null };
+    const regularDivMock = { tagName: 'DIV', isContentEditable: false, getAttribute: () => null };
+
+    expect(isInteractiveElement(buttonMock)).toBe(true);
+    expect(isInteractiveElement(linkMock)).toBe(true);
+    expect(isInteractiveElement(summaryMock)).toBe(true);
+    expect(isInteractiveElement(roleButtonMock)).toBe(true);
+    expect(isInteractiveElement(roleTabMock)).toBe(true);
+    expect(isInteractiveElement(roleMenuItemMock)).toBe(true);
+    expect(isInteractiveElement(regularDivMock)).toBe(false);
+    expect(isInteractiveElement(null)).toBe(false);
   });
 });
