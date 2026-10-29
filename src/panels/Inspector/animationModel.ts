@@ -73,3 +73,125 @@ export function editPreset(layer: Layer, side: PresetSide, index: number, expect
     next.delayMs = Math.max(0, Math.min(next.delayMs, window - next.durationMs));
     return replacePresets(layer, side, list.map((item, i) => i === index ? next : item));
 }
+
+export interface PresetPropertyMapping {
+    preset: TransitionType;
+    primaryProperty: AnimationBlockProperty;
+    defaultAmount: (side: PresetSide) => any;
+}
+
+export const PRESET_PROPERTY_MAPPINGS: Record<TransitionType, PresetPropertyMapping> = {
+    fade: {
+        preset: 'fade',
+        primaryProperty: 'opacity',
+        defaultAmount: (side) => (side === 'in' ? 1.0 : -1.0),
+    },
+    'scale-out': {
+        preset: 'scale-out',
+        primaryProperty: 'scale',
+        defaultAmount: (side) => (side === 'in' ? 0.25 : -0.25),
+    },
+    pop: {
+        preset: 'pop',
+        primaryProperty: 'scale',
+        defaultAmount: () => 0.35,
+    },
+    'slide-up': {
+        preset: 'slide-up',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: 0, y: side === 'in' ? -0.25 : 0.25, z: 0 }),
+    },
+    'slide-down': {
+        preset: 'slide-down',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: 0, y: side === 'in' ? 0.25 : -0.25, z: 0 }),
+    },
+    'slide-left': {
+        preset: 'slide-left',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: side === 'in' ? 0.25 : -0.25, y: 0, z: 0 }),
+    },
+    'slide-right': {
+        preset: 'slide-right',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: side === 'in' ? -0.25 : 0.25, y: 0, z: 0 }),
+    },
+    'mask-sweep': {
+        preset: 'mask-sweep',
+        primaryProperty: 'maskSweep',
+        defaultAmount: () => 1.0,
+    },
+    wipe: {
+        preset: 'wipe',
+        primaryProperty: 'maskSweep',
+        defaultAmount: () => 1.0,
+    },
+    blur: {
+        preset: 'blur',
+        primaryProperty: 'layerBlur',
+        defaultAmount: () => 0.4,
+    },
+    focus: {
+        preset: 'focus',
+        primaryProperty: 'layerBlur',
+        defaultAmount: () => 0.3,
+    },
+    'rack-focus': {
+        preset: 'rack-focus',
+        primaryProperty: 'layerBlur',
+        defaultAmount: () => 0.5,
+    },
+    typewriter: {
+        preset: 'typewriter',
+        primaryProperty: 'pathReveal',
+        defaultAmount: () => 1.0,
+    },
+    scramble: {
+        preset: 'scramble',
+        primaryProperty: 'changeText',
+        defaultAmount: () => 1.0,
+    },
+    spin: {
+        preset: 'spin',
+        primaryProperty: 'rotation',
+        defaultAmount: () => ({ x: 0, y: 0, z: degToRad(360) }),
+    },
+    'flip-x': {
+        preset: 'flip-x',
+        primaryProperty: 'rotation',
+        defaultAmount: () => ({ x: degToRad(180), y: 0, z: 0 }),
+    },
+    'flip-y': {
+        preset: 'flip-y',
+        primaryProperty: 'rotation',
+        defaultAmount: () => ({ x: 0, y: degToRad(180), z: 0 }),
+    },
+    swing: {
+        preset: 'swing',
+        primaryProperty: 'tilt',
+        defaultAmount: () => ({ x: degToRad(25), y: 0, z: 0 }),
+    },
+    'float-out': {
+        preset: 'float-out',
+        primaryProperty: 'position',
+        defaultAmount: () => ({ x: 0, y: -0.15, z: 0 }),
+    },
+    none: {
+        preset: 'none',
+        primaryProperty: 'opacity',
+        defaultAmount: () => 0,
+    },
+};
+
+export function getUnderlyingPropertyForPreset(type: TransitionType): AnimationBlockProperty {
+    return PRESET_PROPERTY_MAPPINGS[type]?.primaryProperty ?? 'opacity';
+}
+
+export function inferPresetFromProperty(property: AnimationBlockProperty): TransitionType {
+    for (const [preset, mapping] of Object.entries(PRESET_PROPERTY_MAPPINGS)) {
+        if (mapping.primaryProperty === property) {
+            return preset as TransitionType;
+        }
+    }
+    return 'fade';
+}

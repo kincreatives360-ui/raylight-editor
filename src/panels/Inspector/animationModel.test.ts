@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultShapeLayer, createDefaultTextLayer, createDefaultShot } from '../../model/defaults';
-import { addBlocksToShot, availableAnimations, availablePresets, presetList, replacePresets } from './animationModel';
+import { addBlocksToShot, availableAnimations, availablePresets, presetList, replacePresets, getUnderlyingPropertyForPreset, inferPresetFromProperty } from './animationModel';
 describe('object-aware animation controls', () => {
     it('limits typography presets and animations to text selections', () => {
         const text = createDefaultTextLayer();
@@ -32,5 +32,19 @@ describe('object-aware animation controls', () => {
         const empty = replacePresets(next, 'in', []);
         expect(empty.entrance.type).toBe('none');
         expect(presetList(empty, 'in')).toEqual([]);
+    });
+
+    it('maps high-level user presets to underlying physical evaluated properties bidirectionally', () => {
+        expect(getUnderlyingPropertyForPreset('fade')).toBe('opacity');
+        expect(getUnderlyingPropertyForPreset('slide-up')).toBe('position');
+        expect(getUnderlyingPropertyForPreset('scale-out')).toBe('scale');
+        expect(getUnderlyingPropertyForPreset('blur')).toBe('layerBlur');
+        expect(getUnderlyingPropertyForPreset('mask-sweep')).toBe('maskSweep');
+        expect(getUnderlyingPropertyForPreset('spin')).toBe('rotation');
+
+        expect(inferPresetFromProperty('opacity')).toBe('fade');
+        expect(inferPresetFromProperty('position')).toBe('slide-up');
+        expect(inferPresetFromProperty('scale')).toBe('scale-out');
+        expect(inferPresetFromProperty('maskSweep')).toBe('mask-sweep');
     });
 });
