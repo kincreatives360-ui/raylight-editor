@@ -1727,70 +1727,72 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                     const visibleEnd = Math.min(clipEnd, shotEnd);
                                     const left = (visibleStart - shotStart) * pxPerMs;
                                     const width = Math.max(18, (visibleEnd - visibleStart) * pxPerMs);
+                                    const openAudioContextMenu = (e: React.MouseEvent) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        setContextMenu({
+                                            x: e.clientX,
+                                            y: e.clientY,
+                                            items: [
+                                                { type: 'header', label: clip.name },
+                                                {
+                                                    id: 'split',
+                                                    label: 'Split at playhead',
+                                                    shortcut: '⌘B',
+                                                    onClick: () => splitAudioClipAtPlayhead(clip.id, usePlayheadStore.getState().currentTimeMs),
+                                                },
+                                                {
+                                                    id: 'fade-in',
+                                                    label: 'Quick fade in',
+                                                    children: [
+                                                        { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
+                                                        { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
+                                                        { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
+                                                        { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
+                                                    ],
+                                                },
+                                                {
+                                                    id: 'fade-out',
+                                                    label: 'Quick fade out',
+                                                    children: [
+                                                        { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
+                                                        { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
+                                                        { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
+                                                        { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
+                                                    ],
+                                                },
+                                                {
+                                                    id: 'toggle-mute',
+                                                    label: project.audio?.muted ? 'Unmute' : 'Mute',
+                                                    shortcut: 'M',
+                                                    onClick: () => toggleProjectAudioMuted(),
+                                                },
+                                                { type: 'divider' },
+                                                {
+                                                    id: 'duplicate',
+                                                    label: 'Duplicate',
+                                                    shortcut: '⌘D',
+                                                    onClick: () => duplicateAudioClip(clip.id),
+                                                },
+                                                {
+                                                    id: 'delete',
+                                                    label: 'Delete clip',
+                                                    icon: Trash2,
+                                                    shortcut: '⌫',
+                                                    danger: true,
+                                                    onClick: () => deleteAudioClip(clip.id),
+                                                },
+                                            ],
+                                        });
+                                    };
+
                                     return (
                                         <AudioClipBar key={clip.id} clip={clip} left={left} width={width}
                                             muted={clip.muted || project.audio?.muted}
                                             onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
                                             onSeek={() => setCurrentTimeMs(visibleStart)}
                                             onDelete={() => deleteAudioClip(clip.id)}
-                                            onContextMenu={(e) => {
-                                                e.preventDefault();
-                                                e.stopPropagation();
-                                                setContextMenu({
-                                                    x: e.clientX,
-                                                    y: e.clientY,
-                                                    items: [
-                                                        { type: 'header', label: clip.name },
-                                                        {
-                                                            id: 'split',
-                                                            label: 'Split at playhead',
-                                                            shortcut: '⌘B',
-                                                            onClick: () => splitAudioClipAtPlayhead(clip.id, currentTimeMs),
-                                                        },
-                                                        {
-                                                            id: 'fade-in',
-                                                            label: 'Quick fade in',
-                                                            children: [
-                                                                { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
-                                                                { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
-                                                                { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
-                                                                { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
-                                                            ],
-                                                        },
-                                                        {
-                                                            id: 'fade-out',
-                                                            label: 'Quick fade out',
-                                                            children: [
-                                                                { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
-                                                                { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
-                                                                { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
-                                                                { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
-                                                            ],
-                                                        },
-                                                        {
-                                                            id: 'toggle-mute',
-                                                            label: project.audio?.muted ? 'Unmute' : 'Mute',
-                                                            shortcut: 'M',
-                                                            onClick: () => toggleProjectAudioMuted(),
-                                                        },
-                                                        { type: 'divider' },
-                                                        {
-                                                            id: 'duplicate',
-                                                            label: 'Duplicate',
-                                                            shortcut: '⌘D',
-                                                            onClick: () => duplicateAudioClip(clip.id),
-                                                        },
-                                                        {
-                                                            id: 'delete',
-                                                            label: 'Delete clip',
-                                                            icon: Trash2,
-                                                            shortcut: '⌫',
-                                                            danger: true,
-                                                            onClick: () => deleteAudioClip(clip.id),
-                                                        },
-                                                    ],
-                                                });
-                                            }} />
+                                            onContextMenu={openAudioContextMenu} />
                                     );
                                 }
                                 const left = Math.max(0, clipStart) * pxPerMs;
@@ -1800,7 +1802,65 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                         muted={clip.muted || project.audio?.muted}
                                         onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
                                         onSeek={() => setCurrentTimeMs(Math.max(0, clipStart))}
-                                        onDelete={() => deleteAudioClip(clip.id)} />
+                                        onDelete={() => deleteAudioClip(clip.id)}
+                                        onContextMenu={(e) => {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            setContextMenu({
+                                                x: e.clientX,
+                                                y: e.clientY,
+                                                items: [
+                                                    { type: 'header', label: clip.name },
+                                                    {
+                                                        id: 'split',
+                                                        label: 'Split at playhead',
+                                                        shortcut: '⌘B',
+                                                        onClick: () => splitAudioClipAtPlayhead(clip.id, usePlayheadStore.getState().currentTimeMs),
+                                                    },
+                                                    {
+                                                        id: 'fade-in',
+                                                        label: 'Quick fade in',
+                                                        children: [
+                                                            { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
+                                                            { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
+                                                            { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
+                                                            { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
+                                                        ],
+                                                    },
+                                                    {
+                                                        id: 'fade-out',
+                                                        label: 'Quick fade out',
+                                                        children: [
+                                                            { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
+                                                            { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
+                                                            { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
+                                                            { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
+                                                        ],
+                                                    },
+                                                    {
+                                                        id: 'toggle-mute',
+                                                        label: project.audio?.muted ? 'Unmute' : 'Mute',
+                                                        shortcut: 'M',
+                                                        onClick: () => toggleProjectAudioMuted(),
+                                                    },
+                                                    { type: 'divider' },
+                                                    {
+                                                        id: 'duplicate',
+                                                        label: 'Duplicate',
+                                                        shortcut: '⌘D',
+                                                        onClick: () => duplicateAudioClip(clip.id),
+                                                    },
+                                                    {
+                                                        id: 'delete',
+                                                        label: 'Delete clip',
+                                                        icon: Trash2,
+                                                        shortcut: '⌫',
+                                                        danger: true,
+                                                        onClick: () => deleteAudioClip(clip.id),
+                                                    },
+                                                ],
+                                            });
+                                        }} />
                                 );
                             })}
                         </div>
@@ -1965,6 +2025,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         selectCameraBlock(cb.id);
+                                                        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                                         setContextMenu({
                                                             x: e.clientX,
                                                             y: e.clientY,
@@ -1986,7 +2047,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                                     ),
                                                                                 }));
                                                                             },
-                                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                            anchorRect: targetRect,
                                                                         });
                                                                     },
                                                                 },
@@ -2087,6 +2148,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                         e.preventDefault();
                                                         e.stopPropagation();
                                                         selectLightBlock(lb.id);
+                                                        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                                         setContextMenu({
                                                             x: e.clientX,
                                                             y: e.clientY,
@@ -2108,7 +2170,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                                     ),
                                                                                 }));
                                                                             },
-                                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                            anchorRect: targetRect,
                                                                         });
                                                                     },
                                                                 },
@@ -2375,6 +2437,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                     e.preventDefault();
                                                                     e.stopPropagation();
                                                                     selectBlock(blk.id, layer.id);
+                                                                    const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
                                                                     setContextMenu({
                                                                         x: e.clientX,
                                                                         y: e.clientY,
@@ -2395,7 +2458,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                                                                 ),
                                                                                             }));
                                                                                         },
-                                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                                        anchorRect: targetRect,
                                                                                     });
                                                                                 },
                                                                             },
@@ -2577,6 +2640,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             }}
                             onClose={() => setEasingPopoverTarget(null)}
                             anchorRect={easingPopoverTarget.anchorRect}
+                        />
+                    )}
+                    {contextMenu && (
+                        <ContextMenu
+                            x={contextMenu.x}
+                            y={contextMenu.y}
+                            items={contextMenu.items}
+                            onClose={() => setContextMenu(null)}
                         />
                     )}
                 </div>

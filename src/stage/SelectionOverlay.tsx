@@ -883,43 +883,53 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     const handleStartDragGradientEnd = (event: React.PointerEvent) => {
                         event.stopPropagation();
                         event.preventDefault();
+                        const rect = overlayRootRef.current?.getBoundingClientRect();
+                        if (!rect) return;
+                        const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
+                        const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
                         const targetLayerId = primaryEval.layer.id;
-                        const handlePointerMove = (moveEv: PointerEvent) => {
-                            const newAngle = Math.round(((Math.atan2(moveEv.clientY - cy, moveEv.clientX - cx) * 180) / Math.PI + 90) % 360);
+
+                        beginDragTransaction();
+                        const onMove = (moveEv: PointerEvent | MouseEvent) => {
+                            const newAngle = Math.round(((Math.atan2(moveEv.clientY - centerClientY, moveEv.clientX - centerClientX) * 180) / Math.PI + 90) % 360);
                             const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
-                            updateLayer(activeShot.id, targetLayerId, (l) =>
-                                l.kind === 'shape' && l.fill.kind === 'gradient'
-                                    ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
-                                    : l
+                            updateLayer(
+                                activeShot.id,
+                                targetLayerId,
+                                (l) =>
+                                    l.kind === 'shape' && l.fill.kind === 'gradient'
+                                        ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
+                                        : l,
+                                { skipHistory: true }
                             );
                         };
-                        const handlePointerUp = () => {
-                            window.removeEventListener('pointermove', handlePointerMove);
-                            window.removeEventListener('pointerup', handlePointerUp);
-                        };
-                        window.addEventListener('pointermove', handlePointerMove);
-                        window.addEventListener('pointerup', handlePointerUp);
+                        bindPointerDrag(event, onMove, commitDragTransaction);
                     };
 
                     const handleStartDragGradientStart = (event: React.PointerEvent) => {
                         event.stopPropagation();
                         event.preventDefault();
+                        const rect = overlayRootRef.current?.getBoundingClientRect();
+                        if (!rect) return;
+                        const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
+                        const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
                         const targetLayerId = primaryEval.layer.id;
-                        const handlePointerMove = (moveEv: PointerEvent) => {
-                            const newAngle = Math.round(((Math.atan2(cy - moveEv.clientY, cx - moveEv.clientX) * 180) / Math.PI + 90) % 360);
+
+                        beginDragTransaction();
+                        const onMove = (moveEv: PointerEvent | MouseEvent) => {
+                            const newAngle = Math.round(((Math.atan2(centerClientY - moveEv.clientY, centerClientX - moveEv.clientX) * 180) / Math.PI + 90) % 360);
                             const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
-                            updateLayer(activeShot.id, targetLayerId, (l) =>
-                                l.kind === 'shape' && l.fill.kind === 'gradient'
-                                    ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
-                                    : l
+                            updateLayer(
+                                activeShot.id,
+                                targetLayerId,
+                                (l) =>
+                                    l.kind === 'shape' && l.fill.kind === 'gradient'
+                                        ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
+                                        : l,
+                                { skipHistory: true }
                             );
                         };
-                        const handlePointerUp = () => {
-                            window.removeEventListener('pointermove', handlePointerMove);
-                            window.removeEventListener('pointerup', handlePointerUp);
-                        };
-                        window.addEventListener('pointermove', handlePointerMove);
-                        window.addEventListener('pointerup', handlePointerUp);
+                        bindPointerDrag(event, onMove, commitDragTransaction);
                     };
 
                     return (

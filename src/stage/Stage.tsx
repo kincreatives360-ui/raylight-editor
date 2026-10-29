@@ -1488,7 +1488,38 @@ const StageComponent: React.FC<StageProps> = ({
             )}
 
             {/* RAYLIGHT RIGHT-CLICK CONTEXT MENU (Audit Section 6.4) */}
-            {contextMenu && (
+            {contextMenu && (() => {
+                const idsToAlign = contextMenuLayer
+                    ? new Set(selectedLayerSet.has(contextMenuLayer.id) ? selectedLayerIds : [contextMenuLayer.id])
+                    : new Set<string>();
+
+                const alignLayers = (alignment: 'left' | 'center-h' | 'right' | 'top' | 'center-v' | 'bottom') => {
+                    updateShot(frame.activeShot.id, (s) => ({
+                        ...s,
+                        layers: s.layers.map((l) => {
+                            if (!idsToAlign.has(l.id) || l.locked) return l;
+                            const size = (l as any).size || { width: 300, height: 200 };
+                            const lw = ((size.width || 300) / 1920) * (l.scale?.x ?? 1);
+                            const lh = ((size.height || 200) / 1080) * (l.scale?.y ?? 1);
+                            const halfW = 0.5 * targetAspect;
+                            const halfH = 0.5;
+
+                            let nextX = l.position.x;
+                            let nextY = l.position.y;
+
+                            if (alignment === 'left') nextX = -halfW + lw / 2;
+                            else if (alignment === 'center-h') nextX = 0;
+                            else if (alignment === 'right') nextX = halfW - lw / 2;
+                            else if (alignment === 'top') nextY = halfH - lh / 2;
+                            else if (alignment === 'center-v') nextY = 0;
+                            else if (alignment === 'bottom') nextY = -halfH + lh / 2;
+
+                            return { ...l, position: { ...l.position, x: nextX, y: nextY } };
+                        }),
+                    }));
+                };
+
+                return (
                 <ContextMenu
                     x={contextMenu.x}
                     y={contextMenu.y}
@@ -1540,44 +1571,44 @@ const StageComponent: React.FC<StageProps> = ({
                                               id: 'align-left',
                                               label: 'Align Left',
                                               icon: AlignLeft,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: -0.32 } })),
+                                              onClick: () => alignLayers('left'),
                                           },
                                           {
                                               id: 'align-center-h',
                                               label: 'Center Horizontal',
                                               icon: AlignCenterHorizontal,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: 0 } })),
+                                              onClick: () => alignLayers('center-h'),
                                           },
                                           {
                                               id: 'align-right',
                                               label: 'Align Right',
                                               icon: AlignRight,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: 0.32 } })),
+                                              onClick: () => alignLayers('right'),
                                           },
                                           {
                                               id: 'align-top',
                                               label: 'Align Top',
                                               icon: AlignStartVertical,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: 0.32 } })),
+                                              onClick: () => alignLayers('top'),
                                           },
                                           {
                                               id: 'align-center-v',
                                               label: 'Center Vertical',
                                               icon: AlignCenterVertical,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: 0 } })),
+                                              onClick: () => alignLayers('center-v'),
                                           },
                                           {
                                               id: 'align-bottom',
                                               label: 'Align Bottom',
                                               icon: AlignEndVertical,
-                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: -0.32 } })),
+                                              onClick: () => alignLayers('bottom'),
                                           },
                                       ],
                                   },
                                   { type: 'divider' },
                                   {
                                       id: 'animate-last-change',
-                                      label: 'Animate last change',
+                                      label: 'Animate position offset',
                                       icon: Sparkles,
                                       shortcut: '⇧K',
                                       onClick: () => {
@@ -1727,7 +1758,8 @@ const StageComponent: React.FC<StageProps> = ({
                               ]
                     }
                 />
-            )}
+                );
+            })()}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
             <CanvasToolbar

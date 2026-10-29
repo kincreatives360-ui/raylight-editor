@@ -43,6 +43,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         addCameraBlockToShot,
         toggleProjectAudioMuted,
         deleteLayerFromShot,
+        duplicateLayerInShot,
+        createGroupFromLayers,
+        ungroupInShot,
         restackLayerInShot,
         moveLayerToOrderAndGroup,
         updateGroupInShot,
@@ -428,6 +431,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 id: 'focus',
                                 label: 'Focus in timeline',
                                 onClick: () => {
+                                    if (shot.id !== activeShot.id) {
+                                        selectShot(shot.id);
+                                    }
                                     selectLayer(layer.id, false);
                                     if (!expandedTimelineLayerSet.has(layer.id)) {
                                         toggleTimelineLayerExpanded(layer.id);
@@ -441,6 +447,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 icon: Copy,
                                 shortcut: '⌘D',
                                 onClick: () => {
+                                    if (shot.id !== activeShot.id) {
+                                        selectShot(shot.id);
+                                    }
                                     const dup = duplicateLayerInShot(shot.id, layer.id);
                                     if (dup) selectLayer(dup.id, false);
                                 },
@@ -675,7 +684,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     icon: Trash2,
                                     shortcut: '⌫',
                                     danger: true,
-                                    onClick: () => ungroupInShot(shot.id, group.id),
+                                    onClick: () => {
+                                        childLayers.forEach((child) => deleteLayerFromShot(shot.id, child.id));
+                                        ungroupInShot(shot.id, group.id);
+                                    },
                                 },
                             ],
                         });

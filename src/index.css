@@ -386,6 +386,12 @@ select:focus-visible {
     transition-duration: 120ms !important;
     scroll-behavior: auto !important;
   }
+
+  ::view-transition-group(*),
+  ::view-transition-old(*),
+  ::view-transition-new(*) {
+    animation: none !important;
+  }
 }
 
 /* Reduced transparency accessibility fallback */

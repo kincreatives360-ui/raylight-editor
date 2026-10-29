@@ -1557,7 +1557,13 @@ export default function App() {
               tooltip={false}
               label="Expand Left Panel"
               type="button"
-              onClick={toggleLeftPanel}
+              onClick={() => {
+                setResizePriority('left');
+                setLeftPanelOpen(true);
+                if (workspaceWidth < leftPanelWidth + rightSidebarWidth + MIN_STAGE_WIDTH) {
+                  setRightSidebarOpen(false);
+                }
+              }}
               title="Expand Left Panel ( [ )"
               className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-[#18181b]/90 hover:bg-[#27272a] text-[#a1a1aa] hover:text-white border border-white/10 shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff] text-xs font-medium"
               icon={<>

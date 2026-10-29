@@ -59,12 +59,14 @@ export function estimateExportMetrics(
             : settings.quality === 'web'
                 ? 6
                 : 2.5;
+    const bitrateMultiplier = settings.resolution === '4k' ? 2.5 : 1;
+    const effectiveBitrateMbps = bitrateMbps * bitrateMultiplier;
     const resScale = (width * height) / (1920 * 1080);
     const estimatedSizeMb = settings.format === 'png'
         ? 1.4 * resScale
         : settings.format === 'gif'
             ? durationSec * 0.85
-            : (durationSec * bitrateMbps * resScale) / 8;
+            : (durationSec * effectiveBitrateMbps) / 8;
     const estimatedTimeSec = settings.format === 'png'
         ? 1
         : Math.max(2, Math.ceil((totalFrames * (resScale > 2 ? 32 : 16)) / 1000));

@@ -24,10 +24,18 @@ INSTALLED=0
 echo "▲ Installing Vercel's Web Interface Guidelines…"
 echo ""
 
+CACHED_COMMAND=$(mktemp)
+trap 'rm -f "$CACHED_COMMAND"' EXIT
+
+if ! curl -fsSL "$REPO_URL/$COMMAND_FILE" | tr -d '\r' > "$CACHED_COMMAND" || [ ! -s "$CACHED_COMMAND" ]; then
+  echo "Error: Failed to download $REPO_URL/$COMMAND_FILE" >&2
+  exit 1
+fi
+
 # Amp Code
 if [ -d "$HOME/.amp" ]; then
   mkdir -p "$HOME/.config/amp/commands"
-  curl -sL -o "$HOME/.config/amp/commands/$INSTALL_NAME" "$REPO_URL/$COMMAND_FILE"
+  cp "$CACHED_COMMAND" "$HOME/.config/amp/commands/$INSTALL_NAME"
   printf "${GREEN}✓${RESET} Amp Code Skill\n"
   INSTALLED=$((INSTALLED + 1))
 fi
@@ -35,7 +43,7 @@ fi
 # Claude Code
 if [ -d "$HOME/.claude" ]; then
   mkdir -p "$HOME/.claude/commands"
-  curl -sL -o "$HOME/.claude/commands/$INSTALL_NAME" "$REPO_URL/$COMMAND_FILE"
+  cp "$CACHED_COMMAND" "$HOME/.claude/commands/$INSTALL_NAME"
   printf "${GREEN}✓${RESET} Claude Code Skill\n"
   INSTALLED=$((INSTALLED + 1))
 fi
@@ -43,7 +51,7 @@ fi
 # Cursor (1.6+)
 if [ -d "$HOME/.cursor" ]; then
   mkdir -p "$HOME/.cursor/commands"
-  curl -sL -o "$HOME/.cursor/commands/$INSTALL_NAME" "$REPO_URL/$COMMAND_FILE"
+  cp "$CACHED_COMMAND" "$HOME/.cursor/commands/$INSTALL_NAME"
   printf "${GREEN}✓${RESET} Cursor Command\n"
   INSTALLED=$((INSTALLED + 1))
 fi
@@ -51,39 +59,28 @@ fi
 # OpenCode
 if command -v opencode &> /dev/null || [ -d "$HOME/.config/opencode" ]; then
   mkdir -p "$HOME/.config/opencode/commands"
-  curl -sL -o "$HOME/.config/opencode/commands/$INSTALL_NAME" "$REPO_URL/$COMMAND_FILE"
+  cp "$CACHED_COMMAND" "$HOME/.config/opencode/commands/$INSTALL_NAME"
   printf "${GREEN}✓${RESET} OpenCode Commands\n"
   INSTALLED=$((INSTALLED + 1))
 fi
 
-# Windsurf - appends to global_rules.md
-MARKER="# Web Interface Guidelines"
+# Windsurf - installed as workflow in workflows directory
 if [ -d "$HOME/.codeium" ] || [ -d "$HOME/Library/Application Support/Windsurf" ]; then
-  mkdir -p "$HOME/.codeium/windsurf/memories"
-  RULES_FILE="$HOME/.codeium/windsurf/memories/global_rules.md"
-  if [ -f "$RULES_FILE" ] && grep -q "$MARKER" "$RULES_FILE"; then
-    printf "${GREEN}✓${RESET} Windsurf ${DIM}(already installed)${RESET}\n"
-  else
-    if [ -f "$RULES_FILE" ]; then
-      echo "" >> "$RULES_FILE"
-    fi
-    echo "$MARKER" >> "$RULES_FILE"
-    echo "" >> "$RULES_FILE"
-    curl -sL "$REPO_URL/$COMMAND_FILE" >> "$RULES_FILE"
-    printf "${GREEN}✓${RESET} Windsurf Command\n"
-  fi
+  mkdir -p "$HOME/.codeium/windsurf/workflows"
+  cp "$CACHED_COMMAND" "$HOME/.codeium/windsurf/workflows/$INSTALL_NAME"
+  printf "${GREEN}✓${RESET} Windsurf Workflow\n"
   INSTALLED=$((INSTALLED + 1))
 fi
 
-# Antigravity - uses SKILL.md format in global_skills folder
-if command -v agy &> /dev/null || [ -d "$HOME/.gemini/antigravity" ]; then
-  SKILL_DIR="$HOME/.gemini/antigravity/global_skills/web-interface-guidelines"
+# Antigravity - uses SKILL.md format in config/skills folder
+if command -v agy &> /dev/null || [ -d "$HOME/.gemini/antigravity" ] || [ -d "$HOME/.gemini/config/skills" ]; then
+  SKILL_DIR="$HOME/.gemini/config/skills/web-interface-guidelines"
   mkdir -p "$SKILL_DIR"
 
-  # Download markdown and convert frontmatter to SKILL.md format
+  # Convert frontmatter to SKILL.md format
   # Add name field before description, remove argument-hint
-  curl -sL "$REPO_URL/$COMMAND_FILE" | sed 's/^description:/name: web-interface-guidelines\
-description:/' | grep -v "^argument-hint:" > "$SKILL_DIR/SKILL.md"
+  sed 's/^description:/name: web-interface-guidelines\
+description:/' "$CACHED_COMMAND" | grep -v "^argument-hint:" > "$SKILL_DIR/SKILL.md"
 
   printf "${GREEN}✓${RESET} Antigravity Skill\n"
   INSTALLED=$((INSTALLED + 1))
@@ -93,30 +90,22 @@ fi
 if command -v gemini &> /dev/null || [ -d "$HOME/.gemini" ]; then
   mkdir -p "$HOME/.gemini/commands"
   TOML_FILE="$HOME/.gemini/commands/web-interface-guidelines.toml"
-  TEMP_FILE=$(mktemp)
-
-  # Download markdown file to temp file and normalize line endings
-  curl -sL "$REPO_URL/$COMMAND_FILE" | tr -d '\r' > "$TEMP_FILE"
 
   # Extract description from frontmatter (handle possible trailing spaces on ---)
-  DESC=$(awk '/^---[[:space:]]*$/{if(f){exit}else{f=1;next}} f{print}' "$TEMP_FILE" | grep '^description:' | sed 's/^description:[[:space:]]*//')
+  DESC=$(awk '/^---[[:space:]]*$/{if(f){exit}else{f=1;next}} f{print}' "$CACHED_COMMAND" | grep '^description:' | sed 's/^description:[[:space:]]*//')
 
   # Write TOML header
   printf 'description = "%s"\n' "$DESC" > "$TOML_FILE"
   printf 'prompt = """\n' >> "$TOML_FILE"
 
-  # Extract content after frontmatter using awk, escape backslashes for TOML
-  # awk: skip until we've seen two --- lines, then print everything after
+  # Extract content after frontmatter using awk, escape backslashes for TOML, replace $ARGUMENTS with {{args}}
   awk '
     /^---[[:space:]]*$/ { count++; next }
     count >= 2 { print }
-  ' "$TEMP_FILE" | sed 's/\\/\\\\/g' >> "$TOML_FILE"
+  ' "$CACHED_COMMAND" | sed 's/\\/\\\\/g; s/\$ARGUMENTS/{{args}}/g' >> "$TOML_FILE"
 
   # Close the multi-line string
   printf '"""\n' >> "$TOML_FILE"
-
-  # Cleanup
-  rm -f "$TEMP_FILE"
 
   printf "${GREEN}✓${RESET} Gemini CLI Command\n"
   INSTALLED=$((INSTALLED + 1))

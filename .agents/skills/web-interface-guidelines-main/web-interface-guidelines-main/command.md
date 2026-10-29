@@ -15,7 +15,7 @@ Read files, check against rules below. Output concise but comprehensive—sacrif
 
 - Icon-only buttons need `aria-label`
 - Form controls need `<label>` or `aria-label`
-- Interactive elements need keyboard handlers (`onKeyDown`/`onKeyUp`)
+- Custom interactive controls (e.g. non-native clickable elements) need keyboard handlers (`onKeyDown`/`onKeyUp`); do not flag native `<button>`, `<a>`, or form controls that already provide built-in keyboard interaction
 - `<button>` for actions, `<a>`/`<Link>` for navigation (not `<div onClick>`)
 - Images need `alt` (or `alt=""` if decorative)
 - Decorative icons need `aria-hidden="true"`

@@ -3,7 +3,7 @@ import { useFloatingPanel } from '../../ui/useFloatingPanel';
 // src/panels/Timeline/EasingPopover.tsx
 import React, { useCallback, useRef } from 'react';
 import { X } from 'lucide-react';
-import type { Easing } from '../../model/types';
+import type { Easing, SpringEasingName } from '../../model/types';
 import { ScrubInput } from '../../ui/ScrubInput';
 
 interface EasingPopoverProps {
@@ -13,8 +13,20 @@ interface EasingPopoverProps {
     anchorRect?: DOMRect | null;
 }
 
+const POPOVER_WIDTH = 360;
+
+interface PresetBezierDef {
+    label: string;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    kind?: 'bezier' | 'spring';
+    springName?: SpringEasingName;
+}
+
 // Preset cubic-bezier control points matching Raylight
-const PRESET_BEZIERS: { label: string; x1: number; y1: number; x2: number; y2: number; kind?: 'bezier' | 'spring'; springName?: string }[] = [
+const PRESET_BEZIERS: PresetBezierDef[] = [
     { label: 'Ease In Out', x1: 0.65, y1: 0, x2: 0.35, y2: 1 },
     { label: 'Ease In', x1: 0.42, y1: 0, x2: 1, y2: 1 },
     { label: 'Ease Out', x1: 0, y1: 0, x2: 0.58, y2: 1 },
@@ -40,6 +52,17 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
     const coords = React.useMemo(() => {
         if (easing.kind === 'bezier') {
             return { x1: easing.x1, y1: easing.y1, x2: easing.x2, y2: easing.y2 };
+        }
+        if (easing.kind === 'spring') {
+            switch (easing.name) {
+                case 'gentle': return { x1: 0.25, y1: 1.1, x2: 0.5, y2: 1 };
+                case 'snappy': return { x1: 0.15, y1: 1.25, x2: 0.35, y2: 1 };
+                case 'bouncy': return { x1: 0.3, y1: 1.4, x2: 0.4, y2: 1 };
+                case 'quick': return { x1: 0.1, y1: 1.1, x2: 0.25, y2: 1 };
+                case 'slow': return { x1: 0.3, y1: 1, x2: 0.6, y2: 1 };
+                case 'stiff': return { x1: 0.1, y1: 1.3, x2: 0.2, y2: 1 };
+                default: return { x1: 0.25, y1: 1.1, x2: 0.5, y2: 1 };
+            }
         }
         if (easing.kind === 'preset') {
             switch (easing.name) {
@@ -153,7 +176,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
             };
         }
         const top = Math.max(16, Math.min(window.innerHeight - 380, anchorRect.top - 80));
-        let left = anchorRect.left - 270;
+        let left = anchorRect.left - POPOVER_WIDTH - 8;
         let originX = 'right';
         if (left < 16) {
             left = anchorRect.right + 12;
@@ -163,6 +186,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
             position: 'fixed',
             top: `${top}px`,
             left: `${left}px`,
+            width: `${POPOVER_WIDTH}px`,
             transformOrigin: `top ${originX}`,
             zIndex: 100,
         };
@@ -201,11 +225,14 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                 <div className="w-[108px] shrink-0 flex flex-col gap-1 pr-2 border-r border-white/10 overflow-y-auto max-h-[220px]">
                     <span className="text-[10px] uppercase font-mono tracking-wider text-gray-400 mb-1">Presets</span>
                     {PRESET_BEZIERS.map((preset) => {
-                        const isActive =
-                            Math.abs(coords.x1 - preset.x1) < 0.05 &&
-                            Math.abs(coords.y1 - preset.y1) < 0.05 &&
-                            Math.abs(coords.x2 - preset.x2) < 0.05 &&
-                            Math.abs(coords.y2 - preset.y2) < 0.05;
+                        const isActive = preset.kind === 'spring'
+                            ? easing.kind === 'spring' && easing.name === preset.springName
+                            : easing.kind === 'bezier'
+                                ? Math.abs(coords.x1 - preset.x1) < 0.05 &&
+                                  Math.abs(coords.y1 - preset.y1) < 0.05 &&
+                                  Math.abs(coords.x2 - preset.x2) < 0.05 &&
+                                  Math.abs(coords.y2 - preset.y2) < 0.05
+                                : false;
                         return (
                             <button
                                 key={preset.label}
