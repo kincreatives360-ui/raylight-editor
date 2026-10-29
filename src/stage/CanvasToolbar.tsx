@@ -358,12 +358,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const toolBtn = (active: boolean) =>
         `w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none ${
             active
-                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm'
-                : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                ? 'bg-brand-blue text-white shadow-xs'
+                : 'text-muted hover:text-primary hover:bg-white/5'
         }`;
 
     const chevronBtn =
-        'px-0.5 py-1 text-[#a1a1aa] hover:text-white cursor-pointer rounded transition-colors';
+        'px-0.5 py-1 text-muted hover:text-primary cursor-pointer rounded transition-colors';
 
     /* ── Dropdown menu items ── */
     const pointerItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
@@ -394,8 +394,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     onClick={() => setIsCropping(!isCropping)}
                     className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition-colors duration-100 ${
                         isCropping
-                            ? 'bg-[var(--accent-primary,#0088ff)] text-white border-[#0077e6]'
-                            : 'bg-[#161619]/95 hover:bg-[#242428] text-[#f4f4f5] border-white/[0.07]'
+                            ? 'bg-brand-blue text-white border-brand-blue'
+                            : 'bg-surface/95 hover:bg-muted text-primary border-subtle'
                     }`}
                 >
                     {isCropping ? (
@@ -405,7 +405,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         </>
                     ) : (
                         <>
-                            <Crop className="w-3.5 h-3.5 text-[#a1a1aa]" />
+                            <Crop className="w-3.5 h-3.5 text-muted" />
                             <span>Crop</span>
                         </>
                     )}
@@ -413,7 +413,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* ═══ Main Floating Toolbar ═══ */}
-            <div className="relative flex items-center gap-0.5 px-1.5 py-1 rounded-xl bg-[#161619]/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl text-xs">
+            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex items-center gap-0.5 px-1.5 py-1 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs">
 
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">
@@ -678,15 +678,15 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
                     {openMenu === 'components' && (
                         <DropdownMenu align="right" className="w-80 p-2.5">
-                            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/[0.08]">
-                                <div className="flex items-center gap-1.5 font-semibold text-white text-[12px]">
-                                    <Shapes className="w-4 h-4 text-[var(--accent-primary,#0088ff)]" />
+                            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-subtle">
+                                <div className="flex items-center gap-1.5 font-semibold text-primary text-[12px]">
+                                    <Shapes className="w-4 h-4 text-brand-blue" />
                                     <span>Library &amp; Presets</span>
                                 </div>
                             </div>
 
                             <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
-                                    <div className="text-[11px] uppercase font-mono tracking-wider text-[#a1a1aa] px-1 py-0.5">
+                                    <div className="text-[11px] uppercase font-mono tracking-wider text-muted px-1 py-0.5">
                                         Active Layer Presets
                                     </div>
                                     {motionPresets.map((preset) => {
@@ -699,22 +699,22 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                                     handleApplyPreset(preset.name);
                                                     setOpenMenu(null);
                                                 }}
-                                                className="w-full p-2 rounded-lg flex items-center justify-between text-left cursor-pointer hover:bg-white/[0.07] transition group border border-transparent hover:border-white/[0.06]"
+                                                className="w-full p-2 rounded-lg flex items-center justify-between text-left cursor-pointer hover:bg-subtle transition group border border-transparent hover:border-subtle"
                                             >
                                                 <div className="flex items-center gap-2.5">
                                                     <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${preset.bg} shrink-0`}>
                                                         <Icon className={`w-3.5 h-3.5 ${preset.color}`} />
                                                     </div>
                                                     <div>
-                                                        <div className="font-medium text-white text-[11px] group-hover:text-[var(--accent-primary,#0088ff)] transition-colors">
+                                                        <div className="font-medium text-primary text-[11px] group-hover:text-brand-blue transition-colors">
                                                             {preset.label}
                                                         </div>
-                                                        <div className="text-[11px] text-[#a1a1aa] leading-tight">
+                                                        <div className="text-[11px] text-muted leading-tight">
                                                             {preset.desc}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <span className="text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-white/[0.06] text-[#a1a1aa] group-hover:text-white group-hover:bg-[var(--accent-primary,#0070e0)] transition">
+                                                <span className="text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-surface text-muted group-hover:text-white group-hover:bg-brand-blue transition">
                                                     Apply
                                                 </span>
                                             </button>

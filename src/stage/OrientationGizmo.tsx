@@ -27,8 +27,8 @@ export const CameraWorkflowActions: React.FC<{
     onBack: () => void;
 }> = ({ hasBookmark, isPinned, onPin, onBack }) => (
     <div className="flex items-center gap-1.5">
-        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-white/10 bg-[#18181c]/90 text-[#a1a1aa] hover:text-white'}`}>Pin</button>
-        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-white/10 bg-[#18181c]/90 px-2.5 py-0.5 text-[11px] text-[#a1a1aa] transition hover:text-white disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
+        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-subtle bg-surface/90 text-muted hover:text-primary'}`}>Pin</button>
+        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-subtle bg-surface/90 px-2.5 py-0.5 text-[11px] text-muted transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
     </div>
 );
 
@@ -279,7 +279,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={onResetCamera}
                     title="Reset Camera Pose to Default"
-                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 hover:border-white/20 text-[#a1a1aa] hover:text-white text-[11px] font-mono cursor-pointer transition shadow-sm"
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface/90 hover:bg-muted border border-subtle hover:border-medium text-muted hover:text-primary text-[11px] font-mono cursor-pointer transition shadow-xs"
                 >
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>Reset</span>
@@ -296,7 +296,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
                     title="Angle"
-                    className={`p-1 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition shadow-sm ${
+                    className={`p-1 rounded-full bg-surface/90 hover:bg-muted border border-subtle text-muted hover:text-primary cursor-pointer transition shadow-xs ${
                         menuOpen ? 'bg-white/20 text-white' : ''
                     }`}
                 />
@@ -304,33 +304,33 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
 
             {/* Hidden-by-default Screen Settings Popover (Keeps canvas clean) */}
             <div
-                className={`flex flex-col gap-1.5 w-44 p-2 rounded-xl bg-[#141418]/95 backdrop-blur-xl border border-white/10 shadow-2xl z-40 text-left pointer-events-auto select-none transition-all duration-150 ${
+                className={`flex flex-col gap-1.5 w-44 p-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl z-40 text-left pointer-events-auto select-none transition-all duration-150 ${
                     menuOpen ? 'opacity-100 translate-y-0 scale-100' : 'hidden'
                 }`}
                 onPointerDown={(e) => e.stopPropagation()}
             >
-                <div className="text-[11px] font-semibold text-white/50 uppercase tracking-wider px-1">
+                <div className="text-[11px] font-semibold text-disabled uppercase tracking-wider px-1">
                     Quick Views
                 </div>
                 <div className="grid grid-cols-2 gap-1">
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(0, 0, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
                     >
                         Front
                     </button>
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(0, -89, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
                     >
                         Top
                     </button>
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(90, 0, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
                     >
                         Right
                     </button>
@@ -346,7 +346,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                             key={view.id}
                             type="button"
                             onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll); setMenuOpen(false); }}
-                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
+                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
                         >
                             {view.label}
                         </button>
@@ -357,19 +357,19 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     <button
                         type="button"
                         onClick={() => { onFrameSelection(); setMenuOpen(false); }}
-                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white cursor-pointer transition"
+                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary cursor-pointer transition"
                     >
                         <span className="flex items-center gap-1.5">
                             <Focus className="w-3 h-3 text-sky-400" />
                             <span>{hasSelection ? 'Frame Selection' : 'Frame Scene'}</span>
                         </span>
-                        <ShortcutKey className="text-[10px] text-white/40 font-mono">F</ShortcutKey>
+                        <ShortcutKey className="text-[10px] text-disabled font-mono">F</ShortcutKey>
                     </button>
                 )}
             </div>
 
             {/* Readout Pill (Visible on hover/drag to keep canvas clean) */}
-            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[11px] font-mono tabular-nums text-[#a1a1aa] tracking-tight pointer-events-none transition-opacity duration-150 ${
+            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-subtle text-[11px] font-mono tabular-nums text-muted tracking-tight pointer-events-none transition-opacity duration-150 ${
                 isHovered || isDragging ? 'opacity-100' : 'opacity-0'
             }`}>
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x

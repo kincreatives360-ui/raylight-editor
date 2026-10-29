@@ -556,10 +556,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     }
                 }}
                 style={{ paddingLeft: `${12 + indentLevel * 14}px` }}
-                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isDragTarget ? 'border-t border-[#0088ff]' : ''
+                className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue ${isDragTarget ? 'border-t border-brand-blue' : ''
                     } ${isSelected || isInsideSelectedContainer
-                        ? 'bg-[#09355c] text-white font-medium'
-                        : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.04]'
+                        ? 'bg-[var(--accent-selection)] text-white font-medium'
+                        : 'text-muted hover:text-primary hover:bg-white/[0.04]'
                     } ${isLayerEffectivelyHidden(layer, shot.groups) ? 'opacity-40' : ''}`}
             >
                 <div className="flex items-center gap-2 min-w-0 flex-1">
@@ -568,7 +568,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <InlineRenameInput
                             value={editingText}
                             onChange={(e) => setEditingText(e.target.value)}
-                            className="w-full bg-black/90 border border-[#0088ff] rounded px-1.5 py-0.5 text-[11px] text-white outline-none"
+                            className="w-full bg-black/90 border border-brand-blue rounded px-1.5 py-0.5 text-[11px] text-primary outline-none"
                             onCommit={() => commitLayerRename(shot.id, layer.id)}
                             onCancel={() => setEditingId(null)}
                         />
@@ -692,9 +692,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             ],
                         });
                     }}
-                    className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isGroupSelected
-                        ? 'bg-[#0088ff] text-white font-semibold'
-                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                    className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue ${isGroupSelected
+                        ? 'bg-brand-blue text-white font-semibold'
+                        : 'text-secondary hover:bg-white/[0.04]'
                         }`}
                 >
                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -719,7 +719,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             className="p-0.5 cursor-pointer"
                         />
                         <Hash
-                            className={`w-3.5 h-3.5 shrink-0 ${isGroupSelected ? 'text-white' : 'text-[#0088ff]'
+                            className={`w-3.5 h-3.5 shrink-0 ${isGroupSelected ? 'text-white' : 'text-brand-blue'
                                 }`}
                         />
                         {isEditing ? (
@@ -759,8 +759,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
 
     return (
         <aside
+            id="raylight-left-panel"
             style={{ width: `var(--workspace-left-width, ${leftPanelWidth}px)` }}
-            className="border-r border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
+            className="raylight-left-panel border-r border-subtle bg-app flex flex-col shrink-0 text-xs select-none h-full relative"
         >
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
@@ -779,7 +780,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     aria-expanded={projectMenuOpen}
                     aria-haspopup="menu"
                     title={`Project Menu • ${storage.message}`}
-                    className="px-2.5 py-1 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/[0.07] flex items-center gap-1.5 text-[11px] font-semibold text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                    className="px-2.5 py-1 rounded-full bg-surface hover:bg-subtle border border-subtle flex items-center gap-1.5 text-[11px] font-semibold text-primary cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
                 >
                     <span className="font-bold tracking-tight text-sm leading-none">
                         R
@@ -797,14 +798,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         }`}
                         title={storage.message}
                     />
-                    <ChevronDown className="w-3 h-3 text-[#a1a1aa]" />
+                    <ChevronDown className="w-3 h-3 text-muted" />
                 </button>
 
                 {projectMenuOpen && (
-                    <MenuSurface className="absolute top-11 left-3 w-60 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50">
-                        <div className="px-2.5 py-1.5 border-b border-white/[0.08] mb-1">
-                            <div className="font-semibold text-white truncate text-[11px]">{project.name}</div>
-                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-[#a1a1aa]">
+                    <MenuSurface className="absolute top-11 left-3 w-60 rounded-xl bg-surface border border-subtle shadow-2xl p-1 text-xs z-50">
+                        <div className="px-2.5 py-1.5 border-b border-subtle mb-1">
+                            <div className="font-semibold text-primary truncate text-[11px]">{project.name}</div>
+                            <div className="flex items-center gap-1.5 mt-0.5 text-[10px] text-muted">
                                 <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                                     storage.status === 'saved'
                                         ? 'bg-emerald-400'
@@ -823,9 +824,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 exportProjectToFile(project);
                                 setProjectMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
-                            <Download className="w-3.5 h-3.5 text-[#38bdf8]" />
+                            <Download className="w-3.5 h-3.5 text-brand-blue" />
                             <span>Export Project (.raylight.json)</span>
                         </MenuItem>
                         <MenuItem
@@ -834,19 +835,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 projectFileInputRef.current?.click();
                                 setProjectMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
                             <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
                             <span>Import Project File...</span>
                         </MenuItem>
-                        <div className="my-1 border-t border-white/[0.08]" />
+                        <div className="my-1 border-t border-subtle" />
                         <MenuItem
                             unstyled
                             onClick={() => {
                                 setTimelineView(timelineView === 'video' ? 'scene' : 'video');
                                 setProjectMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-[#a1a1aa] hover:text-white hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-muted hover:text-primary hover:bg-subtle cursor-pointer"
                         >
                             <Activity className="w-3.5 h-3.5" />
                             <span>Switch to {timelineView === 'video' ? 'Scene (3D Layers)' : 'Video (Timeline Clips)'}</span>
@@ -878,7 +879,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         onClick={() => setAddMenuOpen((v) => !v)}
                         aria-expanded={addMenuOpen}
                         aria-haspopup="menu"
-                        className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#242429] border border-white/[0.07] flex items-center justify-center text-[#d4d4d8] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="w-7 h-7 rounded-full bg-surface hover:bg-subtle border border-subtle flex items-center justify-center text-secondary hover:text-primary cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
                         title="Add Blank Shot, Layer, or Camera"
                     />
 
@@ -890,14 +891,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             <PanelLeftClose className="w-3.5 h-3.5" />
                         </>}
                         onClick={toggleLeftPanel}
-                        className="w-7 h-7 rounded-full hover:bg-[#18181b] border border-transparent hover:border-white/[0.07] flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff]"
+                        className="w-7 h-7 rounded-full hover:bg-surface border border-transparent hover:border-subtle flex items-center justify-center text-muted hover:text-primary cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
                         title="Collapse Left Panel ( [ )"
                     />
                 </div>
 
                 {addMenuOpen && (
                     <MenuSurface
-                        className="absolute top-11 right-3 w-48 rounded-xl bg-[#18181b] border border-white/10 shadow-2xl p-1 text-xs z-50"
+                        className="absolute top-11 right-3 w-48 rounded-xl bg-surface border border-subtle shadow-2xl p-1 text-xs z-50"
                     >
                         <MenuItem
                             unstyled
@@ -907,7 +908,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 setInspectorTab('shot');
                                 setAddMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
                             + Blank Shot (Scene)
                         </MenuItem>
@@ -919,7 +920,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
                             + Image Layer
                         </MenuItem>
@@ -931,7 +932,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
                             + Rectangle Shape
                         </MenuItem>
@@ -943,7 +944,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
                             }}
-                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[#e4e4e7] hover:bg-white/5 cursor-pointer"
+                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-secondary hover:bg-subtle cursor-pointer"
                         >
                             + 3D Text Layer
                         </MenuItem>
@@ -981,9 +982,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 document.getElementById('left-panel-tab-assets')?.focus();
                             }
                         }}
-                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTab === 'file'
-                            ? 'bg-[#1f1f23] text-white shadow-xs'
-                            : 'text-[#a1a1aa] hover:text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue ${activeTab === 'file'
+                            ? 'bg-subtle text-primary shadow-xs'
+                            : 'text-muted hover:text-primary'
                             }`}
                     >
                         File
@@ -1002,9 +1003,9 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 document.getElementById('left-panel-tab-file')?.focus();
                             }
                         }}
-                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${activeTab === 'assets'
-                            ? 'bg-[#1f1f23] text-white shadow-xs'
-                            : 'text-[#a1a1aa] hover:text-white'
+                        className={`px-3 py-1 rounded-md text-[11px] font-semibold transition cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue ${activeTab === 'assets'
+                            ? 'bg-subtle text-primary shadow-xs'
+                            : 'text-muted hover:text-primary'
                             }`}
                     >
                         Assets
@@ -1022,24 +1023,24 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         setSearchOpen((v) => !v);
                         if (searchOpen) setSearchQuery('');
                     }}
-                    className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-[#0088ff]' : 'text-[#a1a1aa] hover:text-white'
+                    className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-brand-blue' : 'text-muted hover:text-primary'
                     }`}
                 />
             </div>
 
             {searchOpen && (
                 <SearchField
-                    containerClassName="px-3 py-1.5 border-b border-white/[0.07] bg-[#111114] flex items-center gap-1.5"
-                    iconClassName="w-3 h-3 text-[#a1a1aa]"
+                    containerClassName="px-3 py-1.5 border-b border-subtle bg-panel flex items-center gap-1.5"
+                    iconClassName="w-3 h-3 text-muted"
                     autoFocus
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
                     placeholder="Find layer..."
                     aria-label="Filter layers by name"
-                    className="w-full bg-transparent text-[11px] text-white outline-none placeholder:text-[#a1a1aa]"
+                    className="w-full bg-transparent text-[11px] text-primary outline-none placeholder:text-muted"
                     onClear={() => setSearchQuery('')}
-                    clearButtonClassName="text-[#a1a1aa] hover:text-white cursor-pointer"
+                    clearButtonClassName="text-muted hover:text-primary cursor-pointer"
                 ></SearchField>
             )}
 
@@ -1105,8 +1106,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         }}
                                         onDoubleClick={() => startRename(shot.id, shot.name)}
                                         className={`group h-7 px-2 flex items-center justify-between text-[11px] cursor-pointer transition rounded-lg ${isShotSelected
-                                            ? 'bg-[#0088ff] text-white font-semibold'
-                                            : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                            ? 'bg-brand-blue text-white font-semibold'
+                                            : 'text-secondary hover:bg-white/[0.04]'
                                             }`}
                                     >
                                         <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -1207,7 +1208,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                 )
                                             )}
                                             {shot.layers.length === 0 && (
-                                                <div className="px-5 py-2 text-[10px] text-[var(--text-muted,#a1a1aa)] italic">
+                                                <div className="px-5 py-2 text-[10px] text-muted italic">
                                                     No layers in this shot
                                                 </div>
                                             )}
@@ -1224,10 +1225,10 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     {timelineView === 'scene' && (
                         <div
                             style={{ height: `${timelineHeightPx}px` }}
-                            className="border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0"
+                            className="border-t border-subtle bg-app flex flex-col shrink-0"
                         >
                             {/* Header Spacer matching Timeline Transport (h-8) + Ruler (h-6) = 56px (h-14) */}
-                            <div className="h-14 border-b border-white/[0.06] px-3 flex items-center text-[10px] font-mono text-[#a1a1aa] shrink-0">
+                            <div className="h-14 border-b border-subtle px-3 flex items-center text-[10px] font-mono text-muted shrink-0">
                                 <span className="truncate">{activeShot.name} TRACKS</span>
                             </div>
 
@@ -1306,7 +1307,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         ? 'bg-emerald-600/30 text-emerald-200 font-semibold border border-emerald-500/40'
                                         : hasCameraBlocks
                                             ? 'text-emerald-400 hover:bg-white/[0.04]'
-                                            : 'text-[#a1a1aa] hover:text-emerald-300 hover:bg-white/[0.04]'
+                                            : 'text-muted hover:text-emerald-300 hover:bg-white/[0.04]'
                                         }`}
                                 >
                                     <Video className="w-3.5 h-3.5 shrink-0" />
@@ -1344,8 +1345,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         selectLayer(layer.id, false);
                                                     }}
                                                     className={`h-10 px-2 rounded-md flex items-center justify-between text-[11px] cursor-pointer transition ${isSelected
-                                                        ? 'bg-[#0088ff] text-white font-semibold'
-                                                        : 'text-[#d4d4d8] hover:bg-white/[0.04]'
+                                                        ? 'bg-brand-blue text-white font-semibold'
+                                                        : 'text-secondary hover:bg-white/[0.04]'
                                                         }`}
                                                 >
                                                     <div className="flex items-center gap-1.5 min-w-0 flex-1">
@@ -1400,7 +1401,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                             }
                                                             className={`h-9 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer ${isSelected && selectedPresetType
                                                                 ? 'bg-purple-500/20 text-purple-200 font-medium'
-                                                                : 'text-[#a1a1aa] hover:text-white'
+                                                                : 'text-muted hover:text-white'
                                                                 }`}
                                                         >
                                                             <div className="flex items-center gap-2 truncate">
@@ -1419,7 +1420,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                                 onClick={() => selectBlock(blk.id, layer.id)}
                                                                 className={`h-9 pl-7 pr-2 rounded flex items-center justify-between text-[10px] cursor-pointer capitalize ${selectedBlockId === blk.id
                                                                     ? 'bg-purple-500/25 text-white font-medium'
-                                                                    : 'text-[#a1a1aa] hover:text-white'
+                                                                    : 'text-muted hover:text-white'
                                                                     }`}
                                                             >
                                                                 <div className="flex items-center gap-2 truncate">
@@ -1461,8 +1462,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                 onClick={() => setAssetCategory(cat.id)}
                                 className={`px-2.5 py-1 rounded-lg shrink-0 font-medium transition cursor-pointer ${
                                     assetCategory === cat.id
-                                        ? 'bg-[#0088ff] text-white shadow-xs'
-                                        : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                        ? 'bg-brand-blue text-white shadow-xs'
+                                        : 'bg-surface text-muted hover:text-primary border border-subtle'
                                 }`}
                             >
                                 {cat.label}
@@ -1475,7 +1476,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <div className="flex-1 flex flex-col min-h-0 gap-2.5">
                             <button
                                 onClick={onUploadClick}
-                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                                className="w-full py-2 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue-hover text-white font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-brand-blue/15"
                             >
                                 <Plus className="w-4 h-4" />
                                 <span>Upload Media</span>
@@ -1502,7 +1503,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                             setInspectorTab('layer');
                                             selectLayer(created.id);
                                         }}
-                                        className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center gap-2.5 cursor-grab transition group"
+                                        className="p-2 rounded-xl bg-surface hover:bg-subtle border border-subtle flex items-center gap-2.5 cursor-grab transition group"
                                     >
                                         <div className="w-10 h-8 rounded-lg bg-black border border-white/10 overflow-hidden flex items-center justify-center shrink-0">
                                             {asset.thumbUrl || asset.dataUrl ? (
@@ -1512,14 +1513,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     className="w-full h-full object-cover"
                                                 />
                                             ) : (
-                                                <ImageIcon className="w-4 h-4 text-[#0088ff]" />
+                                                <ImageIcon className="w-4 h-4 text-brand-blue" />
                                             )}
                                         </div>
                                         <div className="min-w-0 flex-1">
-                                            <div className="text-[11px] font-medium text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                            <div className="text-[11px] font-medium text-primary truncate group-hover:text-brand-blue transition-colors">
                                                 {asset.name}
                                             </div>
-                                            <div className="text-[10px] font-mono text-[#a1a1aa]">
+                                            <div className="text-[10px] font-mono text-muted">
                                                 {asset.width}&times;{asset.height}
                                             </div>
                                         </div>
@@ -1542,14 +1543,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     },
                                                 }));
                                             }}
-                                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-[#0088ff] text-[#c4c4cc] hover:text-white text-[10px] font-medium transition cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 shadow-xs"
+                                            className="px-2 py-1 rounded-md bg-white/10 hover:bg-brand-blue text-secondary hover:text-white text-[10px] font-medium transition cursor-pointer shrink-0 opacity-0 group-hover:opacity-100 flex items-center gap-1 shadow-xs"
                                         >
                                             Set Bg
                                         </button>
                                     </div>
                                 ))}
                                 {assetList.length === 0 && (
-                                    <div className="py-10 text-center text-xs text-[#71717a] border border-dashed border-white/10 rounded-xl p-4">
+                                    <div className="py-10 text-center text-xs text-disabled border border-dashed border-subtle rounded-xl p-4">
                                         No uploaded media yet.<br />Click Upload Media to add photos or videos.
                                     </div>
                                 )}
@@ -1600,19 +1601,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     },
                                                 }));
                                             }}
-                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.08] hover:border-[#0088ff] text-left transition cursor-pointer flex flex-col gap-1.5 group shadow-xs"
+                                            className="p-2 rounded-xl bg-surface hover:bg-subtle border border-subtle hover:border-brand-blue text-left transition cursor-pointer flex flex-col gap-1.5 group shadow-xs"
                                         >
                                             <div
-                                                className="w-full h-12 rounded-lg border border-white/10 relative overflow-hidden group-hover:scale-105 transition-transform"
+                                                className="w-full h-12 rounded-lg border border-subtle relative overflow-hidden group-hover:scale-105 transition-transform"
                                                 style={{
                                                     background: `linear-gradient(135deg, ${c1} 0%, ${c2} 100%)`,
                                                 }}
                                             />
                                             <div>
-                                                <div className="text-[11px] font-semibold text-white truncate group-hover:text-[#0088ff] transition-colors">
+                                                <div className="text-[11px] font-semibold text-primary truncate group-hover:text-brand-blue transition-colors">
                                                     {meta?.label || p}
                                                 </div>
-                                                <div className="text-[10px] text-[#71717a] truncate">
+                                                <div className="text-[10px] text-disabled truncate">
                                                     Procedural GLSL
                                                 </div>
                                             </div>
@@ -1629,17 +1630,17 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             <button
                                 type="button"
                                 onClick={onSelectAudioClick}
-                                className="w-full py-2 px-3 rounded-xl bg-[#0088ff] hover:bg-[#0077e6] text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-[#0088ff]/15"
+                                className="w-full py-2 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue-hover text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-brand-blue/15"
                             >
                                 <Upload className="w-3.5 h-3.5" />
                                 <span>Upload Audio Track</span>
                             </button>
 
                             {audioLabel && (
-                                <div className="p-2.5 rounded-xl bg-[#161619] border border-white/10 flex items-center justify-between gap-2">
+                                <div className="p-2.5 rounded-xl bg-surface border border-subtle flex items-center justify-between gap-2">
                                     <div className="flex items-center gap-2 min-w-0">
                                         <Volume2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                                        <span className="text-[11px] font-medium text-white truncate">{audioLabel}</span>
+                                        <span className="text-[11px] font-medium text-primary truncate">{audioLabel}</span>
                                     </div>
                                     <span className="text-[10px] text-emerald-400 font-mono shrink-0">Active</span>
                                 </div>
@@ -1648,14 +1649,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             {/* Sound Search Bar */}
                             <SearchField
                                 containerClassName="relative"
-                                iconClassName="w-3.5 h-3.5 text-[#71717a] absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
+                                iconClassName="w-3.5 h-3.5 text-disabled absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none"
                                 type="text"
                                 placeholder="Search 150+ sound effects..."
                                 value={soundSearchQuery}
                                 onChange={(e) => setSoundSearchQuery(e.target.value)}
-                                className="w-full bg-[#161619] border border-white/10 rounded-xl pl-8 pr-7 py-1.5 text-xs text-white placeholder-[#71717a] outline-none focus:border-[#0088ff] transition"
+                                className="w-full bg-surface border border-subtle rounded-xl pl-8 pr-7 py-1.5 text-xs text-primary placeholder:text-disabled outline-none focus:border-brand-blue transition"
                                 onClear={() => setSoundSearchQuery('')}
-                                clearButtonClassName="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#71717a] hover:text-white"
+                                clearButtonClassName="absolute right-2.5 top-1/2 -translate-y-1/2 text-disabled hover:text-primary"
                             ></SearchField>
 
                             {/* Category Filter Pills */}
@@ -1667,8 +1668,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                         onClick={() => setSelectedSfxCategory(cat)}
                                         className={`px-2 py-0.5 rounded-full shrink-0 font-medium transition cursor-pointer ${
                                             selectedSfxCategory === cat
-                                                ? 'bg-[#0088ff]/25 text-[#38bdf8] border border-[#0088ff]/50'
-                                                : 'bg-[#18181b] text-[#a1a1aa] hover:text-white border border-white/5'
+                                                ? 'bg-brand-blue/25 text-brand-blue border border-brand-blue/50'
+                                                : 'bg-surface text-muted hover:text-primary border border-subtle'
                                         }`}
                                     >
                                         {cat}
@@ -1687,19 +1688,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                     return (
                                         <div
                                             key={sound.id}
-                                            className="p-2 rounded-xl bg-[#161619] hover:bg-[#1f1f23] border border-white/[0.06] flex items-center justify-between gap-2 transition"
+                                            className="p-2 rounded-xl bg-surface hover:bg-subtle border border-subtle flex items-center justify-between gap-2 transition"
                                         >
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-xs font-semibold text-white truncate">
+                                                    <span className="text-xs font-semibold text-primary truncate">
                                                         {sound.name}
                                                     </span>
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#0088ff]/10 text-[#38bdf8] font-mono tabular-nums tracking-tight shrink-0">
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-brand-blue/10 text-brand-blue font-mono tabular-nums tracking-tight shrink-0">
                                                         {durationFormatted}
                                                     </span>
                                                 </div>
                                                 <div className="flex items-center gap-1.5 mt-0.5">
-                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-[#a1a1aa] font-medium uppercase tracking-wider">
+                                                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-white/5 text-muted font-medium uppercase tracking-wider">
                                                         {sound.category}
                                                     </span>
                                                 </div>
@@ -1720,8 +1721,8 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                     onClick={() => handleTogglePreviewSound(sound.id, sound.getUrl())}
                                                     title={isPlaying ? "Pause Preview" : "Preview Sound"}
                                                     className={`p-1.5 rounded-lg border transition cursor-pointer ${isPlaying
-                                                    ? 'bg-[#0088ff] text-white border-[#38bdf8]'
-                                                    : 'bg-[#222226] hover:bg-[#2a2a30] text-[#d4d4d8] border-white/10'
+                                                    ? 'bg-brand-blue text-white border-brand-blue'
+                                                    : 'bg-subtle hover:bg-muted text-secondary border-subtle'
                                                     }`}
                                                 />
 
@@ -1753,14 +1754,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                                                         }));
                                                     }}
                                                     title="Add to Timeline at Playhead"
-                                                    className="p-1.5 rounded-lg bg-[#0088ff]/20 hover:bg-[#0088ff]/30 text-[#38bdf8] border border-[#0088ff]/40 transition cursor-pointer"
+                                                    className="p-1.5 rounded-lg bg-brand-blue/20 hover:bg-brand-blue/30 text-brand-blue border border-brand-blue/40 transition cursor-pointer"
                                                 />
                                             </div>
                                         </div>
                                     );
                                 })}
                                 {filteredCuratedSounds.length === 0 && (
-                                    <div className="py-8 text-center text-xs text-[#71717a]">
+                                    <div className="py-8 text-center text-xs text-disabled">
                                         No sound effects match &quot;{soundSearchQuery}&quot;
                                     </div>
                                 )}

@@ -103,11 +103,11 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         onClose={onClose}
         initialFocusRef={inputRef}
         backdropProps={{"role": "dialog", "aria-modal": "true", "aria-label": "Command Menu", "className": "fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150", "onClick": onClose}}
-        surfaceProps={{"className": "w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
+        surfaceProps={{"id": "raylight-command-menu", "className": "raylight-modal w-full max-w-xl rounded-2xl bg-surface border border-subtle shadow-2xl overflow-hidden flex flex-col text-primary", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
     >
         {/* Search Header */}
         <SearchField
-            containerClassName="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08] bg-[#18181f]"
+            containerClassName="flex items-center gap-3 px-4 py-3.5 border-b border-subtle bg-surface"
             iconClassName="w-4 h-4 text-zinc-400 shrink-0"
             inputRef={inputRef}
             type="text"
@@ -152,7 +152,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-xs select-none transition-colors ${
                     isSelected
-                      ? 'bg-[#0070e0] text-white shadow-sm'
+                      ? 'bg-brand-blue text-white shadow-xs'
                       : 'text-zinc-300 hover:bg-white/[0.05]'
                   }`}
                 >
@@ -207,7 +207,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#121216] text-[11px] text-zinc-400">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-subtle bg-app text-[11px] text-muted">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
             <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</ShortcutKey>

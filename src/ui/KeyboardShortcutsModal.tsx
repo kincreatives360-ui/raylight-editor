@@ -104,19 +104,19 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
     <ModalShell
         onClose={handleClose}
         backdropProps={{"role": "dialog", "aria-modal": "true", "aria-labelledby": "shortcuts-title", "className": "fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150", "onClick": handleClose}}
-        surfaceProps={{"className": "w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs", "onClick": (e) => e.stopPropagation()}}
+        surfaceProps={{"id": "raylight-keyboard-shortcuts-modal", "className": "raylight-modal w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-surface border border-subtle shadow-2xl overflow-hidden text-xs", "onClick": (e) => e.stopPropagation()}}
     >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-[#18181e]/80">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-subtle bg-surface/80">
           <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-xl bg-[#0088ff]/15 border border-[#0088ff]/30 flex items-center justify-center text-[#0088ff]">
+            <div className="w-8 h-8 rounded-xl bg-brand-blue/15 border border-brand-blue/30 flex items-center justify-center text-brand-blue">
               <Keyboard className="w-4 h-4" />
             </div>
             <div>
               <h2 id="shortcuts-title" className="text-sm font-semibold text-white">
                 Studio Keyboard Shortcuts
               </h2>
-              <p className="text-xs text-[#a1a1aa]">
+              <p className="text-xs text-muted">
                 Master speed editing with professional hotkeys &amp; controls
               </p>
             </div>
@@ -129,20 +129,20 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                 <X className="w-4 h-4" />
               </>}
               onClick={handleClose}
-              className="p-1.5 rounded-lg text-[#a1a1aa] hover:text-white hover:bg-white/10 transition cursor-pointer"
+              className="p-1.5 rounded-lg text-muted hover:text-primary hover:bg-subtle transition cursor-pointer"
           />
         </div>
 
         {/* Search & Category Filter Pills */}
-        <div className="p-4 border-b border-white/[0.06] bg-[#15151a] space-y-3">
+        <div className="p-4 border-b border-subtle bg-app space-y-3">
           <SearchField
               containerClassName="relative"
-              iconClassName="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#71717a]"
+              iconClassName="absolute left-3 top-2.5 w-3.5 h-3.5 text-disabled"
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search shortcuts by action or key (e.g. animate, nudge, group, safe)..."
-              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#0e0e11] border border-white/10 text-white placeholder-[#71717a] text-xs focus:outline-none focus:border-[#0088ff] focus:ring-1 focus:ring-[#0088ff] transition"
+              className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-surface border border-subtle text-primary placeholder-disabled text-xs focus:outline-none focus:border-brand-blue focus:ring-1 focus:ring-brand-blue transition"
               autoFocus
           ></SearchField>
 
@@ -154,8 +154,8 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                 onClick={() => setActiveCategory(cat)}
                 className={`px-2.5 py-1 rounded-md text-[11px] font-medium transition cursor-pointer ${
                   activeCategory === cat
-                    ? 'bg-[#0088ff] text-white shadow-sm'
-                    : 'bg-[#202026] text-[#a1a1aa] hover:text-white hover:bg-[#282830]'
+                    ? 'bg-brand-blue text-white shadow-xs'
+                    : 'bg-subtle text-muted hover:text-primary hover:bg-muted'
                 }`}
               >
                 {cat}
@@ -167,7 +167,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         {/* Shortcuts List */}
         <div className="flex-1 overflow-y-auto p-4 space-y-2 min-h-0">
           {filteredShortcuts.length === 0 ? (
-            <div className="py-12 text-center text-[#71717a]">
+            <div className="py-12 text-center text-disabled">
               No shortcuts found matching &ldquo;{search}&rdquo;
             </div>
           ) : (
@@ -175,7 +175,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
               {filteredShortcuts.map((sc) => (
                 <div
                   key={sc.description}
-                  className="flex items-center justify-between p-2.5 rounded-xl bg-[#191920]/70 hover:bg-[#1f1f28] border border-white/[0.04] transition group"
+                  className="flex items-center justify-between p-2.5 rounded-xl bg-subtle/70 hover:bg-subtle border border-subtle transition group"
                 >
                   <span className="text-gray-300 font-medium text-[11px] pr-2">
                     {sc.description}
@@ -184,7 +184,7 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
                     {sc.keys.map((k, kidx) => (
                       <ShortcutKey
                         key={`${k}-${kidx}`}
-                        className="px-2 py-0.5 rounded-md bg-[#25252e] border border-white/10 text-[#f4f4f5] font-mono tabular-nums text-[11px] font-semibold tracking-tight shadow-xs select-none"
+                        className="px-2 py-0.5 rounded-md bg-surface border border-subtle text-primary font-mono tabular-nums text-[11px] font-semibold tracking-tight shadow-xs select-none"
                       >
                         {k === '⌘/Ctrl' ? getModifierKey() : k}
                       </ShortcutKey>
@@ -197,15 +197,15 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-3 border-t border-white/[0.08] bg-[#16161b] flex items-center justify-between text-[11px] text-[#8e8e96]">
+        <div className="px-6 py-3 border-t border-subtle bg-surface flex items-center justify-between text-[11px] text-muted">
           <div className="flex items-center gap-1.5">
-            <Command className="w-3.5 h-3.5 text-[#0070e0]" />
-            <span>Press <ShortcutKey className="px-1.5 py-0.5 rounded bg-[#27272a] text-white text-[11px]">?</ShortcutKey> anywhere to toggle this guide</span>
+            <Command className="w-3.5 h-3.5 text-brand-blue" />
+            <span>Press <ShortcutKey className="px-1.5 py-0.5 rounded bg-subtle text-white text-[11px]">?</ShortcutKey> anywhere to toggle this guide</span>
           </div>
           <button
             type="button"
             onClick={handleClose}
-            className="px-3.5 py-1 rounded-lg bg-[#27272e] hover:bg-[#34343d] text-white text-xs font-medium transition cursor-pointer"
+            className="px-3.5 py-1 rounded-lg bg-subtle hover:bg-muted text-white text-xs font-medium transition cursor-pointer"
           >
             Done
           </button>

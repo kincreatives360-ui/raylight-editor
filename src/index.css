@@ -54,6 +54,17 @@
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
   --color-sidebar-border: var(--sidebar-border);
+
+  /* Canonical Studio Surfaces & Brand Blue */
+  --color-app: var(--bg-app);
+  --color-panel: var(--bg-panel);
+  --color-surface: var(--bg-surface);
+  --color-subtle: var(--bg-subtle);
+  --color-brand-blue: #0088ff;
+  --color-brand-blue-hover: #0077e6;
+  --color-border-subtle: var(--border-subtle);
+  --color-border-medium: var(--border-medium);
+  --color-border-focus: var(--border-focus);
 }
 
 :root, .dark {
@@ -532,3 +543,40 @@ textarea,
 .stroke-light-key { stroke: var(--color-brand-amber); }
 .stroke-animation { stroke: var(--color-brand-purple); }
 .stroke-audio-track { stroke: var(--color-brand-orange); }
+
+/* Canonical Raylight App Shell & Structural Component Classes */
+.raylight-app-shell {
+  background-color: var(--bg-canvas);
+  color: var(--text-primary);
+}
+
+.raylight-left-panel {
+  background-color: var(--bg-app);
+  border-right: 1px solid var(--border-subtle);
+}
+
+.raylight-right-sidebar {
+  background-color: var(--bg-panel);
+  border-left: 1px solid var(--border-subtle);
+}
+
+.raylight-timeline {
+  background-color: var(--bg-panel);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.raylight-stage {
+  background-color: var(--bg-canvas);
+}
+
+.raylight-modal {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-medium);
+  box-shadow: 0 20px 45px rgba(0, 0, 0, 0.75), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.raylight-floating-toolbar {
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-subtle);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.55);
+}

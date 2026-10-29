@@ -647,14 +647,14 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
             <div className="space-y-4">
                 {!backgroundOnly && <>
                 {/* 1. PROJECT SETTINGS HEADER */}
-                <h2 className="text-[13px] font-semibold text-white tracking-wide">Project Settings</h2>
+                <h2 className="text-[13px] font-semibold text-primary tracking-wide">Project Settings</h2>
 
                 {/* Name */}
                 <InspectorRow
                     unstyled
                     className="space-y-1.5"
                     labelTag="label"
-                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    labelClassName="text-[11px] text-muted block font-normal"
                     label={<>Name</>}
                 >
                     <input
@@ -662,7 +662,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                         value={project.name}
                         onChange={(e) => updateProject((p) => ({ ...p, name: e.target.value }))}
                         placeholder="Untitled project"
-                        className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
+                        className="w-full h-8 px-3 rounded-lg bg-surface border border-subtle text-[12px] text-primary outline-none focus:border-brand-blue transition placeholder:text-disabled"
                     />
                 </InspectorRow>
 
@@ -671,14 +671,14 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     unstyled
                     className="space-y-1.5"
                     labelTag="label"
-                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    labelClassName="text-[11px] text-muted block font-normal"
                     label={<>Aspect Ratio</>}
                 >
                     <div className="relative">
                         <FigmaSelect
                             value={project.aspectRatio}
                             onChange={(e) => updateProject((p) => ({ ...p, aspectRatio: e.target.value as AspectRatio }))}
-                            className="w-full h-8 px-3 pr-8 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none appearance-none cursor-pointer focus:border-white/20 transition"
+                            className="w-full h-8 px-3 pr-8 rounded-lg bg-surface border border-subtle text-[12px] text-primary outline-none appearance-none cursor-pointer focus:border-brand-blue transition"
                         >
                             <option value="16:9">Landscape 16:9</option>
                             <option value="9:16">Portrait 9:16</option>
@@ -696,11 +696,11 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     unstyled
                     className="space-y-1.5"
                     labelTag="label"
-                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                    labelClassName="text-[11px] text-muted block font-normal"
                     label={<>Lens</>}
                 >
                     <ScrubInput
-                        label={<span className="text-[#71717a] font-medium mr-1.5">F</span>}
+                        label={<span className="text-disabled font-medium mr-1.5">F</span>}
                         value={project.defaultCamera?.focalLength ?? 50}
                         min={14}
                         max={200}
@@ -716,29 +716,29 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                 },
                             }));
                         }}
-                        className="h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[12px] text-white hover:border-white/20 transition cursor-ew-resize"
+                        className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                     />
                 </InspectorRow>
 
                 </>}
                 {/* Background Section */}
                 <div className="space-y-2.5">
-                    {!backgroundOnly && <label className="text-[11px] text-[#8e8e93] block font-normal">Background</label>}
+                    {!backgroundOnly && <label className="text-[11px] text-muted block font-normal">Background</label>}
                     {/* 3-segmented button */}
                     <SegmentedControl
                         unstyled
                         ariaLabel="Background mode"
                         value={bgMode}
                         onChange={handleModeChange}
-                        className="h-8 p-0.5 rounded-lg bg-[#141416] border border-white/[0.06] grid grid-cols-3 gap-0.5"
-                        buttonClassName={(_, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${selected ? 'border border-white/30 bg-[#222226] text-white shadow-sm' : 'text-[#8e8e93] hover:text-white'}`}
+                        className="h-8 p-0.5 rounded-lg bg-subtle border border-subtle grid grid-cols-3 gap-0.5"
+                        buttonClassName={(_, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${selected ? 'border border-subtle bg-muted text-primary shadow-xs' : 'text-muted hover:text-primary'}`}
                         options={[{ value: 'color', label: 'Color' }, { value: 'image', label: 'Image' }, { value: 'shader', label: 'Shader' }]}
                     />
 
                     {/* Mode == 'color' */}
                     {bgMode === 'color' && (
                         <div className="space-y-2.5 pt-0.5">
-                            <label className="text-[11px] text-[#8e8e93] block font-normal">Color & Gradient</label>
+                            <label className="text-[11px] text-muted block font-normal">Color & Gradient</label>
                             <ColorPicker
                                 color={bg.kind === 'solid' ? bg.color : (bg.kind === 'gradient' ? bg.stops[0]?.color || '#090a12' : '#000000')}
                                 gradientValue={bg.kind === 'gradient' ? {
@@ -759,7 +759,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         stops: g.stops,
                                     });
                                 }}
-                                className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2.5 text-[12px] text-white cursor-pointer transition"
+                                className="h-8 px-2.5 rounded-lg bg-surface border border-subtle hover:border-brand-blue flex items-center gap-2.5 text-[12px] text-primary cursor-pointer transition"
                             />
 
                             {/* Quick swatches */}
@@ -794,12 +794,12 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                 unstyled
                                 className="space-y-1.5"
                                 labelTag="label"
-                                labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                labelClassName="text-[11px] text-muted block font-normal"
                                 label={<>Image</>}
                             >
                                 {bg.kind === 'image' && (bg.src || (bg.assetId && project.assets[bg.assetId]?.dataUrl)) ? (
                                     <div
-                                        className="relative group rounded-xl overflow-hidden border border-white/[0.08] bg-[#141416] aspect-[16/9] max-h-36 cursor-pointer shadow-inner"
+                                        className="relative group rounded-xl overflow-hidden border border-subtle bg-subtle aspect-[16/9] max-h-36 cursor-pointer shadow-inner"
                                         onClick={() => fileInputRef.current?.click()}
                                     >
                                         <img
@@ -848,15 +848,15 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         <button
                                             type="button"
                                             onClick={() => fileInputRef.current?.click()}
-                                            className="w-full py-6 px-3 rounded-xl border border-dashed border-white/15 hover:border-white/30 bg-[#141416]/50 hover:bg-[#141416] flex flex-col items-center justify-center gap-1.5 text-[11px] text-[#a1a1aa] hover:text-white cursor-pointer transition group"
+                                            className="w-full py-6 px-3 rounded-xl border border-dashed border-subtle hover:border-medium bg-subtle/50 hover:bg-subtle flex flex-col items-center justify-center gap-1.5 text-[11px] text-muted hover:text-primary cursor-pointer transition group"
                                         >
-                                            <Upload className="w-4 h-4 text-[#8e8e93] group-hover:text-white transition" />
+                                            <Upload className="w-4 h-4 text-muted group-hover:text-primary transition" />
                                             <span className="font-medium">Upload Image</span>
-                                            <span className="text-[10px] text-[#71717a]">PNG, JPG, WebP</span>
+                                            <span className="text-[10px] text-disabled">PNG, JPG, WebP</span>
                                         </button>
                                         {Object.values(project.assets || {}).filter((a) => a.mimeType?.startsWith('image/')).length > 0 && (
                                             <div className="space-y-1.5 pt-1">
-                                                <span className="text-[10px] text-[#71717a] block">From Project Assets:</span>
+                                                <span className="text-[10px] text-disabled block">From Project Assets:</span>
                                                 <div className="flex items-center gap-1.5 overflow-x-auto pb-1 no-scrollbar">
                                                     {Object.values(project.assets || {})
                                                         .filter((a) => a.mimeType?.startsWith('image/'))
@@ -876,7 +876,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                                                         opacity: 1,
                                                                     });
                                                                 }}
-                                                                className="w-10 h-10 rounded-lg border border-white/15 hover:border-[#0088ff] overflow-hidden shrink-0 transition relative group cursor-pointer"
+                                                                className="w-10 h-10 rounded-lg border border-subtle hover:border-brand-blue overflow-hidden shrink-0 transition relative group cursor-pointer"
                                                                 title={asset.name}
                                                             >
                                                                 <img
@@ -900,14 +900,14 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         unstyled
                                         className="space-y-1.5"
                                         labelTag="label"
-                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        labelClassName="text-[11px] text-muted block font-normal"
                                         label={<>Fit</>}
                                     >
                                         <div className="relative">
                                             <FigmaSelect
                                                 value={(bg.fit ?? 'cover') === 'contain' ? 'contain' : 'cover'}
                                                 onChange={(e) => setProjectBackground({ ...bg, fit: e.target.value as 'cover' | 'contain' })}
-                                                className="w-full h-8 pl-3 pr-8 rounded-lg bg-[#141416] border border-white/[0.08] hover:border-white/20 text-[11px] text-white appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--accent-primary)] transition"
+                                                className="w-full h-8 pl-3 pr-8 rounded-lg bg-surface border border-subtle hover:border-brand-blue text-[11px] text-primary appearance-none cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue transition"
                                             >
                                                 <option value="cover">Fill</option>
                                                 <option value="contain">Fit</option>
@@ -925,7 +925,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                             step={5}
                                             unit="%"
                                             onChange={(v) => setProjectBackground({ ...bg, dim: v / 100 })}
-                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                            className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                         />
                                         <ScrubInput
                                             label="Blur"
@@ -935,7 +935,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                             step={1}
                                             unit="%"
                                             onChange={(v) => setProjectBackground({ ...bg, blur: v })}
-                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                            className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                         />
                                     </div>
 
@@ -944,7 +944,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         unstyled
                                         className="space-y-1.5"
                                         labelTag="label"
-                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        labelClassName="text-[11px] text-muted block font-normal"
                                         label={<>Backdrop</>}
                                     >
                                         <ColorPicker
@@ -964,11 +964,11 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                             {/* Preset Visual Card */}
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between text-[11px]">
-                                    <span className="text-[#8e8e93] font-normal">Preset</span>
-                                    <span className="text-[#0088ff] font-medium">{currentMeta?.label || currentPreset}</span>
+                                    <span className="text-muted font-normal">Preset</span>
+                                    <span className="text-brand-blue font-medium">{currentMeta?.label || currentPreset}</span>
                                 </div>
                                 <div
-                                    className="h-20 rounded-xl border border-white/10 hover:border-white/25 overflow-hidden relative cursor-pointer group bg-[#060a14] transition shadow-inner"
+                                    className="h-20 rounded-xl border border-subtle hover:border-medium overflow-hidden relative cursor-pointer group bg-app transition shadow-inner"
                                 >
                                     {/* Dynamic Shader Swatch Representation */}
                                     <ShaderPreviewCanvas
@@ -997,12 +997,12 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                             </div>
 
                             {/* Shader Colors matching Raylight: Color & Accent */}
-                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                            <div className="space-y-2 pt-1 border-t border-subtle">
                                 <InspectorRow
                                     unstyled
                                     className="space-y-1.5"
                                     labelTag="label"
-                                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                    labelClassName="text-[11px] text-muted block font-normal"
                                     label={<>Color</>}
                                 >
                                     <ColorPicker
@@ -1010,7 +1010,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         color={shaderColor1.startsWith('#') ? shaderColor1 : `#${shaderColor1}`}
                                         showGradientMode={false}
                                         onChange={(c) => updateShaderColors(c, undefined, undefined)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle hover:border-brand-blue flex items-center gap-2 text-[12px] text-primary transition w-full"
                                     />
                                 </InspectorRow>
 
@@ -1018,7 +1018,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                     unstyled
                                     className="space-y-1.5"
                                     labelTag="label"
-                                    labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                    labelClassName="text-[11px] text-muted block font-normal"
                                     label={<>Accent</>}
                                 >
                                     <ColorPicker
@@ -1026,7 +1026,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         color={shaderColor2.startsWith('#') ? shaderColor2 : `#${shaderColor2}`}
                                         showGradientMode={false}
                                         onChange={(c) => updateShaderColors(undefined, c, undefined)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle hover:border-brand-blue flex items-center gap-2 text-[12px] text-primary transition w-full"
                                     />
                                 </InspectorRow>
 
@@ -1035,7 +1035,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         unstyled
                                         className="space-y-1.5"
                                         labelTag="label"
-                                        labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                                        labelClassName="text-[11px] text-muted block font-normal"
                                         label={<>Color 3</>}
                                     >
                                         <ColorPicker
@@ -1043,14 +1043,14 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                             color={shaderColor3.startsWith('#') ? shaderColor3 : `#${shaderColor3}`}
                                             showGradientMode={false}
                                             onChange={(c) => updateShaderColors(undefined, undefined, c)}
-                                            className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] hover:border-white/20 flex items-center gap-2 text-[12px] text-white transition w-full"
+                                            className="h-8 px-2.5 rounded-lg bg-surface border border-subtle hover:border-brand-blue flex items-center gap-2 text-[12px] text-primary transition w-full"
                                         />
                                     </InspectorRow>
                                 )}
                             </div>
 
                             {/* Shader Parameters Grid */}
-                            <div className="space-y-2 pt-1 border-t border-white/[0.06]">
+                            <div className="space-y-2 pt-1 border-t border-subtle">
 
                                 {/* Row 1: Speed & Waves */}
                                 <div className="grid grid-cols-2 gap-2">
@@ -1063,7 +1063,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         decimals={1}
                                         unit=" x"
                                         onChange={(v) => updateShaderKnob('speed', v)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                     />
                                     <ScrubInput
                                         label={currentMeta?.knobs?.waves?.label || 'Waves'}
@@ -1073,7 +1073,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         step={5}
                                         unit=" %"
                                         onChange={(v) => updateShaderKnob('waves', v / 100)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                     />
                                 </div>
 
@@ -1087,7 +1087,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         step={5}
                                         unit=" %"
                                         onChange={(v) => updateShaderKnob('focus', v / 100)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                     />
                                     <ScrubInput
                                         label={currentMeta?.knobs?.glow?.label || 'Glow'}
@@ -1097,7 +1097,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         step={5}
                                         unit=" %"
                                         onChange={(v) => updateShaderKnob('glow', v / 100)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                     />
                                 </div>
 
@@ -1111,7 +1111,7 @@ const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                         step={5}
                                         unit=" %"
                                         onChange={(v) => updateShaderKnob('shine', v / 100)}
-                                        className="h-8 px-2.5 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-between text-[11px] hover:border-white/20 transition cursor-ew-resize"
+                                        className="h-8 px-2.5 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[11px] text-primary hover:border-brand-blue transition cursor-ew-resize"
                                     />
                                 </div>
                             </div>
@@ -1146,14 +1146,14 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     onChange={setShotTab}
                     ariaLabel="Shot settings"
                     fullWidth
-                    className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-white/[0.08]"
+                    className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-subtle"
                 />
 
                 {/* Shot Title & Duration */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <label className="text-[11px] text-[#8e8e93] block font-normal">Shot Name</label>
-                        <span className="text-[11px] font-mono text-[#71717a]">
+                        <label className="text-[11px] text-muted block font-normal">Shot Name</label>
+                        <span className="text-[11px] font-mono text-disabled">
                             {(activeShot.durationMs / 1000).toFixed(1)}s
                         </span>
                     </div>
@@ -1162,7 +1162,7 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                         value={activeShot.name || ''}
                         onChange={(e) => updateShot(activeShot.id, (s) => ({ ...s, name: e.target.value }))}
                         placeholder="Shot name"
-                        className="w-full h-8 px-3 rounded-lg bg-[#18181b] border border-white/[0.08] text-[12px] text-white outline-none focus:border-white/20 transition placeholder:text-[#52525b]"
+                        className="w-full h-8 px-3 rounded-lg bg-surface border border-subtle text-[12px] text-primary outline-none focus:border-brand-blue transition placeholder:text-disabled"
                     />
                 </div>
 
@@ -1170,11 +1170,11 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     <>
                         {/* Background Section */}
                         <div className="space-y-2.5">
-                            <h3 className="text-[12px] font-semibold text-white tracking-wide">Background</h3>
+                            <h3 className="text-[12px] font-semibold text-primary tracking-wide">Background</h3>
 
                             {/* Use project toggle switch */}
                             <div className="flex items-center justify-between py-2">
-                                <span className="text-[11px] font-medium text-white">Use project</span>
+                                <span className="text-[11px] font-medium text-primary">Use project</span>
                                 <Switch
                                     ariaLabel="Use project background"
                                     checked={isUsingProjectBg}
@@ -1193,7 +1193,7 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                                 <div className="sr-only">
                                     <span>Inheriting project background</span>
                                     <span
-                                        className="w-2.5 h-2.5 rounded-full border border-white/20"
+                                        className="w-2.5 h-2.5 rounded-full border border-subtle"
                                         style={{
                                             backgroundColor:
                                                 project.background.kind === 'solid'
@@ -1212,27 +1212,27 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                         </div>
 
                         {/* Divider */}
-                        <div className="border-t border-white/[0.08]" />
+                        <div className="border-t border-subtle" />
 
                         {/* Scene Effects in Figma Style (+) and (-) */}
                         <SceneEffectsSection shot={activeShot} />
 
                         {/* Divider */}
-                        <div className="border-t border-white/[0.08]" />
+                        <div className="border-t border-subtle" />
 
                         {/* Export Section */}
                         <InspectorRow
                             unstyled
                             className="space-y-2"
                             labelTag="span"
-                            labelClassName="text-[11px] text-[#8e8e93] block font-normal"
+                            labelClassName="text-[11px] text-muted block font-normal"
                             label={<>Export</>}
                         >
                             {onOpenExportModal && (
                                 <button
                                     type="button"
                                     onClick={onOpenExportModal}
-                                    className="w-full py-2 px-3 rounded-xl bg-[#222226] hover:bg-[#2a2a30] border border-white/10 text-white font-medium text-[12px] transition cursor-pointer text-center"
+                                    className="w-full py-2 px-3 rounded-xl bg-muted hover:bg-subtle border border-subtle text-primary font-medium text-[12px] transition cursor-pointer text-center"
                                 >
                                     Export shot
                                 </button>
@@ -1245,8 +1245,8 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     /* Animate Tab for Shot: Camera Animation / Controls */
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-[12px] font-semibold text-white tracking-wide">Camera Motion</h3>
-                            <span className="text-[10px] text-[#71717a]">
+                            <h3 className="text-[12px] font-semibold text-primary tracking-wide">Camera Motion</h3>
+                            <span className="text-[10px] text-disabled">
                                 {activeShot.cameraBlocks?.length || 0} moves
                             </span>
                         </div>
@@ -1257,8 +1257,8 @@ const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                                 onDone={() => {}}
                             />
                         ) : (
-                            <div className="py-6 px-3 rounded-xl border border-dashed border-white/10 bg-[#141416]/40 text-center space-y-2">
-                                <span className="text-[11px] text-[#71717a] block">No camera animation in this shot</span>
+                            <div className="py-6 px-3 rounded-xl border border-dashed border-subtle bg-subtle/40 text-center space-y-2">
+                                <span className="text-[11px] text-disabled block">No camera animation in this shot</span>
                                 <button
                                     type="button"
                                     onClick={() => {
@@ -1370,8 +1370,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     return (
         <aside
+            id="raylight-inspector"
             style={{ width: `var(--workspace-right-width, ${rightSidebarWidth}px)` }}
-            className="border-l border-white/[0.07] bg-[#0b0b0d] flex flex-col shrink-0 text-xs select-none h-full relative"
+            className="raylight-right-sidebar border-l border-subtle bg-app flex flex-col shrink-0 text-xs select-none h-full relative"
         >
             <input
                 ref={fontInputRef}
@@ -1382,7 +1383,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             />
 
             {/* 1. TOP HEADER BAR */}
-            <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-white/[0.06]">
+            <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-subtle">
                 <div className="flex items-center">
                     <IconButton
                         unstyled
@@ -1393,7 +1394,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         </>}
                         onClick={toggleRightSidebar}
                         title="Collapse Inspector sidebar ( ] )"
-                        className="p-1.5 rounded-lg hover:bg-white/5 text-[#a1a1aa] hover:text-white cursor-pointer transition opacity-0 hover:opacity-100"
+                        className="p-1.5 rounded-lg hover:bg-subtle text-muted hover:text-primary cursor-pointer transition opacity-0 hover:opacity-100"
                     />
                 </div>
 
@@ -1409,12 +1410,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         </>}
                         onClick={() => clearLayerSelection()}
                         title="Project Settings"
-                        className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
+                        className="p-1 text-muted hover:text-primary cursor-pointer transition"
                     />
 
                     <button
                         onClick={onOpenExportModal}
-                        className="px-3.5 py-1.5 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
+                        className="px-3.5 py-1.5 rounded-lg bg-brand-blue hover:bg-brand-blue-hover text-white font-medium text-[11px] cursor-pointer transition shadow-xs"
                     >
                         Export
                     </button>
@@ -1439,7 +1440,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             ) : selectedLayer ? (
                 <>
                     {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
-                    <div className="h-10 border-b border-white/[0.07] px-3.5 flex items-center shrink-0 bg-[#111111]">
+                    <div className="h-10 border-b border-subtle px-3.5 flex items-center shrink-0 bg-panel">
                         <InspectorModeTabs
                             mode={effectiveMainTab}
                             onChange={setMainTab}
@@ -1487,21 +1488,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             )}
 
             {/* Persistent Inspector Footer: Ask Raylight & Help */}
-            <div className="p-3 border-t border-white/[0.06] flex items-center justify-end gap-2 shrink-0 bg-[#0b0b0d]">
+            <div className="p-3 border-t border-subtle flex items-center justify-end gap-2 shrink-0 bg-app">
                 <button
                     type="button"
                     onClick={onOpenShortcuts}
                     title="Ask Raylight AI Assistant & Shortcuts"
-                    className="h-7 px-3 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-white text-[11px] font-medium flex items-center gap-1.5 shadow-sm transition cursor-pointer"
+                    className="h-7 px-3 rounded-full bg-surface hover:bg-subtle border border-subtle text-primary text-[11px] font-medium flex items-center gap-1.5 shadow-xs transition cursor-pointer"
                 >
-                    <Sparkles className="w-3.5 h-3.5 text-[#0088ff]" />
+                    <Sparkles className="w-3.5 h-3.5 text-brand-blue" />
                     <span>Ask Raylight</span>
                 </button>
                 <button
                     type="button"
                     onClick={onOpenShortcuts}
                     title="Help & Shortcuts (?)"
-                    className="w-7 h-7 rounded-full bg-[#18181b] hover:bg-[#222226] border border-white/10 text-[#a1a1aa] hover:text-white flex items-center justify-center text-[11px] font-medium shadow-sm transition cursor-pointer"
+                    className="w-7 h-7 rounded-full bg-surface hover:bg-subtle border border-subtle text-muted hover:text-primary flex items-center justify-center text-[11px] font-medium shadow-xs transition cursor-pointer"
                 >
                     ?
                 </button>

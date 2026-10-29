@@ -1528,8 +1528,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
     return (
         <section
+            id="raylight-timeline"
             style={{ height: `${timelineHeightPx}px` }}
-            className="border-t border-white/[0.08] bg-[#0b0b0d] flex flex-col shrink-0 select-none relative"
+            className="raylight-timeline border-t border-subtle bg-app flex flex-col shrink-0 select-none relative"
         >
             {/* TOP VERTICAL RESIZE SPLITTER HANDLE (Drag up for more layer room, down to compact) */}
             <div
@@ -1538,7 +1539,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 style={{ touchAction: 'none' }}
                 className="absolute -top-1 left-0 right-0 h-2 cursor-ns-resize z-40 group flex items-center justify-center"
             >
-                <div className="w-12 h-0.5 rounded-full bg-white/15 group-hover:bg-[#0088ff] transition" />
+                <div className="w-12 h-0.5 rounded-full bg-white/15 group-hover:bg-brand-blue transition" />
             </div>
 
             {/* 1. TOP CONTROL ROW (h-8 = 32px) */}
@@ -1551,7 +1552,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type="button"
                         onClick={togglePlay}
                         title="Play / Pause (Space)"
-                        className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
+                        className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
                         icon={isPlaying ? (
                             <Pause className="w-2.5 h-2.5" />
                         ) : (
@@ -1565,7 +1566,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type="button"
                         onClick={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
                         title="Split Clip at Playhead (S)"
-                        className="w-5 h-5 rounded-full border border-white/20 hover:border-white/60 flex items-center justify-center text-[#a1a1aa] hover:text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#0088ff]"
+                        className="w-5 h-5 rounded-full border border-subtle hover:border-medium flex items-center justify-center text-muted hover:text-primary cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
                         icon={<Scissors className="w-2.5 h-2.5" />}
                     />
                     {activeShot && project.shots.some((shot) => shot.id === activeShot.id) && (
@@ -1576,7 +1577,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             type="button"
                             onClick={() => deleteShot(activeShot.id)}
                             title={`Delete ${activeShot.name}`}
-                            className="w-5 h-5 rounded-full border border-white/20 hover:border-rose-400/70 flex items-center justify-center text-[#a1a1aa] hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                            className="w-5 h-5 rounded-full border border-subtle hover:border-rose-400/70 flex items-center justify-center text-muted hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                             icon={<Trash2 className="w-2.5 h-2.5" />}
                         />
                     )}
@@ -1584,9 +1585,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <div className="relative w-28 h-1.5 rounded-full bg-[#27272a] flex items-center group/zoom">
+                    <div className="relative w-28 h-1.5 rounded-full bg-subtle flex items-center group/zoom">
                         <div
-                            className="h-full rounded-full bg-[#0088ff] transition-[width] duration-75"
+                            className="h-full rounded-full bg-brand-blue transition-[width] duration-75"
                             style={{
                                 width: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
                             }}
@@ -1674,7 +1675,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     <div
                         onPointerDown={handleRulerPointerDown}
                         style={{ touchAction: 'none' }}
-                        className="sticky top-0 z-10 h-6 border-b border-white/[0.08] bg-[#0b0b0d] relative cursor-ew-resize select-none shrink-0"
+                        className="sticky top-0 z-10 h-6 border-b border-subtle bg-app relative cursor-ew-resize select-none shrink-0"
                     >
                         {rulerMarks.map((m) => (
                             <div
@@ -1683,9 +1684,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 style={{ left: `${m.timeMs * pxPerMs}px` }}
                             >
                                 {m.isHalf ? (
-                                    <span className="w-1 h-1 rounded-full bg-[#52525b]/70 mt-1.5" />
+                                    <span className="w-1 h-1 rounded-full bg-disabled/70 mt-1.5" />
                                 ) : (
-                                    <span className="text-[11px] font-mono tabular-nums text-[#a1a1aa] font-medium tracking-tight">
+                                    <span className="text-[11px] font-mono tabular-nums text-muted font-medium tracking-tight">
                                         {m.timeMs === 0 ? '0.00' : `${Math.round(m.timeMs / 1000)}s`}
                                     </span>
                                 )}
@@ -2613,7 +2614,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             />
 
                             {/* Small dark pill label with grey monospace text sitting on ruler at top */}
-                            <div className="relative px-2 py-0.5 rounded-full bg-[#242428] border border-white/10 text-[#a1a1aa] text-[11px] font-mono tabular-nums font-medium shadow-sm whitespace-nowrap leading-none select-none mt-1 z-10">
+                            <div className="relative px-2 py-0.5 rounded-full bg-surface border border-subtle text-muted text-[11px] font-mono tabular-nums font-medium shadow-xs whitespace-nowrap leading-none select-none mt-1 z-10">
                                 {(hoverDisplayTimeMs / 1000).toFixed(2)}
                             </div>
                         </div>
