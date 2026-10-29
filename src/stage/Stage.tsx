@@ -295,6 +295,11 @@ const StageComponent: React.FC<StageProps> = ({
         if (!el) return;
 
         const handleWheel = (e: WheelEvent) => {
+            const target = e.target as HTMLElement | null;
+            if (target?.closest?.('[aria-label="Orbit camera controls"]')) {
+                return;
+            }
+
             e.preventDefault();
 
             // 1. Camera Navigation Tool (C) or Alt + Wheel: 3D Camera Dolly (Physical Z push)
@@ -584,6 +589,24 @@ const StageComponent: React.FC<StageProps> = ({
             focalLength: camera.focalLength,
         });
     }, [frame.camera, frame.activeShot.id, setCameraBookmark]);
+
+    const handleBackFromOrbitCamera = useCallback(() => {
+        if (currentShotCameraBookmark) {
+            beginDragTransaction();
+            updateActiveShotCamera({
+                orbit: currentShotCameraBookmark.orbit,
+                tilt: currentShotCameraBookmark.tilt,
+                roll: currentShotCameraBookmark.roll,
+                targetX: currentShotCameraBookmark.targetX,
+                targetY: currentShotCameraBookmark.targetY,
+                targetZ: currentShotCameraBookmark.targetZ,
+                zoom: currentShotCameraBookmark.zoom,
+                focalLength: currentShotCameraBookmark.focalLength,
+            });
+            commitDragTransaction();
+        }
+        setActiveTool('select');
+    }, [currentShotCameraBookmark, beginDragTransaction, updateActiveShotCamera, commitDragTransaction, setActiveTool]);
 
     const handleFrameSelectedLayers = useCallback(() => {
         const selectedIds = useSelectionStore.getState().selectedLayerIds;
@@ -1477,7 +1500,7 @@ const StageComponent: React.FC<StageProps> = ({
                 currentZoom={effectiveViewportFrame.camera.zoom}
             />}
 
-            {activeTool === 'camera' && <OrbitCameraControls pinned={Boolean(currentShotCameraBookmark)} zoom={canvasZoom} onAngle={handleSetOrientation} onPin={handlePinCameraView} onBack={() => setActiveTool('select')} onZoom={setCanvasZoom} />}
+            {activeTool === 'camera' && <OrbitCameraControls pinned={Boolean(currentShotCameraBookmark)} zoom={canvasZoom} onAngle={handleSetOrientation} onPin={handlePinCameraView} onBack={handleBackFromOrbitCamera} onZoom={setCanvasZoom} />}
 
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (

@@ -18,14 +18,22 @@ export function OrbitCameraFrustum({ camera, observer, reference, width, height 
     const distance = (reference.position.z || 2.65) / Math.max(0.15, camera.zoom);
     const halfHeight = Math.tan(THREE.MathUtils.degToRad(pose.fov / 2)) * distance;
     const world = (x: number, y: number) => new THREE.Vector3(x, y, -distance).applyEuler(rotation).add(origin);
-    const project = (point: THREE.Vector3) => { const p = point.clone().project(projection); return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 }; };
+    const toCameraSpace = (point: THREE.Vector3) => point.clone().applyMatrix4(projection.matrixWorldInverse);
+    const project = (point: THREE.Vector3) => {
+        const cam = toCameraSpace(point);
+        if (cam.z >= -0.01) return null;
+        const p = point.clone().project(projection);
+        return { x: (p.x + 1) * width / 2, y: (1 - p.y) * height / 2 };
+    };
     const apex = project(origin);
     const center = project(world(0, 0));
-    const corners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([x, y]) => project(world(x * halfHeight * aspect, y * halfHeight)));
-    if (![apex, center, ...corners].every(p => Number.isFinite(p.x) && Number.isFinite(p.y))) return null;
+    const rawCorners = [[-1, 1], [1, 1], [1, -1], [-1, -1]].map(([x, y]) => world(x * halfHeight * aspect, y * halfHeight));
+    const corners = rawCorners.map(project);
+    if (!apex || !center || corners.some(p => p === null || !Number.isFinite(p.x) || !Number.isFinite(p.y))) return null;
+    const validCorners = corners as { x: number; y: number }[];
     return <svg aria-label="Orbit camera frustum" viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 h-full w-full overflow-visible pointer-events-none z-30" fill="none" stroke="#00bd68" strokeWidth="1.5">
-        {corners.map((p, i) => <line key={i} x1={apex.x} y1={apex.y} x2={p.x} y2={p.y} opacity=".5" vectorEffect="non-scaling-stroke" />)}
-        <polygon points={corners.map(p => `${p.x},${p.y}`).join(' ')} vectorEffect="non-scaling-stroke" />
+        {validCorners.map((p, i) => <line key={i} x1={apex.x} y1={apex.y} x2={p.x} y2={p.y} opacity=".5" vectorEffect="non-scaling-stroke" />)}
+        <polygon points={validCorners.map(p => `${p.x},${p.y}`).join(' ')} vectorEffect="non-scaling-stroke" />
         <line x1={apex.x} y1={apex.y} x2={center.x} y2={center.y} strokeDasharray="5 5" vectorEffect="non-scaling-stroke" />
         <circle cx={apex.x} cy={apex.y} r="8" /><circle cx={apex.x} cy={apex.y} r="5" fill="#00bd68" /><circle cx={center.x} cy={center.y} r="2.5" fill="#00bd68" />
     </svg>;
