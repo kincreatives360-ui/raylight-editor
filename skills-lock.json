@@ -1,12 +1,6 @@
 {
   "version": 1,
   "skills": {
-    "architecture-map": {
-      "source": "almendili/skills",
-      "sourceType": "github",
-      "skillPath": "architecture-map/SKILL.md",
-      "computedHash": "bc6e1e8d16081d2d4168831c951136eb9fb6530c77d344ae32a956905df5cdad"
-    },
     "component-canvas": {
       "source": "ibelick/ui-skills",
       "sourceType": "github",
@@ -72,6 +66,12 @@
       "sourceType": "github",
       "skillPath": "skills/react-best-practices/SKILL.md",
       "computedHash": "6b526d013e28073246a36f99b529bc43745d30832ecfa8217b359c34f260ca6b"
+    },
+    "floorplan": {
+      "skillPath": "skills/floorplan/SKILL.md",
+      "sourceType": "github",
+      "computedHash": "ad5a1e4fe3e96af217fbe45ce4a07ed4d078456069f795384888c1fcc281502f",
+      "source": "haydenschmitty/floorplan"
     }
   }
 }
