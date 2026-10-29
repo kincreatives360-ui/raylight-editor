@@ -500,18 +500,20 @@ p, .typeset-body {
 }
 
 /* Continuous corners / Apple squircles for supporting Chromium browsers */
-button,
-input,
-select,
-textarea,
-.rounded-md,
-.rounded-lg,
-.rounded-xl,
-.rounded-2xl,
-[role="button"],
-[role="dialog"],
-[role="tooltip"] {
-  corner-shape: squircle;
+@supports (corner-shape: squircle) {
+  button,
+  input,
+  select,
+  textarea,
+  .rounded-md,
+  .rounded-lg,
+  .rounded-xl,
+  .rounded-2xl,
+  [role="button"],
+  [role="dialog"],
+  [role="tooltip"] {
+    corner-shape: squircle;
+  }
 }
 
 /* View Transitions API under 300ms */
