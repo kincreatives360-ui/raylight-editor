@@ -148,6 +148,29 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     pass.material.dispose();
   });
 
+  it('passes depth-of-field lens and highlight settings to the shader', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.depthOfField.focalLength = 100;
+    effectsState.depthOfField.highlightThreshold = 0.65;
+    effectsState.depthOfField.highlightIntensity = 0.4;
+    const evaluated: EvaluatedEffects = { state: effectsState, orderedEnabledPasses: [], deterministicSeed: 0 };
+    const pass = createSceneEffectPass('depthOfField');
+
+    configureSceneEffectPass(pass, 'depthOfField', evaluated, 1920, 1080);
+
+    expect((pass.uniforms.uMotion.value as THREE.Vector2).x).toBeCloseTo(0.4);
+    expect((pass.uniforms.uMotion.value as THREE.Vector2).y).toBeCloseTo(2);
+    expect((pass.uniforms.uExtra.value as THREE.Vector4).x).toBeCloseTo(0.65);
+    expect(pass.material.fragmentShader).toContain('* max(.01,uMotion.y)');
+    pass.material.dispose();
+  });
+
+  it('uses a negative horizontal ghost shift so preview matches Canvas output', () => {
+    const pass = createSceneEffectPass('ghost');
+    expect(pass.material.fragmentShader).toContain('vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y');
+    pass.material.dispose();
+  });
+
   it('provides an output encoding pass converting linear to display sRGB', () => {
     const encodingPass = createOutputEncodingPass();
     expect(encodingPass).toBeInstanceOf(ShaderPass);

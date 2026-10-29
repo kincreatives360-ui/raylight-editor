@@ -60,7 +60,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
         #elif EFFECT == 5
           vec4 ghost=vec4(0.0);
           float angle=radians(uParams.w);
-          vec2 shift=vec2(cos(angle),sin(angle))*uParams.y;
+          vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y;
           float radius=uParams.z*uResolution.x/1920.0*max(.0,uExtra.x);
           for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++)
             ghost+=sampleAt(vUv+shift+vec2(float(x),float(y))*radius/uResolution);
@@ -95,7 +95,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float focalPlane = uParams.x;
           float focusRange = max(0.001, uParams.y);
           float bokehScale = max(0.0, uParams.z);
-          float coc = clamp(abs(linearDepth - focalPlane) / focusRange * bokehScale * (2.8 / max(.1,uParams.w)), 0.0, 1.0);
+          float coc = clamp(abs(linearDepth - focalPlane) / focusRange * bokehScale * (2.8 / max(.1,uParams.w)) * max(.01,uMotion.y), 0.0, 1.0);
           
           if (coc > 0.003) {
             vec4 accum = vec4(0.0);
@@ -154,6 +154,7 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
         dof.bokehShape === 'anamorphic' ? 1.0 : 0.0
       );
       pass.uniforms.uMotion.value.x = dof.highlightIntensity ?? 0;
+      pass.uniforms.uMotion.value.y = (dof.focalLength ?? 50) / 50;
       break;
     }
   }

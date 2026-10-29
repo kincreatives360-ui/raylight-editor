@@ -26,9 +26,10 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
         const rgb = [src[i], src[i+1], src[i+2]].map(n => (n * gain - 0.5) * g.contrast + 0.5);
         const l = rgb[0]*0.2126 + rgb[1]*0.7152 + rgb[2]*0.0722;
         const t = g.temperature ?? 0, tint = g.tint ?? 0;
+        const graded = rgb.map((channel, c) => (l + (channel - l) * g.saturation) * [1+t*0.1,1+tint*0.1,1-t*0.1][c]);
+        const gradedLuma = graded[0]*0.2126 + graded[1]*0.7152 + graded[2]*0.0722;
         for(let c=0;c<3;c++) {
-          const graded=(l+(rgb[c]-l)*g.saturation) * [1+t*0.1,1+tint*0.1,1-t*0.1][c];
-          dst[i+c]=graded+(g.highlights??0)*Math.max(0,l-.45)+(g.shadows??0)*Math.max(0,.55-l);
+          dst[i+c]=graded[c]+(g.highlights??0)*Math.max(0,gradedLuma-.45)+(g.shadows??0)*Math.max(0,.55-gradedLuma);
         }
       } else if (key === 'bloom') {
         const radius = Math.max(1, width / 240)*(e.bloom.radius??1), softness=e.bloom.softness??0.5;
