@@ -16,6 +16,23 @@ vi.mock('../../../store/useProjectStore', async importOriginal => {
 const render = (effects: LayerEffects) => renderToStaticMarkup(<LayerEffectsSection activeShotId="test" layer={createDefaultShapeLayer({ effects })} />);
 
 describe('layer effect controls', () => {
+  it('exposes radial and zoom blur centers and sample quality without losing progression', () => {
+    for (const type of ['radial', 'zoom'] as const) {
+      const html = render({ layerBlur: .2, layerBlurSettings: { type, centerX: 0, centerY: 1, quality: 32, mode: 'progressive', start: 2, end: 20, angle: 45 } });
+      for (const label of ['Layer blur type', 'Layer blur center X', 'Layer blur center Y', 'Layer blur quality', 'Start', 'End', 'Blur angle']) expect(html).toContain(label);
+    }
+    expect(render({ layerBlur: .2 })).not.toContain('Layer blur center X');
+  });
+  it('exposes RGB split modes, signed channels, softness and cell alignment', () => {
+    let effects: LayerEffects = {};
+    for (const key of ['rgbSplit', 'bevel', 'halftone', 'pixelate'] as const) effects = addLayerEffect(effects, key);
+    const linear = render(effects);
+    for (const label of ['RGB split mode', 'RGB split amount', 'RGB split angle', 'RGB split red', 'RGB split green', 'RGB split blue', 'Bevel and emboss softness', 'Halftone offset X', 'Halftone offset Y', 'Halftone contrast', 'Pixelate offset X', 'Pixelate offset Y']) expect(linear).toContain(label);
+    const radial = render({ ...effects, rgbSplit: { ...effects.rgbSplit!, mode: 'radial' } });
+    expect(radial).toContain('RGB split center X');
+    expect(radial).toContain('RGB split center Y');
+    expect(radial).not.toContain('RGB split angle');
+  });
   it('initializes turbulent mode visibly and preserves authored values including zero', () => {
     for (const existing of [{ enabled: true }, { enabled: false, amount: 0, speed: 0, seed: 0, size: 75, evolution: 50, loop: true }]) {
       let layer = createDefaultShapeLayer({ effects: { layerBlur: .2, warp: existing } });
@@ -39,7 +56,7 @@ describe('layer effect controls', () => {
     expect(html).toContain('Loop duration');
   });
   it('toggles and removes each added effect while preserving the rest of the layer', () => {
-    for (const [key, title] of [['outline', 'Alpha outline'], ['colorCorrection', 'Color correction'], ['noise', 'Noise'], ['bevel', 'Bevel and emboss'], ['halftone', 'Halftone'], ['roughen', 'Roughen edges'], ['colorKey', 'Color key'], ['pixelate', 'Pixelate']] as const) {
+    for (const [key, title] of [['outline', 'Alpha outline'], ['colorCorrection', 'Color correction'], ['noise', 'Noise'], ['bevel', 'Bevel and emboss'], ['halftone', 'Halftone'], ['roughen', 'Roughen edges'], ['colorKey', 'Color key'], ['pixelate', 'Pixelate'], ['rgbSplit', 'RGB split']] as const) {
       let layer = createDefaultShapeLayer({ effects: addLayerEffect({ layerBlur: .2 }, key) });
       updateLayer.mockImplementation((_shot: string, _id: string, edit: (current: Layer) => Layer) => { layer = edit(layer) as typeof layer; });
       const findCard = (node: ReactNode): { onToggle: () => void; onRemove: () => void } | undefined => {

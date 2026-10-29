@@ -379,7 +379,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             ref={menuRef}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none"
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]"
         >
             {/* Transient Toast Notification */}
             {toastMessage && (
@@ -413,7 +413,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* ═══ Main Floating Toolbar ═══ */}
-            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex items-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs">
+            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex items-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full overflow-x-auto no-scrollbar shrink-0">
 
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">

@@ -148,12 +148,14 @@ export function getLayerBlurBleedLayout(
     totalBlurPx: number,
     dofBlurPx: number,
     motionBlur?: { x: number; y: number },
-    deviceFramed = false
+    deviceFramed = false,
+    effectPaddingPx = 0
 ) {
     const motionDistPx = motionBlur ? Math.hypot(motionBlur.x * canvasW, motionBlur.y * canvasH) : 0;
-    const effectiveBlurPx = totalBlurPx + dofBlurPx * 1.5 + motionDistPx;
+    const effectiveBlurPx = totalBlurPx + dofBlurPx * 1.5 + motionDistPx + effectPaddingPx;
+    const paddingLimit = Math.max(256, Math.ceil(effectPaddingPx));
     const blurPadding = (!deviceFramed && effectiveBlurPx > 0.1)
-        ? Math.min(256, Math.ceil(effectiveBlurPx * 3))
+        ? Math.min(paddingLimit, Math.ceil(effectiveBlurPx * 3))
         : 0;
     const paddedCanvasW = canvasW + blurPadding * 2;
     const paddedCanvasH = canvasH + blurPadding * 2;
@@ -235,7 +237,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         totalBlurPx + Math.max(getBlurSettings(layer.effects, 'layerBlur').start, getBlurSettings(layer.effects, 'layerBlur').end) * canvasW / authoredW,
         dofBlurPx,
         evalLayer.motionBlur,
-        Boolean(deviceFrameSettings)
+        Boolean(deviceFrameSettings),
+        layer.effects.rgbSplit?.enabled ? layer.effects.rgbSplit.amount * Math.max(Math.abs(layer.effects.rgbSplit.red), Math.abs(layer.effects.rgbSplit.green), Math.abs(layer.effects.rgbSplit.blue)) + 2 : 0
     );
 
     const maxTexSize = gl.capabilities.maxTextureSize || 4096;
@@ -759,14 +762,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         [warp, meshW, meshH, widthScale, heightScale, authoredW, authoredH]);
     const warpedHaloGeometry = useMemo(() => warp?.enabled && warp.mode && halo ? createWarpGeometry(meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, { width: authoredW * widthScale, height: authoredH * heightScale }) : null,
         [warp, halo, meshW, meshH, widthScale, heightScale, authoredW, authoredH]);
-    const turbulenceFrame = useRef<{ time: number; geometry: THREE.PlaneGeometry } | null>(null);
+    const turbulenceFrame = useRef<{ time: number; geometry: THREE.PlaneGeometry; haloGeometry?: THREE.PlaneGeometry | null } | null>(null);
     useFrame(() => {
         if (!warp?.enabled || warp.mode !== 'turbulent' || !warpedGeometry) return;
         const time = Math.max(0, usePlayheadStore.getState().currentTimeMs - shotStartMs) / 1000;
-        if (turbulenceFrame.current?.time === time && turbulenceFrame.current.geometry === warpedGeometry) return;
+        if (turbulenceFrame.current?.time === time && turbulenceFrame.current.geometry === warpedGeometry && turbulenceFrame.current.haloGeometry === warpedHaloGeometry) return;
         updateWarpGeometry(warpedGeometry, meshW * widthScale, meshH * heightScale, authoredW * widthScale, authoredH * heightScale, warp, time);
         if (warpedHaloGeometry && halo) updateWarpGeometry(warpedHaloGeometry, meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, time, { width: authoredW * widthScale, height: authoredH * heightScale });
-        turbulenceFrame.current = { time, geometry: warpedGeometry };
+        turbulenceFrame.current = { time, geometry: warpedGeometry, haloGeometry: warpedHaloGeometry };
     });
     useEffect(() => () => { warpedGeometry?.dispose(); warpedHaloGeometry?.dispose(); }, [warpedGeometry, warpedHaloGeometry]);
 

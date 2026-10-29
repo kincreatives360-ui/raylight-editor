@@ -116,6 +116,9 @@ describe('ScrubInput Component', () => {
                             if (sel === '[role="spinbutton"]' && node.attributes['role'] === 'spinbutton') {
                                 return node;
                             }
+                            if (sel.startsWith('#') && node.attributes['id'] === sel.slice(1)) {
+                                return node;
+                            }
                             for (const child of node.children) {
                                 const found = find(child);
                                 if (found) return found;
@@ -280,5 +283,33 @@ describe('ScrubInput Component', () => {
         expect(evaluateMathExpression('(100 - 20) / 2')).toBe(40);
         expect(evaluateMathExpression('-10 + 5')).toBe(-5);
         expect(evaluateMathExpression('invalid')).toBeNull();
+    });
+
+    it('associates JSX element label with input via aria-labelledby when ariaLabel is not provided', async () => {
+        const container = (document as unknown as { createElement: (tag: string) => unknown }).createElement('div') as HTMLElement;
+        const root = createRoot(container);
+        const onChange = vi.fn();
+
+        await act(async () => {
+            root.render(
+                <ScrubInput
+                    label={<span>Custom JSX Label</span>}
+                    value={10}
+                    onChange={onChange}
+                />
+            );
+        });
+
+        const spinbutton = container.querySelector('[role="spinbutton"]') as HTMLElement | null;
+        expect(spinbutton).not.toBeNull();
+        const labelledBy = spinbutton?.getAttribute('aria-labelledby');
+        expect(labelledBy).toBeTruthy();
+        const labelSpan = container.querySelector(`#${labelledBy}`);
+        expect(labelSpan).not.toBeNull();
+        expect(labelSpan?.textContent).toContain('Custom JSX Label');
+
+        await act(async () => {
+            root.unmount();
+        });
     });
 });

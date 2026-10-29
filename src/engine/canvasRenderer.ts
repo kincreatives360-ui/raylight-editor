@@ -480,10 +480,48 @@ export function createCanvasFillStyle(
       const ey = handles.end.y * h;
       const radius = Math.hypot(ex - rx, ey - ry);
       const minorRadius = handles.width === undefined ? radius : Math.max(1, handles.width * h);
+      const angle = Math.atan2(ey - ry, ex - rx);
+      const scaleY = minorRadius / Math.max(1, radius);
+
+      if (typeof document !== 'undefined' && typeof ctx.createPattern === 'function') {
+        try {
+          const offscreen = document.createElement('canvas');
+          const offW = Math.max(1, Math.round(w));
+          const offH = Math.max(1, Math.round(h));
+          offscreen.width = offW;
+          offscreen.height = offH;
+          const offCtx = offscreen.getContext('2d');
+          if (offCtx) {
+            offCtx.save();
+            offCtx.translate(rx, ry);
+            offCtx.rotate(angle);
+            offCtx.scale(1, scaleY);
+            const rGrad = offCtx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, radius));
+            for (const stop of fill.stops) {
+              const stopOpacity = (stop.opacity ?? 1) * opacityMultiplier;
+              rGrad.addColorStop(
+                Math.max(0, Math.min(1, stop.at)),
+                hexToRgba(stop.color, stopOpacity)
+              );
+            }
+            offCtx.fillStyle = rGrad;
+            const maxDim = Math.hypot(offW, offH) * 2;
+            offCtx.fillRect(-maxDim, -maxDim, maxDim * 2, maxDim * 2);
+            offCtx.restore();
+            const pattern = ctx.createPattern(offscreen, 'no-repeat');
+            if (pattern) {
+              return pattern;
+            }
+          }
+        } catch {
+          // fallback to direct radial gradient
+        }
+      }
+
       ctx.save();
       ctx.translate(rx, ry);
-      ctx.rotate(Math.atan2(ey - ry, ex - rx));
-      ctx.scale(1, minorRadius / Math.max(1, radius));
+      ctx.rotate(angle);
+      ctx.scale(1, scaleY);
       grad = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, radius));
       ctx.restore();
     } else if (isAngular && typeof ctx.createConicGradient === 'function') {

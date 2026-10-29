@@ -268,6 +268,10 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         const p = getBlurSettings(effects, key);
         return new THREE.Vector4(p.mode === 'progressive' ? p.start : (effects[key] ?? 0) * 100, p.mode === 'progressive' ? p.end : (effects[key] ?? 0) * 100, p.angle * Math.PI / 180, p.mode === 'progressive' ? 1 : 0);
     };
+    const blurShape = (key: 'layerBlur' | 'backdropBlur') => {
+        const p = getBlurSettings(effects, key);
+        return new THREE.Vector4(p.type === 'radial' ? 1 : p.type === 'zoom' ? 2 : 0, p.centerX ?? .5, p.centerY ?? .5, p.quality ?? 16);
+    };
     return {
         ...getLayerStyleUniforms(effects),
         layerScene: { value: null as THREE.Texture | null },
@@ -280,6 +284,8 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerPixelRatio: { value: 1 },
         layerBlurProfile: { value: profile('layerBlur') },
         layerBackdropProfile: { value: profile('backdropBlur') },
+        layerBlurShape: { value: blurShape('layerBlur') },
+        layerBackdropShape: { value: blurShape('backdropBlur') },
         layerBlend: { value: ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'].indexOf(blend) },
         layerBackdrop: { value: Math.max(0, effects.backdropBlur ?? 0) },
         layerGlass: { value: glass ? 1 : 0 },
@@ -299,6 +305,8 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
 export type LayerEffectUniforms = ReturnType<typeof getLayerEffectUniforms>;
 
 let fallbackRenderer: THREE.WebGLRenderer | null | undefined;
+let cachedExportUniforms: LayerEffectUniforms | null = null;
+let cachedExportMaterial: THREE.MeshBasicMaterial | null = null;
 
 /** Reuse the production shader for canvas exports rather than maintaining a second set of effects. */
 export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop: HTMLCanvasElement, effects: LayerEffects, options: {
@@ -314,7 +322,19 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     renderer.setSize(source.width, source.height, false);
     const texture = new THREE.CanvasTexture(source), behind = new THREE.CanvasTexture(backdrop);
     texture.colorSpace = THREE.SRGBColorSpace;
-    const uniforms = getLayerEffectUniforms(effects, 'normal');
+    const freshUniforms = getLayerEffectUniforms(effects, 'normal');
+    if (!cachedExportUniforms) {
+        cachedExportUniforms = freshUniforms;
+    } else {
+        for (const [key, val] of Object.entries(freshUniforms)) {
+            if ((cachedExportUniforms as any)[key]) {
+                (cachedExportUniforms as any)[key].value = (val as any).value;
+            } else {
+                (cachedExportUniforms as any)[key] = val;
+            }
+        }
+    }
+    const uniforms = cachedExportUniforms;
     uniforms.layerScene.value = behind;
     uniforms.layerAuthorSize.value.set(1920, 1080);
     uniforms.layerResolution.value.set(source.width, source.height);
@@ -324,15 +344,27 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     uniforms.layerTime.value = options.time; uniforms.layerViewAngle.value = options.viewAngle;
     const blur = getBlurSettings(effects, 'backdropBlur');
     uniforms.layerBackdrop.value = Math.max(blur.start, blur.end);
-    const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: options.opacity, toneMapped: false, side: THREE.DoubleSide });
-    material.onBeforeCompile = shader => installLayerEffects(shader, uniforms);
+    if (!cachedExportMaterial) {
+        cachedExportMaterial = new THREE.MeshBasicMaterial({ transparent: true, opacity: options.opacity, toneMapped: false, side: THREE.DoubleSide });
+        cachedExportMaterial.onBeforeCompile = shader => installLayerEffects(shader, uniforms);
+    }
+    const material = cachedExportMaterial;
+    material.map = texture;
+    material.opacity = options.opacity;
+    material.needsUpdate = true;
     const warp = effects.warp;
     const geometry = new THREE.PlaneGeometry(1920, 1080, warp?.enabled && warp.mode ? 64 : 1, warp?.enabled && warp.mode ? 48 : 1);
     if (warp?.enabled && warp.mode) updateWarpGeometry(geometry, 1920, 1080, 1920, 1080, { ...warp, centerX: (warp.centerX ?? 0) + (options.centerX - .5) * 1920, centerY: (warp.centerY ?? 0) + (options.centerY - .5) * 1080 }, options.time, { width: options.width * 1920, height: options.height * 1080, centerX: (options.centerX - .5) * 1920, centerY: (options.centerY - .5) * 1080 });
     const scene = new THREE.Scene(); scene.add(new THREE.Mesh(geometry, material));
     const camera = new THREE.OrthographicCamera(-960, 960, 540, -540, .1, 10000); camera.position.z = 5000;
     try { renderer.setClearColor(0, 0); renderer.render(scene, camera); return renderer.domElement; }
-    finally { geometry.dispose(); material.dispose(); texture.dispose(); behind.dispose(); renderer.renderLists.dispose(); }
+    finally {
+        geometry.dispose();
+        material.map = null;
+        texture.dispose();
+        behind.dispose();
+        renderer.renderLists.dispose();
+    }
 }
 
 /** Inject into both the unlit and lit materials, preserving their light/shadow calculations. */
@@ -344,29 +376,53 @@ uniform vec2 layerResolution;
 uniform vec2 layerAuthorSize, layerContentScale, layerContentCenter;
 uniform float layerTime, layerViewAngle, layerPixelRatio;
 uniform vec4 layerBlurProfile, layerBackdropProfile, layerScreen, layerScreenCamera, layerScreenPattern;
+uniform vec4 layerBlurShape, layerBackdropShape;
 uniform int layerBlend;
 uniform float layerBackdrop, layerGlass, layerRefraction, layerRoughness;
 uniform float layerDispersion, layerShine;
 uniform vec3 layerTint;
 uniform vec2 layerWarp;
-float layerBlurRadius(vec4 profile, vec2 uv) {
+float layerBlurRadius(vec4 profile, vec2 uv, vec4 shape) {
+    if (shape.x > .5) {
+        vec2 fromCenter = uv - shape.yz;
+        float distanceFromCenter = shape.x < 1.5 ? length(fromCenter) * 2. : dot(fromCenter, vec2(cos(profile.z), -sin(profile.z))) + .5;
+        if (shape.x > 1.5) distanceFromCenter = .5 + dot(fromCenter, vec2(cos(profile.z), -sin(profile.z)));
+        float t = clamp(distanceFromCenter, 0., 1.);
+        return mix(profile.y, mix(profile.x, profile.y, t), profile.w);
+    }
     vec2 dir = vec2(cos(profile.z), -sin(profile.z));
     float t = clamp(.5 + dot(uv - .5, dir) / max(.0001, abs(dir.x) + abs(dir.y)), 0., 1.);
     return mix(profile.y, mix(profile.x, profile.y, t), profile.w);
 }
 #ifdef USE_MAP
-vec4 layerSampleArtwork(vec2 uv, float radius) {
+vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count, vec2 size) {
+    float phase = (index + .5) / count;
+    if (shape.x < .5) {
+        float angle = index * 2.39996323;
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / size;
+    }
+    vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
+    if (shape.x < 1.5) {
+        float angle = index * 2.39996323;
+        vec2 fromCenter = (uv - center) * size;
+        float spin = (phase - .5) * min(radius / max(length(fromCenter), 1.), .35);
+        float c = cos(spin), s = sin(spin);
+        return (mat2(c, -s, s, c) * fromCenter - fromCenter) / size;
+    }
+    return (center - uv) * phase * min(1., radius * 2. / max(size.x, size.y));
+}
+vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
     vec4 color = vec4(0.); float alpha = 0.;
-    for (int i = 0; i < 16; i++) {
-        float a = float(i) * 2.39996323;
-        vec2 delta = vec2(cos(a), sin(a)) * sqrt((float(i) + .5) / 16.) * radius / layerAuthorSize;
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= shape.w) break;
+        vec2 delta = layerBlurOffset(uv, radius, shape, float(i), shape.w, layerAuthorSize);
         vec2 p = uv + delta;
         vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.)));
         sampleColor.a *= step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
         color.rgb += sampleColor.rgb * sampleColor.a;
         alpha += sampleColor.a;
     }
-    return vec4(color.rgb / max(alpha, .00001), alpha / 16.);
+    return vec4(color.rgb / max(alpha, .00001), alpha / shape.w);
 }
 vec3 layerScreenMask(vec2 pixels) {
     vec2 cell = pixels / max(.5, layerScreen.y);
@@ -385,12 +441,28 @@ vec3 layerScreenMask(vec2 pixels) {
     return vec3(1. - smoothstep(.3, .46, length(f - .5)));
 }
 #endif
-vec3 layerSampleScene(vec2 uv, float radius) {
+vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count) {
+    float phase = (index + .5) / count;
+    if (shape.x < .5) {
+        float angle = index * 2.39996323;
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / layerResolution;
+    }
+    vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
+    if (shape.x < 1.5) {
+        vec2 fromCenter = (uv - center) * layerResolution;
+        float spin = (phase - .5) * min(radius / max(length(fromCenter), 1.), .35);
+        float c = cos(spin), s = sin(spin);
+        return (mat2(c, -s, s, c) * fromCenter - fromCenter) / layerResolution;
+    }
+    return (center - uv) * phase * min(1., radius * 2. / max(layerResolution.x, layerResolution.y));
+}
+vec3 layerSampleScene(vec2 uv, float radius, vec4 shape) {
     vec3 c = texture2D(layerScene, uv).rgb * .2;
-    for (int i = 0; i < 12; i++) {
-        float a = float(i) * 2.39996323;
-        vec2 offset = vec2(cos(a), sin(a)) * sqrt((float(i)+.5)/12.) * radius / layerResolution;
-        c += texture2D(layerScene, clamp(uv + offset, vec2(0.), vec2(1.))).rgb * (.8/12.);
+    float count = min(shape.w, 32.);
+    for (int i = 0; i < 32; i++) {
+        if (float(i) >= count) break;
+        vec2 offset = layerSceneBlurOffset(uv, radius, shape, float(i), count);
+        c += texture2D(layerScene, clamp(uv + offset, vec2(0.), vec2(1.))).rgb * (.8/count);
     }
     return c;
 }
@@ -406,17 +478,17 @@ ${LAYER_STYLE_GLSL}
     layerUv.x += sin(layerUv.y * layerWarp.y * 6.2831853) * layerWarp.x * .1;
     layerUv.y += sin(layerUv.x * layerWarp.y * 6.2831853) * layerWarp.x * .1;
     vec2 localUv = (layerUv - layerContentCenter) * layerContentScale + .5;
-    float radius = layerBlurRadius(layerBlurProfile, localUv);
+    float radius = layerBlurRadius(layerBlurProfile, localUv, layerBlurShape);
     vec2 sampleUv = layerUv;
     if (layerScreen.x > .5 && layerScreen.w > .5) {
         vec2 cell = layerScreen.y / layerAuthorSize;
         sampleUv = (floor(layerUv / cell) + .5) * cell;
     }
     sampleUv = layerStyleUv(sampleUv, localUv);
-    vec4 artwork = radius > .01 ? layerSampleArtwork(sampleUv, radius) : texture2D(map, sampleUv);
+    vec4 artwork = radius > .01 ? layerSampleArtwork(sampleUv, radius, layerBlurShape) : texture2D(map, sampleUv);
     if (layerScreen.x > .5) {
         vec2 pixels = (layerUv - .5) * layerAuthorSize;
-        if (layerScreenCamera.x > .001) artwork.rgb = mix(artwork.rgb, layerSampleArtwork(sampleUv, layerScreenCamera.x * layerScreen.y).rgb, layerScreenCamera.x);
+        if (layerScreenCamera.x > .001) artwork.rgb = mix(artwork.rgb, layerSampleArtwork(sampleUv, layerScreenCamera.x * layerScreen.y, vec4(0., .5, .5, 16.)).rgb, layerScreenCamera.x);
         vec3 maskColor = layerScreenMask(pixels);
         float moire = sin(gl_FragCoord.x * 1.7 + pixels.y * .13) * sin(gl_FragCoord.y * 1.3 - pixels.x * .11);
         maskColor *= 1. - layerScreenPattern.x * (.15 + .15 * moire);
@@ -425,7 +497,7 @@ ${LAYER_STYLE_GLSL}
         artwork.rgb *= mix(vec3(1.), maskColor, layerScreen.z);
         artwork.rgb *= (1. - layerScreenPattern.y * .3 * bands) * (1. - layerScreenCamera.z * .7 * refresh);
         artwork.rgb *= 1. - layerScreenPattern.z * layerViewAngle * .7;
-        artwork.rgb += layerSampleArtwork(sampleUv, layerScreen.y * .5).rgb * layerScreenCamera.y * .25;
+        artwork.rgb += layerSampleArtwork(sampleUv, layerScreen.y * .5, vec4(0., .5, .5, 16.)).rgb * layerScreenCamera.y * .25;
     }
     artwork = layerApplyStyles(artwork, sampleUv, localUv);
     diffuseColor *= artwork;
@@ -443,13 +515,13 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     #endif
     float backdropRadius = layerBackdrop;
     #ifdef USE_MAP
-    backdropRadius = layerBlurRadius(layerBackdropProfile, localUv) * layerPixelRatio;
+    backdropRadius = layerBlurRadius(layerBackdropProfile, localUv, layerBackdropShape) * layerPixelRatio;
     #endif
     float frost = max(backdropRadius, layerGlass * layerRoughness * 100. * layerPixelRatio);
-    vec3 behind = layerSampleScene(screenUv + refractOffset * layerGlass, frost);
+    vec3 behind = layerSampleScene(screenUv + refractOffset * layerGlass, frost, layerBackdropShape);
     if (layerGlass > .5 && layerDispersion > .001) {
-        behind.r = layerSampleScene(screenUv + refractOffset * (1. + layerDispersion), frost).r;
-        behind.b = layerSampleScene(screenUv + refractOffset * (1. - layerDispersion), frost).b;
+        behind.r = layerSampleScene(screenUv + refractOffset * (1. + layerDispersion), frost, layerBackdropShape).r;
+        behind.b = layerSampleScene(screenUv + refractOffset * (1. - layerDispersion), frost, layerBackdropShape).b;
     }
     vec3 sourceColor = gl_FragColor.rgb;
     if (layerGlass > .5) {

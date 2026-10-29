@@ -8,6 +8,7 @@ export function getLayerStyleUniforms(effects: LayerEffects) {
     const bevel = effects.bevel?.enabled ? effects.bevel : undefined;
     const print = effects.halftone?.enabled ? effects.halftone : undefined;
     const pixel = effects.pixelate?.enabled ? effects.pixelate : undefined;
+    const rgb = effects.rgbSplit?.enabled ? effects.rgbSplit : undefined;
     return {
         styleGrade: { value: new THREE.Vector4(grade?.exposure ?? 0, grade?.contrast ?? 1, grade?.saturation ?? 1, grade ? 1 : 0) },
         styleBalance: { value: new THREE.Vector2(grade?.temperature ?? 0, grade?.tint ?? 0) },
@@ -16,14 +17,21 @@ export function getLayerStyleUniforms(effects: LayerEffects) {
         styleNoise: { value: new THREE.Vector4(noise?.amount ?? 0, noise?.scale ?? 1, noise?.density ?? 1, noise?.seed ?? 0) },
         styleNoiseOptions: { value: new THREE.Vector2(noise?.monochrome === false ? 0 : 1, noise?.animated ? noise.speed : 0) },
         styleBevel: { value: new THREE.Vector4(bevel?.thickness ?? 0, bevel?.depth ?? 0, (bevel?.angle ?? 0) * Math.PI / 180, bevel?.intensity ?? 0) },
+        styleBevelSoftness: { value: bevel?.softness ?? (bevel?.thickness ?? 0) * .35 },
         styleBevelHighlight: { value: new THREE.Color(bevel?.highlightColor ?? '#ffffff') },
         styleBevelShadow: { value: new THREE.Color(bevel?.shadowColor ?? '#000000') },
         styleHalftone: { value: new THREE.Vector4(print ? 1 : 0, print?.dotSize ?? 8, print?.spacing ?? 10, (print?.angle ?? 0) * Math.PI / 180) },
+        styleHalftoneOffset: { value: new THREE.Vector2(print?.offsetX ?? 0, print?.offsetY ?? 0) },
+        styleHalftoneContrast: { value: print?.contrast ?? 1 },
         stylePrintOptions: { value: new THREE.Vector3(['circle', 'square', 'line'].indexOf(print?.shape ?? 'circle'), print?.sourceColor ? 1 : 0, print?.invert ? 1 : 0) },
         stylePrintForeground: { value: new THREE.Color(print?.foreground ?? '#000000') },
         stylePrintBackground: { value: new THREE.Color(print?.background ?? '#ffffff') },
         stylePixelate: { value: new THREE.Vector3(pixel?.blockSize ?? 1, pixel?.aspect ?? 1, pixel ? 1 : 0) },
+        stylePixelateOffset: { value: new THREE.Vector2(pixel?.offsetX ?? 0, pixel?.offsetY ?? 0) },
         stylePixelProfile: { value: new THREE.Vector4(pixel?.mode === 'progressive' ? pixel.start : pixel?.blockSize ?? 1, pixel?.mode === 'progressive' ? pixel.end : pixel?.blockSize ?? 1, (pixel?.angle ?? 0) * Math.PI / 180, pixel?.mode === 'progressive' ? 1 : 0) },
+        styleRgbSplit: { value: new THREE.Vector4(rgb?.amount ?? 0, (rgb?.angle ?? 0) * Math.PI / 180, rgb?.mode === 'radial' ? 1 : 0, rgb ? 1 : 0) },
+        styleRgbChannels: { value: new THREE.Vector3(rgb?.red ?? 1, rgb?.green ?? 0, rgb?.blue ?? -1) },
+        styleRgbCenter: { value: new THREE.Vector2(rgb?.centerX ?? .5, rgb?.centerY ?? .5) },
     };
 }
 
@@ -31,10 +39,12 @@ export function getLayerStyleUniforms(effects: LayerEffects) {
 export const LAYER_STYLE_GLSL = `
 ${COLOR_GRADE_GLSL}
 ${RANDOM_GLSL}
-uniform vec4 styleGrade, styleNoise, styleBevel, styleHalftone, stylePixelProfile;
-uniform vec2 styleBalance, styleNoiseOptions;
+uniform vec4 styleGrade, styleNoise, styleBevel, styleHalftone, stylePixelProfile, styleRgbSplit;
+uniform vec2 styleBalance, styleNoiseOptions, styleHalftoneOffset, stylePixelateOffset, styleRgbCenter;
 uniform vec3 styleLevels, styleCurves, styleBevelHighlight, styleBevelShadow;
 uniform vec3 stylePrintOptions, stylePrintForeground, stylePrintBackground, stylePixelate;
+uniform vec3 styleRgbChannels;
+uniform float styleBevelSoftness, styleHalftoneContrast;
 
 float styleCurve(float value) {
     float c1 = clamp(.25 + styleCurves.x, 0., 1.);
@@ -48,23 +58,37 @@ float styleCurve(float value) {
 
 vec2 layerStyleUv(vec2 uv, vec2 localUv) {
     if (stylePixelate.z < .5) return uv;
-    float block = layerBlurRadius(stylePixelProfile, localUv);
+    float block = layerBlurRadius(stylePixelProfile, localUv, vec4(0., .5, .5, 16.));
     if (block < 1.) return uv;
-    vec2 cell = vec2(block * stylePixelate.y, block) / layerAuthorSize;
-    return (floor((uv - layerContentCenter) / cell) + .5) * cell + layerContentCenter;
+    vec2 pixels = (uv - layerContentCenter) * layerAuthorSize - stylePixelateOffset;
+    return (floor(pixels / vec2(block * stylePixelate.y, block)) + .5) * vec2(block * stylePixelate.y, block) / layerAuthorSize + layerContentCenter + stylePixelateOffset / layerAuthorSize;
 }
 
 #ifdef USE_MAP
 vec4 layerApplyStyles(vec4 artwork, vec2 uv, vec2 localUv) {
+    if (styleRgbSplit.w > .5 && styleRgbSplit.x > 0.) {
+        vec2 direction = vec2(cos(styleRgbSplit.y), -sin(styleRgbSplit.y));
+        if (styleRgbSplit.z > .5) {
+            vec2 rgbCenter = layerContentCenter + (styleRgbCenter - .5) / max(layerContentScale, vec2(.0001));
+            vec2 radial = uv - rgbCenter;
+            direction = radial / max(length(radial), .0001);
+        }
+        vec2 shift = direction * styleRgbSplit.x / layerAuthorSize;
+        vec3 redSample = texture2D(map, clamp(uv + shift * styleRgbChannels.x, vec2(0.), vec2(1.))).rgb;
+        vec3 greenSample = texture2D(map, clamp(uv + shift * styleRgbChannels.y, vec2(0.), vec2(1.))).rgb;
+        vec3 blueSample = texture2D(map, clamp(uv + shift * styleRgbChannels.z, vec2(0.), vec2(1.))).rgb;
+        artwork.rgb = vec3(redSample.r, greenSample.g, blueSample.b);
+    }
     if (styleHalftone.x > .5) {
-        vec2 pixels = (uv - layerContentCenter) * layerAuthorSize;
+        vec2 pixels = (uv - layerContentCenter) * layerAuthorSize - styleHalftoneOffset;
         float c = cos(styleHalftone.w), s = sin(styleHalftone.w);
         vec2 grid = mat2(c, -s, s, c) * pixels;
         float spacing = max(.5, styleHalftone.z);
         vec2 center = (floor(grid / spacing) + .5) * spacing;
         vec2 sourcePixel = mat2(c, s, -s, c) * center;
-        vec3 sourceColor = texture2D(map, clamp(layerContentCenter + sourcePixel / layerAuthorSize, vec2(0.), vec2(1.))).rgb;
+        vec3 sourceColor = texture2D(map, clamp(layerContentCenter + (sourcePixel + styleHalftoneOffset) / layerAuthorSize, vec2(0.), vec2(1.))).rgb;
         float brightness = clamp(dot(sourceColor, vec3(.2126, .7152, .0722)), 0., 1.);
+        brightness = clamp((brightness - .5) * styleHalftoneContrast + .5, 0., 1.);
         float coverage = mix(1. - brightness, brightness, stylePrintOptions.z);
         vec2 f = abs(grid - center);
         float distance = stylePrintOptions.x < .5 ? length(f) : (stylePrintOptions.x < 1.5 ? max(f.x, f.y) : f.y);
@@ -81,8 +105,8 @@ vec4 layerApplyStyles(vec4 artwork, vec2 uv, vec2 localUv) {
     }
     if (styleBevel.w > 0. && styleBevel.x > 0.) {
         vec2 delta = vec2(cos(styleBevel.z), -sin(styleBevel.z)) * styleBevel.x / layerAuthorSize;
-        float high = layerSampleArtwork(uv + delta, styleBevel.x * .35).a;
-        float low = layerSampleArtwork(uv - delta, styleBevel.x * .35).a;
+        float high = layerSampleArtwork(uv + delta, styleBevelSoftness, vec4(0., .5, .5, 16.)).a;
+        float low = layerSampleArtwork(uv - delta, styleBevelSoftness, vec4(0., .5, .5, 16.)).a;
         float relief = clamp((low - high) * styleBevel.y / max(1., styleBevel.x), -1., 1.) * styleBevel.w;
         artwork.rgb = mix(artwork.rgb, styleBevelHighlight, max(0., relief));
         artwork.rgb = mix(artwork.rgb, styleBevelShadow, max(0., -relief));

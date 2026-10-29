@@ -16,7 +16,7 @@ Inspected the supplied repository without running its scripts. Snapshot: `eb927d
 
 Its Type and Play collections are the relevant starting points. The text stage registry provides useful variants of line masks, character sequencing, word entrances, decoder effects and traveling emphasis. Keep the motion recipes; leave the website navigation, scroll and pointer behavior out of Raylight's playback model.
 
-The implementation already offers useful precedents for seeking, particularly time-indexed decoder output and precomputed glitch steps. Its letter-wave builder also addresses layout stability during weight changes. These are valuable engineering references as well as visual examples.
+The implementation already offers useful precedents for seeking, particularly time-indexed decoder output and precomputed glitch steps. However, frames generated with `Math.random()` are seekable only within a constructed timeline and are not reproducible across rebuilds or sessions without a persisted seed, matching the scope section requirements. Its letter-wave builder also addresses layout stability during weight changes. These are valuable engineering references as well as visual examples.
 
 Sources: [exhibit catalogue](https://github.com/kincreatives360-ui/museum-of-motion/blob/eb927dfe3ab4f151f38e2762135a6e49fbe3c9b0/lib/exhibits.ts), [text stages](https://github.com/kincreatives360-ui/museum-of-motion/blob/eb927dfe3ab4f151f38e2762135a6e49fbe3c9b0/lib/motion/stages/text.ts), [wave implementation](https://github.com/kincreatives360-ui/museum-of-motion/blob/eb927dfe3ab4f151f38e2762135a6e49fbe3c9b0/lib/motion/wave.ts).
 

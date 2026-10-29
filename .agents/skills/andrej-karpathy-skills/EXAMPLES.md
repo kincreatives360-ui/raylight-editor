@@ -477,13 +477,14 @@ def test_sort_with_duplicate_scores():
     
     result = sort_scores(scores)
     
-    # The bug: order is non-deterministic for duplicates
-    # Run this test multiple times, it should be consistent
+    # The bug: order is non-deterministic for duplicates (e.g. Bob placed before Alice)
+    # Asserting names confirms tied scores preserve expected tie-breaking order
+    assert [x['name'] for x in result] == ['Alice', 'Bob', 'Charlie']
     assert result[0]['score'] == 100
     assert result[1]['score'] == 100
     assert result[2]['score'] == 90
 
-# Verify: Run test 10 times → fails with inconsistent ordering
+# Verify: Run test 10 times → fails when Bob is placed before Alice due to unstable ordering
 
 # 2. Now fix with stable sort
 def sort_scores(scores):

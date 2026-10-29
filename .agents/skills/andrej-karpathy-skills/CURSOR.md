@@ -4,8 +4,8 @@ This project includes a **Cursor project rule** so the Karpathy-inspired behavio
 
 ## In this repository
 
-1. Open the folder in Cursor.
-2. The rule [`.cursor/rules/karpathy-guidelines.mdc`](.cursor/rules/karpathy-guidelines.mdc) is committed with `alwaysApply: true`, so you do not need extra installation steps.
+1. Open the repository in Cursor.
+2. The root-level project rule [`.cursor/rules/karpathy-guidelines.mdc`](../../.cursor/rules/karpathy-guidelines.mdc) is committed with `alwaysApply: true`, so you do not need extra installation steps when working in `src/` or across the editor.
 3. In Cursor, you can confirm it under **Settings → Rules** (or the project rules UI), where `karpathy-guidelines` should appear.
 
 ## Use the same guidelines in another project

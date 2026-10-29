@@ -161,7 +161,14 @@ export function GradientEditor({ fill, corners, width, height, onChange, begin, 
         <line x1={start.x} y1={start.y} x2={end.x} y2={end.y} stroke="white" strokeWidth="1"/>
         {angular && <circle cx={start.x} cy={start.y} r={Math.hypot(end.x - start.x, end.y - start.y)} fill="none" stroke="white" strokeWidth="1" {...a11y('move', 'Move angular gradient')}/>}
         {(['start', 'end'] as const).map(mode => { const p = mode === 'start' ? start : end; return <rect key={mode} x={p.x - 13} y={p.y - 13} width="26" height="26" fill="transparent" stroke="var(--accent)" strokeWidth="2" {...a11y(mode, mode === 'start' && (radial || angular) ? 'Gradient center' : `Gradient ${mode} endpoint`)}/>; })}
-        {radial && (() => { const p = project({ x: handles.start.x - (handles.end.y - handles.start.y), y: handles.start.y + (handles.width ?? Math.hypot(handles.end.x - handles.start.x, handles.end.y - handles.start.y)) }); return <circle cx={p.x} cy={p.y} r="8" fill="var(--panel-bg)" stroke="var(--accent)" {...a11y('radius', 'Ellipse radius')}/>; })()}
+        {radial && (() => {
+            const dx = handles.end.x - handles.start.x;
+            const dy = handles.end.y - handles.start.y;
+            const len = Math.hypot(dx, dy);
+            const r = handles.width ?? len;
+            const p = project(len > 1e-6 ? { x: handles.start.x - (dy / len) * r, y: handles.start.y + (dx / len) * r } : { x: handles.start.x, y: handles.start.y + r });
+            return <circle cx={p.x} cy={p.y} r="8" fill="var(--panel-bg)" stroke="var(--accent)" {...a11y('radius', 'Ellipse radius')}/>;
+        })()}
         <circle cx={rotatePoint.x} cy={rotatePoint.y} r="8" fill="var(--panel-bg)" stroke="var(--accent)" {...a11y('rotate', 'Rotate gradient; hold Shift for 15 degree snapping')}/>
         {fill.stops.map((stop, index) => { const p = point(stop.at); return <circle key={index} cx={p.x} cy={p.y} r="8" fill={stop.color} fillOpacity={stop.opacity ?? 1} stroke={selected === index ? 'var(--accent)' : 'white'} strokeWidth="2" {...a11y('stop', `Color stop ${index + 1}, ${Math.round(stop.at * 100)} percent, ${stop.color}`, index)}/>; })}
         {selected !== null && fill.stops[selected] && <foreignObject x={Math.max(8, Math.min(width - 228, point(fill.stops[selected].at).x + 20))} y={Math.max(8, Math.min(height - 180, point(fill.stops[selected].at).y + 20))} width="220" height="180" className="pointer-events-auto" onPointerDown={e => e.stopPropagation()} onKeyDown={e => e.stopPropagation()}>

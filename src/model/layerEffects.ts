@@ -3,9 +3,9 @@ import { turbulentWarpPoint } from './proceduralNoise';
 
 export const EFFECT_STAGE = { width: 1920, height: 1080 };
 export type BlurEffectKey = 'layerBlur' | 'backdropBlur';
-export type AddableLayerEffect = 'dropShadow' | 'glow' | BlurEffectKey | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate';
+export type AddableLayerEffect = 'dropShadow' | 'glow' | BlurEffectKey | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit';
 export const LAYER_EFFECT_NAMES: Record<AddableLayerEffect, string> = {
-  dropShadow: 'Shadow', glow: 'Glow', backdropBlur: 'Backdrop blur', layerBlur: 'Layer blur',
+  rgbSplit: 'RGB split', dropShadow: 'Shadow', glow: 'Glow', backdropBlur: 'Backdrop blur', layerBlur: 'Layer blur',
   outline: 'Alpha outline', colorCorrection: 'Color correction', noise: 'Noise', bevel: 'Bevel and emboss', halftone: 'Halftone', roughen: 'Roughen edges', colorKey: 'Color key', pixelate: 'Pixelate',
   liquidGlass: 'Liquid glass', warp: 'Wrap', screen: 'Screen',
 };
@@ -18,17 +18,18 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
   // Re-adding an effect must never discard authored settings (including zero blur).
   if (effects[key] !== undefined) return effects;
   switch (key) {
+    case 'rgbSplit': return { ...effects, rgbSplit: { enabled: true, amount: 8, angle: 0, mode: 'linear', centerX: .5, centerY: .5, red: 1, green: 0, blue: -1 } };
     case 'outline': return { ...effects, outline: { enabled: true, width: 6, placement: 'outside', color: '#ffffff', opacity: 1, softness: 0 } };
     case 'colorCorrection': return { ...effects, colorCorrection: {
       enabled: true, exposure: 0, contrast: 1, saturation: 1, temperature: 0, tint: 0,
       blackPoint: 0, whitePoint: 1, gamma: 1, curveShadows: 0, curveMidtones: 0, curveHighlights: 0,
     } };
     case 'noise': return { ...effects, noise: { enabled: true, amount: .2, scale: 1, monochrome: true, density: 1, seed: 1, animated: false, speed: 1 } };
-    case 'bevel': return { ...effects, bevel: { enabled: true, thickness: 8, depth: 5, angle: 135, highlightColor: '#ffffff', shadowColor: '#000000', intensity: .7 } };
-    case 'halftone': return { ...effects, halftone: { enabled: true, dotSize: 6, spacing: 8, angle: 45, shape: 'circle', foreground: '#000000', background: '#ffffff', sourceColor: false, invert: false } };
+    case 'bevel': return { ...effects, bevel: { enabled: true, thickness: 8, softness: 2.8, depth: 5, angle: 135, highlightColor: '#ffffff', shadowColor: '#000000', intensity: .7 } };
+    case 'halftone': return { ...effects, halftone: { enabled: true, dotSize: 6, spacing: 8, offsetX: 0, offsetY: 0, contrast: 1, angle: 45, shape: 'circle', foreground: '#000000', background: '#ffffff', sourceColor: false, invert: false } };
     case 'roughen': return { ...effects, roughen: { enabled: true, border: 8, scale: 20, sharpness: .5, amount: .7, seed: 1, evolution: 0, speed: 0 } };
     case 'colorKey': return { ...effects, colorKey: { enabled: true, color: '#00ff00', similarity: .3, softness: .1, spill: .5, invert: false } };
-    case 'pixelate': return { ...effects, pixelate: { enabled: true, blockSize: 16, aspect: 1, mode: 'uniform', start: 1, end: 32, angle: 0 } };
+    case 'pixelate': return { ...effects, pixelate: { enabled: true, blockSize: 16, aspect: 1, offsetX: 0, offsetY: 0, mode: 'uniform', start: 1, end: 32, angle: 0 } };
     case 'dropShadow': return { ...effects, dropShadow: defaultShadow() };
     case 'glow': return { ...effects, glow: { enabled: true, mode: 'edge', color: '#0043ff', intensity: .2, radius: 126 / 1920, angle: 106, sheen: 1, rim: 1, depth: 0, blend: 'normal' } };
     case 'backdropBlur': case 'layerBlur': return { ...effects, [key]: .24 };
@@ -39,7 +40,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
 }
 
 export function getBlurSettings(effects: LayerEffects, key: BlurEffectKey): BlurSettings {
-  return effects[`${key}Settings`] ?? { mode: 'uniform', start: 0, end: (effects[key] ?? 0) * 100, angle: 270 };
+  return effects[`${key}Settings`] ?? { type: 'gaussian', centerX: .5, centerY: .5, quality: 16, mode: 'uniform', start: 0, end: (effects[key] ?? 0) * 100, angle: 270 };
 }
 
 export function blurAtPoint(settings: BlurSettings, x: number, y: number): number {

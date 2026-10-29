@@ -323,6 +323,10 @@ export interface WarpEffect {
 }
 
 export interface BlurSettings {
+  type?: 'gaussian' | 'radial' | 'zoom';
+  centerX?: number;
+  centerY?: number;
+  quality?: 8 | 16 | 32;
   mode: 'uniform' | 'progressive';
   start: number;
   end: number;
@@ -380,6 +384,7 @@ export interface NoiseEffect {
 }
 
 export interface BevelEffect {
+  softness?: number;
   enabled: boolean;
   thickness: number;
   depth: number;
@@ -390,6 +395,9 @@ export interface BevelEffect {
 }
 
 export interface HalftoneEffect {
+  offsetX?: number;
+  offsetY?: number;
+  contrast?: number;
   enabled: boolean;
   dotSize: number;
   spacing: number;
@@ -422,6 +430,8 @@ export interface ColorKeyEffect {
 }
 
 export interface PixelateEffect {
+  offsetX?: number;
+  offsetY?: number;
   enabled: boolean;
   blockSize: number;
   aspect: number;
@@ -431,7 +441,20 @@ export interface PixelateEffect {
   angle: number;
 }
 
+export interface RgbSplitEffect {
+  enabled: boolean;
+  amount: number;
+  angle: number;
+  mode: 'linear' | 'radial';
+  centerX: number;
+  centerY: number;
+  red: number;
+  green: number;
+  blue: number;
+}
+
 export interface LayerEffects {
+  rgbSplit?: RgbSplitEffect;
   outline?: OutlineEffect;
   colorCorrection?: ColorCorrectionEffect;
   noise?: NoiseEffect;

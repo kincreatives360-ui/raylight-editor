@@ -1,8 +1,32 @@
 import { describe, expect, it } from 'vitest';
 import { LayerEffectsSchema } from './schema';
-import { addLayerEffect, blurAtPoint, defaultShadow, warpPoint } from './layerEffects';
+import { addLayerEffect, blurAtPoint, defaultShadow, getBlurSettings, warpPoint } from './layerEffects';
 
 describe('reference layer effect parameters', () => {
+  it('round trips advanced blur, channel split, softness and cell offsets', () => {
+    let effects = addLayerEffect({}, 'rgbSplit');
+    effects = addLayerEffect(effects, 'bevel');
+    effects = addLayerEffect(effects, 'halftone');
+    effects = addLayerEffect(effects, 'pixelate');
+    const authored = { ...effects,
+      layerBlur: .3, layerBlurSettings: { type: 'radial', centerX: 0, centerY: 1, quality: 32, mode: 'progressive', start: 2, end: 50, angle: 45 },
+      backdropBlur: .1, backdropBlurSettings: { type: 'zoom', centerX: .25, centerY: .75, quality: 8, mode: 'uniform', start: 0, end: 10, angle: 0 },
+      rgbSplit: { ...effects.rgbSplit!, mode: 'radial', amount: 20, angle: -45, red: -2, blue: 2, centerX: 0, centerY: 1 },
+      bevel: { ...effects.bevel!, softness: 0 },
+      halftone: { ...effects.halftone!, offsetX: -25, offsetY: 30, contrast: 4 },
+      pixelate: { ...effects.pixelate!, offsetX: -10, offsetY: 5 },
+    };
+    expect(LayerEffectsSchema.parse(JSON.parse(JSON.stringify(authored)))).toEqual(authored);
+    expect(getBlurSettings({}, 'layerBlur')).toMatchObject({ type: 'gaussian', centerX: .5, centerY: .5, quality: 16 });
+  });
+  it('rejects invalid blur samples and normalized centers or split channel strengths', () => {
+    const blur = { type: 'radial', mode: 'uniform', start: 0, end: 20, angle: 0 };
+    for (const patch of [{ quality: 12 }, { centerX: 1.1 }, { centerY: -.1 }, { type: 'unknown' }]) expect(LayerEffectsSchema.safeParse({ layerBlurSettings: { ...blur, ...patch } }).success).toBe(false);
+    const rgbSplit = addLayerEffect({}, 'rgbSplit').rgbSplit!;
+    for (const patch of [{ red: 2.1 }, { green: -2.1 }, { centerX: -1 }, { amount: -1 }]) expect(LayerEffectsSchema.safeParse({ rgbSplit: { ...rgbSplit, ...patch } }).success).toBe(false);
+    const halftone = addLayerEffect({}, 'halftone').halftone!;
+    expect(LayerEffectsSchema.safeParse({ halftone: { ...halftone, contrast: 0 } }).success).toBe(false);
+  });
   it('round trips every recommended effect and preserves authored settings when re-added', () => {
     let effects = {};
     for (const key of ['outline', 'colorCorrection', 'noise', 'bevel', 'halftone', 'roughen', 'colorKey', 'pixelate'] as const) {

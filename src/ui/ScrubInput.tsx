@@ -1,5 +1,5 @@
 // src/ui/ScrubInput.tsx
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useId } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 
 const DRAG_THRESHOLD = 3;
@@ -334,7 +334,10 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         }
     };
 
+    const generatedLabelId = useId();
     const labelString = typeof label === 'string' ? label : undefined;
+    const hasAccessibleName = Boolean(ariaLabel ?? labelString);
+    const labelId = !hasAccessibleName ? generatedLabelId : undefined;
 
     return (
         <div
@@ -342,6 +345,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             role="spinbutton"
             tabIndex={isEditing ? -1 : 0}
             aria-label={ariaLabel ?? labelString}
+            aria-labelledby={labelId}
             aria-valuenow={safeValue}
             aria-valuemin={Number.isFinite(min) ? min : undefined}
             aria-valuemax={Number.isFinite(max) ? max : undefined}
@@ -362,7 +366,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     : 'bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))]'
             } focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
         >
-            <span className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
+            <span id={labelId} className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
                 {label}
             </span>
 
@@ -371,6 +375,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                     ref={inputRef}
                     type="text"
                     aria-label={ariaLabel ?? labelString}
+                    aria-labelledby={labelId}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onBlur={commitTextInput}

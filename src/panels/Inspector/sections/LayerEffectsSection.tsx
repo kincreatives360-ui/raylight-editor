@@ -37,6 +37,12 @@ function BlurControls({ effectKey, effects, onChange }: { effectKey: BlurEffectK
     const settingsKey = `${effectKey}Settings` as const;
     const patch = (next: Partial<BlurSettings>) => onChange({ [settingsKey]: { ...settings, ...next } });
     return <div className="space-y-3 pt-3">
+        <Mode label={`${LAYER_EFFECT_NAMES[effectKey]} type`} value={settings.type ?? 'gaussian'} options={[["gaussian", "Gaussian"], ["radial", "Radial"], ["zoom", "Zoom"]]} onChange={type => patch({ type: type as BlurSettings['type'] })} />
+        {(settings.type === 'radial' || settings.type === 'zoom') && <div className="grid grid-cols-2 gap-2">
+            <Percent label="Center X" ariaLabel={`${LAYER_EFFECT_NAMES[effectKey]} center X`} value={settings.centerX ?? .5} onChange={centerX => patch({ centerX })} />
+            <Percent label="Center Y" ariaLabel={`${LAYER_EFFECT_NAMES[effectKey]} center Y`} value={settings.centerY ?? .5} onChange={centerY => patch({ centerY })} />
+        </div>}
+        <Mode label={`${LAYER_EFFECT_NAMES[effectKey]} quality`} value={String(settings.quality ?? 16)} options={[["8", "Draft (8)"], ["16", "Standard (16)"], ["32", "High (32)"]]} onChange={quality => patch({ quality: Number(quality) as BlurSettings['quality'] })} />
         <Mode label={`${LAYER_EFFECT_NAMES[effectKey]} mode`} value={settings.mode} options={[["uniform", "Uniform"], ["progressive", "Progressive"]]} onChange={mode => patch({ mode: mode as BlurSettings['mode'] })} />
         {settings.mode === 'uniform' ? <NumberControl label="Blur" value={(effects[effectKey] ?? 0) * 100} onChange={v => onChange({ [effectKey]: v / 100, [settingsKey]: { ...settings, end: v } })} /> : <>
             <div className="grid grid-cols-2 gap-2"><NumberControl label="Start" value={settings.start} onChange={start => patch({ start })} /><NumberControl label="End" value={settings.end} onChange={end => patch({ end })} /></div>
@@ -50,7 +56,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
     const effects = layer.effects;
     const change = (edit: (current: LayerEffects) => LayerEffects) => updateLayer(activeShotId, layer.id, l => ({ ...l, effects: edit(l.effects) }));
     const patch = (next: LayerEffects) => change(current => ({ ...current, ...next }));
-    const objectPatch = <K extends 'dropShadow' | 'glow' | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate'>(key: K, next: Partial<NonNullable<LayerEffects[K]>>) => change(current => ({ ...current, [key]: { ...current[key], ...next } }));
+    const objectPatch = <K extends 'dropShadow' | 'glow' | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit'>(key: K, next: Partial<NonNullable<LayerEffects[K]>>) => change(current => ({ ...current, [key]: { ...current[key], ...next } }));
     const remove = (key: AddableLayerEffect) => change(current => {
         const next = { ...current }; delete next[key];
         if (key === 'dropShadow') delete next.shadows;
@@ -147,7 +153,17 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <label className="flex items-center justify-between text-xs text-muted-foreground">Noise animated<input aria-label="Noise animated" type="checkbox" checked={effects.noise.animated} onChange={e => objectPatch('noise', { animated: e.target.checked })} /></label>
                 <NumberControl label="Speed" ariaLabel="Noise speed" value={effects.noise.speed} min={0} max={20} step={0.1} unit=" /s" onChange={value => objectPatch('noise', { speed: value })} />
             </div>)}
+            {effects.rgbSplit && card('rgbSplit', <Layers size={14} />, <div className="space-y-3 pt-3">
+                <Mode label="RGB split mode" value={effects.rgbSplit.mode} options={[["linear", "Linear"], ["radial", "Radial"]]} onChange={mode => objectPatch('rgbSplit', { mode: mode as NonNullable<LayerEffects['rgbSplit']>['mode'] })} />
+                <NumberControl label="Amount" ariaLabel="RGB split amount" value={effects.rgbSplit.amount} max={200} onChange={amount => objectPatch('rgbSplit', { amount })} />
+                {effects.rgbSplit.mode === 'linear' ? <NumberControl label="Angle" ariaLabel="RGB split angle" value={effects.rgbSplit.angle} min={-360} max={360} unit="°" onChange={angle => objectPatch('rgbSplit', { angle })} /> : <div className="grid grid-cols-2 gap-2">
+                    <Percent label="Center X" ariaLabel="RGB split center X" value={effects.rgbSplit.centerX} onChange={centerX => objectPatch('rgbSplit', { centerX })} />
+                    <Percent label="Center Y" ariaLabel="RGB split center Y" value={effects.rgbSplit.centerY} onChange={centerY => objectPatch('rgbSplit', { centerY })} />
+                </div>}
+                <div className="grid grid-cols-3 gap-2">{(['red', 'green', 'blue'] as const).map(channel => <NumberControl key={channel} label={channel[0].toUpperCase() + channel.slice(1)} ariaLabel={'RGB split ' + channel} value={effects.rgbSplit![channel]} min={-2} max={2} step={.1} unit="×" onChange={value => objectPatch('rgbSplit', { [channel]: value })} />)}</div>
+            </div>)}
             {effects.bevel && card('bevel', <Layers size={14} />, <div className="space-y-3 pt-3">
+                <NumberControl label="Softness" ariaLabel="Bevel and emboss softness" value={effects.bevel.softness ?? effects.bevel.thickness * .35} onChange={softness => objectPatch('bevel', { softness })} />
                 <NumberControl label="Thickness" ariaLabel="Bevel and emboss thickness" value={effects.bevel.thickness} min={0} max={200} step={0.1} unit=" px" onChange={value => objectPatch('bevel', { thickness: value })} />
                 <NumberControl label="Depth" ariaLabel="Bevel and emboss depth" value={effects.bevel.depth} min={-200} max={200} step={0.1} unit=" px" onChange={value => objectPatch('bevel', { depth: value })} />
                 <NumberControl label="Angle" ariaLabel="Bevel and emboss angle" value={effects.bevel.angle} min={-3600} max={3600} step={0.1} unit="°" onChange={value => objectPatch('bevel', { angle: value })} />
@@ -156,6 +172,8 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <Percent label="Intensity" ariaLabel="Bevel and emboss intensity" value={effects.bevel.intensity} onChange={value => objectPatch('bevel', { intensity: value })} />
             </div>)}
             {effects.halftone && card('halftone', <Layers size={14} />, <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-2 gap-2"><NumberControl label="Offset X" ariaLabel="Halftone offset X" value={effects.halftone.offsetX ?? 0} min={-2000} max={2000} onChange={offsetX => objectPatch('halftone', { offsetX })} /><NumberControl label="Offset Y" ariaLabel="Halftone offset Y" value={effects.halftone.offsetY ?? 0} min={-2000} max={2000} onChange={offsetY => objectPatch('halftone', { offsetY })} /></div>
+                <NumberControl label="Contrast" ariaLabel="Halftone contrast" value={effects.halftone.contrast ?? 1} min={.1} max={4} step={.1} unit="×" onChange={contrast => objectPatch('halftone', { contrast })} />
                 <NumberControl label="Dot size" ariaLabel="Halftone dot size" value={effects.halftone.dotSize} min={0.5} max={200} step={0.1} unit=" px" onChange={value => objectPatch('halftone', { dotSize: value })} />
                 <NumberControl label="Spacing" ariaLabel="Halftone spacing" value={effects.halftone.spacing} min={0.5} max={200} step={0.1} unit=" px" onChange={value => objectPatch('halftone', { spacing: value })} />
                 <NumberControl label="Angle" ariaLabel="Halftone angle" value={effects.halftone.angle} min={-3600} max={3600} step={0.1} unit="°" onChange={value => objectPatch('halftone', { angle: value })} />
@@ -182,6 +200,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <label className="flex items-center justify-between text-xs text-muted-foreground">Color key invert<input aria-label="Color key invert" type="checkbox" checked={effects.colorKey.invert} onChange={e => objectPatch('colorKey', { invert: e.target.checked })} /></label>
             </div>)}
             {effects.pixelate && card('pixelate', <Layers size={14} />, <div className="space-y-3 pt-3">
+                <div className="grid grid-cols-2 gap-2"><NumberControl label="Offset X" ariaLabel="Pixelate offset X" value={effects.pixelate.offsetX ?? 0} min={-2000} max={2000} onChange={offsetX => objectPatch('pixelate', { offsetX })} /><NumberControl label="Offset Y" ariaLabel="Pixelate offset Y" value={effects.pixelate.offsetY ?? 0} min={-2000} max={2000} onChange={offsetY => objectPatch('pixelate', { offsetY })} /></div>
                 <NumberControl label="Block size" ariaLabel="Pixelate block size" value={effects.pixelate.blockSize} min={1} max={500} step={0.1} unit=" px" onChange={value => objectPatch('pixelate', { blockSize: value })} />
                 <NumberControl label="Aspect" ariaLabel="Pixelate aspect" value={effects.pixelate.aspect} min={0.1} max={10} step={0.1} unit="" onChange={value => objectPatch('pixelate', { aspect: value })} />
                 <Mode label="Pixelate mode" value={effects.pixelate.mode} options={[["uniform","Uniform"],["progressive","Progressive"]]} onChange={value => objectPatch('pixelate', { mode: value as typeof effects.pixelate.mode })} />
