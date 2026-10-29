@@ -4,7 +4,9 @@ import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
 import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 // src/panels/Timeline/Timeline.tsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX, Scissors, Trash2 } from 'lucide-react';
+import { Play, Pause, Volume2, VolumeX, Scissors, Trash2, Copy } from 'lucide-react';
+import { ContextMenu, type ContextMenuItemDef } from '../../ui/ContextMenu';
+import { copyTimelineBlock } from '../../utils/editorClipboard';
 import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip, Easing } from '../../model/types';
 import { isBlankProjectState } from '../../model/types';
 import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
@@ -44,6 +46,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         addCameraBlockToShot,
         toggleProjectAudioMuted,
         splitAtPlayhead,
+        splitShotAtPlayhead,
+        splitAudioClipAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
     } = useProjectStore();
@@ -1455,6 +1459,49 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         }));
     };
 
+    const duplicateAudioClip = (clipId: string) => {
+        updateProject((p) => {
+            const clips = p.audio?.clips || [];
+            const clip = clips.find((c) => c.id === clipId);
+            if (!clip) return p;
+            const newClip = {
+                ...clip,
+                id: `audio-${Date.now()}`,
+                startMs: clip.startMs + clip.durationMs,
+            };
+            return {
+                ...p,
+                audio: {
+                    ...p.audio,
+                    clips: [...clips, newClip],
+                },
+            };
+        });
+    };
+
+    const setAudioFade = (clipId: string, type: 'in' | 'out', ms: number) => {
+        updateProject((p) => ({
+            ...p,
+            audio: {
+                ...p.audio,
+                clips: (p.audio?.clips || []).map((c) =>
+                    c.id === clipId
+                        ? {
+                              ...c,
+                              ...(type === 'in' ? { fadeInMs: ms } : { fadeOutMs: ms }),
+                          }
+                        : c
+                ),
+            },
+        }));
+    };
+
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        items: ContextMenuItemDef[];
+    } | null>(null);
+
     // 10. Cursor-Anchored Horizontal Zoom handled via native wheel listener on trackRef
 
     const hoverDisplayTimeMs = hoverTimeMs === null
@@ -1685,7 +1732,65 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             muted={clip.muted || project.audio?.muted}
                                             onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
                                             onSeek={() => setCurrentTimeMs(visibleStart)}
-                                            onDelete={() => deleteAudioClip(clip.id)} />
+                                            onDelete={() => deleteAudioClip(clip.id)}
+                                            onContextMenu={(e) => {
+                                                e.preventDefault();
+                                                e.stopPropagation();
+                                                setContextMenu({
+                                                    x: e.clientX,
+                                                    y: e.clientY,
+                                                    items: [
+                                                        { type: 'header', label: clip.name },
+                                                        {
+                                                            id: 'split',
+                                                            label: 'Split at playhead',
+                                                            shortcut: '⌘B',
+                                                            onClick: () => splitAudioClipAtPlayhead(clip.id, currentTimeMs),
+                                                        },
+                                                        {
+                                                            id: 'fade-in',
+                                                            label: 'Quick fade in',
+                                                            children: [
+                                                                { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
+                                                                { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
+                                                                { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
+                                                                { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
+                                                            ],
+                                                        },
+                                                        {
+                                                            id: 'fade-out',
+                                                            label: 'Quick fade out',
+                                                            children: [
+                                                                { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
+                                                                { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
+                                                                { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
+                                                                { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
+                                                            ],
+                                                        },
+                                                        {
+                                                            id: 'toggle-mute',
+                                                            label: project.audio?.muted ? 'Unmute' : 'Mute',
+                                                            shortcut: 'M',
+                                                            onClick: () => toggleProjectAudioMuted(),
+                                                        },
+                                                        { type: 'divider' },
+                                                        {
+                                                            id: 'duplicate',
+                                                            label: 'Duplicate',
+                                                            shortcut: '⌘D',
+                                                            onClick: () => duplicateAudioClip(clip.id),
+                                                        },
+                                                        {
+                                                            id: 'delete',
+                                                            label: 'Delete clip',
+                                                            icon: Trash2,
+                                                            shortcut: '⌫',
+                                                            danger: true,
+                                                            onClick: () => deleteAudioClip(clip.id),
+                                                        },
+                                                    ],
+                                                });
+                                            }} />
                                     );
                                 }
                                 const left = Math.max(0, clipStart) * pxPerMs;
@@ -1856,6 +1961,78 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     data-cam-pill="true"
                                                     tone="camera"
                                                     selected={isCamSelected}
+                                                    onContextMenu={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        selectCameraBlock(cb.id);
+                                                        setContextMenu({
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            items: [
+                                                                { type: 'header', label: `${modeLabel} Camera Move` },
+                                                                {
+                                                                    id: 'edit-easing',
+                                                                    label: 'Edit easing',
+                                                                    shortcut: '↵',
+                                                                    onClick: () => {
+                                                                        selectCameraBlock(cb.id);
+                                                                        setEasingPopoverTarget({
+                                                                            easing: cb.easing,
+                                                                            onChange: (easing) => {
+                                                                                updateShot(activeShot.id, (s) => ({
+                                                                                    ...s,
+                                                                                    cameraBlocks: s.cameraBlocks.map((b) =>
+                                                                                        b.id === cb.id ? { ...b, easing } : b
+                                                                                    ),
+                                                                                }));
+                                                                            },
+                                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                        });
+                                                                    },
+                                                                },
+                                                                {
+                                                                    id: 'copy',
+                                                                    label: 'Copy',
+                                                                    icon: Copy,
+                                                                    shortcut: '⌘C',
+                                                                    onClick: () => copyTimelineBlock({ type: 'camera', block: cb }),
+                                                                },
+                                                                {
+                                                                    id: 'dup',
+                                                                    label: 'Duplicate',
+                                                                    shortcut: '⌘D',
+                                                                    onClick: () => {
+                                                                        updateShot(activeShot.id, (s) => ({
+                                                                            ...s,
+                                                                            cameraBlocks: [
+                                                                                ...s.cameraBlocks,
+                                                                                {
+                                                                                    ...cb,
+                                                                                    id: `cam-blk-${Date.now()}`,
+                                                                                    startMs: Math.min(s.durationMs - cb.durationMs, cb.startMs + 50),
+                                                                                },
+                                                                            ],
+                                                                        }));
+                                                                    },
+                                                                },
+                                                                { type: 'divider' },
+                                                                {
+                                                                    id: 'del',
+                                                                    label: 'Remove',
+                                                                    icon: Trash2,
+                                                                    shortcut: '⌫',
+                                                                    danger: true,
+                                                                    onClick: () => {
+                                                                        updateShot(activeShot.id, (s) => ({
+                                                                            ...s,
+                                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
+                                                                        }));
+                                                                        if (selectedCameraBlockId === cb.id) selectCameraBlock(null);
+                                                                    },
+                                                                },
+                                                            ],
+                                                        });
+                                                    }}
                                                     onPointerDown={(e) =>
                                                         startCameraBlockDrag(e, activeShot, cb, 'move')
                                                     }
@@ -1906,6 +2083,78 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     data-light-pill="true"
                                                     tone="light"
                                                     selected={isLightSelected}
+                                                    onContextMenu={(e) => {
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        selectLightBlock(lb.id);
+                                                        setContextMenu({
+                                                            x: e.clientX,
+                                                            y: e.clientY,
+                                                            items: [
+                                                                { type: 'header', label: lb.label || 'Light Key' },
+                                                                {
+                                                                    id: 'edit-easing',
+                                                                    label: 'Edit easing',
+                                                                    shortcut: '↵',
+                                                                    onClick: () => {
+                                                                        selectLightBlock(lb.id);
+                                                                        setEasingPopoverTarget({
+                                                                            easing: lb.easing,
+                                                                            onChange: (easing) => {
+                                                                                updateShot(activeShot.id, (s) => ({
+                                                                                    ...s,
+                                                                                    lightBlocks: (s.lightBlocks || []).map((b) =>
+                                                                                        b.id === lb.id ? { ...b, easing } : b
+                                                                                    ),
+                                                                                }));
+                                                                            },
+                                                                            anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                        });
+                                                                    },
+                                                                },
+                                                                {
+                                                                    id: 'copy',
+                                                                    label: 'Copy',
+                                                                    icon: Copy,
+                                                                    shortcut: '⌘C',
+                                                                    onClick: () => copyTimelineBlock({ type: 'light', block: lb }),
+                                                                },
+                                                                {
+                                                                    id: 'dup',
+                                                                    label: 'Duplicate',
+                                                                    shortcut: '⌘D',
+                                                                    onClick: () => {
+                                                                        updateShot(activeShot.id, (s) => ({
+                                                                            ...s,
+                                                                            lightBlocks: [
+                                                                                ...(s.lightBlocks || []),
+                                                                                {
+                                                                                    ...lb,
+                                                                                    id: `light-blk-${Date.now()}`,
+                                                                                    startMs: Math.min(s.durationMs - lb.durationMs, lb.startMs + 50),
+                                                                                },
+                                                                            ],
+                                                                        }));
+                                                                    },
+                                                                },
+                                                                { type: 'divider' },
+                                                                {
+                                                                    id: 'del',
+                                                                    label: 'Remove',
+                                                                    icon: Trash2,
+                                                                    shortcut: '⌫',
+                                                                    danger: true,
+                                                                    onClick: () => {
+                                                                        updateShot(activeShot.id, (s) => ({
+                                                                            ...s,
+                                                                            lightBlocks: (s.lightBlocks || []).filter((b) => b.id !== lb.id),
+                                                                        }));
+                                                                        if (selectedLightBlockId === lb.id) selectLightBlock(null);
+                                                                    },
+                                                                },
+                                                            ],
+                                                        });
+                                                    }}
                                                     onClick={(e) => {
                                                         e.stopPropagation();
                                                         selectLightBlock(lb.id);
@@ -2122,6 +2371,76 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                             <TimelineRangeBar
                                                                 tone="animation"
                                                                 selected={selectedBlockId === blk.id}
+                                                                onContextMenu={(e) => {
+                                                                    e.preventDefault();
+                                                                    e.stopPropagation();
+                                                                    selectBlock(blk.id, layer.id);
+                                                                    setContextMenu({
+                                                                        x: e.clientX,
+                                                                        y: e.clientY,
+                                                                        items: [
+                                                                            { type: 'header', label: blk.label },
+                                                                            {
+                                                                                id: 'edit-easing',
+                                                                                label: 'Edit easing',
+                                                                                shortcut: '↵',
+                                                                                onClick: () => {
+                                                                                    setEasingPopoverTarget({
+                                                                                        easing: blk.easing,
+                                                                                        onChange: (easing) => {
+                                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                                ...l,
+                                                                                                blocks: l.blocks.map((b) =>
+                                                                                                    b.id === blk.id ? { ...b, easing } : b
+                                                                                                ),
+                                                                                            }));
+                                                                                        },
+                                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
+                                                                                    });
+                                                                                },
+                                                                            },
+                                                                            {
+                                                                                id: 'copy',
+                                                                                label: 'Copy',
+                                                                                icon: Copy,
+                                                                                shortcut: '⌘C',
+                                                                                onClick: () => copyTimelineBlock({ type: 'animation', block: blk, layerId: layer.id }),
+                                                                            },
+                                                                            {
+                                                                                id: 'dup',
+                                                                                label: 'Duplicate',
+                                                                                shortcut: '⌘D',
+                                                                                onClick: () => {
+                                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                        ...l,
+                                                                                        blocks: [
+                                                                                            ...l.blocks,
+                                                                                            {
+                                                                                                ...blk,
+                                                                                                id: `blk-${Date.now()}`,
+                                                                                                startMs: Math.min(activeShot.durationMs - blk.durationMs, blk.startMs + 50),
+                                                                                            },
+                                                                                        ],
+                                                                                    }));
+                                                                                },
+                                                                            },
+                                                                            { type: 'divider' },
+                                                                            {
+                                                                                id: 'del',
+                                                                                label: 'Remove',
+                                                                                icon: Trash2,
+                                                                                shortcut: '⌫',
+                                                                                danger: true,
+                                                                                onClick: () => {
+                                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                                        ...l,
+                                                                                        blocks: l.blocks.filter((b) => b.id !== blk.id),
+                                                                                    }));
+                                                                                },
+                                                                            },
+                                                                        ],
+                                                                    });
+                                                                }}
                                                                 onClick={(e) => {
                                                                     e.stopPropagation();
                                                                     if (suppressPillClickRef.current === blk.id) {

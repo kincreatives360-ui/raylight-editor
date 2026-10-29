@@ -13,6 +13,7 @@ interface AudioClipBarProps {
     onSeek: () => void;
     onDelete: () => void;
     onDrag: (event: React.PointerEvent<HTMLElement>, edge: 'move' | 'left' | 'right') => void;
+    onContextMenu?: (event: React.MouseEvent) => void;
 }
 
 const AudioWaveform: React.FC<{
@@ -63,13 +64,14 @@ const AudioWaveform: React.FC<{
     }
 );
 
-export function AudioClipBar({ clip, left, width, muted, onSeek, onDelete, onDrag }: AudioClipBarProps) {
+export function AudioClipBar({ clip, left, width, muted, onSeek, onDelete, onDrag, onContextMenu }: AudioClipBarProps) {
     return (
         <TimelineRangeBar
             tone="audio"
             selected={!muted}
             title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
             onPointerDown={(e) => onDrag(e, 'move')}
+            onContextMenu={onContextMenu}
             onClick={(e) => {
                 e.stopPropagation();
                 onSeek();

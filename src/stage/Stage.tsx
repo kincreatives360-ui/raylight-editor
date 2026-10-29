@@ -1,7 +1,8 @@
-import { MenuSurface, MenuItem } from '../ui/Menu';
+import { ContextMenu, type ContextMenuItemDef } from '../ui/ContextMenu';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
-import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers } from 'lucide-react';
+import { RotateCcw, UploadCloud, Copy, Trash2, FolderPlus, FolderMinus, ChevronsUp, ChevronsDown, ChevronUp, ChevronDown, Lock, Unlock, Eye, EyeOff, Type, Square, Circle, Layers, Focus, AlignLeft, AlignCenterHorizontal, AlignRight, AlignStartVertical, AlignCenterVertical, AlignEndVertical, Sparkles, ClipboardCopy, ClipboardPaste } from 'lucide-react';
+import { copyLayerEffects, getCopiedLayerEffects, hasCopiedLayerEffects } from '../utils/editorClipboard';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
 import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
@@ -71,6 +72,7 @@ const StageComponent: React.FC<StageProps> = ({
         updateLayer,
         createGroupFromLayers,
         ungroupInShot,
+        recordAnimatedBlockAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
     } = useProjectStore();
@@ -1487,333 +1489,244 @@ const StageComponent: React.FC<StageProps> = ({
 
             {/* RAYLIGHT RIGHT-CLICK CONTEXT MENU (Audit Section 6.4) */}
             {contextMenu && (
-                <MenuSurface
-                    onMouseDown={(e) => e.stopPropagation()}
-                    onClick={(e) => e.stopPropagation()}
-                    style={{
-                        left: `${Math.min(contextMenu.x, window.innerWidth - 232)}px`,
-                        top: `${Math.min(
-                            contextMenu.y,
-                            window.innerHeight - (contextMenuLayer ? 390 : 220)
-                        )}px`,
-                    }}
-                    className="fixed z-50 w-56 bg-[var(--bg-muted,#242428)]/98 backdrop-blur-xl border border-[var(--border-subtle,rgba(255,255,255,0.07))] shadow-2xl rounded-xl p-1 text-xs text-[var(--text-secondary,#d4d4d8)] flex flex-col gap-0.5 select-none"
-                >
-                    {contextMenuLayer ? (
-                        <>
-                            <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider truncate border-b border-white/10 mb-0.5">
-                                {contextMenuLayer.name}
-                            </div>
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    const dup = duplicateLayerInShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id
-                                    );
-                                    if (dup) selectLayer(dup.id, false);
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={Copy}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Duplicate</>}
-                                shortcut={<>
-                                    ⌘D
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    const idsToGroup = selectedLayerSet.has(
-                                        contextMenuLayer.id
-                                    )
-                                        ? selectedLayerIds
-                                        : [contextMenuLayer.id];
-                                    createGroupFromLayers(frame.activeShot.id, idsToGroup);
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={FolderPlus}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Group</>}
-                                shortcut={<>
-                                    ⌘G
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            {contextMenuLayer.groupId && (
-                                <MenuItem
-                                    unstyled
-                                    onClick={() => {
-                                        if (contextMenuLayer.groupId) {
-                                            ungroupInShot(
-                                                frame.activeShot.id,
-                                                contextMenuLayer.groupId
-                                            );
-                                        }
-                                        setContextMenu(null);
-                                    }}
-                                    className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-amber-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                    icon={FolderMinus}
-                                    iconClassName="w-3.5 h-3.5 text-amber-400"
-                                    contentClassName="flex items-center gap-2"
-                                    label={<>Ungroup</>}
-                                    shortcut={<>
-                                        ⌘⇧G
-                                    </>}
-                                    shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                                />
-                            )}
-                            <div className="my-1 border-t border-white/10" />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    restackLayerInShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        'front'
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={ChevronsUp}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Bring to Front</>}
-                                shortcut={<>
-                                    ⌘⇧]
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    restackLayerInShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        'forward'
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={ChevronUp}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Bring Forward</>}
-                                shortcut={<>
-                                    ⌘]
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    restackLayerInShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        'backward'
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={ChevronDown}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Send Backward</>}
-                                shortcut={<>
-                                    ⌘[
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    restackLayerInShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        'back'
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={ChevronsDown}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Send to Back</>}
-                                shortcut={<>
-                                    ⌘⇧[
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <div className="my-1 border-t border-white/10" />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    updateLayer(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        (l) => ({ ...l, locked: !l.locked })
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-gray-300 transition text-left cursor-pointer group"
-                            >
-                                <div className="flex items-center gap-2">
-                                    {contextMenuLayer.locked ? (
-                                        <Unlock className="w-3.5 h-3.5 text-amber-400" />
-                                    ) : (
-                                        <Lock className="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300" />
-                                    )}
-                                    <span>
-                                        {contextMenuLayer.locked ? 'Unlock Layer' : 'Lock Layer'}
-                                    </span>
-                                </div>
-                            </MenuItem>
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    updateLayer(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id,
-                                        (l) => ({ ...l, hidden: !l.hidden })
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 text-gray-300 transition text-left cursor-pointer group"
-                                icon={contextMenuLayer.hidden ? Eye : EyeOff}
-                                iconClassName={contextMenuLayer.hidden ? 'w-3.5 h-3.5 text-emerald-400' : 'w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300'}
-                                contentClassName="flex items-center gap-2"
-                                label={<>
-                                    {contextMenuLayer.hidden ? 'Show Layer' : 'Hide Layer'}
-                                </>}
-                                shortcut={<>
-                                    ⌘⇧H
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <div className="my-1 border-t border-white/10" />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    deleteLayerFromShot(
-                                        frame.activeShot.id,
-                                        contextMenuLayer.id
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-rose-500/20 text-rose-300 hover:text-rose-200 transition text-left cursor-pointer group"
-                                icon={Trash2}
-                                iconClassName="w-3.5 h-3.5 text-rose-400"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Delete</>}
-                                shortcut={<>
-                                    Del
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-rose-400/80"
-                            />
-                        </>
-                    ) : (
-                        <>
-                            <div className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider border-b border-white/10 mb-0.5">
-                                Canvas
-                            </div>
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    const l = addLayerToShot(frame.activeShot.id, 'text', {
-                                        position: { x: 0, y: 0, z: 0 },
-                                    });
-                                    selectLayer(l.id, false);
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={Type}
-                                iconClassName="w-3.5 h-3.5 text-sky-400"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Add Text</>}
-                                shortcut={<>
-                                    T
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    const l = addLayerToShot(frame.activeShot.id, 'shape', {
-                                        shape: 'rectangle',
-                                        position: { x: 0, y: 0, z: 0 },
-                                    });
-                                    selectLayer(l.id, false);
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={Square}
-                                iconClassName="w-3.5 h-3.5 text-amber-400"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Add Rectangle</>}
-                                shortcut={<>
-                                    R
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    const l = addLayerToShot(frame.activeShot.id, 'shape', {
-                                        shape: 'ellipse',
-                                        position: { x: 0, y: 0, z: 0 },
-                                    });
-                                    selectLayer(l.id, false);
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={Circle}
-                                iconClassName="w-3.5 h-3.5 text-emerald-400"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Add Ellipse</>}
-                                shortcut={<>
-                                    O
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <div className="my-1 border-t border-white/10" />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    setSelectedLayerIds(
-                                        frame.activeShot.layers.map((l) => l.id)
-                                    );
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-sky-500/20 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={Layers}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Select All Layers</>}
-                                shortcut={<>
-                                    ⌘A
-                                </>}
-                                shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300"
-                            />
-                            <MenuItem
-                                unstyled
-                                onClick={() => {
-                                    resetCanvasView();
-                                    setContextMenu(null);
-                                }}
-                                className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg hover:bg-white/10 hover:text-white text-gray-300 transition text-left cursor-pointer group"
-                                icon={RotateCcw}
-                                iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                contentClassName="flex items-center gap-2"
-                                label={<>Reset View to Fit</>}
-                            />
-                        </>
-                    )}
-                </MenuSurface>
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    onClose={() => setContextMenu(null)}
+                    items={
+                        contextMenuLayer
+                            ? [
+                                  { type: 'header', label: contextMenuLayer.name },
+                                  {
+                                      id: 'group',
+                                      label: 'Group',
+                                      icon: FolderPlus,
+                                      shortcut: '⌘G',
+                                      onClick: () => {
+                                          const idsToGroup = selectedLayerSet.has(contextMenuLayer.id)
+                                              ? selectedLayerIds
+                                              : [contextMenuLayer.id];
+                                          createGroupFromLayers(frame.activeShot.id, idsToGroup);
+                                      },
+                                  },
+                                  {
+                                      id: 'frame-selection',
+                                      label: 'Frame selection',
+                                      icon: Focus,
+                                      shortcut: '⌥⌘G',
+                                      onClick: handleFrameSelectedLayers,
+                                  },
+                                  ...(contextMenuLayer.groupId
+                                      ? [
+                                            {
+                                                id: 'ungroup',
+                                                label: 'Ungroup',
+                                                icon: FolderMinus,
+                                                shortcut: '⌘⇧G',
+                                                onClick: () => {
+                                                    if (contextMenuLayer.groupId) {
+                                                        ungroupInShot(frame.activeShot.id, contextMenuLayer.groupId);
+                                                    }
+                                                },
+                                            } as ContextMenuItemDef,
+                                        ]
+                                      : []),
+                                  {
+                                      id: 'align',
+                                      label: 'Align',
+                                      icon: AlignCenterHorizontal,
+                                      children: [
+                                          {
+                                              id: 'align-left',
+                                              label: 'Align Left',
+                                              icon: AlignLeft,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: -0.32 } })),
+                                          },
+                                          {
+                                              id: 'align-center-h',
+                                              label: 'Center Horizontal',
+                                              icon: AlignCenterHorizontal,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: 0 } })),
+                                          },
+                                          {
+                                              id: 'align-right',
+                                              label: 'Align Right',
+                                              icon: AlignRight,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, x: 0.32 } })),
+                                          },
+                                          {
+                                              id: 'align-top',
+                                              label: 'Align Top',
+                                              icon: AlignStartVertical,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: 0.32 } })),
+                                          },
+                                          {
+                                              id: 'align-center-v',
+                                              label: 'Center Vertical',
+                                              icon: AlignCenterVertical,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: 0 } })),
+                                          },
+                                          {
+                                              id: 'align-bottom',
+                                              label: 'Align Bottom',
+                                              icon: AlignEndVertical,
+                                              onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, l => ({ ...l, position: { ...l.position, y: -0.32 } })),
+                                          },
+                                      ],
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'animate-last-change',
+                                      label: 'Animate last change',
+                                      icon: Sparkles,
+                                      shortcut: '⇧K',
+                                      onClick: () => {
+                                          recordAnimatedBlockAtPlayhead(
+                                              frame.activeShot.id,
+                                              contextMenuLayer.id,
+                                              'position',
+                                              { x: 0.05, y: 0.05, z: 0 },
+                                              Math.max(0, (effectiveTimeMs ?? 0) - frame.activeShot.startMs),
+                                              'Animate'
+                                          );
+                                      },
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'bring-to-front',
+                                      label: 'Bring to Front',
+                                      icon: ChevronsUp,
+                                      shortcut: ']',
+                                      onClick: () => restackLayerInShot(frame.activeShot.id, contextMenuLayer.id, 'front'),
+                                  },
+                                  {
+                                      id: 'bring-forward',
+                                      label: 'Bring Forward',
+                                      icon: ChevronUp,
+                                      shortcut: '⌘]',
+                                      onClick: () => restackLayerInShot(frame.activeShot.id, contextMenuLayer.id, 'forward'),
+                                  },
+                                  {
+                                      id: 'send-backward',
+                                      label: 'Send Backward',
+                                      icon: ChevronDown,
+                                      shortcut: '⌘[',
+                                      onClick: () => restackLayerInShot(frame.activeShot.id, contextMenuLayer.id, 'backward'),
+                                  },
+                                  {
+                                      id: 'send-to-back',
+                                      label: 'Send to Back',
+                                      icon: ChevronsDown,
+                                      shortcut: '[',
+                                      onClick: () => restackLayerInShot(frame.activeShot.id, contextMenuLayer.id, 'back'),
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'copy-effects',
+                                      label: 'Copy effects',
+                                      icon: ClipboardCopy,
+                                      shortcut: '⌥⌘C',
+                                      onClick: () => copyLayerEffects(contextMenuLayer.layerEffects),
+                                  },
+                                  {
+                                      id: 'paste-effects',
+                                      label: 'Paste effects',
+                                      icon: ClipboardPaste,
+                                      shortcut: '⌥⌘V',
+                                      disabled: !hasCopiedLayerEffects(),
+                                      onClick: () => {
+                                          const eff = getCopiedLayerEffects();
+                                          if (eff) {
+                                              updateLayer(frame.activeShot.id, contextMenuLayer.id, (l) => ({
+                                                  ...l,
+                                                  layerEffects: eff,
+                                              }));
+                                          }
+                                      },
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'duplicate',
+                                      label: 'Duplicate',
+                                      icon: Copy,
+                                      shortcut: '⌘D',
+                                      onClick: () => {
+                                          const dup = duplicateLayerInShot(frame.activeShot.id, contextMenuLayer.id);
+                                          if (dup) selectLayer(dup.id, false);
+                                      },
+                                  },
+                                  {
+                                      id: 'toggle-lock',
+                                      label: contextMenuLayer.locked ? 'Unlock Layer' : 'Lock Layer',
+                                      icon: contextMenuLayer.locked ? Unlock : Lock,
+                                      onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, (l) => ({ ...l, locked: !l.locked })),
+                                  },
+                                  {
+                                      id: 'toggle-visibility',
+                                      label: contextMenuLayer.hidden ? 'Show Layer' : 'Hide Layer',
+                                      icon: contextMenuLayer.hidden ? Eye : EyeOff,
+                                      shortcut: '⌘⇧H',
+                                      onClick: () => updateLayer(frame.activeShot.id, contextMenuLayer.id, (l) => ({ ...l, hidden: !l.hidden })),
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'delete',
+                                      label: 'Delete',
+                                      icon: Trash2,
+                                      shortcut: '⌫',
+                                      danger: true,
+                                      onClick: () => deleteLayerFromShot(frame.activeShot.id, contextMenuLayer.id),
+                                  },
+                              ]
+                            : [
+                                  { type: 'header', label: 'Canvas' },
+                                  {
+                                      id: 'add-text',
+                                      label: 'Add Text',
+                                      icon: Type,
+                                      shortcut: 'T',
+                                      onClick: () => {
+                                          const l = addLayerToShot(frame.activeShot.id, 'text', { position: { x: 0, y: 0, z: 0 } });
+                                          selectLayer(l.id, false);
+                                      },
+                                  },
+                                  {
+                                      id: 'add-rect',
+                                      label: 'Add Rectangle',
+                                      icon: Square,
+                                      shortcut: 'R',
+                                      onClick: () => {
+                                          const l = addLayerToShot(frame.activeShot.id, 'shape', { shape: 'rectangle', position: { x: 0, y: 0, z: 0 } });
+                                          selectLayer(l.id, false);
+                                      },
+                                  },
+                                  {
+                                      id: 'add-ellipse',
+                                      label: 'Add Ellipse',
+                                      icon: Circle,
+                                      shortcut: 'O',
+                                      onClick: () => {
+                                          const l = addLayerToShot(frame.activeShot.id, 'shape', { shape: 'ellipse', position: { x: 0, y: 0, z: 0 } });
+                                          selectLayer(l.id, false);
+                                      },
+                                  },
+                                  { type: 'divider' },
+                                  {
+                                      id: 'select-all',
+                                      label: 'Select All Layers',
+                                      icon: Layers,
+                                      shortcut: '⌘A',
+                                      onClick: () => setSelectedLayerIds(frame.activeShot.layers.map((l) => l.id)),
+                                  },
+                                  {
+                                      id: 'reset-fit',
+                                      label: 'Reset View to Fit',
+                                      icon: RotateCcw,
+                                      onClick: () => resetCanvasView(),
+                                  },
+                              ]
+                    }
+                />
             )}
 
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}

@@ -3,7 +3,8 @@ import { IconButton } from '../../ui/primitives';
 import { SearchField } from '../../ui/SearchField';
 import { InlineRenameInput } from '../../ui/InlineRenameInput';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Search, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Trash2, Copy, Image as ImageIcon, Square, Circle, Type, Hash, Music, Activity, Video, Sun, Volume2, VolumeX, PanelLeftClose, Play, Pause, Upload, Download, FolderOpen, RotateCcw } from 'lucide-react';
+import { Search, Plus, ChevronRight, ChevronDown, Eye, EyeOff, Trash2, Copy, Image as ImageIcon, Square, Circle, Type, Hash, Music, Activity, Video, Sun, Volume2, VolumeX, PanelLeftClose, Play, Pause, Upload, Download, FolderOpen, RotateCcw, FolderPlus, FolderMinus, Lock, Unlock } from 'lucide-react';
+import { ContextMenu, type ContextMenuItemDef } from '../../ui/ContextMenu';
 import { isBlankProjectState, type Shot, type Layer, type Group, type AudioClip } from '../../model/types';
 import { isLayerEffectivelyHidden } from '../../engine/evaluateShot';
 import { useProjectStore } from '../../store/useProjectStore';
@@ -192,6 +193,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     }, [soundItems, soundSearchQuery, selectedSfxCategory]);
 
     const [searchOpen, setSearchOpen] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{
+        x: number;
+        y: number;
+        items: ContextMenuItemDef[];
+    } | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
     const [collapsedShots, setCollapsedShots] = useState<Record<string, boolean>>(
         {}
@@ -404,6 +410,93 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     e.stopPropagation();
                     startRename(layer.id, layer.name);
                 }}
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    setContextMenu({
+                        x: e.clientX,
+                        y: e.clientY,
+                        items: [
+                            { type: 'header', label: layer.name },
+                            {
+                                id: 'rename',
+                                label: 'Rename',
+                                shortcut: 'F2',
+                                onClick: () => startRename(layer.id, layer.name),
+                            },
+                            {
+                                id: 'focus',
+                                label: 'Focus in timeline',
+                                onClick: () => {
+                                    selectLayer(layer.id, false);
+                                    if (!expandedTimelineLayerSet.has(layer.id)) {
+                                        toggleTimelineLayerExpanded(layer.id);
+                                    }
+                                },
+                            },
+                            { type: 'divider' },
+                            {
+                                id: 'duplicate',
+                                label: 'Duplicate',
+                                icon: Copy,
+                                shortcut: '⌘D',
+                                onClick: () => {
+                                    const dup = duplicateLayerInShot(shot.id, layer.id);
+                                    if (dup) selectLayer(dup.id, false);
+                                },
+                            },
+                            {
+                                id: 'group',
+                                label: 'Group',
+                                icon: FolderPlus,
+                                shortcut: '⌘G',
+                                onClick: () => createGroupFromLayers(shot.id, [layer.id]),
+                            },
+                            ...(layer.groupId
+                                ? [
+                                      {
+                                          id: 'ungroup',
+                                          label: 'Ungroup',
+                                          icon: FolderMinus,
+                                          shortcut: '⌘⇧G',
+                                          onClick: () => ungroupInShot(shot.id, layer.groupId!),
+                                      } as ContextMenuItemDef,
+                                  ]
+                                : []),
+                            { type: 'divider' },
+                            {
+                                id: 'toggle-lock',
+                                label: layer.locked ? 'Unlock Layer' : 'Lock Layer',
+                                icon: layer.locked ? Unlock : Lock,
+                                onClick: () =>
+                                    updateLayer(shot.id, layer.id, (l) => ({
+                                        ...l,
+                                        locked: !l.locked,
+                                    })),
+                            },
+                            {
+                                id: 'toggle-visibility',
+                                label: layer.hidden ? 'Show Layer' : 'Hide Layer',
+                                icon: layer.hidden ? Eye : EyeOff,
+                                shortcut: '⌘⇧H',
+                                onClick: () =>
+                                    updateLayer(shot.id, layer.id, (l) => ({
+                                        ...l,
+                                        hidden: !l.hidden,
+                                    })),
+                            },
+                            { type: 'divider' },
+                            {
+                                id: 'delete',
+                                label: 'Delete',
+                                icon: Trash2,
+                                shortcut: '⌫',
+                                danger: true,
+                                onClick: () => deleteLayerFromShot(shot.id, layer.id),
+                            },
+                        ],
+                    });
+                }}
                 role="treeitem"
                 tabIndex={0}
                 aria-selected={isSelected}
@@ -553,6 +646,39 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     onDoubleClick={(e) => {
                         e.stopPropagation();
                         startRename(group.id, group.name);
+                    }}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setContextMenu({
+                            x: e.clientX,
+                            y: e.clientY,
+                            items: [
+                                { type: 'header', label: group.name },
+                                {
+                                    id: 'rename',
+                                    label: 'Rename group',
+                                    shortcut: 'F2',
+                                    onClick: () => startRename(group.id, group.name),
+                                },
+                                {
+                                    id: 'ungroup',
+                                    label: 'Ungroup',
+                                    icon: FolderMinus,
+                                    shortcut: '⌘⇧G',
+                                    onClick: () => ungroupInShot(shot.id, group.id),
+                                },
+                                { type: 'divider' },
+                                {
+                                    id: 'delete',
+                                    label: 'Delete group',
+                                    icon: Trash2,
+                                    shortcut: '⌫',
+                                    danger: true,
+                                    onClick: () => ungroupInShot(shot.id, group.id),
+                                },
+                            ],
+                        });
                     }}
                     className={`group h-7 pr-2 flex items-center justify-between text-[11px] cursor-pointer transition focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${isGroupSelected
                         ? 'bg-[#0088ff] text-white font-semibold'
@@ -1631,6 +1757,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     )}
 
                 </div>
+            )}
+            {contextMenu && (
+                <ContextMenu
+                    x={contextMenu.x}
+                    y={contextMenu.y}
+                    items={contextMenu.items}
+                    onClose={() => setContextMenu(null)}
+                />
             )}
         </aside>
     );
