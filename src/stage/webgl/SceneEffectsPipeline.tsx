@@ -68,6 +68,25 @@ function blendEvaluatedEffects(
         blendedState.glitch.intensity = outGl * (1 - t) + inGl * t;
     }
 
+    const transitionAmount = (state: typeof outState, key: 'atmosphere' | 'gradientMap' | 'fishEye' | 'lensDistortion') => {
+        if (key === 'atmosphere') return state.atmosphere.fog + state.atmosphere.mist + state.atmosphere.haze;
+        if (key === 'gradientMap') return state.gradientMap.blend;
+        if (key === 'fishEye') return state.fishEye.amount;
+        return state.lensDistortion.strength;
+    };
+    for (const key of ['atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'] as const) {
+        if (!activeKeys.has(key)) continue;
+        const outEffect = outState[key];
+        const inEffect = inState[key];
+        const outAmount = outEffect.enabled ? transitionAmount(outState, key) : 0;
+        const inAmount = inEffect.enabled ? transitionAmount(inState, key) : 0;
+        blendedState[key].enabled = true;
+        if (key === 'atmosphere') blendedState.atmosphere.fog = outAmount * (1 - t) + inAmount * t;
+        else if (key === 'gradientMap') blendedState.gradientMap.blend = outAmount * (1 - t) + inAmount * t;
+        else if (key === 'fishEye') blendedState.fishEye.amount = outAmount * (1 - t) + inAmount * t;
+        else blendedState.lensDistortion.strength = outAmount * (1 - t) + inAmount * t;
+    }
+
     const orderedEnabledPasses = [...activeKeys].map((key, i) => ({
         key,
         orderIndex: i,

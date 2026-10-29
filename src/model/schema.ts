@@ -608,6 +608,10 @@ export const EffectKeySchema = z.enum([
   'colorGrade',
   'edgeFade',
   'glitch',
+  'atmosphere',
+  'gradientMap',
+  'fishEye',
+  'lensDistortion',
 ]);
 
 export const SceneEffectAnimationBlockSchema = z.object({
@@ -693,6 +697,23 @@ export const ShotSchema = z.object({
     })).optional(),
   }),
   effects: z.object({
+    atmosphere: z.object({
+      enabled: z.boolean(), fog: z.number().min(0).max(1), mist: z.number().min(0).max(1), haze: z.number().min(0).max(1),
+      color: z.string(), depthEnabled: z.boolean(), start: z.number().min(0).max(1), reach: z.number().min(0.01).max(1), mistHeight: z.number().min(0).max(1),
+    }).default({ enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 }),
+    gradientMap: z.object({
+      enabled: z.boolean(), stops: z.array(z.object({ at: z.number().min(0).max(1), color: z.string(), opacity: z.number().min(0).max(1).optional() })).min(2).max(8),
+      blend: z.number().min(0).max(1), shift: z.number().min(-1).max(1), spread: z.number().min(0.01).max(2),
+      blendMode: z.enum(['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn']),
+    }).default({ enabled: false, stops: [{ at: 0, color: '#171a45' }, { at: 0.45, color: '#f05a9d' }, { at: 1, color: '#ffbc62' }], blend: 1, shift: 0, spread: 1, blendMode: 'normal' }),
+    fishEye: z.object({
+      enabled: z.boolean(), amount: z.number().min(-1).max(1), centerX: z.number().min(-1).max(1), centerY: z.number().min(-1).max(1),
+      scale: z.number().min(0.1).max(2), edgeMode: z.enum(['fill', 'balanced', 'none']),
+    }).default({ enabled: false, amount: 0.52, centerX: 0, centerY: 0, scale: 1, edgeMode: 'balanced' }),
+    lensDistortion: z.object({
+      enabled: z.boolean(), mode: z.enum(['pinch', 'barrel']), strength: z.number().min(-1).max(1), centerX: z.number().min(-1).max(1), centerY: z.number().min(-1).max(1),
+      edgeMode: z.enum(['fill', 'balanced', 'none']), measure: z.enum(['width', 'height', 'diagonal']),
+    }).default({ enabled: false, mode: 'pinch', strength: 0.25, centerX: 0, centerY: 0, edgeMode: 'fill', measure: 'width' }),
     depthOfField: z.object({
       enabled: z.boolean(),
       target: Vec3Schema,
@@ -703,6 +724,8 @@ export const ShotSchema = z.object({
       focalLength: z.number().optional(),
       highlightThreshold: z.number().optional(),
       highlightIntensity: z.number().optional(),
+      sceneSize: z.number().min(1).max(200).optional(),
+      focusMode: z.enum(['point', 'subject']).optional(),
     }),
     bloom: z.object({
       enabled: z.boolean(),
@@ -710,6 +733,7 @@ export const ShotSchema = z.object({
       threshold: z.number().min(0).max(4),
       radius: z.number().min(0).max(4).optional(),
       softness: z.number().min(0).max(1).optional(),
+      blendMode: z.enum(['screen', 'add', 'softLight']).optional(),
     }),
     vignette: z.object({
       enabled: z.boolean(),
@@ -721,18 +745,29 @@ export const ShotSchema = z.object({
       enabled: z.boolean(),
       shutterAngle: z.number().min(0).max(360),
       samples: z.number().int().min(2).max(32).optional(),
+      angle: z.number().min(-180).max(180).optional(),
+      direction: z.enum(['camera', 'angle']).optional(), amount: z.number().min(0).max(0.1).optional(),
     }),
     chromaticAberration: z.object({
       enabled: z.boolean(),
       offset: z.number().min(0).max(0.1),
       verticalOffset: z.number().min(-0.1).max(0.1).optional(),
       edgeStrength: z.number().min(0).max(4).optional(),
+      mode: z.enum(['lens', 'split']).optional(), angle: z.number().min(-180).max(180).optional(), softness: z.number().min(0).max(1).optional(),
+      centerX: z.number().min(-1).max(1).optional(), centerY: z.number().min(-1).max(1).optional(),
+      channelRed: z.number().min(-2).max(2).optional(), channelGreen: z.number().min(-2).max(2).optional(), channelBlue: z.number().min(-2).max(2).optional(),
+      fringeColorAngle: z.number().min(-180).max(180).optional(),
     }),
     filmGrain: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(1),
       size: z.number().min(0.1).max(32),
       softness: z.number().min(0).max(1).optional(),
+      colorAmount: z.number().min(0).max(1).optional(), aspect: z.number().min(0.25).max(4).optional(), seed: z.number().int().optional(),
+      stock: z.enum(['Tungsten 500', 'Kodak 5219', 'Fuji 400', 'Custom']).optional(),
+      shadowStrength: z.number().min(0).max(1).optional(), midStrength: z.number().min(0).max(1).optional(), highlightStrength: z.number().min(0).max(1).optional(),
+      midpoint: z.number().min(0).max(1).optional(), protectBlacks: z.boolean().optional(), blendMode: z.enum(['film', 'overlay', 'softLight', 'multiply']).optional(),
+      motion: z.enum(['frame', '12fps', 'static']).optional(), smooth: z.boolean().optional(), perChannel: z.boolean().optional(),
     }),
     ghost: z.object({
       enabled: z.boolean(),
@@ -751,6 +786,8 @@ export const ShotSchema = z.object({
       tint: z.number().min(-4).max(4).optional(),
       highlights: z.number().min(-1).max(1).optional(),
       shadows: z.number().min(-1).max(1).optional(),
+      lift: z.number().min(-1).max(1).optional(), gamma: z.number().min(0.1).max(4).optional(), vibrance: z.number().min(-1).max(1).optional(),
+      blackPoint: z.number().min(0).max(1).optional(), whitePoint: z.number().min(0).max(1).optional(),
     }),
     edgeFade: z.object({
       enabled: z.boolean(),
@@ -759,12 +796,14 @@ export const ShotSchema = z.object({
       left: z.number().min(0).max(1).optional(),
       right: z.number().min(0).max(1).optional(),
       softness: z.number().min(0).max(4).optional(),
+      color: z.string().optional(),
     }),
     glitch: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(1),
       bandSize: z.number().min(2).max(200).optional(),
       colorShift: z.number().min(0).max(2).optional(),
+      mode: z.enum(['digital', 'analog', 'datamosh']).optional(), jitter: z.number().min(0).max(1).optional(), scanlines: z.number().min(0).max(1).optional(), seed: z.number().int().optional(),
     }),
   }),
   effectsOrder: z.array(EffectKeySchema),

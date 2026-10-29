@@ -96,6 +96,10 @@ const StageComponent: React.FC<StageProps> = ({
         setCameraBookmark,
         setGradientEditorAngle,
         selectedCameraBlockId,
+        dofFocusActive,
+        dofFocusIndicator,
+        setDofFocusActive,
+        setDofFocusIndicator,
     } = useSelectionStore();
 
     const isPlaying = usePlayheadStore((s) => s.isPlaying);
@@ -460,6 +464,21 @@ const StageComponent: React.FC<StageProps> = ({
         focalLength: DEFAULT_FOCAL_LENGTH,
     };
     const gradientCameraPose = evaluateCameraPose(effectiveViewportFrame.camera, gradientReferenceCamera, targetAspect);
+    const handleDofFocusClick = useCallback((event: React.MouseEvent<HTMLDivElement>) => {
+        const rect=stageFrameRef.current?.getBoundingClientRect();
+        if(!rect) return;
+        const x=Math.max(0,Math.min(frameWidth,(event.clientX-rect.left)/canvasZoom));
+        const y=Math.max(0,Math.min(frameHeight,(event.clientY-rect.top)/canvasZoom));
+        const nearest=frame.layers.reduce<{ layer: (typeof frame.layers)[number] | null; distance: number }>((best,layer)=>{
+            if(layer.visible===false) return best;
+            const center=getLayerProjectedCorners(layer,frameWidth,frameHeight,targetAspect,gradientCameraPose,gradientReferenceCamera.position.z??DEFAULT_CAMERA_Z,gradientReferenceCamera.focalLength??DEFAULT_FOCAL_LENGTH).pCenter;
+            const distance=Math.hypot(center.x-x,center.y-y);
+            return distance<best.distance?{layer,distance}:best;
+        },{layer:null,distance:Infinity}).layer;
+        updateShot(frame.activeShot.id,shot=>({...shot,effects:{...shot.effects,depthOfField:{...shot.effects.depthOfField,target:{x:(x/frameWidth-.5)*2,y:(.5-y/frameHeight)*2,z:nearest?.position.z??shot.effects.depthOfField.target.z}}}}));
+        setDofFocusIndicator({x,y});
+        setDofFocusActive(false);
+    },[canvasZoom,frame.activeShot.id,frame.layers,frameHeight,frameWidth,gradientCameraPose,gradientReferenceCamera.focalLength,gradientReferenceCamera.position.z,setDofFocusActive,setDofFocusIndicator,targetAspect,updateShot]);
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -1379,6 +1398,11 @@ const StageComponent: React.FC<StageProps> = ({
                         onSelectLayer={handleSelectLayerWithDeepSelect}
                         cameraRef={cameraRef}
                     />
+
+                    {dofFocusActive&&<div role="button" tabIndex={0} aria-label="Click the canvas to set depth of field focus" onClick={handleDofFocusClick} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();const rect=stageFrameRef.current?.getBoundingClientRect();if(rect)handleDofFocusClick({clientX:rect.left+rect.width/2,clientY:rect.top+rect.height/2} as React.MouseEvent<HTMLDivElement>);}}} className="absolute inset-0 z-50 flex items-center justify-center cursor-crosshair bg-sky-500/[0.04]">
+                        <span className="rounded-full border border-sky-300/60 bg-sky-500/15 px-3 py-1.5 text-[11px] text-white shadow-lg backdrop-blur">Click a point to focus</span>
+                    </div>}
+                    {!dofFocusActive&&dofFocusIndicator&&<div aria-hidden="true" className="absolute z-40 pointer-events-none" style={{left:dofFocusIndicator.x,top:dofFocusIndicator.y,transform:'translate(-50%,-50%)'}}><div className="w-12 h-12 rounded-full border border-sky-300/80 shadow-[0_0_0_1px_rgba(0,0,0,.5),0_0_20px_rgba(56,189,248,.35)]"/><div className="absolute left-1/2 top-1/2 w-1.5 h-1.5 -translate-x-1/2 -translate-y-1/2 rounded-full bg-sky-200"/></div>}
 
                     {/* 3D Lighting Gizmo & Interactive Controls Overlay */}
                     <LightingOverlay

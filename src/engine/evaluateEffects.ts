@@ -116,6 +116,18 @@ export function evaluateEffectsAtTime(
 
         let summary = 'Active';
         switch (key) {
+            case 'atmosphere':
+                summary = `Fog: ${Math.round(effects.atmosphere.fog * 100)}% | Mist: ${Math.round(effects.atmosphere.mist * 100)}%`;
+                break;
+            case 'gradientMap':
+                summary = `${effects.gradientMap.blendMode} | Blend: ${Math.round(effects.gradientMap.blend * 100)}%`;
+                break;
+            case 'fishEye':
+                summary = `Distortion: ${Math.round(effects.fishEye.amount * 100)}%`;
+                break;
+            case 'lensDistortion':
+                summary = `${effects.lensDistortion.mode} | Strength: ${Math.round(effects.lensDistortion.strength * 100)}%`;
+                break;
             case 'depthOfField':
                 summary = `Target Z:${effects.depthOfField.target.z.toFixed(2)} | f/${effects.depthOfField.aperture} | ${effects.depthOfField.bokehShape}`;
                 break;

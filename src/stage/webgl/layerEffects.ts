@@ -326,12 +326,8 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     if (!cachedExportUniforms) {
         cachedExportUniforms = freshUniforms;
     } else {
-        for (const [key, val] of Object.entries(freshUniforms)) {
-            if ((cachedExportUniforms as any)[key]) {
-                (cachedExportUniforms as any)[key].value = (val as any).value;
-            } else {
-                (cachedExportUniforms as any)[key] = val;
-            }
+        for (const key of Object.keys(freshUniforms) as (keyof LayerEffectUniforms)[]) {
+            Object.assign(cachedExportUniforms[key], { value: freshUniforms[key].value });
         }
     }
     const uniforms = cachedExportUniforms;

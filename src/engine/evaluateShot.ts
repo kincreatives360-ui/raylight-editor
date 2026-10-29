@@ -327,6 +327,10 @@ export function evaluateProjectAtTime(
         if (hasActiveBlock) {
             evaluatedEffectsConfig = {
                 ...baseShot.effects,
+                atmosphere: { ...baseShot.effects.atmosphere },
+                gradientMap: { ...baseShot.effects.gradientMap, stops: baseShot.effects.gradientMap.stops.map(stop => ({ ...stop })) },
+                fishEye: { ...baseShot.effects.fishEye },
+                lensDistortion: { ...baseShot.effects.lensDistortion },
                 depthOfField: {
                     ...baseShot.effects.depthOfField,
                     target: { ...baseShot.effects.depthOfField.target },
@@ -381,6 +385,18 @@ export function evaluateProjectAtTime(
                     evaluatedEffectsConfig.edgeFade.enabled = true;
                     evaluatedEffectsConfig.edgeFade.top = Math.max(0, Math.min(1, val));
                     evaluatedEffectsConfig.edgeFade.bottom = Math.max(0, Math.min(1, val));
+                } else if (eb.effectKey === 'atmosphere') {
+                    evaluatedEffectsConfig.atmosphere.enabled = true;
+                    evaluatedEffectsConfig.atmosphere.fog = Math.max(0, Math.min(1, val));
+                } else if (eb.effectKey === 'gradientMap') {
+                    evaluatedEffectsConfig.gradientMap.enabled = true;
+                    evaluatedEffectsConfig.gradientMap.blend = Math.max(0, Math.min(1, val));
+                } else if (eb.effectKey === 'fishEye') {
+                    evaluatedEffectsConfig.fishEye.enabled = true;
+                    evaluatedEffectsConfig.fishEye.amount = Math.max(-1, Math.min(1, val));
+                } else if (eb.effectKey === 'lensDistortion') {
+                    evaluatedEffectsConfig.lensDistortion.enabled = true;
+                    evaluatedEffectsConfig.lensDistortion.strength = Math.max(-1, Math.min(1, val));
                 }
             }
         }

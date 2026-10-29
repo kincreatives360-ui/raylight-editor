@@ -112,9 +112,21 @@ export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
   'ghost',
   'edgeFade',
   'glitch',
+  'atmosphere',
+  'gradientMap',
+  'fishEye',
+  'lensDistortion',
 ];
 
 export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
+  atmosphere: { enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 },
+  gradientMap: {
+    enabled: false,
+    stops: [{ at: 0, color: '#171a45' }, { at: 0.45, color: '#f05a9d' }, { at: 1, color: '#ffbc62' }],
+    blend: 1, shift: 0, spread: 1, blendMode: 'normal',
+  },
+  fishEye: { enabled: false, amount: 0.52, centerX: 0, centerY: 0, scale: 1, edgeMode: 'balanced' },
+  lensDistortion: { enabled: false, mode: 'pinch', strength: 0.25, centerX: 0, centerY: 0, edgeMode: 'fill', measure: 'width' },
   depthOfField: {
     enabled: false,
     target: { x: 0, y: 0, z: 0 },
@@ -122,6 +134,11 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     aperture: 2.8,
     bokehScale: 4.5,
     bokehShape: 'anamorphic',
+    focalLength: 50,
+    highlightThreshold: 0.7,
+    highlightIntensity: 0,
+    sceneSize: 31.8,
+    focusMode: 'point',
   },
   bloom: {
     enabled: false,
@@ -129,6 +146,7 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     threshold: 0.75,
     radius: 1,
     softness: 0.5,
+    blendMode: 'screen',
   },
   vignette: {
     enabled: false,
@@ -139,18 +157,25 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
   motionBlur: {
     enabled: false,
     shutterAngle: 180,
+    samples: 18,
+    angle: 0,
+    direction: 'camera',
+    amount: 0.01,
   },
   chromaticAberration: {
     enabled: false,
     offset: 0.002,
     verticalOffset: 0,
     edgeStrength: 1,
+    mode: 'lens', angle: 0, softness: 0.6, centerX: 0, centerY: 0, channelRed: 1, channelGreen: 0, channelBlue: -1, fringeColorAngle: 0,
   },
   filmGrain: {
     enabled: false,
     intensity: 0.025,
     size: 1.2,
     softness: 0,
+    colorAmount: 0.4, aspect: 1, seed: 0, shadowStrength: 0.7, midStrength: 1, highlightStrength: 0.45, midpoint: 0.4,
+    stock: 'Tungsten 500', protectBlacks: true, blendMode: 'film', motion: 'frame', smooth: false, perChannel: false,
   },
   ghost: {
     enabled: false,
@@ -169,18 +194,21 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     tint: 0,
     highlights: 0,
     shadows: 0,
+    lift: 0, gamma: 1, vibrance: 0, blackPoint: 0, whitePoint: 1,
   },
   edgeFade: {
     enabled: false,
     top: 0.1,
     bottom: 0.1,
     softness: 1,
+    color: '#0a0a0c',
   },
   glitch: {
     enabled: false,
     intensity: 0.15,
     bandSize: 50,
     colorShift: 0.5,
+    mode: 'digital', jitter: 0.2, scanlines: 0, seed: 0,
   },
 };
 

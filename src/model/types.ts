@@ -749,9 +749,49 @@ export type EffectKey =
   | 'ghost'
   | 'colorGrade'
   | 'edgeFade'
-  | 'glitch';
+  | 'glitch'
+  | 'atmosphere'
+  | 'gradientMap'
+  | 'fishEye'
+  | 'lensDistortion';
 
 export interface SceneEffects {
+  atmosphere: {
+    enabled: boolean;
+    fog: number;
+    mist: number;
+    haze: number;
+    color: string;
+    depthEnabled: boolean;
+    start: number;
+    reach: number;
+    mistHeight: number;
+  };
+  gradientMap: {
+    enabled: boolean;
+    stops: GradientStop[];
+    blend: number;
+    shift: number;
+    spread: number;
+    blendMode: 'normal' | 'multiply' | 'screen' | 'overlay' | 'softLight' | 'hardLight' | 'difference' | 'exclusion' | 'lighten' | 'darken' | 'colorDodge' | 'colorBurn';
+  };
+  fishEye: {
+    enabled: boolean;
+    amount: number;
+    centerX: number;
+    centerY: number;
+    scale: number;
+    edgeMode: 'fill' | 'balanced' | 'none';
+  };
+  lensDistortion: {
+    enabled: boolean;
+    mode: 'pinch' | 'barrel';
+    strength: number;
+    centerX: number;
+    centerY: number;
+    edgeMode: 'fill' | 'balanced' | 'none';
+    measure: 'width' | 'height' | 'diagonal';
+  };
   depthOfField: {
     enabled: boolean;
     target: Vec3;
@@ -762,6 +802,8 @@ export interface SceneEffects {
     focalLength?: number;
     highlightThreshold?: number;
     highlightIntensity?: number;
+    sceneSize?: number;
+    focusMode?: 'point' | 'subject';
   };
   bloom: {
     enabled: boolean;
@@ -769,29 +811,57 @@ export interface SceneEffects {
     threshold: number;
     radius?: number;
     softness?: number;
+    blendMode?: 'screen' | 'add' | 'softLight';
   };
   vignette: {
     enabled: boolean;
     intensity: number;
     midpoint?: number;
     roundness?: number;
+    softness?: number;
+    color?: string;
   };
   motionBlur: {
     enabled: boolean;
     samples?: number;
     shutterAngle: number;
+    angle?: number;
+    direction?: 'camera' | 'angle';
+    amount?: number;
   };
   chromaticAberration: {
     enabled: boolean;
     offset: number;
     verticalOffset?: number;
     edgeStrength?: number;
+    mode?: 'lens' | 'split';
+    angle?: number;
+    softness?: number;
+    centerX?: number;
+    centerY?: number;
+    channelRed?: number;
+    channelGreen?: number;
+    channelBlue?: number;
+    fringeColorAngle?: number;
   };
   filmGrain: {
     enabled: boolean;
     intensity: number;
     size: number;
     softness?: number;
+    colorAmount?: number;
+    aspect?: number;
+    seed?: number;
+    stock?: 'Tungsten 500' | 'Kodak 5219' | 'Fuji 400' | 'Custom';
+    shadowStrength?: number;
+    midStrength?: number;
+    highlightStrength?: number;
+    midpoint?: number;
+    protectBlacks?: boolean;
+    blendMode?: 'film' | 'overlay' | 'softLight' | 'multiply';
+    motion?: 'frame' | '12fps' | 'static';
+    smooth?: boolean;
+    perChannel?: boolean;
   };
   ghost: {
     enabled: boolean;
@@ -810,6 +880,11 @@ export interface SceneEffects {
     tint?: number;
     highlights?: number;
     shadows?: number;
+    lift?: number;
+    gamma?: number;
+    vibrance?: number;
+    blackPoint?: number;
+    whitePoint?: number;
   };
   edgeFade: {
     enabled: boolean;
@@ -818,12 +893,17 @@ export interface SceneEffects {
     left?: number;
     right?: number;
     softness?: number;
+    color?: string;
   };
   glitch: {
     enabled: boolean;
     intensity: number;
     bandSize?: number;
     colorShift?: number;
+    mode?: 'digital' | 'analog' | 'datamosh';
+    jitter?: number;
+    scanlines?: number;
+    seed?: number;
   };
 }
 
