@@ -35,3 +35,4 @@ describe('EasingPopover Component', () => {
         expect(html).toContain('Y2');
     });
 });
+

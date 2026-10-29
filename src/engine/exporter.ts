@@ -15,7 +15,7 @@ import { acquireCanvas, releaseCanvas } from './canvasPool';
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png';
 export type ExportResolution = '720p' | '1080p' | '4k';
-export type ExportQuality = 'studio' | 'social' | 'web';
+export type ExportQuality = 'studio' | 'social' | 'web' | 'web-low';
 export type ExportScope = 'entire' | 'shot';
 
 export interface ExportSettings {
@@ -360,10 +360,12 @@ export async function runVideoExportPipeline(
     const bitrateMultiplier = settings.resolution === '4k' ? 2.5 : 1;
     const bitrate = Math.round(
         (settings.quality === 'studio'
-            ? 18_000_000
+            ? 25_000_000
             : settings.quality === 'social'
-                ? 10_000_000
-                : 5_000_000) * bitrateMultiplier
+                ? 12_000_000
+                : settings.quality === 'web'
+                    ? 6_000_000
+                    : 2_500_000) * bitrateMultiplier
     );
 
     if (

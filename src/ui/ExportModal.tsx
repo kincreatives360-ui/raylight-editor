@@ -190,11 +190,12 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {/* Quality & Compression */}
         <div className="space-y-1.5">
           <span className="text-[11px] text-[#8e8e93] block font-medium">Compression</span>
-          <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-3 gap-0.5">
+          <div className="h-8 p-0.5 rounded-lg bg-[#18181c] border border-white/[0.08] grid grid-cols-4 gap-0.5">
             {[
-              { id: 'studio' as const, label: 'Studio (Sharp)' },
-              { id: 'social' as const, label: 'Social Media' },
-              { id: 'web' as const, label: 'Web (Fast)' },
+              { id: 'studio' as const, label: 'Studio' },
+              { id: 'social' as const, label: 'Social' },
+              { id: 'web' as const, label: 'Web' },
+              { id: 'web-low' as const, label: 'Low' },
             ].map((q) => (
               <button
                 key={q.id}
