@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "architecture-map": {
+      "source": "almendili/skills",
+      "sourceType": "github",
+      "skillPath": "architecture-map/SKILL.md",
+      "computedHash": "bc6e1e8d16081d2d4168831c951136eb9fb6530c77d344ae32a956905df5cdad"
+    },
     "component-canvas": {
       "source": "ibelick/ui-skills",
       "sourceType": "github",
