@@ -14,13 +14,16 @@ interface EasingPopoverProps {
 }
 
 // Preset cubic-bezier control points matching Raylight
-const PRESET_BEZIERS: { label: string; x1: number; y1: number; x2: number; y2: number }[] = [
+const PRESET_BEZIERS: { label: string; x1: number; y1: number; x2: number; y2: number; kind?: 'bezier' | 'spring'; springName?: string }[] = [
     { label: 'Ease In Out', x1: 0.65, y1: 0, x2: 0.35, y2: 1 },
     { label: 'Ease In', x1: 0.42, y1: 0, x2: 1, y2: 1 },
     { label: 'Ease Out', x1: 0, y1: 0, x2: 0.58, y2: 1 },
     { label: 'Linear', x1: 0, y1: 0, x2: 1, y2: 1 },
     { label: 'Ease Back', x1: 0.34, y1: 1.56, x2: 0.64, y2: 1 },
     { label: 'Expo Out', x1: 0.16, y1: 1, x2: 0.3, y2: 1 },
+    { label: 'Spring Gentle', x1: 0.25, y1: 1.1, x2: 0.5, y2: 1, kind: 'spring', springName: 'gentle' },
+    { label: 'Spring Snappy', x1: 0.15, y1: 1.25, x2: 0.35, y2: 1, kind: 'spring', springName: 'snappy' },
+    { label: 'Spring Bouncy', x1: 0.3, y1: 1.4, x2: 0.4, y2: 1, kind: 'spring', springName: 'bouncy' },
 ];
 
 export const EasingPopover: React.FC<EasingPopoverProps> = ({
@@ -171,12 +174,12 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
             style={style}
             role="dialog"
             aria-label="Easing curve editor"
-            className="w-[256px] rounded-2xl bg-[#141416]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] p-3 flex flex-col gap-2.5 text-white select-none animate-in fade-in zoom-in-95 duration-100"
+            className="w-[360px] rounded-2xl bg-[#141416]/95 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] p-3 text-white select-none animate-in fade-in zoom-in-95 duration-100"
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
         >
             {/* Header */}
-            <div className="flex items-center justify-between px-0.5">
+            <div className="flex items-center justify-between px-0.5 pb-2 mb-2 border-b border-white/10">
                 <span className="text-[12px] font-semibold text-[#f4f4f5] tracking-tight">
                     Easing curve
                 </span>
@@ -192,6 +195,51 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                     title="Close"
                 />
             </div>
+
+            <div className="flex gap-3">
+                {/* Left Pane: Presets List */}
+                <div className="w-[108px] shrink-0 flex flex-col gap-1 pr-2 border-r border-white/10 overflow-y-auto max-h-[220px]">
+                    <span className="text-[10px] uppercase font-mono tracking-wider text-gray-400 mb-1">Presets</span>
+                    {PRESET_BEZIERS.map((preset) => {
+                        const isActive =
+                            Math.abs(coords.x1 - preset.x1) < 0.05 &&
+                            Math.abs(coords.y1 - preset.y1) < 0.05 &&
+                            Math.abs(coords.x2 - preset.x2) < 0.05 &&
+                            Math.abs(coords.y2 - preset.y2) < 0.05;
+                        return (
+                            <button
+                                key={preset.label}
+                                onClick={() => {
+                                    if (preset.kind === 'spring' && preset.springName) {
+                                        onChange({
+                                            kind: 'spring',
+                                            name: preset.springName as any,
+                                        });
+                                    } else {
+                                        onChange({
+                                            kind: 'bezier',
+                                            x1: preset.x1,
+                                            y1: preset.y1,
+                                            x2: preset.x2,
+                                            y2: preset.y2,
+                                        });
+                                    }
+                                }}
+                                className={`h-6 px-2 rounded-md text-[10px] font-medium text-left truncate cursor-pointer transition ${
+                                    isActive
+                                        ? 'bg-[#0088ff] text-white shadow-sm'
+                                        : 'text-[#a1a1aa] hover:text-white hover:bg-white/[0.06]'
+                                }`}
+                            >
+                                {preset.label}
+                            </button>
+                        );
+                    })}
+                </div>
+
+                {/* Right Pane: 2D Curve Editor & Inputs */}
+                <div className="flex-1 min-w-0 flex flex-col gap-2">
+
 
             {/* Interactive SVG Curve Box */}
             <div className="w-full h-[176px] rounded-xl bg-[#1c1c1f] border border-white/[0.06] overflow-hidden relative flex items-center justify-center">
@@ -300,37 +348,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                 </svg>
             </div>
 
-            {/* Quick Presets Strip */}
-            <div className="grid grid-cols-3 gap-1">
-                {PRESET_BEZIERS.map((preset) => {
-                    const isActive =
-                        Math.abs(coords.x1 - preset.x1) < 0.05 &&
-                        Math.abs(coords.y1 - preset.y1) < 0.05 &&
-                        Math.abs(coords.x2 - preset.x2) < 0.05 &&
-                        Math.abs(coords.y2 - preset.y2) < 0.05;
-                    return (
-                        <button
-                            key={preset.label}
-                            onClick={() =>
-                                onChange({
-                                    kind: 'bezier',
-                                    x1: preset.x1,
-                                    y1: preset.y1,
-                                    x2: preset.x2,
-                                    y2: preset.y2,
-                                })
-                            }
-                            className={`h-5 px-1.5 rounded text-[10px] font-medium truncate cursor-pointer transition ${
-                                isActive
-                                    ? 'bg-[#0088ff] text-white'
-                                    : 'bg-[#1c1c1f] text-[#a1a1aa] hover:text-white hover:bg-[#27272c]'
-                            }`}
-                        >
-                            {preset.label}
-                        </button>
-                    );
-                })}
-            </div>
+
 
             {/* Coordinate Inputs (X1, Y1, X2, Y2) */}
             <div className="grid grid-cols-2 gap-1.5 pt-0.5">
@@ -370,6 +388,8 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                     decimals={2}
                     onChange={(y2) => updateCoords({ y2 })}
                 />
+            </div>
+            </div>
             </div>
         </div>
     );
