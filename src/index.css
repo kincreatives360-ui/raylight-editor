@@ -81,6 +81,10 @@
   --color-brand-electric-green: oklch(75.564% 0.23374 144.349);
   --color-brand-amber: oklch(65.393% 0.23303 31.062);
   --color-brand-teal: oklch(67% 0.117 185);
+  --brand-blue: #0088ff;
+  --brand-blue-hover: #0077e6;
+  --color-brand-blue: #0088ff;
+  --color-brand-blue-hover: #0077e6;
 
   /* Raylight Semantic Tone Tokens */
   --color-shot: var(--primary);
@@ -140,7 +144,7 @@
   --panel-active: oklch(25% 0.004 286.1);
   --canvas-workspace: var(--canvas);
   --surface-border: var(--border);
-  --surface-border-strong: color-mix(in oklab, var(--border) 150%, white);
+  --surface-border-strong: color-mix(in oklab, var(--border) 85%, white);
   --text-primary: var(--foreground);
   --text-secondary: var(--muted-foreground);
   --text-muted: oklch(58% 0.01 286.067);
@@ -443,6 +447,25 @@ select:focus-visible {
   }
 }
 
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 150ms var(--ease-out);
+}
+
+/* Custom Scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #262936 #0b0d14;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -456,6 +479,15 @@ select:focus-visible {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #363a4d;
+}
+
+/* Utility to hide scrollbars while preserving scroll functionality */
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Balanced headlines and readable text wrapping */
