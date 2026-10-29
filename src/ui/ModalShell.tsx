@@ -8,7 +8,7 @@ export interface ModalShellProps {
     initialFocusRef?: React.RefObject<HTMLElement | null>;
 }
 
-function ModalShellActive({
+export function ModalShell({
     backdropProps = {},
     surfaceProps = {},
     children,
@@ -108,48 +108,4 @@ function ModalShellActive({
             </div>
         </div>
     );
-}
-
-/** Caller classes retain each dialog's dimensions and placement. Handles focus trapping and accessible dialog lifecycle. */
-export function ModalShell(props: ModalShellProps) {
-    const internals = React as unknown as {
-        __CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?: { H?: unknown };
-        __SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?: { H?: unknown; ReactCurrentDispatcher?: { current?: unknown } };
-    };
-    const hasDispatcher = Boolean(
-        internals.__CLIENT_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE?.H ||
-        internals.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?.H ||
-        internals.__SECRET_INTERNALS_DO_NOT_USE_OR_YOU_WILL_BE_FIRED?.ReactCurrentDispatcher?.current
-    );
-
-    if (!hasDispatcher) {
-        const { backdropProps = {}, surfaceProps = {}, children, onClose } = props;
-        return (
-            <div
-                role="dialog"
-                aria-modal="true"
-                {...backdropProps}
-                onClick={(e) => {
-                    backdropProps.onClick?.(e);
-                    if (e.target === e.currentTarget) {
-                        onClose?.();
-                    }
-                }}
-            >
-                <div
-                    tabIndex={-1}
-                    {...surfaceProps}
-                    className={`focus-visible:outline-none ${surfaceProps.className || ''}`}
-                    onClick={(event) => {
-                        event.stopPropagation();
-                        surfaceProps.onClick?.(event);
-                    }}
-                >
-                    {children}
-                </div>
-            </div>
-        );
-    }
-
-    return <ModalShellActive {...props} />;
 }

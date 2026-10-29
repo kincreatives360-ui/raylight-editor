@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
+import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
 
 export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'depthOfField'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -20,7 +21,9 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
       uniform float uSeed;
       varying vec2 vUv;
       vec4 sampleAt(vec2 uv) { return texture2D(tDiffuse, clamp(uv, vec2(0.0), vec2(1.0))); }
-      float random(vec2 cell) { return fract(sin(dot(cell,vec2(12.9898,78.233))+uSeed*437.1)*43758.5453); }
+      ${COLOR_GRADE_GLSL}
+      ${RANDOM_GLSL}
+      float random(vec2 cell) { return raylightRandom(cell,uSeed); }
       void main(){
         vec4 col=sampleAt(vUv);
         #if EFFECT == 0
@@ -56,10 +59,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           col.rgb+=ghost.rgb/9.0*uParams.x;
         #elif EFFECT == 6
           vec3 straight=col.a>.00001?col.rgb/col.a:vec3(0.0);
-          straight=(straight*exp2(uParams.x)-.5)*uParams.y+.5;
-          float lum=dot(straight,vec3(.2126,.7152,.0722));
-          straight=mix(vec3(lum),straight,uParams.z);
-          straight*=vec3(1.0+.1*uParams.w,1.0+.1*uExtra.x,1.0-.1*uParams.w);
+          straight=raylightGrade(straight,uParams,uExtra.x);
           col.rgb=straight*col.a;
         #elif EFFECT == 7
           float amount=1.0;

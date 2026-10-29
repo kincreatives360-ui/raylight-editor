@@ -27,8 +27,8 @@ export const CameraWorkflowActions: React.FC<{
     onBack: () => void;
 }> = ({ hasBookmark, isPinned, onPin, onBack }) => (
     <div className="flex items-center gap-1.5">
-        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-subtle bg-surface/90 text-muted hover:text-primary'}`}>Pin</button>
-        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-subtle bg-surface/90 px-2.5 py-0.5 text-[11px] text-muted transition hover:text-primary disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
+        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-subtle bg-surface/90 text-muted-foreground hover:text-foreground'}`}>Pin</button>
+        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-subtle bg-surface/90 px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
     </div>
 );
 
@@ -279,7 +279,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     type="button"
                     onClick={onResetCamera}
                     title="Reset Camera Pose to Default"
-                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface/90 hover:bg-muted border border-subtle hover:border-medium text-muted hover:text-primary text-[11px] font-mono cursor-pointer transition shadow-xs"
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface/90 hover:bg-muted border border-subtle hover:border-medium text-muted-foreground hover:text-foreground text-[11px] font-mono cursor-pointer transition shadow-xs"
                 >
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>Reset</span>
@@ -292,11 +292,11 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     label="Angle menu"
                     icon={<>
                         {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
-                        <span>Angle</span>
+
                     </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
                     title="Angle"
-                    className={`p-1 rounded-full bg-surface/90 hover:bg-muted border border-subtle text-muted hover:text-primary cursor-pointer transition shadow-xs ${
+                    className={`p-1 rounded-full bg-surface/90 hover:bg-muted border border-subtle text-muted-foreground hover:text-foreground cursor-pointer transition shadow-xs ${
                         menuOpen ? 'bg-white/20 text-white' : ''
                     }`}
                 />
@@ -316,21 +316,21 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(0, 0, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Front
                     </button>
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(0, -89, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Top
                     </button>
                     <button
                         type="button"
                         onClick={() => { onSetOrientation(90, 0, 0); setMenuOpen(false); }}
-                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Right
                     </button>
@@ -346,7 +346,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                             key={view.id}
                             type="button"
                             onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll); setMenuOpen(false); }}
-                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary font-mono cursor-pointer transition text-left"
+                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                         >
                             {view.label}
                         </button>
@@ -357,7 +357,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     <button
                         type="button"
                         onClick={() => { onFrameSelection(); setMenuOpen(false); }}
-                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-secondary hover:text-primary cursor-pointer transition"
+                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer transition"
                     >
                         <span className="flex items-center gap-1.5">
                             <Focus className="w-3 h-3 text-sky-400" />
@@ -369,7 +369,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             </div>
 
             {/* Readout Pill (Visible on hover/drag to keep canvas clean) */}
-            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-subtle text-[11px] font-mono tabular-nums text-muted tracking-tight pointer-events-none transition-opacity duration-150 ${
+            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-subtle text-[11px] font-mono tabular-nums text-muted-foreground tracking-tight pointer-events-none transition-opacity duration-150 ${
                 isHovered || isDragging ? 'opacity-100' : 'opacity-0'
             }`}>
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x

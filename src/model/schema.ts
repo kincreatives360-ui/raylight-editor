@@ -89,6 +89,7 @@ export const FillSchema = z.discriminatedUnion('kind', [
     stops: z.array(GradientStopSchema).min(2),
     gradientType: z.enum(['linear', 'radial', 'angular', 'diamond', 'mesh']).optional(),
     mesh: z.array(MeshGradientPointSchema).length(9).optional(),
+    handles: z.object({ start: z.object({ x: z.number(), y: z.number() }), end: z.object({ x: z.number(), y: z.number() }), width: z.number().optional() }).optional(),
   }).superRefine((fill, ctx) => {
     if (fill.gradientType === 'mesh' && fill.mesh?.length !== 9) {
       ctx.addIssue({ code: 'custom', path: ['mesh'], message: 'Mesh gradients require exactly nine control points.' });
@@ -292,19 +293,44 @@ export const AnimationBlockSchema = z.object({
   amount: z.union([Vec3Schema, z.number()]),
 });
 
-export const LayerEffectsSchema = z.object({
-  dropShadow: z
-    .object({
+const DropShadowSchema = z.object({
+      mode: z.enum(['drop', 'inner', 'long']).optional(),
+      length: z.number().min(0).max(2000).optional(),
+      angle: z.number().optional(),
+      fade: z.number().min(0).max(1).optional(),
+      spread: z.number().min(-200).max(200).optional(),
       enabled: z.boolean(),
       color: z.string(),
       opacity: z.number().min(0).max(1),
       blur: z.number().min(0).max(1),
       offsetX: z.number().min(-1).max(1),
       offsetY: z.number().min(-1).max(1),
-    })
-    .optional(),
+    });
+const BlurSettingsSchema = z.object({
+  mode: z.enum(['uniform', 'progressive']),
+  start: z.number().min(0).max(200),
+  end: z.number().min(0).max(200),
+  angle: z.number(),
+});
+export const LayerEffectsSchema = z.object({
+  outline: z.object({ enabled: z.boolean(), width: z.number().min(0).max(200), placement: z.enum(["inside","outside"]), color: z.string(), opacity: z.number().min(0).max(1), softness: z.number().min(0).max(200) }).optional(),
+  colorCorrection: z.object({ enabled: z.boolean(), exposure: z.number().min(-5).max(5), contrast: z.number().min(0).max(3), saturation: z.number().min(0).max(3), temperature: z.number().min(-1).max(1), tint: z.number().min(-1).max(1), blackPoint: z.number().min(0).max(1), whitePoint: z.number().min(0).max(1), gamma: z.number().min(0.1).max(4), curveShadows: z.number().min(-1).max(1), curveMidtones: z.number().min(-1).max(1), curveHighlights: z.number().min(-1).max(1) }).optional(),
+  noise: z.object({ enabled: z.boolean(), amount: z.number().min(0).max(1), scale: z.number().min(0.5).max(100), monochrome: z.boolean(), density: z.number().min(0).max(1), seed: z.number().int(), animated: z.boolean(), speed: z.number().min(0).max(20) }).optional(),
+  bevel: z.object({ enabled: z.boolean(), thickness: z.number().min(0).max(200), depth: z.number().min(-200).max(200), angle: z.number(), highlightColor: z.string(), shadowColor: z.string(), intensity: z.number().min(0).max(1) }).optional(),
+  halftone: z.object({ enabled: z.boolean(), dotSize: z.number().min(0.5).max(200), spacing: z.number().min(0.5).max(200), angle: z.number(), shape: z.enum(["circle","square","line"]), foreground: z.string(), background: z.string(), sourceColor: z.boolean(), invert: z.boolean() }).optional(),
+  roughen: z.object({ enabled: z.boolean(), border: z.number().min(0).max(200), scale: z.number().min(0.5).max(100), sharpness: z.number().min(0).max(1), amount: z.number().min(0).max(1), seed: z.number().int(), evolution: z.number(), speed: z.number() }).optional(),
+  colorKey: z.object({ enabled: z.boolean(), color: z.string(), similarity: z.number().min(0).max(1), softness: z.number().min(0).max(1), spill: z.number().min(0).max(1), invert: z.boolean() }).optional(),
+  pixelate: z.object({ enabled: z.boolean(), blockSize: z.number().min(1).max(500), aspect: z.number().min(0.1).max(10), mode: z.enum(["uniform","progressive"]), start: z.number().min(1).max(500), end: z.number().min(1).max(500), angle: z.number() }).optional(),
+  dropShadow: DropShadowSchema.optional(),
+  shadows: z.array(DropShadowSchema).max(16).optional(),
   glow: z
     .object({
+      mode: z.enum(['edge', 'fill']).optional(),
+      angle: z.number().optional(),
+      sheen: z.number().min(0).max(1).optional(),
+      rim: z.number().min(0).max(1).optional(),
+      depth: z.number().min(-200).max(200).optional(),
+      blend: z.enum(['normal', 'add']).optional(),
       enabled: z.boolean(),
       color: z.string(),
       intensity: z.number().min(0),
@@ -313,21 +339,49 @@ export const LayerEffectsSchema = z.object({
     .optional(),
   layerBlur: z.number().min(0).max(2).optional(),
   backdropBlur: z.number().min(0).max(2).optional(),
+  layerBlurSettings: BlurSettingsSchema.optional(),
+  backdropBlurSettings: BlurSettingsSchema.optional(),
   liquidGlass: z
     .object({
       enabled: z.boolean(),
       refraction: z.number().optional(),
+      dispersion: z.number().min(0).max(1).optional(),
+      shine: z.number().min(0).max(1).optional(),
       roughness: z.number().optional(),
       tint: z.string().optional(),
     })
     .optional(),
   warp: z
     .object({
+      mode: z.enum(['bulge', 'ripple', 'bend', 'curl', 'turbulent']).optional(),
+      complexity: z.number().min(1).max(6).optional(),
+      seed: z.number().int().optional(),
+      pinning: z.enum(['none', 'all', 'horizontal', 'vertical', 'left', 'right', 'top', 'bottom']).optional(),
+      evolution: z.number().optional(),
+      loop: z.boolean().optional(),
+      loopDuration: z.number().min(.1).max(60).optional(),
+      speed: z.number().optional(),
+      strength: z.number().min(-2).max(2).optional(),
+      size: z.number().min(1).max(2000).optional(),
+      centerX: z.number().optional(),
+      centerY: z.number().optional(),
+      angle: z.number().optional(),
+      width: z.number().min(1).max(2000).optional(),
+      travel: z.number().min(0).max(1).optional(),
       enabled: z.boolean(),
       amount: z.number().optional(),
       frequency: z.number().optional(),
     })
     .optional(),
+  screen: z.object({
+    enabled: z.boolean(), mode: z.enum(['lcd', 'oled', 'crt', 'led']),
+    pixelSize: z.number().min(.5).max(100),
+    grid: z.number().min(0).max(1), moire: z.number().min(0).max(1),
+    bands: z.number().min(0).max(1), focus: z.number().min(0).max(1),
+    glow: z.number().min(0).max(2), flicker: z.number().min(0).max(1),
+    speed: z.number().min(0).max(20), offAxis: z.number().min(0).max(1),
+    snapToPixels: z.boolean(),
+  }).optional(),
 });
 
 export const BlendModeSchema = z.enum([
@@ -596,6 +650,7 @@ export const ShotSchema = z.object({
     temperature: z.number().min(1000).max(15000),
     ambience: z.number().min(0).max(1),
     ambientColor: z.string().optional(),
+    keyColor: z.string().optional(),
     environment: z.enum(['studio', 'softbox', 'strip-light', 'daylight', 'night-city', 'warehouse', 'custom']).optional(),
     shadowStrength: z.number().min(0).max(1).optional(),
     shadowSoftness: z.number().min(0).max(100).optional(),

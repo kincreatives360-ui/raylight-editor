@@ -103,7 +103,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         onClose={onClose}
         initialFocusRef={inputRef}
         backdropProps={{"role": "dialog", "aria-modal": "true", "aria-label": "Command Menu", "className": "fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150", "onClick": onClose}}
-        surfaceProps={{"id": "raylight-command-menu", "className": "raylight-modal w-full max-w-xl rounded-2xl bg-surface border border-subtle shadow-2xl overflow-hidden flex flex-col text-primary", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
+        surfaceProps={{"id": "raylight-command-menu", "className": "raylight-modal w-full max-w-xl rounded-2xl bg-surface border border-subtle shadow-2xl overflow-hidden flex flex-col text-foreground", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
     >
         {/* Search Header */}
         <SearchField
@@ -207,7 +207,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-subtle bg-app text-[11px] text-muted">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-subtle bg-app text-[11px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
             <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</ShortcutKey>

@@ -1,7 +1,7 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { RotateCw, Compass, Lock, Crop } from 'lucide-react';
+import { RotateCw, Lock, Crop } from 'lucide-react';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import {
@@ -866,106 +866,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     </g>
                 )}
 
-                {/* ONSCREEN GRADIENT INTERACTIVE HANDLES (Figma / Raylight Parity) */}
-                {!isLocked && !isCropping && primaryEval.layer.kind === 'shape' && primaryEval.layer.fill.kind === 'gradient' && (() => {
-                    const fill = primaryEval.layer.fill;
-                    const cx = primaryProj.pCenter.x;
-                    const cy = primaryProj.pCenter.y;
-                    const halfDiag = Math.hypot(primaryProj.pSE.x - primaryProj.pNW.x, primaryProj.pSE.y - primaryProj.pNW.y) * 0.35;
-                    const rad = (((fill.angle ?? 90) - 90) * Math.PI) / 180;
-                    const startX = cx - Math.cos(rad) * halfDiag;
-                    const startY = cy - Math.sin(rad) * halfDiag;
-                    const endX = cx + Math.cos(rad) * halfDiag;
-                    const endY = cy + Math.sin(rad) * halfDiag;
-                    const startColor = fill.stops[0]?.color || '#ffffff';
-                    const endColor = fill.stops[fill.stops.length - 1]?.color || '#000000';
-
-                    const handleStartDragGradientEnd = (event: React.PointerEvent) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        const rect = overlayRootRef.current?.getBoundingClientRect();
-                        if (!rect) return;
-                        const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
-                        const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
-                        const targetLayerId = primaryEval.layer.id;
-
-                        beginDragTransaction();
-                        const onMove = (moveEv: PointerEvent | MouseEvent) => {
-                            const newAngle = Math.round(((Math.atan2(moveEv.clientY - centerClientY, moveEv.clientX - centerClientX) * 180) / Math.PI + 90) % 360);
-                            const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
-                            updateLayer(
-                                activeShot.id,
-                                targetLayerId,
-                                (l) =>
-                                    l.kind === 'shape' && l.fill.kind === 'gradient'
-                                        ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
-                                        : l,
-                                { skipHistory: true }
-                            );
-                        };
-                        bindPointerDrag(event, onMove, commitDragTransaction);
-                    };
-
-                    const handleStartDragGradientStart = (event: React.PointerEvent) => {
-                        event.stopPropagation();
-                        event.preventDefault();
-                        const rect = overlayRootRef.current?.getBoundingClientRect();
-                        if (!rect) return;
-                        const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
-                        const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
-                        const targetLayerId = primaryEval.layer.id;
-
-                        beginDragTransaction();
-                        const onMove = (moveEv: PointerEvent | MouseEvent) => {
-                            const newAngle = Math.round(((Math.atan2(centerClientY - moveEv.clientY, centerClientX - moveEv.clientX) * 180) / Math.PI + 90) % 360);
-                            const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
-                            updateLayer(
-                                activeShot.id,
-                                targetLayerId,
-                                (l) =>
-                                    l.kind === 'shape' && l.fill.kind === 'gradient'
-                                        ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
-                                        : l,
-                                { skipHistory: true }
-                            );
-                        };
-                        bindPointerDrag(event, onMove, commitDragTransaction);
-                    };
-
-                    return (
-                        <g data-gradient-handles="true" className="pointer-events-auto">
-                            {/* Connecting dashed vector line */}
-                            <line
-                                x1={startX}
-                                y1={startY}
-                                x2={endX}
-                                y2={endY}
-                                stroke="rgba(255,255,255,0.85)"
-                                strokeWidth="1.5"
-                                strokeDasharray="3 3"
-                                className="pointer-events-none drop-shadow-md"
-                            />
-                            {/* Start handle circle */}
-                            <g
-                                transform={`translate(${startX}, ${startY})`}
-                                onPointerDown={handleStartDragGradientStart}
-                                className="cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
-                                title="Drag to adjust gradient start position / angle"
-                            >
-                                <circle r="6.5" fill={startColor} stroke="#ffffff" strokeWidth="2.5" className="drop-shadow-lg" />
-                            </g>
-                            {/* End handle circle */}
-                            <g
-                                transform={`translate(${endX}, ${endY})`}
-                                onPointerDown={handleStartDragGradientEnd}
-                                className="cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
-                                title="Drag to adjust gradient end position / angle"
-                            >
-                                <circle r="6.5" fill={endColor} stroke="#ffffff" strokeWidth="2.5" className="drop-shadow-lg" />
-                            </g>
-                        </g>
-                    );
-                })()}
             </svg>
 
             {/* TOP 2D ROTATION LOLLIPOP KNOB & PERIMETER 3D TILT BADGE */}
@@ -983,19 +883,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     >
                         <RotateCw className="w-2.5 h-2.5 text-white" />
                     </div>
-                    <div
-                        style={{
-                            left: `${primaryProj.pRot.x + 28}px`,
-                            top: `${primaryProj.pRot.y}px`,
-                            transform: 'translate(-50%, -50%)',
-                        }}
-                        onPointerDown={handleStart3DTilt}
-                        title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
-                        className="absolute pointer-events-auto h-5 px-1.5 rounded-full bg-[#18181b]/95 hover:bg-[#27272a] border border-white/20 shadow-xl flex items-center gap-1 cursor-grab active:cursor-grabbing text-[10px] font-medium text-white/90 hover:text-white transition-all duration-100 ease-out hover:scale-105"
-                    >
-                        <Compass className="w-2.5 h-2.5 text-sky-400" />
-                        <span>3D</span>
-                    </div>
+
                 </>
             )}
 

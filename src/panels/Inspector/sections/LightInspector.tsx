@@ -56,7 +56,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
             target: shotLight?.target || { x: 0, y: 0, z: 0 },
             intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
-            color: '#ffffff',
+            color: shotLight?.keyColor ?? '#ffffff',
             temperature: shotLight?.temperature ?? 6500,
             castShadow: shotLight?.castShadow !== false,
         }
@@ -81,11 +81,12 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     },
                 });
             } else if (isKey) {
-                const { type: _ignoredType, color: _ignoredColor, intensity: requestedIntensity, ...validKeyPatch } = patch;
+                const { type: _ignoredType, color: requestedColor, intensity: requestedIntensity, ...validKeyPatch } = patch;
                 updateShot(activeShot.id, {
                     light: {
                         ...currentRig,
                         ...validKeyPatch,
+                        ...(requestedColor !== undefined ? { keyColor: requestedColor } : {}),
                         ...(requestedIntensity !== undefined ? { keyIntensity: requestedIntensity } : {}),
                         position: patch.position
                             ? { ...currentRig.position, ...patch.position }
@@ -362,7 +363,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     label="Color"
                     compact={false}
                     showGradientMode={false}
-                    disabled={isKey}
+
                     onChange={(color) => updateLight({ color })}
                 />
             </div>

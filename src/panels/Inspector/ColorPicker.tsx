@@ -66,6 +66,7 @@ interface ColorPickerProps {
     className?: string;
     children?: React.ReactNode;
     disabled?: boolean;
+    defaultOpen?: boolean;
 }
 
 const stopIdMap = new WeakMap<GradientStop, string>();
@@ -83,6 +84,7 @@ function getStopId(stop: GradientStop): string {
 export const ColorPicker: React.FC<ColorPickerProps> = ({
     color,
     onChange,
+    defaultOpen = false,
     label = 'Color',
     gradientValue,
     onGradientChange,
@@ -133,7 +135,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         return Array.from(colors).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 7);
     }, [project]);
     const pickerId = useId();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(defaultOpen);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
     const [selectedMeshPoint, setSelectedMeshPoint] = useState(4);
     const [hexDraft, setHexDraft] = useState(color);
@@ -191,7 +193,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             setPosition({ left, top: below + height < window.innerHeight ? below : Math.max(8, rect.top - height - 8) });
         },
         onClose: () => { setOpen(false); onExitGradientRef.current?.(); }, escape: false,
-        ignoreOutside: target => !!target.closest?.('[data-raylight-color-picker]'),
+        ignoreOutside: target => !!target.closest?.('[data-raylight-color-picker], [data-gradient-editor]'),
     });
 
     const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {

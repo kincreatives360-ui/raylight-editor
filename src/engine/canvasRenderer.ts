@@ -1,3 +1,5 @@
+import { applyLayerSurfaceEffects, compositeLayerEffectSurface, drawLayerHalo } from '../stage/webgl/layerEffects';
+import { applyLayerAlphaEffects } from './layerAlphaEffects';
 import { drawMediaShimmer } from '../stage/webgl/mediaDecorations';
 // src/engine/canvasRenderer.ts
 import type {
@@ -11,7 +13,6 @@ import type {
   GradientStop,
   MeshGradientPoint,
   Background,
-  LayerBase,
   LightRig,
 } from '../model/types';
 import { resolveShotBackground } from '../model/types';
@@ -42,12 +43,12 @@ function parseGradientColor(color: string): [number, number, number] {
   return Number.isFinite(value) ? [(value >> 16) & 255, (value >> 8) & 255, value & 255] : [0, 0, 0];
 }
 
-function sampleStops(stops: GradientStop[], t: number): [number, number, number, number] {
+export function sampleStops(stops: GradientStop[], t: number): [number, number, number, number] {
   const sorted = [...stops].sort((a, b) => a.at - b.at);
   if (!sorted.length) return [0, 0, 0, 0];
   const rightIndex = sorted.findIndex((stop) => stop.at >= t);
   const right = rightIndex < 0 ? sorted[sorted.length - 1] : sorted[rightIndex];
-  const left = rightIndex <= 0 ? sorted[0] : sorted[rightIndex - 1];
+  const left = rightIndex < 0 ? right : rightIndex === 0 ? sorted[0] : sorted[rightIndex - 1];
   const span = right.at - left.at;
   const mix = span <= 0 ? 0 : Math.max(0, Math.min(1, (t - left.at) / span));
   const a = parseGradientColor(left.color);
@@ -469,7 +470,6 @@ export function createCanvasFillStyle(
   }
   const cx = w / 2;
   const cy = h / 2;
-  const len = Math.hypot(w, h) / 2;
   let grad: CanvasGradient;
 
   if (handles) {
@@ -479,7 +479,15 @@ export function createCanvasFillStyle(
       const ex = handles.end.x * w;
       const ey = handles.end.y * h;
       const radius = Math.hypot(ex - rx, ey - ry);
-      grad = ctx.createRadialGradient(rx, ry, 0, rx, ry, Math.max(1, radius));
+      const minorRadius = handles.width === undefined ? radius : Math.max(1, handles.width * h);
+      ctx.save();
+      ctx.translate(rx, ry);
+      ctx.rotate(Math.atan2(ey - ry, ex - rx));
+      ctx.scale(1, minorRadius / Math.max(1, radius));
+      grad = ctx.createRadialGradient(0, 0, 0, 0, 0, Math.max(1, radius));
+      ctx.restore();
+    } else if (isAngular && typeof ctx.createConicGradient === 'function') {
+      grad = ctx.createConicGradient(((fill.angle - 90) * Math.PI) / 180, handles.start.x * w, handles.start.y * h);
     } else {
       grad = ctx.createLinearGradient(
         handles.start.x * w,
@@ -489,17 +497,17 @@ export function createCanvasFillStyle(
       );
     }
   } else if (isRadial) {
-    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, len);
+    grad = ctx.createRadialGradient(cx, cy, 0, cx, cy, w / 2);
   } else if (isAngular && typeof ctx.createConicGradient === 'function') {
     const rad = ((fill.angle - 90) * Math.PI) / 180;
     grad = ctx.createConicGradient(rad, cx, cy);
   } else {
     const rad = ((fill.angle - 90) * Math.PI) / 180;
     grad = ctx.createLinearGradient(
-      cx - Math.cos(rad) * len,
-      cy - Math.sin(rad) * len,
-      cx + Math.cos(rad) * len,
-      cy + Math.sin(rad) * len
+      cx - Math.cos(rad) * w / 2,
+      cy - Math.sin(rad) * h / 2,
+      cx + Math.cos(rad) * w / 2,
+      cy + Math.sin(rad) * h / 2
     );
   }
   for (const stop of fill.stops) {
@@ -517,41 +525,6 @@ function clearShadow(ctx: CanvasRenderingContext2D): void {
   ctx.shadowBlur = 0;
   ctx.shadowOffsetX = 0;
   ctx.shadowOffsetY = 0;
-}
-
-function applyLayerShadowOrGlow(
-  ctx: CanvasRenderingContext2D,
-  effects: LayerBase['effects'],
-  canvasW: number,
-  canvasH: number,
-  bloomMultiplier: number,
-  glowIntensityOffset: number = 0,
-  glowRadiusOffset: number = 0
-): void {
-  const currentGlowIntensity = (effects.glow?.enabled ? effects.glow.intensity : 0) + glowIntensityOffset;
-  const currentGlowRadius = (effects.glow?.enabled ? effects.glow.radius : 0.05) + glowRadiusOffset;
-  const glowColor = effects.glow?.color || '#0088ff';
-
-  if (currentGlowIntensity > 0) {
-    ctx.shadowColor = hexToRgba(
-      glowColor,
-      Math.min(1, currentGlowIntensity * 0.8 * bloomMultiplier)
-    );
-    ctx.shadowBlur = Math.max(
-      10,
-      currentGlowRadius * Math.max(canvasW, canvasH) * bloomMultiplier
-    );
-    ctx.shadowOffsetX = 0;
-    ctx.shadowOffsetY = 0;
-  } else if (effects.dropShadow?.enabled) {
-    const ds = effects.dropShadow;
-    ctx.shadowColor = hexToRgba(ds.color, ds.opacity);
-    ctx.shadowBlur = ds.blur * Math.max(canvasW, canvasH);
-    ctx.shadowOffsetX = ds.offsetX * canvasW;
-    ctx.shadowOffsetY = ds.offsetY * canvasH;
-  } else {
-    clearShadow(ctx);
-  }
 }
 
 function drawDefaultImagePlaceholder(
@@ -643,55 +616,44 @@ async function drawLayerOnCanvas(
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
 ): Promise<void> {
   const effects = layer.layer.effects;
-  if (!(layer.shimmerProgress > 0 && layer.shimmerProgress < 1) && !effects?.warp?.enabled && !effects?.liquidGlass?.enabled && !(effects?.backdropBlur && effects.backdropBlur > 0)) {
+  if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }
   const surface = acquireCanvas(w, h);
   const content = surface.getContext('2d');
-  if (!content) {
-    releaseCanvas(surface);
-    return;
-  }
-  let original: HTMLCanvasElement | null = null;
-  let backdrop: HTMLCanvasElement | null = null;
+  if (!content) { releaseCanvas(surface); return; }
   try {
-    await drawLayerContentOnCanvas(content, { ...layer, layer: { ...layer.layer, blendMode: 'normal' } }, project, frame, w, h);
-    if (effects?.warp?.enabled) {
-      original = acquireCanvas(w, h);
-      original.getContext('2d')?.drawImage(surface, 0, 0);
-      content.clearRect(0, 0, w, h);
-      const amount = (effects.warp.amount ?? 0) / 1920;
-      const frequency = effects.warp.frequency ?? 3;
-      for (let y = 0; y < h; y++) {
-        const offsetPx = Math.sin((y / h) * Math.PI * 2 * frequency) * amount * w;
-        content.drawImage(original, 0, y, w, 1, offsetPx, y, w, 1);
-      }
+    await drawLayerContentOnCanvas(content, {
+      ...layer, opacity: 1, glowIntensityOffset: 0, glowRadiusOffset: 0,
+      totalBlurPx: Math.max(0, layer.totalBlurPx - (effects.layerBlur ?? 0) * 100),
+      layer: { ...layer.layer, effects: {}, blendMode: 'normal' },
+    }, project, frame, w, h);
+    applyLayerAlphaEffects(surface, effects, 1920, 1080, (frame.shotLocalTimeMs ?? 0) / 1000);
+    applyLayerSurfaceEffects(surface, effects, 1920, 1080);
+    const halo = drawLayerHalo(surface, effects, layer.glowIntensityOffset, layer.glowRadiusOffset, 8192, 1920, 1080);
+    ctx.save();
+    ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
+    if (halo) {
+      ctx.globalAlpha = layer.opacity;
+      ctx.drawImage(halo.canvas, -(halo.widthScale - 1) * w / 2, -(halo.heightScale - 1) * h / 2, w * halo.widthScale, h * halo.heightScale);
+      releaseCanvas(halo.canvas);
     }
-    if ((effects?.backdropBlur ?? 0) > 0 || effects?.liquidGlass?.enabled) {
-      backdrop = acquireCanvas(w, h);
-      const back = backdrop.getContext('2d');
-      if (back) {
-        const glass = effects?.liquidGlass;
-        back.filter = `blur(${Math.max(effects?.backdropBlur ?? 0, (glass?.enabled ? glass.roughness ?? 0.1 : 0) * 30) * w / 1920}px)`;
-        const offset = glass?.enabled ? (glass.refraction ?? 0.1) * w * 0.03 : 0;
-        back.drawImage(ctx.canvas, offset, 0, w, h);
-        back.filter = 'none';
-        if (glass?.enabled && glass.tint) { back.globalAlpha = 0.12; back.fillStyle = glass.tint; back.fillRect(0, 0, w, h); back.globalAlpha = 1; }
-        back.globalCompositeOperation = 'destination-in'; back.drawImage(surface, 0, 0);
-        content.globalCompositeOperation = 'destination-over'; content.drawImage(backdrop, 0, 0);
-        // Glass replaces the opaque fill with a refracted backdrop and a subtle surface highlight.
-        if (glass?.enabled) { content.clearRect(0, 0, w, h); content.globalCompositeOperation = 'source-over'; content.drawImage(backdrop, 0, 0); }
-      }
-    }
-    ctx.save(); ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
-    ctx.drawImage(surface, 0, 0); ctx.restore();
-  } finally {
-    releaseCanvas(surface);
-    if (original) releaseCanvas(original);
-    if (backdrop) releaseCanvas(backdrop);
-  }
+    const artboard = getArtboardDimensions(project.aspectRatio);
+    const distanceFactor = Math.max(.35, Math.min(3, 1 / Math.max(.4, 1 + layer.position.z * .65)));
+    const zoom = Math.max(.15, frame.camera.zoom) * distanceFactor;
+    const composed = compositeLayerEffectSurface(surface, ctx.canvas, effects, {
+      opacity: layer.opacity, time: (frame.shotLocalTimeMs ?? 0) / 1000,
+      centerX: .5 + (layer.position.x - (frame.camera.target?.x ?? 0) / artboard.width) * zoom,
+      centerY: .5 + (layer.position.y - (frame.camera.target?.y ?? 0) / artboard.height) * zoom,
+      width: layer.size.width * Math.abs(layer.scale.x) * zoom, height: layer.size.height * Math.abs(layer.scale.y) * zoom,
+      viewAngle: 1 - Math.abs(Math.cos(layer.rotation.x) * Math.cos(layer.rotation.y)),
+    });
+    ctx.globalAlpha = composed ? 1 : layer.opacity;
+    if (!composed && (effects.layerBlur ?? 0) > 0) ctx.filter = `blur(${(effects.layerBlur ?? 0) * 100 * w / 1920}px)`;
+    ctx.drawImage(composed ?? surface, 0, 0, w, h);
+    ctx.restore();
+  } finally { releaseCanvas(surface); }
 }
-
 async function drawLayerContentOnCanvas(
   ctx: CanvasRenderingContext2D,
   evalLayer: EvaluatedLayerWithEffects,
@@ -701,6 +663,7 @@ async function drawLayerContentOnCanvas(
     effects: EvaluatedEffects;
     activeShot?: Shot;
     shot?: Shot;
+    shotLocalTimeMs?: number;
   },
   canvasW: number,
   canvasH: number
@@ -808,13 +771,11 @@ async function drawLayerContentOnCanvas(
     }
   }
 
-  const bloomMultiplier = 1;
 
   if (layer.kind === 'image' || layer.kind === 'video') {
     const imageLayer = layer as ImageLayer | VideoLayer;
     {
       const radius = imageLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
-      applyLayerShadowOrGlow(ctx, imageLayer.effects, canvasW, canvasH, bloomMultiplier);
       for (let step = 4; step >= 1; step--) {
         ctx.fillStyle = '#334155';
         drawRoundedRectPath(ctx, -baseW / 2 - step * 0.7, -baseH / 2 + step * 0.7, baseW, baseH, radius);
@@ -846,13 +807,6 @@ async function drawLayerContentOnCanvas(
     }
   } else if (layer.kind === 'shape') {
     const shpLayer = layer as ShapeLayer;
-    applyLayerShadowOrGlow(
-      ctx,
-      shpLayer.effects,
-      canvasW,
-      canvasH,
-      bloomMultiplier
-    );
 
     if (shpLayer.shape === 'line' || shpLayer.shape === 'arrow') {
       const strokeColor = shpLayer.stroke?.color || '#a855f7';
@@ -920,13 +874,6 @@ async function drawLayerContentOnCanvas(
   } else if (layer.kind === 'text') {
     const txtLayer = layer as TextLayer;
     const fontSizePx = Math.max(12, txtLayer.font.size * canvasH);
-    applyLayerShadowOrGlow(
-      ctx,
-      txtLayer.effects,
-      canvasW,
-      canvasH,
-      bloomMultiplier
-    );
 
     ctx.font = `${txtLayer.font.weight} ${Math.round(fontSizePx)}px ${
       txtLayer.font.family

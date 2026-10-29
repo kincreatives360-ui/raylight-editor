@@ -74,10 +74,10 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 id="export-modal-title" className="text-sm font-bold text-primary">
+              <h3 id="export-modal-title" className="text-sm font-bold text-foreground">
                 Export &amp; Share Video
               </h3>
-              <p className="text-xs text-muted">
+              <p className="text-xs text-muted-foreground">
                 Render MP4, Looping GIF, or High-Res PNG
               </p>
             </div>
@@ -91,7 +91,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </>}
               disabled={exporting}
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-subtle text-muted hover:text-primary cursor-pointer"
+              className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground hover:text-foreground cursor-pointer"
           />
         </div>
 
@@ -115,11 +115,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               }
               className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${exportSettings.format === fmt.id
                 ? 'bg-brand-blue/20 border-brand-blue text-white'
-                : 'bg-subtle border-subtle text-muted hover:text-primary'
+                : 'bg-subtle border-subtle text-muted-foreground hover:text-foreground'
                 }`}
             >
               <div className="font-semibold text-xs">{fmt.label}</div>
-              <div className="text-[11px] text-muted mt-0.5">
+              <div className="text-[11px] text-muted-foreground mt-0.5">
                 {fmt.desc}
               </div>
             </button>
@@ -128,14 +128,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Scope */}
         <div className="space-y-1.5">
-          <span className="text-[11px] text-muted block font-medium">Scope</span>
+          <span className="text-[11px] text-muted-foreground block font-medium">Scope</span>
           <SegmentedControl
               unstyled
               ariaLabel="Export scope"
               value={exportSettings.scope}
               onChange={scope => setExportSettings(s => ({ ...s, scope }))}
               className="h-8 p-0.5 rounded-lg bg-app border border-subtle grid grid-cols-2 gap-0.5"
-              buttonClassName={(option, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center${option.value === 'shot' ? ' truncate px-2' : ''} ${selected ? 'bg-brand-blue text-white shadow-xs' : 'text-muted hover:text-primary'}`}
+              buttonClassName={(option, selected) => `rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center${option.value === 'shot' ? ' truncate px-2' : ''} ${selected ? 'bg-brand-blue text-white shadow-xs' : 'text-muted-foreground hover:text-foreground'}`}
               options={[
                 { value: 'entire', label: <>Entire Timeline ({project.shots.length} shots)</>, disabled: exporting || exportSettings.format === 'png' },
                 { value: 'shot', label: <>Selected Shot ({activeShot.name})</>, disabled: exporting || exportSettings.format === 'png' },
@@ -146,7 +146,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {/* Resolution & Frame Rate Grid */}
         <div className="grid grid-cols-2 gap-3">
           <div className="space-y-1.5">
-            <span className="text-[11px] text-muted block font-medium">Resolution</span>
+            <span className="text-[11px] text-muted-foreground block font-medium">Resolution</span>
             <div className="h-8 p-0.5 rounded-lg bg-app border border-subtle grid grid-cols-3 gap-0.5">
               {(['720p', '1080p', '4k'] as ExportResolution[]).map((res) => (
                 <button
@@ -157,7 +157,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
                     exportSettings.resolution === res
                       ? 'bg-brand-blue text-white shadow-xs'
-                      : 'text-muted hover:text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {res === '4k' ? '4K' : res.toUpperCase()}
@@ -166,7 +166,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
           </div>
           <div className="space-y-1.5">
-            <span className="text-[11px] text-muted block font-medium">Frame Rate</span>
+            <span className="text-[11px] text-muted-foreground block font-medium">Frame Rate</span>
             <div className="h-8 p-0.5 rounded-lg bg-app border border-subtle grid grid-cols-3 gap-0.5">
               {([24, 30, 60] as (24 | 30 | 60)[]).map((f) => (
                 <button
@@ -177,7 +177,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                   className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
                     exportSettings.fps === f
                       ? 'bg-brand-blue text-white shadow-xs'
-                      : 'text-muted hover:text-primary'
+                      : 'text-muted-foreground hover:text-foreground'
                   }`}
                 >
                   {f} FPS
@@ -189,7 +189,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         {/* Quality & Compression */}
         <div className="space-y-1.5">
-          <span className="text-[11px] text-muted block font-medium">Compression</span>
+          <span className="text-[11px] text-muted-foreground block font-medium">Compression</span>
           <div className="h-8 p-0.5 rounded-lg bg-app border border-subtle grid grid-cols-4 gap-0.5">
             {[
               { id: 'studio' as const, label: 'Studio' },
@@ -205,7 +205,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center truncate px-1 ${
                   exportSettings.quality === q.id
                     ? 'bg-brand-blue text-white shadow-xs'
-                    : 'text-muted hover:text-primary'
+                    : 'text-muted-foreground hover:text-foreground'
                 }`}
               >
                 {q.label}
@@ -217,29 +217,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         {/* Made in Raylight Badge */}
         <div className="flex items-center justify-between p-2.5 rounded-xl bg-app border border-subtle">
           <div>
-            <span className="text-[11px] text-primary font-medium block">Made in Raylight Watermark</span>
-            <span className="text-[11px] text-muted">Free plan watermark included on export</span>
+            <span className="text-[11px] text-foreground font-medium block">Made in Raylight Watermark</span>
+            <span className="text-[11px] text-muted-foreground">Free plan watermark included on export</span>
           </div>
           <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
             Included
           </span>
         </div>
 
-        <div className="p-3 rounded-xl bg-app border border-subtle font-mono tabular-nums text-[11px] space-y-1.5 text-primary tracking-tight">
+        <div className="p-3 rounded-xl bg-app border border-subtle font-mono tabular-nums text-[11px] space-y-1.5 text-foreground tracking-tight">
           <div className="flex justify-between items-center">
-            <span className="text-muted font-sans">Dimensions:</span>
-            <span className="font-semibold text-primary">
+            <span className="text-muted-foreground font-sans">Dimensions:</span>
+            <span className="font-semibold text-foreground">
               {exportMetrics.width}&times;{exportMetrics.height}px
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-muted font-sans">Estimated Size:</span>
+            <span className="text-muted-foreground font-sans">Estimated Size:</span>
             <span className="text-emerald-400 font-semibold">
               ~{exportMetrics.estimatedSizeMb} MB
             </span>
           </div>
           <div className="flex justify-between items-center">
-            <span className="text-muted font-sans">Estimated Time:</span>
+            <span className="text-muted-foreground font-sans">Estimated Time:</span>
             <span className="text-sky-400 font-semibold">
               ~{exportMetrics.estimatedTimeSec}s
             </span>
@@ -253,7 +253,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-brand-blue shrink-0" />
                 <span className="truncate">{exportProgressText}</span>
               </span>
-              <span className="font-semibold text-primary shrink-0 ml-2">{exportPercent}%</span>
+              <span className="font-semibold text-foreground shrink-0 ml-2">{exportPercent}%</span>
             </div>
             <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative">
               <div
@@ -281,7 +281,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
             onClick={exporting ? onCancelExport : onClose}
-            className="px-4 py-2 rounded-lg bg-subtle hover:bg-muted text-secondary cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-subtle hover:bg-muted text-muted-foreground cursor-pointer"
           >
             {exporting ? 'Cancel' : 'Close'}
           </button>

@@ -97,9 +97,10 @@ describe('device media surfaces', () => {
     expect(getLayerSurfaceState(layer, false, 0.25)).toMatchObject({ receivesLight: true, surfaceOpacity: 0.25, assemblyOpacity: 1 });
   });
 
-  it('keeps vector shapes flat by default while preserving explicit lighting', () => {
+  it('lights shapes by default while respecting an explicit unlit surface', () => {
     const shape = createDefaultShapeLayer();
-    expect(getLayerSurfaceState(shape, false, 1).receivesLight).toBe(false);
+    expect(getLayerSurfaceState(shape, false, 1).receivesLight).toBe(true);
+    expect(getLayerSurfaceState({ ...shape, receivesLight: false }, false, 1).receivesLight).toBe(false);
     expect(getLayerSurfaceState({ ...shape, receivesLight: true }, false, 1).receivesLight).toBe(true);
   });
 

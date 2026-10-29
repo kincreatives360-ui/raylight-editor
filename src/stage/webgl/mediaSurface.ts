@@ -1,4 +1,5 @@
 import type { Layer, ScreenFit } from '../../model/types';
+import { layerReceivesLight } from '../../model/layerLighting';
 import { getImageFitRect } from '../../model/deviceFrame';
 
 export function getMediaTextureSize(width: number, height: number, projected?: {
@@ -110,7 +111,7 @@ export function getLayerSurfaceState(layer: Layer, framed: boolean, opacity: num
   const alpha = Math.max(0, Math.min(1, Number.isFinite(opacity) ? opacity : 1));
   return {
     visible: visible && !layer.hidden && alpha > 0,
-    receivesLight: framed ? false : layer.receivesLight ?? (layer.kind === 'image' || layer.kind === 'video'),
+    receivesLight: !framed && layerReceivesLight(layer),
     surfaceOpacity: framed ? 1 : alpha,
     assemblyOpacity: framed ? alpha : 1,
   };

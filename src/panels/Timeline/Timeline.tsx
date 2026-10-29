@@ -46,7 +46,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         addCameraBlockToShot,
         toggleProjectAudioMuted,
         splitAtPlayhead,
-        splitShotAtPlayhead,
+
         splitAudioClipAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
@@ -1473,6 +1473,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 ...p,
                 audio: {
                     ...p.audio,
+                    muted: p.audio?.muted ?? false,
+                    masterVolume: p.audio?.masterVolume ?? 1,
                     clips: [...clips, newClip],
                 },
             };
@@ -1484,6 +1486,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             ...p,
             audio: {
                 ...p.audio,
+                    muted: p.audio?.muted ?? false,
+                    masterVolume: p.audio?.masterVolume ?? 1,
                 clips: (p.audio?.clips || []).map((c) =>
                     c.id === clipId
                         ? {
@@ -1566,7 +1570,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         type="button"
                         onClick={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
                         title="Split Clip at Playhead (S)"
-                        className="w-5 h-5 rounded-full border border-subtle hover:border-medium flex items-center justify-center text-muted hover:text-primary cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
+                        className="w-5 h-5 rounded-full border border-subtle hover:border-medium flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
                         icon={<Scissors className="w-2.5 h-2.5" />}
                     />
                     {activeShot && project.shots.some((shot) => shot.id === activeShot.id) && (
@@ -1577,7 +1581,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             type="button"
                             onClick={() => deleteShot(activeShot.id)}
                             title={`Delete ${activeShot.name}`}
-                            className="w-5 h-5 rounded-full border border-subtle hover:border-rose-400/70 flex items-center justify-center text-muted hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+                            className="w-5 h-5 rounded-full border border-subtle hover:border-rose-400/70 flex items-center justify-center text-muted-foreground hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
                             icon={<Trash2 className="w-2.5 h-2.5" />}
                         />
                     )}
@@ -1686,7 +1690,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 {m.isHalf ? (
                                     <span className="w-1 h-1 rounded-full bg-disabled/70 mt-1.5" />
                                 ) : (
-                                    <span className="text-[11px] font-mono tabular-nums text-muted font-medium tracking-tight">
+                                    <span className="text-[11px] font-mono tabular-nums text-muted-foreground font-medium tracking-tight">
                                         {m.timeMs === 0 ? '0.00' : `${Math.round(m.timeMs / 1000)}s`}
                                     </span>
                                 )}
@@ -2614,7 +2618,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             />
 
                             {/* Small dark pill label with grey monospace text sitting on ruler at top */}
-                            <div className="relative px-2 py-0.5 rounded-full bg-surface border border-subtle text-muted text-[11px] font-mono tabular-nums font-medium shadow-xs whitespace-nowrap leading-none select-none mt-1 z-10">
+                            <div className="relative px-2 py-0.5 rounded-full bg-surface border border-subtle text-muted-foreground text-[11px] font-mono tabular-nums font-medium shadow-xs whitespace-nowrap leading-none select-none mt-1 z-10">
                                 {(hoverDisplayTimeMs / 1000).toFixed(2)}
                             </div>
                         </div>

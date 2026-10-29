@@ -1565,7 +1565,7 @@ export default function App() {
                 }
               }}
               title="Expand Left Panel ( [ )"
-              className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted hover:text-primary border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
+              className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted-foreground hover:text-foreground border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
               icon={<>
                 <PanelLeftOpen className="w-3.5 h-3.5 text-brand-blue" />
                 <span className="hidden sm:inline">Panels</span>
@@ -1620,7 +1620,7 @@ export default function App() {
               type="button"
               onClick={toggleRightSidebar}
               title="Expand Inspector ( ] )"
-              className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted hover:text-primary border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
+              className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted-foreground hover:text-foreground border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
               icon={<>
                 <PanelRightOpen className="w-3.5 h-3.5 text-brand-blue" />
                 <span className="hidden sm:inline">Inspector</span>

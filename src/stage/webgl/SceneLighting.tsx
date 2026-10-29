@@ -252,7 +252,7 @@ function RoomEnvironment({ light }: { light: LightRig }) {
       background={false}
       frames={1}
       resolution={128}
-      environmentIntensity={0.4 + (light.ambience ?? 0.45) * 0.6}
+      environmentIntensity={resolved.room.environmentIntensity}
     >
       {panels.map((panel, index) => <Lightformer key={`${environment}-${index}`} {...panel} />)}
     </Environment>

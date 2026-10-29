@@ -73,7 +73,7 @@ describe('OrientationGizmo HUD & Presets UI', () => {
                 onResetCamera={() => {}}
             />
         );
-        expect(html).toContain('>Angle</span>');
+        expect(html).not.toContain('>Angle</span>');
     });
 
     it('shows Pin and Back to camera in the contextual Orbit controls', () => {

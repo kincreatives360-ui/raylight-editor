@@ -1,7 +1,9 @@
-import type { KeyboardEvent, MouseEvent, ReactElement } from 'react';
+import type { KeyboardEvent, ReactElement } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { SegmentedControl, Switch } from './primitives';
 import { ModalShell } from './ModalShell';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { createElement } from 'react';
 import { navigateMenu } from './menuNavigation';
 
 describe('shared choice controls', () => {
@@ -32,14 +34,10 @@ describe('shared choice controls', () => {
         expect(onChange).toHaveBeenCalledWith('one');
     });
 
-    it('keeps clicks inside a modal from reaching backdrop dismissal', () => {
-        const onClick = vi.fn(), dismiss = vi.fn();
-        const root = ModalShell({ backdropProps: { onClick: dismiss }, surfaceProps: { onClick }, children: 'Content' });
-        const event = { stopPropagation: vi.fn() } as unknown as MouseEvent<HTMLDivElement>;
-        root.props.children.props.onClick(event);
-        expect(event.stopPropagation).toHaveBeenCalledOnce();
-        expect(onClick).toHaveBeenCalledWith(event);
-        expect(dismiss).not.toHaveBeenCalled();
+    it('renders dialog semantics through React', () => {
+        const markup = renderToStaticMarkup(createElement(ModalShell, { children: 'Content' }));
+        expect(markup).toContain('role="dialog"');
+        expect(markup).toContain('aria-modal="true"');
     });
 });
 

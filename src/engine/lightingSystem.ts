@@ -25,12 +25,14 @@ export interface ResolvedSceneLight {
 }
 
 export interface ResolvedLighting {
-  key: Omit<ResolvedSceneLight, 'id' | 'type' | 'distance' | 'decay' | 'angle' | 'penumbra' | 'width' | 'height'> & {
+  key: Omit<ResolvedSceneLight, 'enabled' | 'id' | 'type' | 'distance' | 'decay' | 'angle' | 'penumbra' | 'width' | 'height'> & {
+    enabled: boolean;
     id: 'key';
     type: 'directional';
   };
   room: {
     intensity: number;
+    environmentIntensity: number;
     color: string;
     environmentTint: string;
     environment: NonNullable<LightRig['environment']>;
@@ -149,13 +151,13 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     remainingShadows -= 1;
   }
 
-  const keyColor = resolveKelvinColor(light.temperature ?? 6100);
+  const keyColor = resolveKelvinColor(light.temperature ?? 6100, light.keyColor);
   const position = worldPosition(light.position, FALLBACK_POSITION);
   const keyTarget = worldPosition(light.target, FALLBACK_TARGET);
   const key = {
     id: 'key' as const,
     type: 'directional' as const,
-    enabled: true as const,
+    enabled: keyEnabled,
     position,
     target: keyTarget,
     intensity: keyIntensity * 2.2,
@@ -174,7 +176,8 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
   return {
     key,
     room: {
-      intensity: 0.15 + (light.ambience ?? 0.45) * 1.2,
+      intensity: Math.max(0, light.ambience ?? 0.45) * 1.2,
+      environmentIntensity: Math.max(0, light.ambience ?? 0.45) * 1.5,
       color: light.environment && light.environment !== 'custom' ? '#ffffff' : light.ambientColor || '#f8fafc',
       environmentTint: light.environment === 'custom' ? light.ambientColor || '#f8fafc' : ENVIRONMENT_TINTS[light.environment ?? 'studio'],
       environment: light.environment ?? 'studio',

@@ -1,5 +1,5 @@
 // src/utils/editorClipboard.ts
-import type { LayerEffect, CameraBlock, LightAnimationBlock, AnimationBlock, SceneEffectAnimationBlock } from '../model/types';
+import type { LayerEffects, CameraBlock, LightAnimationBlock, AnimationBlock, SceneEffectAnimationBlock } from '../model/types';
 
 export type CopiedTimelineBlock =
   | { type: 'camera'; block: CameraBlock }
@@ -7,18 +7,14 @@ export type CopiedTimelineBlock =
   | { type: 'animation'; block: AnimationBlock; layerId?: string }
   | { type: 'effect'; block: SceneEffectAnimationBlock };
 
-let copiedLayerEffects: LayerEffect[] | null = null;
+let copiedLayerEffects: LayerEffects | null = null;
 let copiedTimelineBlock: CopiedTimelineBlock | null = null;
 
-export function copyLayerEffects(effects: LayerEffect[] | undefined) {
-    if (!effects || effects.length === 0) {
-        copiedLayerEffects = [];
-    } else {
-        copiedLayerEffects = JSON.parse(JSON.stringify(effects));
-    }
+export function copyLayerEffects(effects: LayerEffects | undefined) {
+    copiedLayerEffects = effects ? structuredClone(effects) : null;
 }
 
-export function getCopiedLayerEffects(): LayerEffect[] | null {
+export function getCopiedLayerEffects(): LayerEffects | null {
     return copiedLayerEffects ? JSON.parse(JSON.stringify(copiedLayerEffects)) : null;
 }
 

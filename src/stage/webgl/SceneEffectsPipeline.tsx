@@ -99,8 +99,8 @@ export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, 
     return hwCap;
 }
 
-export function shouldRebuildPassList(activePassKey: string | null, currentPassKey: string): boolean {
-    return activePassKey !== currentPassKey;
+export function shouldRebuildPassList(activePassKey: string | null, currentPassKey: string, passCount = 1): boolean {
+    return passCount === 0 || activePassKey !== currentPassKey;
 }
 
 export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress }) => {
@@ -181,7 +181,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const currentPassKey = effectiveEffects.orderedEnabledPasses
             .map((p) => p.key)
             .join(',');
-        const passListChanged = shouldRebuildPassList(activePassKeyRef.current, currentPassKey);
+        const passListChanged = shouldRebuildPassList(activePassKeyRef.current, currentPassKey, composer.passes.length);
 
         if (passListChanged) {
             activePassKeyRef.current = currentPassKey;
@@ -222,7 +222,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 }
             }
         }
-    }, [effectiveEffects, size.width, size.height, dpr, camera.position.x, camera.position.y]);
+    }, [effectiveEffects, gl, scene, camera, size.width, size.height, dpr, camera.position.x, camera.position.y]);
 
     // Deterministic frame render
     useFrame(() => {

@@ -240,7 +240,7 @@ export const EasingPopover: React.FC<EasingPopoverProps> = ({
                                     if (preset.kind === 'spring' && preset.springName) {
                                         onChange({
                                             kind: 'spring',
-                                            name: preset.springName as any,
+                                            name: preset.springName,
                                         });
                                     } else {
                                         onChange({

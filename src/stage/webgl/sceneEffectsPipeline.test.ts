@@ -7,6 +7,11 @@ import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { getSafeMsaaSampleCount, shouldRebuildPassList } from './SceneEffectsPipeline';
 
 describe('SceneEffectsPipeline pass initialization', () => {
+  it('rebuilds a recreated composer even when the enabled effects have not changed', () => {
+    expect(shouldRebuildPassList('', '', 0)).toBe(true);
+    expect(shouldRebuildPassList('bloom', 'bloom', 0)).toBe(true);
+    expect(shouldRebuildPassList('bloom', 'bloom', 4)).toBe(false);
+  });
   it('builds the render chain on first render when no effects are enabled', () => {
     expect(shouldRebuildPassList(null, '')).toBe(true);
   });

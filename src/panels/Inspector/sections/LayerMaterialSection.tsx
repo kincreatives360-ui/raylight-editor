@@ -1,4 +1,5 @@
 import type { Layer } from '../../../model/types';
+import { layerReceivesLight } from '../../../model/layerLighting';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 export function LayerMaterialSection({ shotId, layer: selectedLayer }: { shotId: string; layer: Layer }) {    
@@ -13,11 +14,8 @@ const { updateLayer } = useProjectStore(); const activeShot = { id: shotId }; re
                 </div>
                 <input
                     type="checkbox"
-                    checked={
-                        selectedLayer.receivesLight !== undefined
-                            ? selectedLayer.receivesLight
-                            : selectedLayer.kind === 'image' || selectedLayer.kind === 'video'
-                    }
+                    aria-label="Receives 3D Light"
+                    checked={layerReceivesLight(selectedLayer)}
                     onChange={(e) => {
                         const receivesLight = e.target.checked;
                         updateLayer(activeShot.id, selectedLayer.id, (l) => ({
@@ -29,7 +27,7 @@ const { updateLayer } = useProjectStore(); const activeShot = { id: shotId }; re
                 />
             </div>
 
-            {(selectedLayer.receivesLight ?? (selectedLayer.kind === 'image' || selectedLayer.kind === 'video')) && (
+            {layerReceivesLight(selectedLayer) && (
                 <div className="space-y-1.5 pt-1">
                     <div className="flex items-center justify-between gap-1 text-[10px] text-[#a1a1aa] tracking-tight">
                         <span>Material Presets:</span>

@@ -1,6 +1,93 @@
 import * as THREE from 'three';
 import type { BlendMode, LayerEffects, SceneEffects } from '../../model/types';
 import { acquireCanvas, releaseCanvas } from '../../engine/canvasPool';
+import { getBlurSettings, warpPoint } from '../../model/layerEffects';
+import { getLayerStyleUniforms, LAYER_STYLE_GLSL } from './layerStyleShader';
+import { drawAlphaOutline, drawLongShadow } from '../../engine/layerAlphaEffects';
+
+/** Geometry and the fallback share the same authored-pixel deformation. */
+export function createWarpGeometry(width: number, height: number, authoredWidth: number, authoredHeight: number, warp: import('../../model/types').WarpEffect, pinBounds = { width: authoredWidth, height: authoredHeight }) {
+    const geometry = new THREE.PlaneGeometry(width, height, 64, 48);
+    updateWarpGeometry(geometry, width, height, authoredWidth, authoredHeight, warp, 0, pinBounds);
+    return geometry;
+}
+
+/** Update the existing buffers during playback; do not allocate a mesh each frame. */
+export function updateWarpGeometry(geometry: THREE.PlaneGeometry, width: number, height: number, authoredWidth: number, authoredHeight: number, warp: import('../../model/types').WarpEffect, timeSeconds = 0, pinBounds: { width: number; height: number; centerX?: number; centerY?: number } = { width: authoredWidth, height: authoredHeight }) {
+    const positions = geometry.getAttribute('position');
+    const uv = geometry.getAttribute('uv');
+    for (let i = 0; i < positions.count; i++) {
+        const point = warpPoint((uv.getX(i) - .5) * authoredWidth, (.5 - uv.getY(i)) * authoredHeight, warp, timeSeconds, pinBounds);
+        positions.setXYZ(i, point.x / authoredWidth * width, -point.y / authoredHeight * height, point.z / authoredWidth * width);
+    }
+    positions.needsUpdate = true;
+    geometry.computeVertexNormals(); geometry.computeBoundingBox(); geometry.computeBoundingSphere();
+}
+
+function paintSpread(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, x: number, y: number, width: number, height: number, spread: number) {
+    ctx.drawImage(source, x, y, width, height);
+    if (Math.abs(spread) < .1) return;
+    const composite = ctx.globalCompositeOperation;
+    ctx.globalCompositeOperation = spread > 0 ? composite : 'destination-in';
+    for (let i = 0; i < 16; i++) {
+        const angle = i / 16 * Math.PI * 2;
+        ctx.drawImage(source, x + Math.cos(angle) * Math.abs(spread), y + Math.sin(angle) * Math.abs(spread), width, height);
+    }
+    ctx.globalCompositeOperation = composite;
+}
+
+/** Inner shadow and directional glow use the actual alpha silhouette. */
+export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: LayerEffects, authoredWidth = source.width, authoredHeight = source.height) {
+    const outline = effects.outline;
+    if (outline?.enabled && outline.placement === 'inside') {
+        const ctx = source.getContext('2d');
+        if (ctx) {
+            ctx.save(); ctx.resetTransform(); ctx.globalCompositeOperation = 'source-atop';
+            const ratio = source.width / Math.max(1, authoredWidth);
+            drawAlphaOutline(ctx, source, { x: 0, y: 0, width: source.width, height: source.height, radius: outline.width * ratio, softness: outline.softness * ratio, placement: 'inside', color: outline.color, opacity: outline.opacity });
+            ctx.restore();
+        }
+    }
+    const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode === 'inner');
+    const glow = effects.glow?.enabled && effects.glow.mode ? effects.glow : undefined;
+    if (!shadows.length && !glow) return;
+    // Smooth masks do not need a full 4K copy of the artwork. Preserve the source,
+    // and composite bounded-resolution shading over it at native resolution.
+    const workingScale = Math.min(1, 2048 / Math.max(source.width, source.height));
+    const workW = Math.max(1, Math.round(source.width * workingScale)), workH = Math.max(1, Math.round(source.height * workingScale));
+    const sx = workW / Math.max(1, authoredWidth), sy = workH / Math.max(1, authoredHeight);
+    const padding = Math.ceil(Math.min(512, Math.max(2, (glow ? glow.radius * 1920 * 3 + Math.abs(glow.depth ?? 0) : 0) * sx,
+        ...shadows.map(s => s ? (s.blur * 1920 * 3 + Math.abs(s.spread ?? 0) + Math.max(Math.abs(s.offsetX * 1920), Math.abs(s.offsetY * 1080))) * Math.max(sx, sy) : 0))));
+    const original = acquireCanvas(workW, workH), mask = acquireCanvas(workW + padding * 2, workH + padding * 2), result = acquireCanvas(workW, workH);
+    try {
+        const originalCtx = original.getContext('2d'), maskCtx = mask.getContext('2d'), resultCtx = result.getContext('2d'), ctx = source.getContext('2d');
+        if (!originalCtx || !maskCtx || !resultCtx || !ctx) return;
+        originalCtx.drawImage(source, 0, 0, workW, workH);
+        const composite = (color: string, opacity: number, blur: number, x: number, y: number, spread: number, inner: boolean, blend: GlobalCompositeOperation = 'source-over') => {
+            maskCtx.clearRect(0, 0, mask.width, mask.height);
+            paintSpread(maskCtx, original, padding, padding, workW, workH, (inner ? -spread : spread) * sx);
+            if (inner) {
+                maskCtx.globalCompositeOperation = 'source-out'; maskCtx.fillStyle = '#ffffff'; maskCtx.fillRect(0, 0, mask.width, mask.height);
+                maskCtx.globalCompositeOperation = 'source-over';
+            }
+            resultCtx.clearRect(0, 0, result.width, result.height);
+            resultCtx.filter = `blur(${Math.max(0, blur * sx)}px)`; resultCtx.drawImage(mask, x * sx - padding, y * sy - padding); resultCtx.filter = 'none';
+            resultCtx.globalCompositeOperation = 'source-in'; resultCtx.fillStyle = color; resultCtx.fillRect(0, 0, result.width, result.height);
+            resultCtx.globalCompositeOperation = 'destination-in'; resultCtx.drawImage(original, 0, 0); resultCtx.globalCompositeOperation = 'source-over';
+            ctx.save(); ctx.resetTransform(); ctx.globalCompositeOperation = blend === 'source-over' ? 'source-atop' : blend;
+            for (let pass = 0; pass < Math.min(2, Math.ceil(opacity)); pass++) { ctx.globalAlpha = Math.max(0, Math.min(1, opacity - pass)); ctx.drawImage(result, 0, 0, source.width, source.height); }
+            ctx.restore();
+        };
+        for (const s of shadows) if (s) composite(s.color, s.opacity, s.blur * 1920, s.offsetX * 1920, s.offsetY * 1080, s.spread ?? 0, true);
+        if (glow) {
+            const angle = (glow.angle ?? 106) * Math.PI / 180, depth = glow.depth ?? 0, sheen = glow.sheen ?? 1, rim = glow.rim ?? 1;
+            const blur = glow.radius * 1920, offset = depth + blur * .15 * sheen;
+            const blend = glow.blend === 'add' ? 'lighter' : 'source-over';
+            if (glow.mode === 'fill') composite(glow.color, glow.intensity * (1 - rim * .5), blur * .25, 0, 0, 0, false, blend);
+            composite(glow.color, glow.intensity * rim * (1 + sheen), blur, Math.cos(angle) * offset, Math.sin(angle) * offset, depth, true, blend);
+        }
+    } finally { releaseCanvas(original); releaseCanvas(mask); releaseCanvas(result); }
+}
 
 export function getBokehOffsets(shape: SceneEffects['depthOfField']['bokehShape'] = 'spherical') {
     return Array.from({ length: 32 }, (_, i) => {
@@ -116,15 +203,21 @@ export function applyLayerReveal(ctx: CanvasRenderingContext2D, width: number, h
 export function getLayerHaloLayout(effects: LayerEffects, width: number, height: number, intensityOffset = 0, radiusOffset = 0) {
     const glowIntensity = Math.max(0, (effects.glow?.enabled ? effects.glow.intensity : 0) + intensityOffset);
     const glowRadius = Math.max(0, (effects.glow?.enabled ? effects.glow.radius : .05) + radiusOffset) * Math.max(width, height);
-    const shadow = effects.dropShadow?.enabled ? effects.dropShadow : undefined;
-    const padding = Math.ceil(Math.max(glowIntensity > 0 ? glowRadius * 3 : 0,
-        shadow ? shadow.blur * Math.max(width, height) * 3 + Math.max(Math.abs(shadow.offsetX * width), Math.abs(shadow.offsetY * height)) : 0));
+    const shadow = effects.dropShadow?.enabled && effects.dropShadow.mode !== 'inner' ? effects.dropShadow : undefined;
+    const padding = Math.ceil(Math.max(glowIntensity > 0 ? glowRadius * 3 + Math.abs(effects.glow?.depth ?? 0) : 0,
+        effects.outline?.enabled && effects.outline.placement === 'outside' ? effects.outline.width + effects.outline.softness * 3 : 0,
+        ...[effects.dropShadow, ...(effects.shadows ?? [])].map(s => s?.enabled && s.mode !== 'inner' ? s.blur * Math.max(width, height) * 3 + Math.abs(s.spread ?? 0) + (s.mode === 'long' ? s.length ?? 120 : 0) + Math.max(Math.abs(s.offsetX * width), Math.abs(s.offsetY * height)) : 0)));
     return { padding, width: width + padding * 2, height: height + padding * 2, glowIntensity, glowRadius, shadow };
 }
 
-export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number) {
+export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number, authoredWidth = source.width, authoredHeight = source.height) {
+    const sx = source.width / Math.max(1, authoredWidth), sy = source.height / Math.max(1, authoredHeight);
+    const shadowPixels = (s: NonNullable<LayerEffects['dropShadow']>) => ({ ...s, length: (s.length ?? 120) * sx, blur: s.blur * 1920 * sx / Math.max(source.width, source.height), offsetX: s.offsetX * 1920 / authoredWidth, offsetY: s.offsetY * 1080 / authoredHeight, spread: (s.spread ?? 0) * sx });
+    effects = { ...effects, dropShadow: effects.dropShadow && shadowPixels(effects.dropShadow), shadows: effects.shadows?.map(shadowPixels), outline: effects.outline && { ...effects.outline, width: effects.outline.width * sx, softness: effects.outline.softness * sx }, glow: effects.glow && { ...effects.glow, radius: effects.glow.radius * 1920 * sx / Math.max(source.width, source.height), depth: (effects.glow.depth ?? 0) * sx } };
     const layout = getLayerHaloLayout(effects, source.width, source.height, intensityOffset, radiusOffset);
-    if (!layout.shadow && layout.glowIntensity <= 0) return null;
+    const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode !== 'inner');
+    const outline = effects.outline?.enabled && effects.outline.placement === 'outside' ? effects.outline : undefined;
+    if (!shadows.length && layout.glowIntensity <= 0 && !outline) return null;
     const canvas = acquireCanvas(
         Math.max(1, Math.ceil(layout.width * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height)))),
         Math.max(1, Math.ceil(layout.height * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height))))
@@ -133,8 +226,14 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
     canvas.width = Math.max(1, Math.ceil(layout.width * ratio));
     canvas.height = Math.max(1, Math.ceil(layout.height * ratio));
     const ctx = canvas.getContext('2d');
-    if (!ctx) return null;
-    const draw = (color: string, opacity: number, blur: number, x: number, y: number) => {
+    if (!ctx) { releaseCanvas(canvas); return null; }
+    const mask = acquireCanvas(canvas.width, canvas.height);
+    const maskCtx = mask.getContext('2d');
+    if (!maskCtx) { releaseCanvas(mask); releaseCanvas(canvas); return null; }
+    const draw = (color: string, opacity: number, blur: number, x: number, y: number, spread = 0) => {
+        ctx.save();
+        maskCtx.clearRect(0, 0, mask.width, mask.height);
+        paintSpread(maskCtx, source, layout.padding * ratio, layout.padding * ratio, source.width * ratio, source.height * ratio, spread * ratio);
         // Draw the silhouette off-canvas; only its displaced shadow enters the output.
         const displacement = canvas.width * 2;
         ctx.globalAlpha = Math.max(0, Math.min(1, opacity));
@@ -142,44 +241,150 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
         ctx.shadowBlur = blur * ratio;
         ctx.shadowOffsetX = displacement + x * ratio;
         ctx.shadowOffsetY = y * ratio;
-        ctx.drawImage(source, layout.padding * ratio - displacement, layout.padding * ratio, source.width * ratio, source.height * ratio);
+        ctx.drawImage(mask, -displacement, 0);
+        ctx.restore();
     };
-    if (layout.shadow) {
-        const s = layout.shadow;
-        draw(s.color, s.opacity, s.blur * Math.max(source.width, source.height), s.offsetX * source.width, s.offsetY * source.height);
+    for (const s of shadows) if (s) {
+        if (s.mode === 'long') drawLongShadow(ctx, source, { x: layout.padding * ratio, y: layout.padding * ratio, width: source.width * ratio, height: source.height * ratio, length: (s.length ?? 120) * ratio, angle: s.angle ?? 45, fade: s.fade ?? 0, color: s.color, opacity: s.opacity, blur: s.blur * Math.max(source.width, source.height) * ratio, spread: (s.spread ?? 0) * ratio, offsetX: s.offsetX * source.width * ratio, offsetY: s.offsetY * source.height * ratio });
+        else draw(s.color, s.opacity, s.blur * Math.max(source.width, source.height), s.offsetX * source.width, s.offsetY * source.height, s.spread);
     }
-    if (layout.glowIntensity > 0) draw(effects.glow?.color ?? '#0088ff', layout.glowIntensity, layout.glowRadius, 0, 0);
+    if (layout.glowIntensity > 0) {
+        const glow = effects.glow;
+        const angle = (glow?.angle ?? 0) * Math.PI / 180, depth = glow?.depth ?? 0;
+        ctx.globalCompositeOperation = glow?.blend === 'add' ? 'lighter' : 'source-over';
+        const radius = layout.glowRadius;
+        for (let pass = 0; pass < Math.min(2, Math.ceil(layout.glowIntensity)); pass++) draw(glow?.color ?? '#0088ff', Math.min(1, layout.glowIntensity - pass) * (glow?.rim ?? 1), radius, Math.cos(angle) * depth, Math.sin(angle) * depth * sy / sx);
+    }
+    ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
+    if (outline) drawAlphaOutline(ctx, source, { x: layout.padding * ratio, y: layout.padding * ratio, width: source.width * ratio, height: source.height * ratio, radius: outline.width * ratio, softness: outline.softness * ratio, placement: 'outside', color: outline.color, opacity: outline.opacity });
+    releaseCanvas(mask);
     return { canvas, widthScale: layout.width / source.width, heightScale: layout.height / source.height };
 }
 
 export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) {
     const glass = effects.liquidGlass?.enabled ? effects.liquidGlass : undefined;
+    const screen = effects.screen?.enabled ? effects.screen : undefined;
+    const profile = (key: 'layerBlur' | 'backdropBlur') => {
+        const p = getBlurSettings(effects, key);
+        return new THREE.Vector4(p.mode === 'progressive' ? p.start : (effects[key] ?? 0) * 100, p.mode === 'progressive' ? p.end : (effects[key] ?? 0) * 100, p.angle * Math.PI / 180, p.mode === 'progressive' ? 1 : 0);
+    };
     return {
+        ...getLayerStyleUniforms(effects),
         layerScene: { value: null as THREE.Texture | null },
         layerResolution: { value: new THREE.Vector2(1, 1) },
+        layerAuthorSize: { value: new THREE.Vector2(1920, 1080) },
+        layerContentScale: { value: new THREE.Vector2(1, 1) },
+        layerContentCenter: { value: new THREE.Vector2(.5, .5) },
+        layerTime: { value: 0 },
+        layerViewAngle: { value: 0 },
+        layerPixelRatio: { value: 1 },
+        layerBlurProfile: { value: profile('layerBlur') },
+        layerBackdropProfile: { value: profile('backdropBlur') },
         layerBlend: { value: ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'].indexOf(blend) },
         layerBackdrop: { value: Math.max(0, effects.backdropBlur ?? 0) },
         layerGlass: { value: glass ? 1 : 0 },
         layerRefraction: { value: glass?.refraction ?? .1 },
         layerRoughness: { value: glass?.roughness ?? .15 },
+        layerDispersion: { value: glass?.dispersion ?? 0 },
+        layerShine: { value: glass?.shine ?? 0 },
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
         // Warp is authored in stage pixels by the inspector; shaders consume UV displacement.
-        layerWarp: { value: new THREE.Vector2(effects.warp?.enabled ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
+        layerWarp: { value: new THREE.Vector2(effects.warp?.enabled && !effects.warp.mode ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
+        layerScreen: { value: new THREE.Vector4(screen ? ['lcd', 'oled', 'crt', 'led'].indexOf(screen.mode) + 1 : 0, screen?.pixelSize ?? 11.4, screen?.grid ?? 0, screen?.snapToPixels ? 1 : 0) },
+        layerScreenCamera: { value: new THREE.Vector4(screen?.focus ?? 0, screen?.glow ?? 0, screen?.flicker ?? 0, screen?.speed ?? .5) },
+        layerScreenPattern: { value: new THREE.Vector4(screen?.moire ?? 0, screen?.bands ?? 0, screen?.offAxis ?? 0, 0) },
     };
 }
 
 export type LayerEffectUniforms = ReturnType<typeof getLayerEffectUniforms>;
 
+let fallbackRenderer: THREE.WebGLRenderer | null | undefined;
+
+/** Reuse the production shader for canvas exports rather than maintaining a second set of effects. */
+export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop: HTMLCanvasElement, effects: LayerEffects, options: {
+    opacity: number; time: number; centerX: number; centerY: number; width: number; height: number; viewAngle: number;
+}): HTMLCanvasElement | null {
+    if (typeof window === 'undefined') return null;
+    if (fallbackRenderer === undefined) {
+        try { fallbackRenderer = new THREE.WebGLRenderer({ alpha: true, antialias: true, preserveDrawingBuffer: true }); }
+        catch { fallbackRenderer = null; }
+    }
+    const renderer = fallbackRenderer;
+    if (!renderer || renderer.getContext().isContextLost()) return null;
+    renderer.setSize(source.width, source.height, false);
+    const texture = new THREE.CanvasTexture(source), behind = new THREE.CanvasTexture(backdrop);
+    texture.colorSpace = THREE.SRGBColorSpace;
+    const uniforms = getLayerEffectUniforms(effects, 'normal');
+    uniforms.layerScene.value = behind;
+    uniforms.layerAuthorSize.value.set(1920, 1080);
+    uniforms.layerResolution.value.set(source.width, source.height);
+    uniforms.layerPixelRatio.value = source.width / 1920;
+    uniforms.layerContentScale.value.set(1 / Math.max(.001, options.width), 1 / Math.max(.001, options.height));
+    uniforms.layerContentCenter.value.set(options.centerX, 1 - options.centerY);
+    uniforms.layerTime.value = options.time; uniforms.layerViewAngle.value = options.viewAngle;
+    const blur = getBlurSettings(effects, 'backdropBlur');
+    uniforms.layerBackdrop.value = Math.max(blur.start, blur.end);
+    const material = new THREE.MeshBasicMaterial({ map: texture, transparent: true, opacity: options.opacity, toneMapped: false, side: THREE.DoubleSide });
+    material.onBeforeCompile = shader => installLayerEffects(shader, uniforms);
+    const warp = effects.warp;
+    const geometry = new THREE.PlaneGeometry(1920, 1080, warp?.enabled && warp.mode ? 64 : 1, warp?.enabled && warp.mode ? 48 : 1);
+    if (warp?.enabled && warp.mode) updateWarpGeometry(geometry, 1920, 1080, 1920, 1080, { ...warp, centerX: (warp.centerX ?? 0) + (options.centerX - .5) * 1920, centerY: (warp.centerY ?? 0) + (options.centerY - .5) * 1080 }, options.time, { width: options.width * 1920, height: options.height * 1080, centerX: (options.centerX - .5) * 1920, centerY: (options.centerY - .5) * 1080 });
+    const scene = new THREE.Scene(); scene.add(new THREE.Mesh(geometry, material));
+    const camera = new THREE.OrthographicCamera(-960, 960, 540, -540, .1, 10000); camera.position.z = 5000;
+    try { renderer.setClearColor(0, 0); renderer.render(scene, camera); return renderer.domElement; }
+    finally { geometry.dispose(); material.dispose(); texture.dispose(); behind.dispose(); renderer.renderLists.dispose(); }
+}
+
 /** Inject into both the unlit and lit materials, preserving their light/shadow calculations. */
 export function installLayerEffects(shader: THREE.WebGLProgramParametersWithUniforms, uniforms: LayerEffectUniforms) {
     Object.assign(shader.uniforms, uniforms);
-    shader.fragmentShader = `
+    const effectHeader = `
 uniform sampler2D layerScene;
 uniform vec2 layerResolution;
+uniform vec2 layerAuthorSize, layerContentScale, layerContentCenter;
+uniform float layerTime, layerViewAngle, layerPixelRatio;
+uniform vec4 layerBlurProfile, layerBackdropProfile, layerScreen, layerScreenCamera, layerScreenPattern;
 uniform int layerBlend;
 uniform float layerBackdrop, layerGlass, layerRefraction, layerRoughness;
+uniform float layerDispersion, layerShine;
 uniform vec3 layerTint;
 uniform vec2 layerWarp;
+float layerBlurRadius(vec4 profile, vec2 uv) {
+    vec2 dir = vec2(cos(profile.z), -sin(profile.z));
+    float t = clamp(.5 + dot(uv - .5, dir) / max(.0001, abs(dir.x) + abs(dir.y)), 0., 1.);
+    return mix(profile.y, mix(profile.x, profile.y, t), profile.w);
+}
+#ifdef USE_MAP
+vec4 layerSampleArtwork(vec2 uv, float radius) {
+    vec4 color = vec4(0.); float alpha = 0.;
+    for (int i = 0; i < 16; i++) {
+        float a = float(i) * 2.39996323;
+        vec2 delta = vec2(cos(a), sin(a)) * sqrt((float(i) + .5) / 16.) * radius / layerAuthorSize;
+        vec2 p = uv + delta;
+        vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.)));
+        sampleColor.a *= step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
+        color.rgb += sampleColor.rgb * sampleColor.a;
+        alpha += sampleColor.a;
+    }
+    return vec4(color.rgb / max(alpha, .00001), alpha / 16.);
+}
+vec3 layerScreenMask(vec2 pixels) {
+    vec2 cell = pixels / max(.5, layerScreen.y);
+    vec2 f = fract(cell);
+    vec3 stripes = vec3(1.) * .12;
+    int channel = int(floor(f.x * 3.));
+    if (channel == 0) stripes.r = 1.; else if (channel == 1) stripes.g = 1.; else stripes.b = 1.;
+    if (layerScreen.x < 1.5) return stripes * smoothstep(0., .08, f.y) * (1. - smoothstep(.92, 1., f.y));
+    if (layerScreen.x < 2.5) {
+        vec2 stagger = vec2(fract(cell.x + mod(floor(cell.y), 2.) * .5), f.y);
+        float diamond = 1. - smoothstep(.35, .48, abs(stagger.x - .5) + abs(stagger.y - .5));
+        vec3 subpixel = mod(floor(cell.x) + floor(cell.y), 3.) < 1. ? vec3(1., .12, .12) : (mod(floor(cell.x) + floor(cell.y), 3.) < 2. ? vec3(.12, 1., .12) : vec3(.12, .12, 1.));
+        return subpixel * diamond;
+    }
+    if (layerScreen.x < 3.5) return stripes * (.35 + .65 * pow(sin(f.y * 3.14159265), 2.));
+    return vec3(1. - smoothstep(.3, .46, length(f - .5)));
+}
+#endif
 vec3 layerSampleScene(vec2 uv, float radius) {
     vec3 c = texture2D(layerScene, uv).rgb * .2;
     for (int i = 0; i < 12; i++) {
@@ -189,14 +394,42 @@ vec3 layerSampleScene(vec2 uv, float radius) {
     }
     return c;
 }
-` + shader.fragmentShader;
+${LAYER_STYLE_GLSL}
+`;
+    // Helpers must follow Three's map sampler declaration in GLSL.
+    shader.fragmentShader = shader.fragmentShader.includes('#include <map_pars_fragment>')
+        ? shader.fragmentShader.replace('#include <map_pars_fragment>', `#include <map_pars_fragment>\n${effectHeader}`)
+        : effectHeader + shader.fragmentShader;
     shader.fragmentShader = shader.fragmentShader.replace('#include <map_fragment>', `
 #ifdef USE_MAP
     vec2 layerUv = vMapUv;
     layerUv.x += sin(layerUv.y * layerWarp.y * 6.2831853) * layerWarp.x * .1;
     layerUv.y += sin(layerUv.x * layerWarp.y * 6.2831853) * layerWarp.x * .1;
+    vec2 localUv = (layerUv - layerContentCenter) * layerContentScale + .5;
+    float radius = layerBlurRadius(layerBlurProfile, localUv);
+    vec2 sampleUv = layerUv;
+    if (layerScreen.x > .5 && layerScreen.w > .5) {
+        vec2 cell = layerScreen.y / layerAuthorSize;
+        sampleUv = (floor(layerUv / cell) + .5) * cell;
+    }
+    sampleUv = layerStyleUv(sampleUv, localUv);
+    vec4 artwork = radius > .01 ? layerSampleArtwork(sampleUv, radius) : texture2D(map, sampleUv);
+    if (layerScreen.x > .5) {
+        vec2 pixels = (layerUv - .5) * layerAuthorSize;
+        if (layerScreenCamera.x > .001) artwork.rgb = mix(artwork.rgb, layerSampleArtwork(sampleUv, layerScreenCamera.x * layerScreen.y).rgb, layerScreenCamera.x);
+        vec3 maskColor = layerScreenMask(pixels);
+        float moire = sin(gl_FragCoord.x * 1.7 + pixels.y * .13) * sin(gl_FragCoord.y * 1.3 - pixels.x * .11);
+        maskColor *= 1. - layerScreenPattern.x * (.15 + .15 * moire);
+        float bands = .5 + .5 * sin(pixels.y / max(.5, layerScreen.y) * 3.14159265);
+        float refresh = .5 + .5 * sin((localUv.y - layerTime * layerScreenCamera.w) * 6.2831853);
+        artwork.rgb *= mix(vec3(1.), maskColor, layerScreen.z);
+        artwork.rgb *= (1. - layerScreenPattern.y * .3 * bands) * (1. - layerScreenCamera.z * .7 * refresh);
+        artwork.rgb *= 1. - layerScreenPattern.z * layerViewAngle * .7;
+        artwork.rgb += layerSampleArtwork(sampleUv, layerScreen.y * .5).rgb * layerScreenCamera.y * .25;
+    }
+    artwork = layerApplyStyles(artwork, sampleUv, localUv);
+    diffuseColor *= artwork;
 #endif
-${THREE.ShaderChunk.map_fragment.replaceAll('vMapUv', 'layerUv')}
 `);
     // Capture and source use the same output space, including the render-target's color space.
     shader.fragmentShader = shader.fragmentShader.replace('#include <colorspace_fragment>', `#include <colorspace_fragment>
@@ -205,12 +438,27 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     vec2 screenUv = gl_FragCoord.xy / layerResolution;
     vec2 refractOffset = vec2(0.);
     #ifdef USE_MAP
-    refractOffset = (vMapUv - .5) * layerRefraction * .08;
+    vec2 localUv = (vMapUv - layerContentCenter) * layerContentScale + .5;
+    refractOffset = (localUv - .5) * layerRefraction * .12;
     #endif
-    vec3 behind = layerSampleScene(screenUv + refractOffset * layerGlass,
-        max(layerBackdrop, layerGlass * layerRoughness * 30.));
+    float backdropRadius = layerBackdrop;
+    #ifdef USE_MAP
+    backdropRadius = layerBlurRadius(layerBackdropProfile, localUv) * layerPixelRatio;
+    #endif
+    float frost = max(backdropRadius, layerGlass * layerRoughness * 100. * layerPixelRatio);
+    vec3 behind = layerSampleScene(screenUv + refractOffset * layerGlass, frost);
+    if (layerGlass > .5 && layerDispersion > .001) {
+        behind.r = layerSampleScene(screenUv + refractOffset * (1. + layerDispersion), frost).r;
+        behind.b = layerSampleScene(screenUv + refractOffset * (1. - layerDispersion), frost).b;
+    }
     vec3 sourceColor = gl_FragColor.rgb;
-    if (layerGlass > .5) sourceColor = mix(sourceColor, behind * layerTint, .65);
+    if (layerGlass > .5) {
+        sourceColor = behind * layerTint;
+        #ifdef USE_MAP
+        float edge = pow(clamp(max(abs(localUv.x - .5), abs(localUv.y - .5)) * 2., 0., 1.), 12.);
+        sourceColor += vec3(layerShine * edge * .4);
+        #endif
+    }
     if (layerBlend == 1) sourceColor = min(sourceColor, behind);
     if (layerBlend == 2) sourceColor *= behind;
     if (layerBlend == 3) sourceColor = max(sourceColor, behind);
@@ -218,7 +466,8 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     if (layerBlend == 5) sourceColor = min(vec3(1.), sourceColor + behind);
     if (layerBlend == 6) sourceColor = abs(behind - sourceColor);
     // Resolve here so a translucent layer composites against the blurred backdrop.
-    gl_FragColor = vec4(mix(behind, sourceColor, gl_FragColor.a), 1.);
+    float coverage = clamp(gl_FragColor.a / max(opacity, .00001), 0., 1.);
+    gl_FragColor = vec4(mix(behind, sourceColor, opacity), coverage);
 }
 `);
 }

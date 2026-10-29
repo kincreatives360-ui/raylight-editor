@@ -1,8 +1,23 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo, applyMotionBlur } from './layerEffects';
+import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo, applyMotionBlur, createWarpGeometry } from './layerEffects';
 import { canvasPool } from '../../engine/canvasPool';
 
 describe('layer effect rendering', () => {
+  it('keeps inner shadows inside the surface rather than creating an outer halo', () => {
+    expect(drawLayerHalo({ width: 100, height: 100 } as HTMLCanvasElement, { dropShadow: { enabled: true, mode: 'inner', color: '#000000', opacity: 1, blur: .02, offsetX: 0, offsetY: 0 } }, 0, 0, 2048)).toBeNull();
+  });
+  it('tessellates curl geometry with finite normals and real depth', () => {
+    const geometry = createWarpGeometry(3.2, 2, 320, 200, { enabled: true, mode: 'curl', strength: .5, size: 183 });
+    expect(geometry.getAttribute('position').count).toBeGreaterThan(1000);
+    expect(geometry.boundingBox!.max.z).toBeGreaterThan(0);
+    expect(Array.from(geometry.getAttribute('normal').array).every(Number.isFinite)).toBe(true);
+    geometry.dispose();
+  });
+  it('declares the map sampler before helpers that sample it', () => {
+    const shader = { uniforms: {}, fragmentShader: '#include <map_pars_fragment>\nvoid main() {\n#include <map_fragment>\n#include <colorspace_fragment>\n}' } as unknown as Parameters<typeof installLayerEffects>[0];
+    installLayerEffects(shader, getLayerEffectUniforms({}, 'normal'));
+    expect(shader.fragmentShader.indexOf('#include <map_pars_fragment>')).toBeLessThan(shader.fragmentShader.indexOf('vec4 layerSampleArtwork'));
+  });
   let origDocument: unknown;
 
   beforeEach(() => {

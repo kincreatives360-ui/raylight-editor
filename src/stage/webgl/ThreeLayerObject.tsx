@@ -1,6 +1,6 @@
 import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
-import { useThree } from '@react-three/fiber';
+import { useThree, useFrame } from '@react-three/fiber';
 import { DeviceOpacityGroup } from './DeviceOpacityGroup';
 import { drawMediaFrame, getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';
 import { applyTextureMask, drawMediaShimmer } from './mediaDecorations';
@@ -19,7 +19,9 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
 import { MacBookProDeviceFrame } from './MacBookProDeviceFrame';
-import { applyBokehBlur, applyMotionBlur, applyLayerReveal, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
+import { applyBokehBlur, applyMotionBlur, applyLayerReveal, applyLayerSurfaceEffects, createWarpGeometry, updateWarpGeometry, drawLayerHalo, getLayerEffectUniforms, installLayerEffects } from './layerEffects';
+import { applyLayerAlphaEffects } from '../../engine/layerAlphaEffects';
+import { getBlurSettings } from '../../model/layerEffects';
 import { releaseCanvas } from '../../engine/canvasPool';
 
 interface ThreeLayerObjectProps {
@@ -212,7 +214,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const screenZoom = deviceFrameSettings?.screenZoom;
     const rot = evalLayer.rotation;
     const opacity = evalLayer.opacity ?? 1;
-    const totalBlurPx = Math.max(0, Math.round(((evalLayer.totalBlurPx ?? 0) - (evalLayer.dofBlurPx ?? 0)) * 2) / 2);
+    // Authored layer blur is sampled by the material; retain animation blur here.
+    const totalBlurPx = Math.max(0, Math.round(((evalLayer.totalBlurPx ?? 0) - (evalLayer.dofBlurPx ?? 0) - (layer.effects.layerBlur ?? 0) * 100) * 2) / 2);
+    const authoredW = Math.max(1, evalLayer.size.width * 1920), authoredH = Math.max(1, evalLayer.size.height * 1080);
     const dofBlurPx = evalLayer.dofBlurPx ?? 0;
     const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
     const cameraPose = evaluateCameraPose(evaluatedCamera, {
@@ -228,7 +232,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const { blurPadding, paddedCanvasW, paddedCanvasH, widthScale, heightScale } = getLayerBlurBleedLayout(
         canvasW,
         canvasH,
-        totalBlurPx,
+        totalBlurPx + Math.max(getBlurSettings(layer.effects, 'layerBlur').start, getBlurSettings(layer.effects, 'layerBlur').end) * canvasW / authoredW,
         dofBlurPx,
         evalLayer.motionBlur,
         Boolean(deviceFrameSettings)
@@ -253,9 +257,21 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         effectUniformsRef.current = effectUniforms;
     }, [effectUniforms]);
     const sceneCopy = useRef<THREE.FramebufferTexture | null>(null);
+    const surfaceMesh = useRef<THREE.Mesh>(null);
+    const viewVectors = useMemo(() => ({ normal: new THREE.Vector3(), direction: new THREE.Vector3() }), []);
     useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
-    const captureBackdrop = (renderer: THREE.WebGLRenderer) => {
+    const captureBackdrop = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
         const uniforms = effectUniformsRef.current;
+        uniforms.layerTime.value = Math.max(0, usePlayheadStore.getState().currentTimeMs - shotStartMs) / 1000;
+        if (surfaceMesh.current && uniforms.layerScreen.value.x > 0) {
+            viewVectors.normal.set(0, 0, 1).transformDirection(surfaceMesh.current.matrixWorld);
+            camera.getWorldDirection(viewVectors.direction);
+            uniforms.layerViewAngle.value = 1 - Math.abs(viewVectors.normal.dot(viewVectors.direction));
+        }
+        uniforms.layerAuthorSize.value.set(authoredW * widthScale, authoredH * heightScale);
+        uniforms.layerContentScale.value.set(widthScale, heightScale);
+        const profile = getBlurSettings(layer.effects, 'backdropBlur');
+        uniforms.layerBackdrop.value = Math.max(profile.start, profile.end);
         if (!uniforms.layerBlend.value && !uniforms.layerBackdrop.value && !uniforms.layerGlass.value) return;
         const target = renderer.getRenderTarget();
         const dimensions = target ? new THREE.Vector2(target.width, target.height) : renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -269,7 +285,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         renderer.copyFramebufferToTexture(sceneCopy.current);
         uniforms.layerScene.value = sceneCopy.current;
         uniforms.layerResolution.value.copy(dimensions);
-        uniforms.layerBackdrop.value = Math.max(0, layer.effects.backdropBlur ?? 0) * 100 * dimensions.x / 960;
+        uniforms.layerPixelRatio.value = dimensions.x / 1920;
     };
     const compileEffects = (shader: THREE.WebGLProgramParametersWithUniforms) => installLayerEffects(shader, effectUniformsRef.current);
 
@@ -282,8 +298,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         return false;
     }, [layer, project.assets]);
 
-    // Selective playhead subscription: Only video layers re-render on RAF ticks; static layers stay idle
-    const currentTimeMs = usePlayheadStore((s) => (isVideoAsset ? s.currentTimeMs : 0));
+    const animatedAlpha = Boolean(layer.effects.roughen?.enabled && layer.effects.roughen.speed);
+    // Only animated alpha masks and video need CPU texture updates during playback.
+    const currentTimeMs = usePlayheadStore((s) => (isVideoAsset || animatedAlpha ? s.currentTimeMs : 0));
+    const alphaTimeSeconds = animatedAlpha ? Math.max(0, currentTimeMs - shotStartMs) / 1000 : 0;
 
     const [loadedImageState, setLoadedImageState] = useState<{
         url: string;
@@ -549,6 +567,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
         applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
+        applyLayerAlphaEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
+        applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale);
 
         if (!textureRef.current) {
             const tex = new THREE.CanvasTexture(canvas);
@@ -561,6 +581,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         return textureRef.current;
     }, [
         layer,
+        authoredW, authoredH, widthScale, heightScale, alphaTimeSeconds,
         project,
         loadedImg,
         isVideoAsset,
@@ -593,12 +614,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const halo = useMemo(() => {
         if (!texture) return null;
-        const result = drawLayerHalo(texture.image as HTMLCanvasElement, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize);
+        const result = drawLayerHalo(texture.image as HTMLCanvasElement, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale);
         if (!result) return null;
         const haloTexture = new THREE.CanvasTexture(result.canvas);
         configureLayerTexture(haloTexture, gl.capabilities.getMaxAnisotropy());
         return { ...result, texture: haloTexture };
-    }, [texture, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl]);
+    // CanvasTexture identity stays stable while timed alpha edits change its pixels.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [texture, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl, authoredW, authoredH, widthScale, heightScale, alphaTimeSeconds]);
     useEffect(() => () => {
         halo?.texture.dispose();
         if (halo?.canvas) releaseCanvas(halo.canvas);
@@ -664,14 +687,17 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             if (blurPadding > 0) ctx.translate(blurPadding, blurPadding);
             applyTextureMask(ctx, canvasW, canvasH, layer, project);
             applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
+            applyLayerAlphaEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
+            applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale);
             if (halo) {
-                const updated = drawLayerHalo(canvas, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize);
+                const updated = drawLayerHalo(canvas, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale);
                 const haloCtx = halo.canvas.getContext('2d');
                 if (updated && haloCtx) {
                     haloCtx.clearRect(0, 0, halo.canvas.width, halo.canvas.height);
                     haloCtx.drawImage(updated.canvas, 0, 0);
                     markTextureUpdated(halo.texture);
                 }
+                if (updated) releaseCanvas(updated.canvas);
             }
             markTextureUpdated(texture);
             invalidate();
@@ -682,6 +708,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         return () => { for (const event of events) videoElement.removeEventListener(event, redraw); };
     }, [
         currentTimeMs,
+        authoredW, authoredH, widthScale, heightScale, alphaTimeSeconds,
         isVideoAsset,
         videoElement,
         texture,
@@ -727,6 +754,21 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         () => createNormalizedRoundedGeometry(meshW, meshH, cornerRadiusWorld),
         [meshW, meshH, cornerRadiusWorld]
     );
+    const warp = layer.effects.warp;
+    const warpedGeometry = useMemo(() => warp?.enabled && warp.mode ? createWarpGeometry(meshW * widthScale, meshH * heightScale, authoredW * widthScale, authoredH * heightScale, warp) : null,
+        [warp, meshW, meshH, widthScale, heightScale, authoredW, authoredH]);
+    const warpedHaloGeometry = useMemo(() => warp?.enabled && warp.mode && halo ? createWarpGeometry(meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, { width: authoredW * widthScale, height: authoredH * heightScale }) : null,
+        [warp, halo, meshW, meshH, widthScale, heightScale, authoredW, authoredH]);
+    const turbulenceFrame = useRef<{ time: number; geometry: THREE.PlaneGeometry } | null>(null);
+    useFrame(() => {
+        if (!warp?.enabled || warp.mode !== 'turbulent' || !warpedGeometry) return;
+        const time = Math.max(0, usePlayheadStore.getState().currentTimeMs - shotStartMs) / 1000;
+        if (turbulenceFrame.current?.time === time && turbulenceFrame.current.geometry === warpedGeometry) return;
+        updateWarpGeometry(warpedGeometry, meshW * widthScale, meshH * heightScale, authoredW * widthScale, authoredH * heightScale, warp, time);
+        if (warpedHaloGeometry && halo) updateWarpGeometry(warpedHaloGeometry, meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, time, { width: authoredW * widthScale, height: authoredH * heightScale });
+        turbulenceFrame.current = { time, geometry: warpedGeometry };
+    });
+    useEffect(() => () => { warpedGeometry?.dispose(); warpedHaloGeometry?.dispose(); }, [warpedGeometry, warpedHaloGeometry]);
 
     useEffect(() => {
         return () => {
@@ -744,11 +786,12 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const haloZ = deviceFrameMetrics ? SCREEN_PLANE_Z - deviceFrameMetrics.bodyDepth * 1.1 - 0.001 : SCREEN_PLANE_Z - 0.001;
 
     const contents = <>
-            {halo && <mesh position={[0, 0, haloZ]} renderOrder={layer.order * 2}>
-                <planeGeometry args={[meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale]} />
+            {halo && <mesh geometry={warpedHaloGeometry ?? undefined} position={[0, 0, haloZ]} renderOrder={layer.order * 2}>
+                {!warpedHaloGeometry && <planeGeometry args={[meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale]} />}
                 <meshBasicMaterial map={halo.texture} transparent opacity={renderOpacity} toneMapped={false} depthWrite={false} side={THREE.DoubleSide} />
             </mesh>}
             <mesh
+                ref={surfaceMesh}
                 onBeforeRender={captureBackdrop}
                 renderOrder={layer.order * 2 + 1}
                 // One shared screen plane: the artwork sits at SCREEN_PLANE_Z
@@ -758,11 +801,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 // occludes the screen edge at every tilt instead of the
                 // artwork floating over the chassis.
                 position={[0, 0, SCREEN_PLANE_Z]}
-                geometry={(blurPadding <= 0 && (layer.kind === 'image' || layer.kind === 'video') && !deviceFrameSettings) ? normalizedScreenGeometry ?? undefined : undefined}
+                geometry={warpedGeometry ?? ((blurPadding <= 0 && (layer.kind === 'image' || layer.kind === 'video') && !deviceFrameSettings) ? normalizedScreenGeometry ?? undefined : undefined)}
                 castShadow={receivesLight && (layer.kind === 'image' || layer.kind === 'video')}
                 receiveShadow={receivesLight}
             >
-                {(blurPadding > 0 || (layer.kind !== 'image' && layer.kind !== 'video') || Boolean(deviceFrameSettings)) && (
+                {!warpedGeometry && (blurPadding > 0 || (layer.kind !== 'image' && layer.kind !== 'video') || Boolean(deviceFrameSettings)) && (
                     <planeGeometry args={[meshW * widthScale, meshH * heightScale]} />
                 )}
                 {receivesLight ? (

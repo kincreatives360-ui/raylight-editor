@@ -15,6 +15,25 @@ const rig: LightRig = {
 };
 
 describe('lightingSystem', () => {
+  it('honors the Sun switch without disabling independent sources', () => {
+    const resolved = resolveLighting({ ...rig, keyLightEnabled: false });
+    expect(resolved.key.enabled).toBe(false);
+    expect(resolved.key.castShadow).toBe(false);
+    expect(resolved.fill.enabled).toBe(false);
+    expect(resolved.sources).toHaveLength(5);
+  });
+
+  it('allows both ambient illumination and environment reflections to reach zero', () => {
+    const resolved = resolveLighting({ ...rig, ambience: 0 });
+    expect(resolved.room.intensity).toBe(0);
+    expect(resolved.room.environmentIntensity).toBe(0);
+  });
+  it('uses the editable key light tint without tinting other sources', () => {
+    const original = resolveLighting(rig);
+    const tinted = resolveLighting({ ...rig, keyColor: '#ff0000' });
+    expect(tinted.key.color).toBe('#ff0000');
+    expect(tinted.sources).toEqual(original.sources);
+  });
   it('resolves one renderer-ready configuration for key, room, and every enabled source', () => {
     const resolved = resolveLighting(rig);
     expect(resolved.key.position).toEqual([1.5, 3, 5]);

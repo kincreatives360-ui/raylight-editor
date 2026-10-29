@@ -1,3 +1,4 @@
+import { GradientEditor } from './GradientEditor';
 import { ContextMenu, type ContextMenuItemDef } from '../ui/ContextMenu';
 
 import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
@@ -90,7 +91,6 @@ const StageComponent: React.FC<StageProps> = ({
         resetCanvasView,
         clearLayerSelection,
         gradientEditorActive,
-        gradientEditorAngle,
         gradientEditorLayerId,
         cameraBookmarks,
         setCameraBookmark,
@@ -444,12 +444,13 @@ const StageComponent: React.FC<StageProps> = ({
         : undefined;
     const showShapeGradientAngleControl = gradientEditorActive
         && gradientShapeLayer?.kind === 'shape'
+        && selectedLayerIds.includes(gradientShapeLayer.id)
         && gradientShapeLayer.fill.kind === 'gradient'
-        && !['radial', 'mesh'].includes(gradientShapeLayer.fill.gradientType ?? 'linear');
+        && !['mesh', 'diamond'].includes(gradientShapeLayer.fill.gradientType ?? 'linear');
     const showGradientAngleControl = showShapeGradientAngleControl || (gradientEditorActive
         && !gradientEditorLayerId
         && effectiveBackground.kind === 'gradient'
-        && effectiveBackground.gradientType !== 'radial');
+);
     const gradientShapeFrameLayer = gradientEditorLayerId
         ? frame.layers.find((layer) => layer.id === gradientEditorLayerId)
         : undefined;
@@ -459,85 +460,6 @@ const StageComponent: React.FC<StageProps> = ({
         focalLength: DEFAULT_FOCAL_LENGTH,
     };
     const gradientCameraPose = evaluateCameraPose(effectiveViewportFrame.camera, gradientReferenceCamera, targetAspect);
-    const gradientShapeCenter = gradientShapeFrameLayer
-        ? (() => {
-            const corners = getLayerProjectedCorners(gradientShapeFrameLayer, frameWidth, frameHeight, targetAspect, gradientCameraPose, gradientReferenceCamera.position.z ?? DEFAULT_CAMERA_Z, gradientReferenceCamera.focalLength ?? DEFAULT_FOCAL_LENGTH).corners;
-            return { x: corners.reduce((sum, point) => sum + point.x, 0) / corners.length, y: corners.reduce((sum, point) => sum + point.y, 0) / corners.length };
-        })()
-        : { x: frameWidth / 2, y: frameHeight / 2 };
-
-    const updateGradientAngleFromPointer = (event: React.PointerEvent<SVGGElement>) => {
-        event.stopPropagation();
-        const svgEl = event.currentTarget.ownerSVGElement;
-        if (!svgEl) return;
-        const rect = svgEl.getBoundingClientRect();
-        if (!rect.width || !rect.height) return;
-        const x = ((event.clientX - rect.left) / rect.width) * frameWidth - gradientShapeCenter.x;
-        const y = ((event.clientY - rect.top) / rect.height) * frameHeight - gradientShapeCenter.y;
-        if (Math.hypot(x, y) < 8) return;
-        const angle = Math.round((Math.atan2(x, -y) * 180 / Math.PI + 360) % 360);
-        setGradientEditorAngle(angle);
-
-        const halfLen = Math.hypot(frameWidth, frameHeight) / 2;
-        const rad = (angle * Math.PI) / 180;
-        const dx = Math.sin(rad) * halfLen;
-        const dy = -Math.cos(rad) * halfLen;
-        const cx = frameWidth / 2;
-        const cy = frameHeight / 2;
-        const handles = {
-            start: { x: (cx - dx) / frameWidth, y: (cy - dy) / frameHeight },
-            end: { x: (cx + dx) / frameWidth, y: (cy + dy) / frameHeight },
-        };
-
-        if (gradientEditorLayerId) {
-            updateLayer(frame.activeShot.id, gradientEditorLayerId, (layer) => layer.kind === 'shape' && layer.fill.kind === 'gradient'
-                ? { ...layer, fill: { ...layer.fill, angle } }
-                : layer);
-        } else {
-            const currentShot = frame.activeShot;
-            if (currentShot.useProjectBackground === false && currentShot.background?.kind === 'gradient') {
-                updateShot(currentShot.id, (s) => ({
-                    ...s,
-                    background: s.background?.kind === 'gradient'
-                        ? { ...s.background, angle, handles }
-                        : s.background,
-                }));
-            } else if (project.background.kind === 'gradient') {
-                updateProject((p) => ({
-                    ...p,
-                    background: p.background.kind === 'gradient'
-                        ? { ...p.background, angle, handles }
-                        : p.background,
-                }));
-            }
-        }
-    };
-
-    const handleGradientAnglePointerDown = (event: React.PointerEvent<SVGGElement>) => {
-        event.preventDefault();
-        beginDragTransaction();
-        updateGradientAngleFromPointer(event);
-        event.currentTarget.setPointerCapture(event.pointerId);
-    };
-
-    const handleGradientAnglePointerMove = (event: React.PointerEvent<SVGGElement>) => {
-        if (event.buttons === 1) updateGradientAngleFromPointer(event);
-    };
-
-    const handleGradientAnglePointerUp = (event: React.PointerEvent<SVGGElement>) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        commitDragTransaction();
-    };
-
-    const handleGradientAnglePointerCancel = (event: React.PointerEvent<SVGGElement>) => {
-        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-            event.currentTarget.releasePointerCapture(event.pointerId);
-        }
-        commitDragTransaction();
-    };
-
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -1365,42 +1287,24 @@ const StageComponent: React.FC<StageProps> = ({
                         />
                     </div>
 
-                    {showGradientAngleControl && (
-                        <svg
-                            aria-label="Drag to set gradient direction"
-                            className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none pointer-events-none"
-                            viewBox={`0 0 ${frameWidth} ${frameHeight}`}
-                        >
-                            {(() => {
-                                const radians = gradientEditorAngle * Math.PI / 180;
-                                const halfLength = Math.hypot(frameWidth, frameHeight) / 2;
-                                const dx = Math.sin(radians) * halfLength;
-                                const dy = -Math.cos(radians) * halfLength;
-                                const cx = gradientShapeCenter.x;
-                                const cy = gradientShapeCenter.y;
-                                const x1 = cx - dx;
-                                const y1 = cy - dy;
-                                const x2 = cx + dx;
-                                const y2 = cy + dy;
-                                return (
-                                    <g
-                                        className="pointer-events-auto"
-                                        onPointerDown={handleGradientAnglePointerDown}
-                                        onPointerMove={handleGradientAnglePointerMove}
-                                        onPointerUp={handleGradientAnglePointerUp}
-                                        onPointerCancel={handleGradientAnglePointerCancel}
-                                    >
-                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="transparent" strokeWidth="24" className="cursor-crosshair pointer-events-auto" />
-                                        <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="white" strokeWidth="1.5" className="pointer-events-none drop-shadow" />
-                                        <circle cx={x1} cy={y1} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
-                                        <circle cx={x2} cy={y2} r="7" fill="#0b0b0e" stroke="var(--accent-primary,#0088ff)" strokeWidth="2.5" className="cursor-crosshair pointer-events-auto" />
-                                        <text x={cx + 10} y={cy - 10} fill="white" fontSize="11" className="pointer-events-none" paintOrder="stroke" stroke="#111" strokeWidth="3">{Math.round(gradientEditorAngle)}°</text>
-                                    </g>
-                                );
-                            })()}
-                        </svg>
-                    )}
-
+                    {showShapeGradientAngleControl && gradientShapeLayer?.kind === 'shape' && gradientShapeLayer.fill.kind === 'gradient' && gradientShapeFrameLayer && <GradientEditor
+                        fill={gradientShapeLayer.fill}
+                        corners={getLayerProjectedCorners(gradientShapeFrameLayer, frameWidth, frameHeight, targetAspect, gradientCameraPose, gradientReferenceCamera.position.z ?? DEFAULT_CAMERA_Z, gradientReferenceCamera.focalLength ?? DEFAULT_FOCAL_LENGTH).corners}
+                        width={frameWidth} height={frameHeight}
+                        begin={beginDragTransaction} commit={commitDragTransaction}
+                        onChange={fill => { updateLayer(frame.activeShot.id, gradientShapeLayer.id, layer => layer.kind === 'shape' ? { ...layer, fill } : layer); setGradientEditorAngle(fill.angle); }}
+                    />}
+                    {showGradientAngleControl && !gradientEditorLayerId && effectiveBackground.kind === 'gradient' && <GradientEditor
+                        fill={effectiveBackground}
+                        corners={[{ x: 0, y: 0 }, { x: frameWidth, y: 0 }, { x: frameWidth, y: frameHeight }, { x: 0, y: frameHeight }]}
+                        width={frameWidth} height={frameHeight} begin={beginDragTransaction} commit={commitDragTransaction}
+                        onChange={fill => {
+                            const background = { ...effectiveBackground, ...fill, gradientType: fill.gradientType === 'radial' || fill.gradientType === 'angular' ? fill.gradientType : 'linear' as const };
+                            if (frame.activeShot.useProjectBackground === false) updateShot(frame.activeShot.id, shot => ({ ...shot, background }));
+                            else updateProject(p => ({ ...p, background }));
+                            setGradientEditorAngle(fill.angle);
+                        }}
+                    />}
                     {/* Drag & Drop Target Glow Overlay */}
                     {isDraggingOver && (
                         <div className="absolute inset-0 z-50 bg-[var(--accent-primary,#0088ff)]/15 border-2 border-dashed border-[var(--accent-primary,#0088ff)] rounded-xl flex flex-col items-center justify-center gap-2 backdrop-blur-[2px] pointer-events-none animate-pulse motion-reduce:animate-none">
@@ -1521,7 +1425,7 @@ const StageComponent: React.FC<StageProps> = ({
                         ...s,
                         layers: s.layers.map((l) => {
                             if (!idsToAlign.has(l.id) || l.locked) return l;
-                            const size = (l as any).size || { width: 300, height: 200 };
+                            const size = ('size' in l ? l.size : { width: 300, height: 200 });
                             const lw = ((size.width || 300) / 1920) * (l.scale?.x ?? 1);
                             const lh = ((size.height || 200) / 1080) * (l.scale?.y ?? 1);
                             const halfW = 0.5 * targetAspect;
@@ -1680,7 +1584,7 @@ const StageComponent: React.FC<StageProps> = ({
                                       label: 'Copy effects',
                                       icon: ClipboardCopy,
                                       shortcut: '⌥⌘C',
-                                      onClick: () => copyLayerEffects(contextMenuLayer.layerEffects),
+                                      onClick: () => copyLayerEffects(contextMenuLayer.effects),
                                   },
                                   {
                                       id: 'paste-effects',
@@ -1693,7 +1597,7 @@ const StageComponent: React.FC<StageProps> = ({
                                           if (eff) {
                                               updateLayer(frame.activeShot.id, contextMenuLayer.id, (l) => ({
                                                   ...l,
-                                                  layerEffects: eff,
+                                                  effects: eff,
                                               }));
                                           }
                                       },

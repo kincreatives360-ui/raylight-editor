@@ -1,3 +1,4 @@
+import { mergeGradient } from '../../../stage/gradientGeometry';
 import { InspectorRow } from '../../../ui/primitives';
 import { SegmentedControl, Switch } from '../../../ui/primitives';
 import { IconButton } from '../../../ui/primitives';
@@ -139,7 +140,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     <div className="object-design-color-row"><ColorPicker
                         color={fillColor}
                         gradientValue={layer.fill.kind === 'gradient' ? { angle: layer.fill.angle, stops: layer.fill.stops, gradientType: layer.fill.gradientType, mesh: layer.fill.mesh } : undefined}
-                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: { kind: 'gradient', angle: gradient.angle, stops: gradient.stops, gradientType: gradient.gradientType, mesh: gradient.mesh } } : l)}
+                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: mergeGradient(l.fill.kind === 'gradient' ? l.fill : undefined, gradient) } : l)}
                         onEnterGradient={() => useSelectionStore.getState().setGradientEditor(true, layer.fill.kind === 'gradient' ? layer.fill.angle : 0, layer.id)}
                         onExitGradient={() => useSelectionStore.getState().setGradientEditor(false)}
                         onChange={(newColor) =>

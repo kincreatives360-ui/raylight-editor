@@ -1,4 +1,4 @@
-import React from 'react';
+
 import { describe, expect, it, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { SelectionOverlay } from './SelectionOverlay';
@@ -6,7 +6,7 @@ import { createDefaultProject, createDefaultShapeLayer } from '../model/defaults
 import { evaluateProjectAtTime } from '../engine/evaluateShot';
 
 describe('SelectionOverlay Onscreen Gradient Handles', () => {
-    it('renders onscreen gradient handles for gradient-filled shape layers', () => {
+    it('does not render a second gradient editor merely because a gradient shape is selected', () => {
         const shape = createDefaultShapeLayer({
             id: 'shape-grad-1',
             name: 'Gradient Rect',
@@ -37,8 +37,8 @@ describe('SelectionOverlay Onscreen Gradient Handles', () => {
             />
         );
 
-        expect(html).toContain('data-gradient-handles="true"');
-        expect(html).toContain('Drag to adjust gradient start position / angle');
-        expect(html).toContain('Drag to adjust gradient end position / angle');
+        expect(html).not.toContain('data-gradient-handles="true"');
+        expect(html).not.toContain('Drag to adjust gradient start position / angle');
+        expect(html).not.toContain('Drag to adjust gradient end position / angle');
     });
 });

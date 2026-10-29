@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Layer effect render verification</title>
+<style>body{background:#111318;color:#e4e4e7;font:14px system-ui;margin:28px}h1{font-size:22px}#gallery{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:16px}figure{margin:0;background:#1b1e26;padding:10px;border-radius:8px}img{width:100%;display:block}figcaption{padding:8px 0 0}li{line-height:1.6}.fail{color:#ff8999}.pass{color:#86e4bc}</style></head>
+<body><h1>Layer effect render verification</h1><p id="status">Ready to verify production effects.</p><button id="run">Run render checks</button><div id="gallery"></div><details><summary>Parameter checks</summary><ul id="checks"></ul></details>
+<script type="module">
+import * as THREE from 'three';
+import { addLayerEffect } from '/src/model/layerEffects.ts';
+import { applyLayerSurfaceEffects, createWarpGeometry, updateWarpGeometry, drawLayerHalo, getLayerEffectUniforms, installLayerEffects, compositeLayerEffectSurface } from '/src/stage/webgl/layerEffects.ts';
+import { applyLayerAlphaEffects } from '/src/engine/layerAlphaEffects.ts';
+import { releaseCanvas } from '/src/engine/canvasPool.ts';
+
+const renderer = new THREE.WebGLRenderer({ antialias: true, preserveDrawingBuffer: true, alpha: false });
+renderer.setSize(512, 320); renderer.setPixelRatio(1); renderer.outputColorSpace = THREE.SRGBColorSpace;
+const camera = new THREE.OrthographicCamera(-2.56, 2.56, 1.6, -1.6, .1, 100); camera.position.z = 10;
+const background = document.createElement('canvas'); background.width = 512; background.height = 320;
+const bg = background.getContext('2d');
+for(let y=0;y<320;y+=20)for(let x=0;x<512;x+=20){bg.fillStyle=(x/20+y/20)%2?'#18243f':'#ab4565';bg.fillRect(x,y,20,20);}
+const bgTexture = new THREE.CanvasTexture(background); bgTexture.colorSpace = THREE.SRGBColorSpace;
+const artwork = document.createElement('canvas'); artwork.width = 640; artwork.height = 400;
+const ink = artwork.getContext('2d'); const gradient = ink.createLinearGradient(0,0,640,400);
+gradient.addColorStop(0,'#ed9872');gradient.addColorStop(.5,'#518bc4');gradient.addColorStop(1,'#562f79');
+ink.fillStyle=gradient;ink.beginPath();ink.roundRect(16,16,608,368,24);ink.fill();
+ink.fillStyle='#ffffff';ink.font='bold 48px system-ui';ink.fillText('Raylight',90,210);
+let failures=0, checks=0;
+const errors=[];
+renderer.debug.onShaderError=(_gl,_program,_vs,fs)=>{errors.push(_gl.getShaderInfoLog(fs));};
+
+function render(effects,time=.4) {
+    const scene=new THREE.Scene();
+    const floor=new THREE.Mesh(new THREE.PlaneGeometry(5.12,3.2),new THREE.MeshBasicMaterial({map:bgTexture,toneMapped:false}));floor.position.z=-2;floor.renderOrder=0;scene.add(floor);
+    const source=document.createElement('canvas');source.width=640;source.height=400;source.getContext('2d').drawImage(artwork,0,0);
+    applyLayerAlphaEffects(source,effects,320,200,time);
+    applyLayerSurfaceEffects(source,effects,320,200);
+    const texture=new THREE.CanvasTexture(source);texture.colorSpace=THREE.SRGBColorSpace;
+    const uniforms=getLayerEffectUniforms(effects,'normal');
+    uniforms.layerAuthorSize.value.set(320,200);uniforms.layerResolution.value.set(512,320);uniforms.layerPixelRatio.value=512/1920;
+    uniforms.layerTime.value=time;uniforms.layerViewAngle.value=.35;
+    const profile=effects.backdropBlurSettings;
+    uniforms.layerBackdrop.value=profile?.mode==='progressive'?Math.max(profile.start,profile.end):(effects.backdropBlur??0)*100;
+    const material=new THREE.MeshBasicMaterial({map:texture,transparent:true,toneMapped:false,side:THREE.DoubleSide,opacity:effects.backdropBlur!==undefined?.45:1});
+    material.onBeforeCompile=shader=>installLayerEffects(shader,uniforms);
+    const geometry=effects.warp?.enabled&&effects.warp.mode?createWarpGeometry(3.2,2,320,200,effects.warp):new THREE.PlaneGeometry(3.2,2);
+    if(effects.warp?.mode==='turbulent')updateWarpGeometry(geometry,3.2,2,320,200,effects.warp,time);
+    const mesh=new THREE.Mesh(geometry,material);mesh.renderOrder=2;
+    const sceneCopy=new THREE.FramebufferTexture(512,320);
+    mesh.onBeforeRender=()=>{if(uniforms.layerBackdrop.value>0||uniforms.layerGlass.value){renderer.copyFramebufferToTexture(sceneCopy);uniforms.layerScene.value=sceneCopy;}};
+    scene.add(mesh);
+    const halo=drawLayerHalo(source,effects,0,0,2048,320,200);
+    if(halo){const t=new THREE.CanvasTexture(halo.canvas);t.colorSpace=THREE.SRGBColorSpace;const g=effects.warp?.enabled&&effects.warp.mode?createWarpGeometry(3.2*halo.widthScale,2*halo.heightScale,320*halo.widthScale,200*halo.heightScale,effects.warp):new THREE.PlaneGeometry(3.2*halo.widthScale,2*halo.heightScale);const m=new THREE.Mesh(g,new THREE.MeshBasicMaterial({map:t,transparent:true,toneMapped:false,depthWrite:false}));m.position.z=-.01;m.renderOrder=1;scene.add(m);}
+    renderer.render(scene,camera);
+    const canvas=document.createElement('canvas');canvas.width=512;canvas.height=320;const ctx=canvas.getContext('2d');ctx.drawImage(renderer.domElement,0,0);
+    const data=ctx.getImageData(0,0,512,320).data;let hash=2166136261;for(let i=0;i<data.length;i++){hash=Math.imul(hash^data[i],16777619);}
+    const url=canvas.toDataURL();
+    scene.traverse(obj=>{if(obj.isMesh){obj.geometry.dispose();obj.material.map?.dispose();obj.material.dispose();}});
+    // Background is shared across cases; Three reuploads its canvas after disposal.
+    texture.dispose();sceneCopy.dispose();if(halo)releaseCanvas(halo.canvas);
+    return {hash,url};
+}
+function check(label,base,changed){checks++;const a=render(base),b=render(changed);const ok=a.hash!==b.hash;failures+=!ok;const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=`${ok?'PASS':'FAIL'} — ${label}`;document.querySelector('#checks').append(li);}
+function fallbackHash(effects){
+ const output=compositeLayerEffectSurface(artwork,background,effects,{opacity:1,time:.4,centerX:.5,centerY:.5,width:1,height:1,viewAngle:.35});
+ if(!output)throw new Error('Export effect compositor could not create a WebGL context');
+ const canvas=document.createElement('canvas');canvas.width=output.width;canvas.height=output.height;const ctx=canvas.getContext('2d');ctx.drawImage(output,0,0);
+ const data=ctx.getImageData(0,0,canvas.width,canvas.height).data;let hash=2166136261;for(let i=0;i<data.length;i++)hash=Math.imul(hash^data[i],16777619);return hash;
+}
+function show(label,effects){const {url}=render(effects);const fig=document.createElement('figure');const img=new Image();img.src=url;const caption=document.createElement('figcaption');caption.textContent=label;fig.append(img,caption);document.querySelector('#gallery').append(fig);}
+const defaults=key=>addLayerEffect({},key);
+const mutate=(base,key,field,value)=>({...base,[key]:{...base[key],[field]:value}});
+document.querySelector('#run').onclick=async()=>{
+document.querySelector('#run').disabled=true;
+document.querySelector('#status').textContent='Checking production effect parameters…';
+await new Promise(requestAnimationFrame);
+for(const key of ['dropShadow','glow','liquidGlass','warp','screen']){
+ const base=defaults(key);
+ const fields={dropShadow:{mode:'inner',blur:.05,spread:20,offsetX:.03,offsetY:-.03,opacity:.7,color:'#55ff88'},glow:{mode:'fill',radius:.02,intensity:.8,angle:0,sheen:0,rim:.2,depth:20,blend:'add',color:'#ff4488'},liquidGlass:{roughness:.8,refraction:.9,dispersion:1,shine:0,tint:'#88aaff'},warp:{strength:1,size:100,centerX:60,centerY:60},screen:{mode:'oled',pixelSize:20,grid:.3,moire:0,bands:0,focus:.8,glow:0,offAxis:0,snapToPixels:false}}[key];
+ for(const [field,value]of Object.entries(fields))check(`${key}.${field}`,base,mutate(base,key,field,value));
+ await new Promise(requestAnimationFrame);
+}
+for(const key of ['outline','colorCorrection','noise','bevel','halftone','roughen','colorKey','pixelate']){
+ let base=defaults(key);
+ if(key==='colorKey')base=mutate(base,key,'color','#518bc4');
+ const fields={outline:{width:15,placement:'inside',color:'#ff9955',opacity:.4,softness:8},colorCorrection:{exposure:1,contrast:1.5,saturation:0,temperature:1,tint:1,blackPoint:.1,whitePoint:.7,gamma:1.5,curveShadows:.2,curveMidtones:.2,curveHighlights:-.2},noise:{amount:.7,scale:6,monochrome:false,density:.2,seed:20,animated:true},bevel:{thickness:20,depth:-20,angle:0,highlightColor:'#ff2222',shadowColor:'#2222ff',intensity:.1},halftone:{dotSize:12,spacing:16,angle:0,shape:'square',foreground:'#0043ff',background:'#ffaaaa',sourceColor:true,invert:true},roughen:{border:25,scale:50,sharpness:.9,amount:.2,seed:20,evolution:90,speed:60},colorKey:{color:'#ed9872',similarity:.05,softness:.8,spill:0,invert:true},pixelate:{blockSize:32,aspect:2,mode:'progressive'}}[key];
+ for(const[field,value]of Object.entries(fields))check(`${key}.${field}`,base,mutate(base,key,field,value));
+ show(key,base);
+ if(key==='noise'){const animated=mutate(base,key,'animated',true);check('Noise speed',animated,mutate(animated,key,'speed',3));}
+ if(key==='pixelate'){const progressive=mutate(base,key,'mode','progressive');for(const[field,value]of Object.entries({start:20,end:60,angle:180}))check(`Pixelate progressive ${field}`,progressive,mutate(progressive,key,field,value));}
+ await new Promise(requestAnimationFrame);
+}
+const longShadow=mutate(defaults('dropShadow'),'dropShadow','mode','long');
+for(const[field,value]of Object.entries({length:60,angle:90,fade:.8}))check(`Long shadow ${field}`,longShadow,mutate(longShadow,'dropShadow',field,value));
+show('Long shadow',longShadow);
+const turbulence=mutate(defaults('warp'),'warp','mode','turbulent');
+const turbulent={...turbulence,warp:{...turbulence.warp,amount:30,size:100,speed:60}};
+for(const[field,value]of Object.entries({amount:60,size:50,complexity:5,seed:20,pinning:'all',evolution:90,loop:true,speed:120}))check(`Turbulent Wrap ${field}`,turbulent,mutate(turbulent,'warp',field,value));
+const loop=mutate(turbulent,'warp','loop',true);check('Turbulent loop duration',loop,mutate(loop,'warp','loopDuration',8));show('Turbulent Wrap',turbulent);
+await new Promise(requestAnimationFrame);
+const printed=defaults('halftone');
+check('Color correction remains active with halftone',printed,{...printed,colorCorrection:{...defaults('colorCorrection').colorCorrection,exposure:-2}});
+const display=defaults('screen');
+check('Pixelate remains active with Screen snap',display,{...display,pixelate:{...defaults('pixelate').pixelate,blockSize:50}});
+for(const[key,field,value]of [['colorCorrection','exposure',1],['noise','amount',.8],['bevel','depth',-20],['halftone','angle',0],['pixelate','blockSize',64]]){
+ const base=defaults(key),changed=mutate(base,key,field,value);checks++;const ok=fallbackHash(base)!==fallbackHash(changed);failures+=!ok;const li=document.createElement('li');li.className=ok?'pass':'fail';li.textContent=`${ok?'PASS':'FAIL'} — Export compositor ${key}.${field}`;document.querySelector('#checks').append(li);
+ await new Promise(requestAnimationFrame);
+}
+for(const key of ['layerBlur','backdropBlur']){
+ const uniform=defaults(key);check(`${key} uniform radius`,uniform,{[key]:.7});
+ const base={...uniform,[`${key}Settings`]:{mode:'progressive',start:0,end:50,angle:270}};
+ show(`${key} · progressive`,base);
+ for(const[field,value]of Object.entries({start:35,end:90,angle:0}))check(`${key} progressive ${field}`,base,{...base,[`${key}Settings`]:{...base[`${key}Settings`],[field]:value}});
+}
+for(const mode of ['bulge','ripple','bend','curl']){
+ const base=mutate(defaults('warp'),'warp','mode',mode);show(`Wrap · ${mode}`,base);
+ if(mode==='ripple'){for(const[field,value]of Object.entries({width:20,travel:.9}))check(`Ripple ${field}`,base,mutate(base,'warp',field,value));}
+ if(mode==='bend'||mode==='curl')check(`${mode} angle`,base,mutate(base,'warp','angle',90));
+}
+for(const mode of ['lcd','oled','crt','led'])show(`Screen · ${mode.toUpperCase()}`,mutate(defaults('screen'),'screen','mode',mode));
+for(const mode of ['drop','inner'])show(`Shadow · ${mode}`,mutate(defaults('dropShadow'),'dropShadow','mode',mode));
+for(const mode of ['edge','fill'])show(`Glow · ${mode}`,mutate(defaults('glow'),'glow','mode',mode));
+show('Liquid glass',defaults('liquidGlass'));
+const flicker=mutate(defaults('screen'),'screen','flicker',.8);
+check('Screen flicker',defaults('screen'),flicker);check('Screen refresh speed',flicker,mutate(flicker,'screen','speed',2));
+if(errors.length){failures+=errors.length;const pre=document.createElement('pre');pre.textContent=errors.join('\n');document.body.append(pre);}
+document.querySelector('#status').textContent=`${checks-failures}/${checks} parameter render checks passed. ${errors.length} shader errors.`;
+document.querySelector('#status').className=failures?'fail':'pass';
+renderer.dispose();
+};
+</script></body></html>

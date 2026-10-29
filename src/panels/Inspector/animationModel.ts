@@ -77,7 +77,7 @@ export function editPreset(layer: Layer, side: PresetSide, index: number, expect
 export interface PresetPropertyMapping {
     preset: TransitionType;
     primaryProperty: AnimationBlockProperty;
-    defaultAmount: (side: PresetSide) => any;
+    defaultAmount: (side: PresetSide) => AnimationBlock['amount'];
 }
 
 export const PRESET_PROPERTY_MAPPINGS: Record<TransitionType, PresetPropertyMapping> = {
