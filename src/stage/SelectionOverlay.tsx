@@ -865,6 +865,97 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                         )}
                     </g>
                 )}
+
+                {/* ONSCREEN GRADIENT INTERACTIVE HANDLES (Figma / Raylight Parity) */}
+                {!isLocked && !isCropping && primaryEval.layer.kind === 'shape' && primaryEval.layer.fill.kind === 'gradient' && (() => {
+                    const fill = primaryEval.layer.fill;
+                    const cx = primaryProj.pCenter.x;
+                    const cy = primaryProj.pCenter.y;
+                    const halfDiag = Math.hypot(primaryProj.pSE.x - primaryProj.pNW.x, primaryProj.pSE.y - primaryProj.pNW.y) * 0.35;
+                    const rad = (((fill.angle ?? 90) - 90) * Math.PI) / 180;
+                    const startX = cx - Math.cos(rad) * halfDiag;
+                    const startY = cy - Math.sin(rad) * halfDiag;
+                    const endX = cx + Math.cos(rad) * halfDiag;
+                    const endY = cy + Math.sin(rad) * halfDiag;
+                    const startColor = fill.stops[0]?.color || '#ffffff';
+                    const endColor = fill.stops[fill.stops.length - 1]?.color || '#000000';
+
+                    const handleStartDragGradientEnd = (event: React.PointerEvent) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        const targetLayerId = primaryEval.layer.id;
+                        const handlePointerMove = (moveEv: PointerEvent) => {
+                            const newAngle = Math.round(((Math.atan2(moveEv.clientY - cy, moveEv.clientX - cx) * 180) / Math.PI + 90) % 360);
+                            const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
+                            updateLayer(activeShot.id, targetLayerId, (l) =>
+                                l.kind === 'shape' && l.fill.kind === 'gradient'
+                                    ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
+                                    : l
+                            );
+                        };
+                        const handlePointerUp = () => {
+                            window.removeEventListener('pointermove', handlePointerMove);
+                            window.removeEventListener('pointerup', handlePointerUp);
+                        };
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                    };
+
+                    const handleStartDragGradientStart = (event: React.PointerEvent) => {
+                        event.stopPropagation();
+                        event.preventDefault();
+                        const targetLayerId = primaryEval.layer.id;
+                        const handlePointerMove = (moveEv: PointerEvent) => {
+                            const newAngle = Math.round(((Math.atan2(cy - moveEv.clientY, cx - moveEv.clientX) * 180) / Math.PI + 90) % 360);
+                            const positiveAngle = newAngle < 0 ? newAngle + 360 : newAngle;
+                            updateLayer(activeShot.id, targetLayerId, (l) =>
+                                l.kind === 'shape' && l.fill.kind === 'gradient'
+                                    ? { ...l, fill: { ...l.fill, angle: positiveAngle } }
+                                    : l
+                            );
+                        };
+                        const handlePointerUp = () => {
+                            window.removeEventListener('pointermove', handlePointerMove);
+                            window.removeEventListener('pointerup', handlePointerUp);
+                        };
+                        window.addEventListener('pointermove', handlePointerMove);
+                        window.addEventListener('pointerup', handlePointerUp);
+                    };
+
+                    return (
+                        <g data-gradient-handles="true" className="pointer-events-auto">
+                            {/* Connecting dashed vector line */}
+                            <line
+                                x1={startX}
+                                y1={startY}
+                                x2={endX}
+                                y2={endY}
+                                stroke="rgba(255,255,255,0.85)"
+                                strokeWidth="1.5"
+                                strokeDasharray="3 3"
+                                className="pointer-events-none drop-shadow-md"
+                            />
+                            {/* Start handle circle */}
+                            <g
+                                transform={`translate(${startX}, ${startY})`}
+                                onPointerDown={handleStartDragGradientStart}
+                                className="cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
+                                title="Drag to adjust gradient start position / angle"
+                            >
+                                <circle r="6.5" fill={startColor} stroke="#ffffff" strokeWidth="2.5" className="drop-shadow-lg" />
+                            </g>
+                            {/* End handle circle */}
+                            <g
+                                transform={`translate(${endX}, ${endY})`}
+                                onPointerDown={handleStartDragGradientEnd}
+                                className="cursor-grab active:cursor-grabbing hover:scale-125 transition-transform"
+                                title="Drag to adjust gradient end position / angle"
+                            >
+                                <circle r="6.5" fill={endColor} stroke="#ffffff" strokeWidth="2.5" className="drop-shadow-lg" />
+                            </g>
+                        </g>
+                    );
+                })()}
             </svg>
 
             {/* TOP 2D ROTATION LOLLIPOP KNOB & PERIMETER 3D TILT BADGE */}

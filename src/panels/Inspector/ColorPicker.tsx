@@ -637,6 +637,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                                 const raw = event.currentTarget.dataset.dragStop;
                                 if (raw === undefined || (event.buttons & 1) === 0) return;
                                 const bounds = event.currentTarget.getBoundingClientRect();
+                                const dy = Math.abs(event.clientY - (bounds.top + bounds.height / 2));
+                                if (dy > 24 && gradient.stops.length > 2) {
+                                    // Vertical tear-off deletion (Figma / Raylight parity)
+                                    const idx = Number(raw);
+                                    updateGradient({
+                                        ...gradient,
+                                        stops: gradient.stops.filter((_, i) => i !== idx),
+                                    });
+                                    delete (event.currentTarget as SVGSVGElement).dataset.dragStop;
+                                    return;
+                                }
                                 const padPx = (12 / 300) * bounds.width;
                                 const usableWidth = bounds.width - padPx * 2;
                                 const at = usableWidth > 0

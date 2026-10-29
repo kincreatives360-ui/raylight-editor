@@ -106,6 +106,11 @@ export type Fill =
     stops: GradientStop[];
     gradientType?: 'linear' | 'radial' | 'angular' | 'diamond' | 'mesh';
     mesh?: MeshGradientPoint[];
+    handles?: {
+      start: { x: number; y: number };
+      end: { x: number; y: number };
+      width?: number;
+    };
   };
 
 import type { ShaderPreset } from './backgroundPresets';
