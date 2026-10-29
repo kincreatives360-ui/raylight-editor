@@ -11,6 +11,7 @@ import {
     detectMatchingPreset,
     LENS_PRESETS,
     focalLengthToFov,
+    computeLogarithmicDolly,
     type FramableLayer,
 } from './cameraMath';
 import type { CameraBlock } from '../../model/types';
@@ -496,6 +497,18 @@ describe('Unified Camera Presets & Framing System', () => {
             expect(getMovementPresetIdByLabel(undefined)).toBeUndefined();
             expect(getMovementPresetIdByLabel('')).toBeUndefined();
             expect(getMovementPresetIdByLabel('Custom Camera Move')).toBeUndefined();
+        });
+
+        it('computes logarithmic dolly zoom with smoothstep interpolation', () => {
+            // t = 0 -> start distance
+            expect(computeLogarithmicDolly(1.0, 4.0, 0)).toBeCloseTo(1.0, 4);
+            // t = 1 -> end distance
+            expect(computeLogarithmicDolly(1.0, 4.0, 1)).toBeCloseTo(4.0, 4);
+            // t = 0.5 -> geometric mean midpoint 2.0
+            expect(computeLogarithmicDolly(1.0, 4.0, 0.5)).toBeCloseTo(2.0, 4);
+            // clamped t bounds
+            expect(computeLogarithmicDolly(1.0, 4.0, -1)).toBeCloseTo(1.0, 4);
+            expect(computeLogarithmicDolly(1.0, 4.0, 2)).toBeCloseTo(4.0, 4);
         });
     });
 });
