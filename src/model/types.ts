@@ -767,10 +767,14 @@ export interface SceneEffects {
     enabled: boolean;
     intensity: number;
     threshold: number;
+    radius?: number;
+    softness?: number;
   };
   vignette: {
     enabled: boolean;
     intensity: number;
+    midpoint?: number;
+    roundness?: number;
   };
   motionBlur: {
     enabled: boolean;
@@ -780,17 +784,22 @@ export interface SceneEffects {
   chromaticAberration: {
     enabled: boolean;
     offset: number;
+    verticalOffset?: number;
+    edgeStrength?: number;
   };
   filmGrain: {
     enabled: boolean;
     intensity: number;
     size: number;
+    softness?: number;
   };
   ghost: {
     enabled: boolean;
     opacity: number;
     offset: number;
     blur: number;
+    angle?: number;
+    spread?: number;
   };
   colorGrade: {
     enabled: boolean;
@@ -799,6 +808,8 @@ export interface SceneEffects {
     saturation: number;
     temperature?: number;
     tint?: number;
+    highlights?: number;
+    shadows?: number;
   };
   edgeFade: {
     enabled: boolean;
@@ -806,10 +817,13 @@ export interface SceneEffects {
     bottom: number;
     left?: number;
     right?: number;
+    softness?: number;
   };
   glitch: {
     enabled: boolean;
     intensity: number;
+    bandSize?: number;
+    colorShift?: number;
   };
 }
 

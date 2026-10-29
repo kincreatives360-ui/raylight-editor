@@ -39,16 +39,16 @@ const EFFECT_NAMES: Record<EffectKey, string> = {
 };
 
 const EFFECT_DEFAULTS: Record<EffectKey, Record<string, number>> = {
-  bloom: { intensity: 0.35, threshold: 0.75 },
-  vignette: { intensity: 0.42 },
+  bloom: { intensity: 0.35, threshold: 0.75, radius: 1, softness: 0.5 },
+  vignette: { intensity: 0.42, midpoint: 0.5, roundness: 1 },
   motionBlur: { shutterAngle: 180, samples: 8 },
-  chromaticAberration: { offset: 0.002 },
-  filmGrain: { intensity: 0.025, size: 1.2 },
-  ghost: { opacity: 0.25, offset: 0.02, blur: 4 },
-  colorGrade: { exposure: 1.0, contrast: 1.0, saturation: 1.0, temperature: 0, tint: 0 },
-  edgeFade: { top: 0.1, bottom: 0.1, left: 0, right: 0 },
-  glitch: { intensity: 0.15 },
-  depthOfField: { aperture: 2.8, focusRange: 0.35, bokehScale: 4.5, focalLength: 50 },
+  chromaticAberration: { offset: 0.002, verticalOffset: 0, edgeStrength: 1 },
+  filmGrain: { intensity: 0.025, size: 1.2, softness: 0 },
+  ghost: { opacity: 0.25, offset: 0.02, blur: 4, angle: 0, spread: 1 },
+  colorGrade: { exposure: 1.0, contrast: 1.0, saturation: 1.0, temperature: 0, tint: 0, highlights: 0, shadows: 0 },
+  edgeFade: { top: 0.1, bottom: 0.1, left: 0, right: 0, softness: 1 },
+  glitch: { intensity: 0.15, bandSize: 50, colorShift: 0.5 },
+  depthOfField: { aperture: 2.8, focusRange: 0.35, bokehScale: 4.5, focalLength: 50, highlightThreshold: 0.8, highlightIntensity: 0 },
 };
 
 function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: EffectKey; className?: string }) {
@@ -289,9 +289,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                         .map(([field, rawVal]) => {
                           const normalizedPixels =
                             (key === 'chromaticAberration' && field === 'offset') ||
+                            (key === 'chromaticAberration' && field === 'verticalOffset') ||
                             (key === 'ghost' && field === 'offset');
                           const scale = normalizedPixels ? 1920 : key === 'ghost' && field === 'blur' ? 2 : 1;
-                          const signed = ['exposure', 'temperature', 'tint'].includes(field);
+                          const signed = ['exposure', 'temperature', 'tint', 'highlights', 'shadows', 'verticalOffset', 'angle'].includes(field) || (key === 'ghost' && field === 'offset');
                           const max =
                             field === 'aperture'
                               ? 32
@@ -301,14 +302,32 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                               ? 32
                               : field === 'shutterAngle'
                               ? 360
+                              : field === 'angle'
+                              ? 180
+                              : field === 'bandSize'
+                              ? 200
+                              : field === 'colorShift'
+                              ? 2
+                              : field === 'threshold'
+                              ? 4
+                              : field === 'intensity'
+                              ? key === 'bloom' ? 4 : 1
+                              : field === 'roundness'
+                              ? 2
+                              : field === 'midpoint'
+                              ? 1
+                              : field === 'highlights' || field === 'shadows'
+                              ? 1
                               : normalizedPixels
                               ? 100
-                              : ['contrast', 'saturation', 'exposure', 'intensity', 'bokehScale'].includes(field)
+                              : ['contrast', 'saturation', 'exposure', 'bokehScale', 'radius', 'roundness', 'edgeStrength', 'spread'].includes(field)
                               ? 4
+                              : ['softness'].includes(field)
+                              ? key === 'edgeFade' ? 4 : 1
                               : field === 'focusRange'
                               ? 20
                               : field === 'size'
-                              ? 10
+                              ? 32
                               : 1;
 
                           return (
@@ -316,10 +335,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                               key={field}
                               label={label(field)}
                               value={Number(rawVal) * scale}
-                              min={signed ? -4 : field === 'aperture' ? 0.1 : 0}
+                              min={signed ? (field === 'angle' ? -180 : normalizedPixels ? -100 : -4) : field === 'aperture' ? 0.1 : field === 'bandSize' ? 2 : field === 'size' ? 0.1 : 0}
                               max={max}
                               step={
-                                normalizedPixels || field === 'samples' || field === 'shutterAngle'
+                                normalizedPixels || field === 'samples' || field === 'shutterAngle' || field === 'angle' || field === 'bandSize'
                                   ? 1
                                   : 0.01
                               }

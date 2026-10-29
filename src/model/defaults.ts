@@ -127,10 +127,14 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     enabled: false,
     intensity: 0.35,
     threshold: 0.75,
+    radius: 1,
+    softness: 0.5,
   },
   vignette: {
     enabled: false,
     intensity: 0.42,
+    midpoint: 0.5,
+    roundness: 1,
   },
   motionBlur: {
     enabled: false,
@@ -139,17 +143,22 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
   chromaticAberration: {
     enabled: false,
     offset: 0.002,
+    verticalOffset: 0,
+    edgeStrength: 1,
   },
   filmGrain: {
     enabled: false,
     intensity: 0.025,
     size: 1.2,
+    softness: 0,
   },
   ghost: {
     enabled: false,
     opacity: 0.25,
     offset: 0.02,
     blur: 4,
+    angle: 0,
+    spread: 1,
   },
   colorGrade: {
     enabled: false,
@@ -158,15 +167,20 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     saturation: 1.0,
     temperature: 0,
     tint: 0,
+    highlights: 0,
+    shadows: 0,
   },
   edgeFade: {
     enabled: false,
     top: 0.1,
     bottom: 0.1,
+    softness: 1,
   },
   glitch: {
     enabled: false,
     intensity: 0.15,
+    bandSize: 50,
+    colorShift: 0.5,
   },
 };
 

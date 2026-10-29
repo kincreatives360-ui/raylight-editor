@@ -708,10 +708,14 @@ export const ShotSchema = z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(4),
       threshold: z.number().min(0).max(4),
+      radius: z.number().min(0).max(4).optional(),
+      softness: z.number().min(0).max(1).optional(),
     }),
     vignette: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(1),
+      midpoint: z.number().min(0).max(1).optional(),
+      roundness: z.number().min(0).max(2).optional(),
     }),
     motionBlur: z.object({
       enabled: z.boolean(),
@@ -721,17 +725,22 @@ export const ShotSchema = z.object({
     chromaticAberration: z.object({
       enabled: z.boolean(),
       offset: z.number().min(0).max(0.1),
+      verticalOffset: z.number().min(-0.1).max(0.1).optional(),
+      edgeStrength: z.number().min(0).max(4).optional(),
     }),
     filmGrain: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(1),
       size: z.number().min(0.1).max(32),
+      softness: z.number().min(0).max(1).optional(),
     }),
     ghost: z.object({
       enabled: z.boolean(),
       opacity: z.number().min(0).max(1),
       offset: z.number().min(-1).max(1),
       blur: z.number().min(0).max(100),
+      angle: z.number().min(-180).max(180).optional(),
+      spread: z.number().min(0).max(4).optional(),
     }),
     colorGrade: z.object({
       enabled: z.boolean(),
@@ -740,6 +749,8 @@ export const ShotSchema = z.object({
       saturation: z.number().min(0).max(4),
       temperature: z.number().min(-4).max(4).optional(),
       tint: z.number().min(-4).max(4).optional(),
+      highlights: z.number().min(-1).max(1).optional(),
+      shadows: z.number().min(-1).max(1).optional(),
     }),
     edgeFade: z.object({
       enabled: z.boolean(),
@@ -747,10 +758,13 @@ export const ShotSchema = z.object({
       bottom: z.number().min(0).max(1),
       left: z.number().min(0).max(1).optional(),
       right: z.number().min(0).max(1).optional(),
+      softness: z.number().min(0).max(4).optional(),
     }),
     glitch: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(1),
+      bandSize: z.number().min(2).max(200).optional(),
+      colorShift: z.number().min(0).max(2).optional(),
     }),
   }),
   effectsOrder: z.array(EffectKeySchema),

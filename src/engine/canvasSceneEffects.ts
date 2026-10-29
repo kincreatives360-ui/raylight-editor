@@ -26,28 +26,38 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
         const rgb = [src[i], src[i+1], src[i+2]].map(n => (n * gain - 0.5) * g.contrast + 0.5);
         const l = rgb[0]*0.2126 + rgb[1]*0.7152 + rgb[2]*0.0722;
         const t = g.temperature ?? 0, tint = g.tint ?? 0;
-        for(let c=0;c<3;c++) dst[i+c] = (l+(rgb[c]-l)*g.saturation) * [1+t*0.1,1+tint*0.1,1-t*0.1][c];
+        for(let c=0;c<3;c++) {
+          const graded=(l+(rgb[c]-l)*g.saturation) * [1+t*0.1,1+tint*0.1,1-t*0.1][c];
+          dst[i+c]=graded+(g.highlights??0)*Math.max(0,l-.45)+(g.shadows??0)*Math.max(0,.55-l);
+        }
       } else if (key === 'bloom') {
-        const radius = Math.max(1, width / 240);
+        const radius = Math.max(1, width / 240)*(e.bloom.radius??1), softness=e.bloom.softness??0.5;
         for(let c=0;c<3;c++) {
           let glow=0;
           for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) {
             const sx=x+dx*radius, sy=y+dy*radius;
             const lum=sample(sx,sy,0)*0.2126+sample(sx,sy,1)*0.7152+sample(sx,sy,2)*0.0722;
-            glow += sample(sx,sy,c) * Math.max(0,lum-e.bloom.threshold) / Math.max(lum,0.0001);
+            const gate=softness<=0?Number(lum>=e.bloom.threshold):clamp((lum-e.bloom.threshold+softness)/(2*softness));
+            glow += sample(sx,sy,c) * gate * Math.max(0,lum-e.bloom.threshold) / Math.max(lum,0.0001);
           }
           dst[i+c] += glow/9*e.bloom.intensity;
         }
       } else if (key === 'vignette') {
-        const amount=clamp(Math.hypot(u-0.5,v-0.5)*1.4)*e.vignette.intensity;
+        const roundness=e.vignette.roundness??1, midpoint=e.vignette.midpoint??0.5;
+        const distance=Math.hypot((u-0.5),(v-0.5)*Math.max(0.1,roundness));
+        const amount=clamp((distance-midpoint)*2+0.5)*e.vignette.intensity;
         for(let c=0;c<3;c++) dst[i+c]*=1-amount;
       } else if (key === 'filmGrain') {
         const size=Math.max(1,e.filmGrain.size);
-        const noise=fract(Math.sin(Math.floor(x/size)*12.9898+Math.floor(y/size)*78.233+evaluated.deterministicSeed*437.1)*43758.5453)-0.5;
+        const noiseAt=(cellX:number,cellY:number)=>fract(Math.sin(cellX*12.9898+cellY*78.233+evaluated.deterministicSeed*437.1)*43758.5453)-0.5;
+        const coarse=noiseAt(Math.floor(x/size),Math.floor(y/size));
+        const fine=noiseAt(x,y);
+        const noise=coarse*(1-(e.filmGrain.softness??0))+fine*(e.filmGrain.softness??0);
         for(let c=0;c<3;c++) dst[i+c]+=noise*e.filmGrain.intensity;
       } else if (key === 'chromaticAberration') {
-        const shift=e.chromaticAberration.offset*width;
-        dst[i]=sample(x+shift,y,0); dst[i+2]=sample(x-shift,y,2);
+        const edge=Math.hypot(u-.5,v-.5)*2*(e.chromaticAberration.edgeStrength??1);
+        const shift=e.chromaticAberration.offset*width*edge, vertical=e.chromaticAberration.verticalOffset??0;
+        dst[i]=sample(x+shift,y-vertical*height,0); dst[i+2]=sample(x-shift,y+vertical*height,2);
       } else if (key === 'motionBlur') {
         const motion = (evaluated as EvaluatedEffects & { motionVector?: {x:number;y:number} }).motionVector;
         if (motion && (motion.x || motion.y)) {
@@ -59,20 +69,22 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
           }
         }
       } else if (key === 'ghost') {
-        const radius=e.ghost.blur*width/1920;
+        const angle=(e.ghost.angle??0)*Math.PI/180, spread=e.ghost.spread??1;
+        const radius=e.ghost.blur*width/1920*spread;
         for(let c=0;c<3;c++) {
           let echo=0;
-          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) echo+=sample(x-e.ghost.offset*width+dx*radius,y+e.ghost.offset*height*0.5+dy*radius,c);
+          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) echo+=sample(x-Math.cos(angle)*e.ghost.offset*width+dx*radius,y+Math.sin(angle)*e.ghost.offset*height+dy*radius,c);
           dst[i+c]+=echo/9*e.ghost.opacity;
         }
       } else if (key === 'edgeFade') {
         const f=e.edgeFade;
-        const amount=Math.min(f.top>0?v/f.top:1,f.bottom>0?(1-v)/f.bottom:1,(f.left??0)>0?u/f.left!:1,(f.right??0)>0?(1-u)/f.right!:1,1);
+        const softness=f.softness??1, raw=Math.min(f.top>0?v/f.top:1,f.bottom>0?(1-v)/f.bottom:1,(f.left??0)>0?u/f.left!:1,(f.right??0)>0?(1-u)/f.right!:1,1);
+        const amount=softness<=0?raw:Math.pow(clamp(raw),1/Math.max(0.1,softness));
         for(let c=0;c<3;c++) dst[i+c]*=clamp(amount);
       } else if (key === 'glitch') {
-        const noise=fract(Math.sin(Math.floor(v*50)*12.9898+evaluated.deterministicSeed*78.233)*43758.5453);
+        const noise=fract(Math.sin(Math.floor(v*(e.glitch.bandSize??50))*12.9898+evaluated.deterministicSeed*78.233)*43758.5453);
         const shift=noise>1-e.glitch.intensity*0.2?(noise-0.5)*width*e.glitch.intensity*0.1:0;
-        for(let c=0;c<3;c++) dst[i+c]=sample(x+shift,y,c);
+        for(let c=0;c<3;c++) dst[i+c]=sample(x+shift+(c===0?1:c===2?-1:0)*e.glitch.intensity*(e.glitch.colorShift??0.5),y,c);
       }
     }
     const tmp = src;
