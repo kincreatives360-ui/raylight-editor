@@ -1,11 +1,12 @@
 import React from 'react';
-import { Copy, Trash2 } from 'lucide-react';
 import { IconButton } from '../../ui/primitives';
 import type { AnimationBlock, CameraBlock, Easing, Layer, LightAnimationBlock, Shot } from '../../model/types';
+import { generateId } from '../../model/id';
 import { copyTimelineBlock } from '../../utils/editorClipboard';
 import { TimelineDragPreview } from './TimelineDragPreview';
 import { TimelineEasingCurve } from './TimelineEasingCurve';
 import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
+import { createTimelineBlockContextMenu } from './timelineBlockContextMenu';
 import { TransitionPill } from './TransitionPill';
 import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 import type { TimelineContextMenuState, TimelineEasingPopoverTarget, TimelineGhostDragPreview } from './timelineTypes';
@@ -150,69 +151,38 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         setContextMenu({
                                             x: e.clientX,
                                             y: e.clientY,
-                                            items: [
-                                                { type: 'header', label: `${modeLabel} Camera Move` },
-                                                {
-                                                    id: 'edit-easing',
-                                                    label: 'Edit easing',
-                                                    shortcut: '↵',
-                                                    onClick: () => {
-                                                        selectCameraBlock(cb.id);
-                                                        setEasingPopoverTarget({
-                                                            easing: cb.easing,
-                                                            onChange: (easing) => {
-                                                                updateShot(activeShot.id, (s) => ({
-                                                                    ...s,
-                                                                    cameraBlocks: s.cameraBlocks.map((b) =>
-                                                                        b.id === cb.id ? { ...b, easing } : b
-                                                                    ),
-                                                                }));
-                                                            },
-                                                            anchorRect: targetRect,
-                                                        });
-                                                    },
-                                                },
-                                                {
-                                                    id: 'copy',
-                                                    label: 'Copy',
-                                                    icon: Copy,
-                                                    shortcut: '⌘C',
-                                                    onClick: () => copyTimelineBlock({ type: 'camera', block: cb }),
-                                                },
-                                                {
-                                                    id: 'dup',
-                                                    label: 'Duplicate',
-                                                    shortcut: '⌘D',
-                                                    onClick: () => {
-                                                        updateShot(activeShot.id, (s) => ({
+                                            items: createTimelineBlockContextMenu({
+                                                title: `${modeLabel} Camera Move`,
+                                                onEditEasing: () => {
+                                                    selectCameraBlock(cb.id);
+                                                    setEasingPopoverTarget({
+                                                        easing: cb.easing,
+                                                        onChange: (easing) => updateShot(activeShot.id, (s) => ({
                                                             ...s,
-                                                            cameraBlocks: [
-                                                                ...s.cameraBlocks,
-                                                                {
-                                                                    ...cb,
-                                                                    id: `cam-blk-${Date.now()}`,
-                                                                    startMs: Math.min(s.durationMs - cb.durationMs, cb.startMs + 50),
-                                                                },
-                                                            ],
-                                                        }));
-                                                    },
+                                                            cameraBlocks: s.cameraBlocks.map((b) =>
+                                                                b.id === cb.id ? { ...b, easing } : b
+                                                            ),
+                                                        })),
+                                                        anchorRect: targetRect,
+                                                    });
                                                 },
-                                                { type: 'divider' },
-                                                {
-                                                    id: 'del',
-                                                    label: 'Remove',
-                                                    icon: Trash2,
-                                                    shortcut: '⌫',
-                                                    danger: true,
-                                                    onClick: () => {
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
-                                                        }));
-                                                        if (selectedCameraBlockId === cb.id) selectCameraBlock(null);
-                                                    },
+                                                onCopy: () => copyTimelineBlock({ type: 'camera', block: cb }),
+                                                onDuplicate: () => updateShot(activeShot.id, (s) => ({
+                                                    ...s,
+                                                    cameraBlocks: [...s.cameraBlocks, {
+                                                        ...cb,
+                                                        id: generateId('cam-blk'),
+                                                        startMs: Math.min(s.durationMs - cb.durationMs, cb.startMs + 50),
+                                                    }],
+                                                })),
+                                                onRemove: () => {
+                                                    updateShot(activeShot.id, (s) => ({
+                                                        ...s,
+                                                        cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
+                                                    }));
+                                                    if (selectedCameraBlockId === cb.id) selectCameraBlock(null);
                                                 },
-                                            ],
+                                            }),
                                         });
                                     }}
                                     onPointerDown={(e) =>
@@ -273,69 +243,38 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         setContextMenu({
                                             x: e.clientX,
                                             y: e.clientY,
-                                            items: [
-                                                { type: 'header', label: lb.label || 'Light Key' },
-                                                {
-                                                    id: 'edit-easing',
-                                                    label: 'Edit easing',
-                                                    shortcut: '↵',
-                                                    onClick: () => {
-                                                        selectLightBlock(lb.id);
-                                                        setEasingPopoverTarget({
-                                                            easing: lb.easing,
-                                                            onChange: (easing) => {
-                                                                updateShot(activeShot.id, (s) => ({
-                                                                    ...s,
-                                                                    lightBlocks: (s.lightBlocks || []).map((b) =>
-                                                                        b.id === lb.id ? { ...b, easing } : b
-                                                                    ),
-                                                                }));
-                                                            },
-                                                            anchorRect: targetRect,
-                                                        });
-                                                    },
-                                                },
-                                                {
-                                                    id: 'copy',
-                                                    label: 'Copy',
-                                                    icon: Copy,
-                                                    shortcut: '⌘C',
-                                                    onClick: () => copyTimelineBlock({ type: 'light', block: lb }),
-                                                },
-                                                {
-                                                    id: 'dup',
-                                                    label: 'Duplicate',
-                                                    shortcut: '⌘D',
-                                                    onClick: () => {
-                                                        updateShot(activeShot.id, (s) => ({
+                                            items: createTimelineBlockContextMenu({
+                                                title: lb.label || 'Light Key',
+                                                onEditEasing: () => {
+                                                    selectLightBlock(lb.id);
+                                                    setEasingPopoverTarget({
+                                                        easing: lb.easing,
+                                                        onChange: (easing) => updateShot(activeShot.id, (s) => ({
                                                             ...s,
-                                                            lightBlocks: [
-                                                                ...(s.lightBlocks || []),
-                                                                {
-                                                                    ...lb,
-                                                                    id: `light-blk-${Date.now()}`,
-                                                                    startMs: Math.min(s.durationMs - lb.durationMs, lb.startMs + 50),
-                                                                },
-                                                            ],
-                                                        }));
-                                                    },
+                                                            lightBlocks: (s.lightBlocks || []).map((b) =>
+                                                                b.id === lb.id ? { ...b, easing } : b
+                                                            ),
+                                                        })),
+                                                        anchorRect: targetRect,
+                                                    });
                                                 },
-                                                { type: 'divider' },
-                                                {
-                                                    id: 'del',
-                                                    label: 'Remove',
-                                                    icon: Trash2,
-                                                    shortcut: '⌫',
-                                                    danger: true,
-                                                    onClick: () => {
-                                                        updateShot(activeShot.id, (s) => ({
-                                                            ...s,
-                                                            lightBlocks: (s.lightBlocks || []).filter((b) => b.id !== lb.id),
-                                                        }));
-                                                        if (selectedLightBlockId === lb.id) selectLightBlock(null);
-                                                    },
+                                                onCopy: () => copyTimelineBlock({ type: 'light', block: lb }),
+                                                onDuplicate: () => updateShot(activeShot.id, (s) => ({
+                                                    ...s,
+                                                    lightBlocks: [...(s.lightBlocks || []), {
+                                                        ...lb,
+                                                        id: generateId('light-blk'),
+                                                        startMs: Math.min(s.durationMs - lb.durationMs, lb.startMs + 50),
+                                                    }],
+                                                })),
+                                                onRemove: () => {
+                                                    updateShot(activeShot.id, (s) => ({
+                                                        ...s,
+                                                        lightBlocks: (s.lightBlocks || []).filter((b) => b.id !== lb.id),
+                                                    }));
+                                                    if (selectedLightBlockId === lb.id) selectLightBlock(null);
                                                 },
-                                            ],
+                                            }),
                                         });
                                     }}
                                     onClick={(e) => {
@@ -562,67 +501,30 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                                     setContextMenu({
                                                         x: e.clientX,
                                                         y: e.clientY,
-                                                        items: [
-                                                            { type: 'header', label: blk.label },
-                                                            {
-                                                                id: 'edit-easing',
-                                                                label: 'Edit easing',
-                                                                shortcut: '↵',
-                                                                onClick: () => {
-                                                                    setEasingPopoverTarget({
-                                                                        easing: blk.easing,
-                                                                        onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                ...l,
-                                                                                blocks: l.blocks.map((b) =>
-                                                                                    b.id === blk.id ? { ...b, easing } : b
-                                                                                ),
-                                                                            }));
-                                                                        },
-                                                                        anchorRect: targetRect,
-                                                                    });
-                                                                },
-                                                            },
-                                                            {
-                                                                id: 'copy',
-                                                                label: 'Copy',
-                                                                icon: Copy,
-                                                                shortcut: '⌘C',
-                                                                onClick: () => copyTimelineBlock({ type: 'animation', block: blk, layerId: layer.id }),
-                                                            },
-                                                            {
-                                                                id: 'dup',
-                                                                label: 'Duplicate',
-                                                                shortcut: '⌘D',
-                                                                onClick: () => {
-                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                        ...l,
-                                                                        blocks: [
-                                                                            ...l.blocks,
-                                                                            {
-                                                                                ...blk,
-                                                                                id: `blk-${Date.now()}`,
-                                                                                startMs: Math.min(activeShot.durationMs - blk.durationMs, blk.startMs + 50),
-                                                                            },
-                                                                        ],
-                                                                    }));
-                                                                },
-                                                            },
-                                                            { type: 'divider' },
-                                                            {
-                                                                id: 'del',
-                                                                label: 'Remove',
-                                                                icon: Trash2,
-                                                                shortcut: '⌫',
-                                                                danger: true,
-                                                                onClick: () => {
-                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                        ...l,
-                                                                        blocks: l.blocks.filter((b) => b.id !== blk.id),
-                                                                    }));
-                                                                },
-                                                            },
-                                                        ],
+                                                        items: createTimelineBlockContextMenu({
+                                                            title: blk.label,
+                                                            onEditEasing: () => setEasingPopoverTarget({
+                                                                easing: blk.easing,
+                                                                onChange: (easing) => updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                    ...l,
+                                                                    blocks: l.blocks.map((b) => b.id === blk.id ? { ...b, easing } : b),
+                                                                })),
+                                                                anchorRect: targetRect,
+                                                            }),
+                                                            onCopy: () => copyTimelineBlock({ type: 'animation', block: blk, layerId: layer.id }),
+                                                            onDuplicate: () => updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                ...l,
+                                                                blocks: [...l.blocks, {
+                                                                    ...blk,
+                                                                    id: generateId('blk'),
+                                                                    startMs: Math.min(activeShot.durationMs - blk.durationMs, blk.startMs + 50),
+                                                                }],
+                                                            })),
+                                                            onRemove: () => updateLayer(activeShot.id, layer.id, (l) => ({
+                                                                ...l,
+                                                                blocks: l.blocks.filter((b) => b.id !== blk.id),
+                                                            })),
+                                                        }),
                                                     });
                                                 }}
                                                 onClick={(e) => {

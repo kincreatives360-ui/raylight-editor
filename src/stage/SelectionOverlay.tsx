@@ -1,7 +1,7 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { RotateCw, Lock, Crop } from 'lucide-react';
+import { SelectionOverlayVisuals, type ResizeHandleDir } from './SelectionOverlayVisuals';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import {
@@ -30,8 +30,6 @@ interface SelectionOverlayProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
-
-type ResizeHandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     frame,
@@ -747,216 +745,33 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             ref={overlayRootRef}
             className="absolute inset-0 pointer-events-none z-30 overflow-visible select-none"
         >
-            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
-                {selectedEvalLayers.slice(1).map((sec) => {
-                    const secProj = projectCorners(sec);
-                    const pts = secProj.corners.map((point) => `${point.x},${point.y}`).join(' ');
-                    return (
-                        <g key={sec.id}>
-                            <polygon
-                                points={pts}
-                                fill="var(--accent-primary, #0088ff)"
-                                fillOpacity="0.04"
-                                stroke="var(--accent-primary, #0088ff)"
-                                strokeWidth="1.5"
-                                strokeDasharray="5 3"
-                                className="cursor-move pointer-events-auto"
-                                onPointerDown={handleStartMove}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
-                                }}
-                            />
-                        </g>
-                    );
-                })}
-
-                {!isEditingInlineText && (
-                    <g>
-                        {!isLocked && !isCropping && (
-                            <line
-                                x1={primaryProj.pN.x}
-                                y1={primaryProj.pN.y}
-                                x2={primaryProj.pRot.x}
-                                y2={primaryProj.pRot.y}
-                                stroke={borderColor}
-                                strokeWidth="1.5"
-                                strokeDasharray="3 2"
-                            />
-                        )}
-
-                        {primaryProj.corners.length > 4 && (
-                            <polygon
-                                points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
-                                fill="none"
-                                stroke={borderColor}
-                                strokeWidth="1"
-                                strokeDasharray="3 3"
-                                strokeOpacity="0.45"
-                            />
-                        )}
-
-                        <polygon
-                            points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
-                            fill="var(--accent-primary, #0088ff)"
-                            fillOpacity="0.02"
-                            stroke={borderColor}
-                            strokeWidth="1.75"
-                            strokeDasharray={isLocked || isCropping ? '6 4' : 'none'}
-                            className={`pointer-events-auto ${isLocked
-                                    ? 'cursor-not-allowed'
-                                    : activeTool === 'tilt'
-                                        ? 'cursor-grab'
-                                        : 'cursor-move'
-                                }`}
-                            onPointerDown={handleStartMove}
-                            onDoubleClick={(e) => {
-                                if (layer.kind === 'text') {
-                                    e.stopPropagation();
-                                    setIsEditingInlineText(true);
-                                }
-                            }}
-                        />
-
-                        {isMotionBlock && (
-                            <g className="motion-path-gizmo pointer-events-auto">
-                                <path
-                                    d={`M ${motionStartPoint.x} ${motionStartPoint.y} Q ${motionMidControl.x} ${motionMidControl.y} ${motionEndPoint.x} ${motionEndPoint.y}`}
-                                    stroke="var(--accent-primary, #0088ff)"
-                                    strokeWidth="2.5"
-                                    strokeDasharray="5 4"
-                                    fill="none"
-                                />
-                                <circle
-                                    cx={motionStartPoint.x}
-                                    cy={motionStartPoint.y}
-                                    r="5"
-                                    fill="var(--accent-primary, #0088ff)"
-                                    stroke="#ffffff"
-                                    strokeWidth="2"
-                                />
-                                <g
-                                    transform={`translate(${motionEndPoint.x}, ${motionEndPoint.y})`}
-                                    onPointerDown={handleStartDragMotionEnd}
-                                    className="cursor-move"
-                                >
-                                    <circle
-                                        r="7"
-                                        fill="var(--accent-danger, #f43f5e)"
-                                        stroke="#ffffff"
-                                        strokeWidth="2.5"
-                                        className="hover:scale-125 transition-transform"
-                                    />
-                                    <text
-                                        x="12"
-                                        y="4"
-                                        fill="#ffffff"
-                                        fontSize="10"
-                                        fontWeight="bold"
-                                        className="pointer-events-none select-none font-mono"
-                                        paintOrder="stroke"
-                                        stroke="#000000"
-                                        strokeWidth="3"
-                                    >
-                                        To ({Math.round(motionAmt.x * 1920)}px, {Math.round(motionAmt.y * 1080)}px)
-                                    </text>
-                                </g>
-                            </g>
-                        )}
-                    </g>
-                )}
-
-            </svg>
-
-            {/* TOP 2D ROTATION LOLLIPOP KNOB & PERIMETER 3D TILT BADGE */}
-            {!isLocked && !isCropping && !isEditingInlineText && (
-                <>
-                    <div
-                        style={{
-                            left: `${primaryProj.pRot.x}px`,
-                            top: `${primaryProj.pRot.y}px`,
-                            transform: 'translate(-50%, -50%)',
-                        }}
-                        onPointerDown={handleStartRotateZ}
-                        title="Drag around object to Spin / Rotate (Roll Z)"
-                        className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
-                    >
-                        <RotateCw className="w-2.5 h-2.5 text-white" />
-                    </div>
-
-                </>
-            )}
-
-            {/* 8 RESIZE / CROP HANDLES */}
-            {!isLocked &&
-                !isEditingInlineText &&
-                handleItems.map((h) => (
-                        <div
-                            key={h.dir}
-                            onPointerDown={(e) => handleStartResize(e, h.dir)}
-                            style={{
-                                left: `${h.pos.x}px`,
-                                top: `${h.pos.y}px`,
-                                transform: 'translate(-50%, -50%)',
-                                cursor: h.cursor,
-                            }}
-                            className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
-                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
-                                    : isAnimateMode
-                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
-                                        : 'bg-white border-[var(--accent-primary,#0088ff)]'
-                                } hover:scale-125 transition-transform duration-100 ease-out`}
-                        />
-                ))}
-
-            {/* INLINE TEXT EDITOR OR STATUS BADGES (unobstructed interior) */}
-            {((isEditingInlineText && layer.kind === 'text') || isLocked || isCropping) && (
-                <div
-                    style={{
-                        left: `${primaryProj.pCenter.x}px`,
-                        top: `${primaryProj.pCenter.y}px`,
-                        transform: 'translate(-50%, -50%)',
-                    }}
-                    className="absolute flex items-center justify-center pointer-events-auto"
-                >
-                    {isEditingInlineText && layer.kind === 'text' ? (
-                        <div
-                            className="p-1 z-40"
-                            style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
-                        >
-                            <textarea
-                                autoFocus
-                                value={(layer as TextLayer).content}
-                                onChange={(e) =>
-                                    updateLayer(activeShot.id, layer.id, (l) =>
-                                        l.kind === 'text' ? { ...l, content: e.target.value } : l
-                                    )
-                                }
-                                onKeyDown={(e) => {
-                                    e.stopPropagation();
-                                    if (
-                                        e.key === 'Escape' ||
-                                        (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
-                                    ) {
-                                        setIsEditingInlineText(false);
-                                    }
-                                }}
-                                onBlur={() => setIsEditingInlineText(false)}
-                                className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
-                            />
-                        </div>
-                    ) : isLocked ? (
-                        <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[11px] font-mono flex items-center gap-1 shadow-lg">
-                            <Lock className="w-3 h-3" /> Locked
-                        </div>
-                    ) : isCropping ? (
-                        <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[11px] font-semibold flex items-center gap-1 shadow-lg">
-                            <Crop className="w-3 h-3" /> Drag Corners to Crop
-                        </div>
-                    ) : null}
-                </div>
-            )}
-
+            <SelectionOverlayVisuals
+                selectedEvalLayers={selectedEvalLayers}
+                projectCorners={projectCorners}
+                primaryProj={primaryProj}
+                layer={layer}
+                activeShotId={activeShot.id}
+                frameWidth={frameWidth}
+                isLocked={isLocked}
+                isCropping={isCropping}
+                isAnimateMode={isAnimateMode}
+                isEditingInlineText={isEditingInlineText}
+                setIsEditingInlineText={setIsEditingInlineText}
+                activeTool={activeTool}
+                borderColor={borderColor}
+                isMotionBlock={isMotionBlock}
+                motionStartPoint={motionStartPoint}
+                motionEndPoint={motionEndPoint}
+                motionMidControl={motionMidControl}
+                motionAmount={motionAmt}
+                handleItems={handleItems}
+                onMoveStart={handleStartMove}
+                onMotionEndStart={handleStartDragMotionEnd}
+                onRotateStart={handleStartRotateZ}
+                onResizeStart={handleStartResize}
+                onSelectLayer={onSelectLayer}
+                updateLayer={updateLayer}
+            />
         </div>
     );
 };

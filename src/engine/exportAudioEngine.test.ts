@@ -257,6 +257,39 @@ describe('Audio Engine Waveform Generation & Peak Clamping', () => {
 });
 
 describe('Audio Engine Concurrent Decoding', () => {
+    it('evicts old decoded buffers so the audio cache stays bounded', async () => {
+        const originalWindow = (globalThis as unknown as { window?: unknown }).window;
+        const originalFetch = globalThis.fetch;
+        const mockBuffer = {
+            sampleRate: 44100,
+            duration: 1,
+            numberOfChannels: 1,
+            getChannelData: () => new Float32Array(100),
+        } as unknown as AudioBuffer;
+        class MockAudioContext {
+            state = 'running';
+            decodeAudioData = vi.fn().mockResolvedValue(mockBuffer);
+            resume = vi.fn().mockResolvedValue(undefined);
+        }
+        (globalThis as unknown as { window: unknown }).window = { AudioContext: MockAudioContext };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+        } as unknown as Response);
+
+        try {
+            const urls = Array.from({ length: 33 }, (_, index) => `data:audio/wav;base64,lru-${index}`);
+            for (const url of urls) await decodeAudioFromDataUrl(url);
+            await decodeAudioFromDataUrl(urls[0]);
+            expect(globalThis.fetch).toHaveBeenCalledTimes(34);
+        } finally {
+            (globalThis as unknown as { window?: unknown }).window = originalWindow;
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     it('handles concurrent decodeAudioFromDataUrl calls without errors and shares cached result', async () => {
         const mockBuffer = {
             sampleRate: 44100,

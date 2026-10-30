@@ -53,6 +53,8 @@ function openIndexedDb(): Promise<IDBDatabase | null> {
  * serializing saves to prevent overlapping writes/pruning races.
  */
 let saveQueue: Promise<boolean> = Promise.resolve(true);
+const opfsSavedDataUrls = new WeakMap<AssetRecord, string>();
+const indexedDbSavedDataUrls = new WeakMap<AssetRecord, string>();
 
 export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
     const execute = async (): Promise<boolean> => {
@@ -69,11 +71,12 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 if (!asset) return;
                 const { dataUrl: _drop, ...meta } = asset;
                 lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
-                if (asset.dataUrl) {
+                if (asset.dataUrl && opfsSavedDataUrls.get(asset) !== asset.dataUrl) {
                     try {
                         // OPFS is a supplementary copy; IDB stores the full asset in the
                         // same transaction as the project metadata below.
                         const written = await saveMediaToOPFS(id, asset.dataUrl);
+                        if (written) opfsSavedDataUrls.set(asset, asset.dataUrl);
                         if (!written && isOpfsSupported()) {
                             console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
                         }
@@ -102,10 +105,12 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                     }
                 };
 
+                const assetsWritten: AssetRecord[] = [];
                 for (const asset of Object.values(project.assets || {})) {
                     if (asset) {
-                        if (asset.dataUrl) {
+                        if (asset.dataUrl && indexedDbSavedDataUrls.get(asset) !== asset.dataUrl) {
                             assetStore.put(asset);
+                            assetsWritten.push(asset);
                         }
                     }
                 }
@@ -122,6 +127,9 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 projectStore.put(record);
 
                 tx.oncomplete = () => {
+                    for (const asset of assetsWritten) {
+                        indexedDbSavedDataUrls.set(asset, asset.dataUrl);
+                    }
                     db.close();
                     resolve(true);
                 };

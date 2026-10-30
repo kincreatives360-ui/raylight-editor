@@ -12,7 +12,7 @@ import { useStageDofFocus } from './useStageDofFocus';
 import { useStageCameraUpdate } from './useStageCameraUpdate';
 import { useStageGlobalInteractions } from './useStageGlobalInteractions';
 
-import React, { useEffect, useMemo, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState, useCallback } from 'react';
 import { UploadCloud } from 'lucide-react';
 import type { Project } from '../model/types';
 import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
@@ -21,6 +21,7 @@ import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { type SnapGuideLine } from './stageUtils';
 import { CanvasToolbar } from './CanvasToolbar';
+import { getCanvasToolbarPlacement } from './canvasToolbarLayout';
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
 import { radToDeg } from '../model/defaults';
@@ -99,6 +100,8 @@ const StageComponent: React.FC<StageProps> = ({
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
 
     const [viewportSize, setViewportSize] = useState({ width: 880, height: 540 });
+    const [toolbarPlacement, setToolbarPlacement] = useState<'top' | 'bottom'>('bottom');
+    const toolbarPlacementFrameRef = useRef<number | null>(null);
     const [activeGuides, setActiveGuides] = useState<SnapGuideLine[]>([]);
     const [isSpaceHeld, setIsSpaceHeld] = useState(false);
     const [isDraggingOver, setIsDraggingOver] = useState(false);
@@ -164,6 +167,53 @@ const StageComponent: React.FC<StageProps> = ({
         gradientReferenceCamera,
         gradientCameraPose,
     } = useStageViewportModel({ project, frame, viewportSize, isCameraSelected, activeTool, isPlaying });
+    const measureToolbarPlacement = useCallback(() => {
+        if (toolbarPlacementFrameRef.current !== null) {
+            cancelAnimationFrame(toolbarPlacementFrameRef.current);
+        }
+        toolbarPlacementFrameRef.current = requestAnimationFrame(() => {
+            toolbarPlacementFrameRef.current = null;
+            const container = containerRef.current;
+            const toolbar = container?.querySelector<HTMLElement>('[data-canvas-toolbar-positioner]');
+            if (!container || !toolbar) return;
+
+            const handleBounds = Array.from(
+                container.querySelectorAll<HTMLElement>('[data-selection-handle]')
+            ).map((handle) => {
+                const { left, top, right, bottom } = handle.getBoundingClientRect();
+                return { left, top, right, bottom };
+            });
+            const { width, height } = toolbar.getBoundingClientRect();
+            const nextPlacement = getCanvasToolbarPlacement(
+                container.getBoundingClientRect(),
+                { width, height },
+                handleBounds,
+            );
+            setToolbarPlacement((current) => current === nextPlacement ? current : nextPlacement);
+        });
+    }, []);
+
+    useLayoutEffect(() => {
+        measureToolbarPlacement();
+    }, [measureToolbarPlacement, effectiveViewportFrame, frameWidth, frameHeight, canvasZoom, canvasPan.x, canvasPan.y, selectedLayerIds]);
+
+    useEffect(() => {
+        const container = containerRef.current;
+        const toolbar = container?.querySelector<HTMLElement>('[data-canvas-toolbar-positioner]');
+        if (!container || !toolbar) return;
+
+        const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measureToolbarPlacement);
+        observer?.observe(container);
+        observer?.observe(toolbar);
+        window.addEventListener('resize', measureToolbarPlacement);
+        return () => {
+            observer?.disconnect();
+            window.removeEventListener('resize', measureToolbarPlacement);
+            if (toolbarPlacementFrameRef.current !== null) {
+                cancelAnimationFrame(toolbarPlacementFrameRef.current);
+            }
+        };
+    }, [measureToolbarPlacement]);
     const isTransparentBg = effectiveBackground.kind === 'transparent';
     const gradientShapeLayer = gradientEditorLayerId
         ? frame.activeShot.layers.find((layer) => layer.id === gradientEditorLayerId && layer.kind === 'shape')
@@ -501,6 +551,7 @@ const StageComponent: React.FC<StageProps> = ({
             />
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
             <CanvasToolbar
+                placement={toolbarPlacement}
                 selectedLayer={selectedLayer}
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}

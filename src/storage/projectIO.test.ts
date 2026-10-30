@@ -463,6 +463,9 @@ describe('Project IO Storage & File Operations', () => {
     expect(saveOpfsSpy).toHaveBeenCalledWith('asset-fail', 'data:image/png;base64,failData');
     expect(mockAssetStore.put).toHaveBeenCalledWith(project.assets['asset-fail']);
 
+    await saveProjectToIndexedDB(project);
+    expect(mockAssetStore.put).toHaveBeenCalledTimes(1);
+
     saveOpfsSpy.mockRestore();
   });
 
