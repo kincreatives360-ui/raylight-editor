@@ -374,7 +374,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* ═══ Main Floating Toolbar ═══ */}
-            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex items-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full overflow-x-auto no-scrollbar shrink-0">
+            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex flex-wrap items-center justify-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full shrink-0">
 
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">
