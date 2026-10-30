@@ -4,6 +4,7 @@ import {
     Sparkles,
     Trash2,
     X,
+    Wand2,
 } from 'lucide-react';
 import type { LightAnimationBlock } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
@@ -13,6 +14,7 @@ import { IconButton } from '../../../ui/primitives';
 import { InspectorDisclosure } from '../../../ui/InspectorDisclosure';
 import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
 import { AxisFields } from '../../../ui/AxisFields';
+import { LIGHT_ANIMATION_PRESETS, applyLightAnimationPreset } from '../../../engine/lightingSystem';
 
 interface LightBlockInspectorProps {
     activeShotId: string;
@@ -30,6 +32,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
     const [positionOpen, setPositionOpen] = useState(true);
     const [intensityOpen, setIntensityOpen] = useState(true);
     const [temperatureOpen, setTemperatureOpen] = useState(true);
+    const [presetsOpen, setPresetsOpen] = useState(false);
 
     const updateBlock = (updater: (lb: LightAnimationBlock) => LightAnimationBlock) => {
         updateShot(activeShotId, (s) => ({
@@ -48,6 +51,10 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
         onDone();
     };
 
+    const handleApplyPreset = (presetId: string) => {
+        updateBlock((block) => applyLightAnimationPreset(block, presetId));
+    };
+
     const blockProperty = activeLightBlock.property;
     const isRoomAnimation = activeLightBlock.targetLightId === 'room';
 
@@ -55,15 +62,15 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
         <div data-testid="light-block-inspector" className="flex-1 overflow-y-auto divide-y divide-white/[0.06]">
             {/* Header: Title + Done Button */}
             <div className="p-3.5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                    <div className="w-5 h-5 rounded bg-[#f59e0b]/15 flex items-center justify-center text-[#f59e0b]">
+                <div className="flex items-center gap-2 min-w-0">
+                    <div className="w-5 h-5 rounded bg-amber-500/15 flex items-center justify-center text-amber-400 shrink-0">
                         <Sparkles className="w-3.5 h-3.5" />
                     </div>
-                    <div>
-                        <span className="text-[12px] font-semibold text-white tracking-wide block">
+                    <div className="min-w-0">
+                        <span className="text-[12px] font-semibold text-white tracking-wide block truncate">
                             {activeLightBlock.label || 'Light Animation'}
                         </span>
-                        <span className="text-[10px] text-[#a1a1aa] font-mono">
+                        <span className="text-[10px] text-muted-foreground font-mono">
                             Target: {activeLightBlock.targetLightId ?? 'key'}
                         </span>
                     </div>
@@ -79,26 +86,73 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                 />
             </div>
 
+            {/* Movement Presets (Beyond Parity) */}
+            <InspectorDisclosure
+                title={
+                    <span className="flex items-center gap-1.5 text-sky-400">
+                        <Wand2 className="w-3.5 h-3.5" />
+                        <span>Movement Presets</span>
+                    </span>
+                }
+                open={presetsOpen}
+                onOpenChange={setPresetsOpen}
+                defaultOpen={false}
+            >
+                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                    {LIGHT_ANIMATION_PRESETS.map((preset) => (
+                        <button
+                            key={preset.id}
+                            type="button"
+                            onClick={() => handleApplyPreset(preset.id)}
+                            title={preset.description}
+                            className="p-2 text-left rounded-lg bg-surface-elevated/70 hover:bg-surface-elevated border border-border/50 hover:border-sky-500/40 text-foreground transition group cursor-pointer"
+                        >
+                            <span className="text-[11px] font-medium block text-white group-hover:text-sky-300">
+                                {preset.label}
+                            </span>
+                            <span className="text-[9px] text-muted-foreground line-clamp-1">
+                                {preset.description}
+                            </span>
+                        </button>
+                    ))}
+                </div>
+            </InspectorDisclosure>
+
             {/* Timing Section */}
             <InspectorDisclosure
                 title="Timing"
                 open={timingOpen}
                 onOpenChange={setTimingOpen}
             >
-                    <AnimationTimingFields
-                        start={{ label: "Start", value: activeLightBlock.startMs, min: 0, step: 50, decimals: 0, onChange: (val) => updateBlock((lb) => ({ ...lb, startMs: Math.max(0, val) })) }}
-                        duration={{ label: "Duration", value: activeLightBlock.durationMs, min: 50, step: 50, decimals: 0, onChange: (val) => updateBlock((lb) => ({ ...lb, durationMs: Math.max(50, val) })) }}
-                    />
+                <AnimationTimingFields
+                    start={{
+                        label: "Start",
+                        value: activeLightBlock.startMs,
+                        min: 0,
+                        step: 50,
+                        decimals: 0,
+                        onChange: (val) => updateBlock((lb) => ({ ...lb, startMs: Math.max(0, val) })),
+                    }}
+                    duration={{
+                        label: "Duration",
+                        value: activeLightBlock.durationMs,
+                        min: 50,
+                        step: 50,
+                        decimals: 0,
+                        onChange: (val) => updateBlock((lb) => ({ ...lb, durationMs: Math.max(50, val) })),
+                    }}
+                />
             </InspectorDisclosure>
 
             {/* Position Section: From & To */}
-            {(!blockProperty || blockProperty === 'position') && <InspectorDisclosure
-                title="Position"
-                open={positionOpen}
-                onOpenChange={setPositionOpen}
-            >
+            {(!blockProperty || blockProperty === 'position') && (
+                <InspectorDisclosure
+                    title="Position"
+                    open={positionOpen}
+                    onOpenChange={setPositionOpen}
+                >
                     <div className="space-y-2">
-                        <span className="text-[10px] text-[#a1a1aa] font-mono">From (X, Y, Z)</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">From (X, Y, Z)</span>
                         <AxisFields
                             fields={[
                                 { key: "0", label: "From X", value: activeLightBlock.fromX, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, fromX: val })) },
@@ -107,7 +161,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             ]}
                         />
 
-                        <span className="text-[10px] text-[#a1a1aa] font-mono">To (X, Y, Z)</span>
+                        <span className="text-[10px] text-muted-foreground font-mono">To (X, Y, Z)</span>
                         <AxisFields
                             fields={[
                                 { key: "0", label: "To X", value: activeLightBlock.toX, step: 0.05, decimals: 2, onChange: (val) => updateBlock((lb) => ({ ...lb, toX: val })) },
@@ -116,14 +170,16 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             ]}
                         />
                     </div>
-            </InspectorDisclosure>}
+                </InspectorDisclosure>
+            )}
 
             {/* Intensity Section: From & To */}
-            {(!blockProperty || blockProperty === 'intensity' || blockProperty === 'ambience') && <InspectorDisclosure
-                title={isRoomAnimation ? 'Ambience' : 'Intensity'}
-                open={intensityOpen}
-                onOpenChange={setIntensityOpen}
-            >
+            {(!blockProperty || blockProperty === 'intensity' || blockProperty === 'ambience') && (
+                <InspectorDisclosure
+                    title={isRoomAnimation ? 'Ambience' : 'Intensity'}
+                    open={intensityOpen}
+                    onOpenChange={setIntensityOpen}
+                >
                     <div className="grid grid-cols-2 gap-2">
                         <ScrubInput
                             label={isRoomAnimation ? 'From' : 'From Int'}
@@ -144,14 +200,16 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             onChange={(val) => updateBlock((lb) => ({ ...lb, toIntensity: Math.max(0, val) }))}
                         />
                     </div>
-            </InspectorDisclosure>}
+                </InspectorDisclosure>
+            )}
 
             {/* Temperature Section */}
-            {(!blockProperty || blockProperty === 'temperature') && <InspectorDisclosure
-                title="Temperature"
-                open={temperatureOpen}
-                onOpenChange={setTemperatureOpen}
-            >
+            {(!blockProperty || blockProperty === 'temperature') && (
+                <InspectorDisclosure
+                    title="Temperature"
+                    open={temperatureOpen}
+                    onOpenChange={setTemperatureOpen}
+                >
                     <div className="grid grid-cols-2 gap-2">
                         <ScrubInput
                             label="From Temp"
@@ -172,16 +230,17 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                             onChange={(val) => updateBlock((lb) => ({ ...lb, toTemperature: val }))}
                         />
                     </div>
-            </InspectorDisclosure>}
+                </InspectorDisclosure>
+            )}
 
             {/* Easing Selection */}
             <div className="p-3.5 space-y-2">
-                <span className="text-[11px] font-medium text-[#e4e4e7]">Transition Curve</span>
+                <span className="text-[11px] font-medium text-foreground">Transition Curve</span>
                 <EasingControl
                     value={activeLightBlock.easing}
                     onChange={(easing) => updateBlock((lb) => ({ ...lb, easing }))}
                     selectAriaLabel="Transition curve"
-                    selectClassName="flex-1 h-8 px-2.5 rounded-lg bg-[#1c1c1f] border border-white/10 text-[11px] text-white outline-none cursor-pointer hover:border-white/20 transition"
+                    selectClassName="flex-1 h-8 px-2.5 rounded-lg bg-surface-elevated border border-border/80 text-[11px] text-foreground outline-none cursor-pointer hover:border-border transition"
                     showCurvePreview
                     showInlineTuning
                 />
@@ -192,7 +251,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                 <button
                     type="button"
                     onClick={handleDelete}
-                    className="w-full py-2 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-400 font-medium text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer"
+                    className="w-full py-2 rounded-lg bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/20 font-medium text-[11px] flex items-center justify-center gap-1.5 transition cursor-pointer"
                 >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Delete Block</span>

@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { MAX_SHADOW_CASTERS, resolveLighting } from './lightingSystem';
-import type { LightRig, SceneLight } from '../model/types';
+import {
+  MAX_SHADOW_CASTERS,
+  resolveLighting,
+  getKelvinPreviewColor,
+  LIGHT_ANIMATION_PRESETS,
+  applyLightAnimationPreset,
+} from './lightingSystem';
+import type { LightAnimationBlock, LightRig, SceneLight } from '../model/types';
 
 const source = (id: string, type: SceneLight['type']): SceneLight => ({
   id, name: id, type, enabled: true, position: { x: 1, y: 2, z: 3 },
@@ -75,6 +81,53 @@ describe('lightingSystem', () => {
     expect(resolved.sources).toEqual([]);
     expect(resolved.room.environment).toBe('studio');
   });
+
+  it('evaluates Kelvin temperature preview colors with blackbody conversion', () => {
+    const warm = getKelvinPreviewColor(2700);
+    const daylight = getKelvinPreviewColor(6500);
+    const cool = getKelvinPreviewColor(9000);
+
+    expect(warm).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+    expect(daylight).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+    expect(cool).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+  });
+
+  it('provides and applies cinematic light animation movement presets', () => {
+    expect(LIGHT_ANIMATION_PRESETS.length).toBeGreaterThanOrEqual(4);
+
+    const baseBlock: LightAnimationBlock = {
+      id: 'blk-1',
+      label: 'Custom',
+      targetLightId: 'key',
+      property: 'position',
+      startMs: 100,
+      durationMs: 500,
+      fromX: 0,
+      fromY: 0,
+      fromZ: 1,
+      toX: 1,
+      toY: 1,
+      toZ: 1,
+      fromIntensity: 1,
+      toIntensity: 1,
+      fromTemperature: 6500,
+      toTemperature: 6500,
+      easing: { kind: 'preset', name: 'linear' },
+    };
+
+    const gleam = applyLightAnimationPreset(baseBlock, 'gleam-sweep');
+    expect(gleam.label).toBe('Gleam Sweep');
+    expect(gleam.property).toBe('position');
+    expect(gleam.durationMs).toBe(1400);
+    expect(gleam.fromX).toBe(-0.6);
+    expect(gleam.toX).toBe(0.6);
+
+    const pulse = applyLightAnimationPreset(baseBlock, 'power-pulse');
+    expect(pulse.label).toBe('Power Pulse');
+    expect(pulse.property).toBe('intensity');
+    expect(pulse.toIntensity).toBe(2.2);
+
+    const untouched = applyLightAnimationPreset(baseBlock, 'non-existent');
+    expect(untouched).toEqual(baseBlock);
+  });
 });
-
-

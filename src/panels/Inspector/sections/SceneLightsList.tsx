@@ -150,7 +150,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                         className="h-6 px-2 rounded bg-white/[0.06] hover:bg-white/10 text-white text-[11px] font-medium flex items-center gap-1 border border-white/10 transition cursor-pointer"
                         title="Add light to scene"
                     >
-                        <Plus className="w-3 h-3 text-[#0088ff]" />
+                        <Plus className="w-3 h-3 text-sky-400" />
                         <span>Add Light</span>
                         <ChevronDown className="w-2.5 h-2.5 text-[#a1a1aa]" />
                     </button>
@@ -202,7 +202,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                                     <InlineRenameInput
                                         type="text"
                                         defaultValue={source.name || 'Light'}
-                                        className="h-5 px-1 bg-[#121214] border border-[#0088ff] rounded text-white text-[11px] outline-none w-full"
+                                        className="h-5 px-1 bg-[#121214] border border-sky-500 rounded text-white text-[11px] outline-none w-full"
                                         onCommit={value => handleRename(source.id, value)}
                                         onCancel={() => setEditingLightId(null)}
                                     />
