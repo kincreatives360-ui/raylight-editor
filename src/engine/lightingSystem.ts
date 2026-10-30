@@ -115,7 +115,7 @@ function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet
     enabled: true,
     position: worldPosition(source.position, { x: 0, y: 0, z: 1 }),
     target: worldPosition(source.target, FALLBACK_TARGET),
-    intensity: (source.intensity ?? 1) * (rig.intensity ?? 1.2) * 2,
+    intensity: (source.intensity ?? 1) * 2,
     color: resolveKelvinColor(temperature, source.color || '#ffffff'),
     distance: Math.max(0, source.distance ?? (source.type === 'spot' ? 12 : 10)),
     decay: Math.max(0, source.decay ?? 2),
@@ -136,6 +136,8 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     intensity: 1.2,
     temperature: 6100,
     ambience: 0.45,
+    keyLightEnabled: false,
+    fillEnabled: false,
   } satisfies LightRig;
   const keyEnabled = light.keyLightEnabled !== false;
   const keyIntensity = light.keyIntensity ?? light.intensity ?? 1.2;
@@ -184,7 +186,7 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     },
     fill,
     sources: (light.sources ?? []).filter((source) => source.enabled).map((source) => resolveSource(source, light, shadowIds)),
-    showGizmos: light.showGizmos ?? false,
+    showGizmos: light.showGizmos ?? true,
   };
 }
 

@@ -5,6 +5,8 @@ import type { EvaluatedLayerWithEffects } from './evaluateShot';
 import { getArtboardDimensions } from '../stage/stageUtils';
 import { applyLayerSurfaceEffects, compositeLayerEffectSurface, drawLayerHalo } from '../stage/webgl/layerEffects';
 import { drawMediaShimmer } from '../stage/webgl/mediaDecorations';
+import { layerReceivesLight } from '../model/layerLighting';
+import { renderSceneLightSources } from './canvasLighting';
 import { applyLayerAlphaEffects } from './layerAlphaEffects';
 import { acquireCanvas, releaseCanvas } from './canvasPool';
 import { hexToRgba } from './canvasColorUtils';
@@ -121,7 +123,8 @@ export async function drawLayerOnCanvas(
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
 ): Promise<void> {
   const effects = layer.layer.effects;
-  if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0) {
+  const receivesLight = layerReceivesLight(layer.layer) && Boolean(frame.activeShot?.light);
+  if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0 && !receivesLight) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }
   const surface = acquireCanvas(w, h);
@@ -135,6 +138,9 @@ export async function drawLayerOnCanvas(
     }, project, frame, w, h);
     applyLayerAlphaEffects(surface, effects, 1920, 1080, (frame.shotLocalTimeMs ?? 0) / 1000);
     applyLayerSurfaceEffects(surface, effects, 1920, 1080);
+    if (receivesLight && frame.activeShot) {
+      renderSceneLightSources(content, frame.activeShot.light, frame.camera, w, h, project.aspectRatio, surface);
+    }
     const halo = drawLayerHalo(surface, effects, layer.glowIntensityOffset, layer.glowRadiusOffset, 8192, 1920, 1080);
     ctx.save();
     ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;

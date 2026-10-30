@@ -95,9 +95,10 @@ export const DEFAULT_LIGHT_RIG: LightRig = {
   temperature: 6100,
   ambience: 0.45,
   ambientColor: '#f8fafc',
-  keyLightEnabled: true,
+  keyLightEnabled: false,
+  fillEnabled: false,
   castShadow: true,
-  showGizmos: false,
+  showGizmos: true,
   sources: [],
 };
 

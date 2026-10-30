@@ -6,7 +6,7 @@ import { AxisFields } from '../../../ui/AxisFields';
 import { MenuSurface, MenuItem } from '../../../ui/Menu';
 import { IconButton, InspectorModeTabs } from '../../../ui/primitives';
 import React, { useCallback, useState } from 'react';
-import { X, Sun, Thermometer, Sparkles, Plus, ChevronDown } from 'lucide-react';
+import { X, Sparkles, Plus, ChevronDown } from 'lucide-react';
 import type { Shot, SceneLight, LightSourceType, LightAnimationBlock, LightRig } from '../../../model/types';
 import { radToDeg, degToRad } from '../../../model/defaults';
 import { generateId } from '../../../model/id';
@@ -33,6 +33,8 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
     const shotLight = activeShot.light;
     const [activeTab, setActiveTab] = useState<'design' | 'animate'>('design');
     const [addAnimationOpen, setAddAnimationOpen] = useState(false);
+    const [advancedOpen, setAdvancedOpen] = useState(false);
+    const [aimOpen, setAimOpen] = useState(false);
     const isRoom = selectedLightId === 'room';
 
     const isKey =
@@ -63,7 +65,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         : ((shotLight?.sources || []).find((s) => s.id === selectedLightId) ?? null);
 
     const updateLight = useCallback(
-        (patch: Partial<SceneLight> & { environment?: LightRig['environment'] }) => {
+        (patch: Partial<SceneLight> & Pick<Partial<LightRig>, 'environment' | 'fillEnabled' | 'fillIntensity' | 'backgroundReceivesLight' | 'showGizmos'>) => {
             const currentRig = activeShot.light || {
                 position: { x: -0.28, y: 0.36, z: 0.9 },
                 intensity: 1.2,
@@ -78,6 +80,10 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         ambience: patch.intensity ?? currentRig.ambience,
                         ambientColor: patch.color ?? currentRig.ambientColor,
                         environment: 'environment' in patch ? patch.environment : currentRig.environment,
+                        fillEnabled: patch.fillEnabled ?? currentRig.fillEnabled,
+                        fillIntensity: patch.fillIntensity ?? currentRig.fillIntensity,
+                        backgroundReceivesLight: patch.backgroundReceivesLight ?? currentRig.backgroundReceivesLight,
+                        showGizmos: patch.showGizmos ?? currentRig.showGizmos,
                     },
                 });
             } else if (isKey) {
@@ -87,7 +93,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         ...currentRig,
                         ...validKeyPatch,
                         ...(requestedColor !== undefined ? { keyColor: requestedColor } : {}),
-                        ...(requestedIntensity !== undefined ? { keyIntensity: requestedIntensity } : {}),
+                        ...(requestedIntensity !== undefined ? { keyIntensity: requestedIntensity, intensity: requestedIntensity } : {}),
                         position: patch.position
                             ? { ...currentRig.position, ...patch.position }
                             : currentRig.position,
@@ -241,7 +247,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     labelClassName="text-[11px] font-medium text-[#e4e4e7]"
                     label={<>Ambience</>}
                 >
-                    <ScrubInput label={<Sun className="w-3.5 h-3.5 text-[#e4e4e7]" />} value={Math.round(currentLight.intensity * 100)} min={0} max={100} step={1} unit="%"
+                    <ScrubInput label="Ambient" value={Math.round(currentLight.intensity * 100)} min={0} max={100} step={1} unit="%"
                         onChange={(intensity) => updateLight({ intensity: intensity / 100 })} />
                 </InspectorRow>
                 <InspectorRow
@@ -266,6 +272,34 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                     <ColorPicker color={currentLight.color} label="Room color" compact={false} showGradientMode={false}
                         onChange={(color) => updateLight({ color, environment: 'custom' })} />
                 </InspectorRow>
+                <CheckboxRow
+                    label={<>Background receives light</>}
+                    checked={shotLight?.backgroundReceivesLight ?? false}
+                    onChange={(event) => updateLight({ backgroundReceivesLight: event.target.checked })}
+                    rowClassName="flex items-center justify-between gap-3 text-[11px] text-[#e4e4e7]"
+                    className="w-4 h-4 rounded accent-[#0088ff] cursor-pointer"
+                />
+                <details className="border-t border-white/[0.06] pt-2" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+                    <summary className="cursor-pointer select-none text-[11px] font-medium text-[#a1a1aa]">Advanced lighting</summary>
+                    <div className="pt-3 space-y-3">
+                        <CheckboxRow
+                            label={<>Fill light</>}
+                            checked={shotLight?.fillEnabled ?? (shotLight?.keyLightEnabled !== false)}
+                            onChange={(event) => updateLight({ fillEnabled: event.target.checked })}
+                            rowClassName="flex items-center justify-between gap-3 text-[11px] text-[#e4e4e7]"
+                            className="w-4 h-4 rounded accent-[#0088ff] cursor-pointer"
+                        />
+                        <CheckboxRow
+                            label={<>Show light guides</>}
+                            checked={shotLight?.showGizmos ?? true}
+                            onChange={(event) => updateLight({ showGizmos: event.target.checked })}
+                            rowClassName="flex items-center justify-between gap-3 text-[11px] text-[#e4e4e7]"
+                            className="w-4 h-4 rounded accent-[#0088ff] cursor-pointer"
+                        />
+                        <ScrubInput label="Fill strength" value={Math.round((shotLight?.fillIntensity ?? 0.38) * 100)} min={0} max={100} unit="%"
+                            onChange={(value) => updateLight({ fillIntensity: value / 100 })} />
+                    </div>
+                </details>
             </div> : <>
             {/* Type Dropdown */}
             <div className="p-3.5 space-y-2">
@@ -287,55 +321,60 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
 
             {/* Position: X, Y */}
             <div className="p-3.5 space-y-2">
-                <span className="text-[11px] font-medium text-[#e4e4e7]">Position</span>
+                <span className="text-[11px] font-medium text-[#e4e4e7]">Position <span className="text-[#71717a]">(scene units)</span></span>
                 <AxisFields
                     className="grid grid-cols-2 gap-2"
-                    fields={[{ key: "0", label: "X", value: currentLight.position.x, step: 0.05, decimals: 2, onChange: (x) =>
-                       updateLight({ position: { ...currentLight.position, x } })
-                    }, { key: "1", label: "Y", value: currentLight.position.y, step: 0.05, decimals: 2, onChange: (y) =>
-                       updateLight({ position: { ...currentLight.position, y } })
+                    fields={[{ key: "0", label: "X", value: currentLight.position.x * 6, step: 0.3, decimals: 1, onChange: (x) =>
+                       updateLight({ position: { ...currentLight.position, x: x / 6 } })
+                    }, { key: "1", label: "Y", value: currentLight.position.y * 6, step: 0.3, decimals: 1, onChange: (y) =>
+                       updateLight({ position: { ...currentLight.position, y: y / 6 } })
                     }]}
                 />
             </div>
 
             {/* Depth: Z */}
             <div className="p-3.5 space-y-2">
-                <span className="text-[11px] font-medium text-[#e4e4e7]">Depth</span>
+                <span className="text-[11px] font-medium text-[#e4e4e7]">Depth <span className="text-[#71717a]">(scene units)</span></span>
                 <ScrubInput
                     label="Z"
-                    value={currentLight.position.z}
-                    step={0.05}
-                    decimals={2}
+                    value={currentLight.position.z * 5}
+                    step={0.25}
+                    decimals={1}
                     onChange={(z) =>
-                        updateLight({ position: { ...currentLight.position, z } })
+                        updateLight({ position: { ...currentLight.position, z: z / 5 } })
                     }
                 />
             </div>
 
+            <details className="border-t border-white/[0.06] px-3.5 py-2" open={aimOpen} onToggle={(event) => setAimOpen(event.currentTarget.open)}>
+            <summary className="cursor-pointer select-none text-[11px] font-medium text-[#a1a1aa]">Aim controls</summary>
+            <div className="pt-2 -mx-3.5">
             {/* Aim at: X, Y, Z (for Sun, Spot, Area) */}
             {hasTarget && (
                 <div className="p-3.5 space-y-2">
                     <span className="text-[11px] font-medium text-[#e4e4e7]">Aim at</span>
                     <AxisFields
                         className="grid grid-cols-2 gap-2 mb-2"
-                        fields={[{ key: "0", label: "X", value: target.x, step: 0.05, decimals: 2, onChange: (x) => updateLight({ target: { ...target, x } }) }, { key: "1", label: "Y", value: target.y, step: 0.05, decimals: 2, onChange: (y) => updateLight({ target: { ...target, y } }) }]}
+                        fields={[{ key: "0", label: "X", value: target.x * 6, step: 0.3, decimals: 1, onChange: (x) => updateLight({ target: { ...target, x: x / 6 } }) }, { key: "1", label: "Y", value: target.y * 6, step: 0.3, decimals: 1, onChange: (y) => updateLight({ target: { ...target, y: y / 6 } }) }]}
                     />
                     <ScrubInput
                         label="Z"
-                        value={target.z}
-                        step={0.05}
-                        decimals={2}
-                        onChange={(z) => updateLight({ target: { ...target, z } })}
+                        value={target.z * 5}
+                        step={0.25}
+                        decimals={1}
+                        onChange={(z) => updateLight({ target: { ...target, z: z / 5 } })}
                     />
                 </div>
             )}
+            </div>
+            </details>
 
             {/* Effect: Intensity + Temperature */}
             <div className="p-3.5 space-y-2">
                 <span className="text-[11px] font-medium text-[#e4e4e7]">Effect</span>
                 <div className="grid grid-cols-2 gap-2">
                     <ScrubInput
-                        label={<Sun className="w-3.5 h-3.5 text-[#e4e4e7]" />}
+                        label="Power"
                         value={currentLight.intensity}
                         min={0}
                         max={10}
@@ -344,7 +383,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         onChange={(intensity) => updateLight({ intensity })}
                     />
                     <ScrubInput
-                        label={<Thermometer className="w-3.5 h-3.5 text-[#e4e4e7]" />}
+                        label="Temperature"
                         value={currentLight.temperature ?? 6500}
                         min={1000}
                         max={12000}
@@ -368,6 +407,9 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                 />
             </div>
 
+            <details className="border-t border-white/[0.06] px-3.5 py-2" open={advancedOpen} onToggle={(event) => setAdvancedOpen(event.currentTarget.open)}>
+            <summary className="cursor-pointer select-none text-[11px] font-medium text-[#a1a1aa]">Advanced controls</summary>
+            <div className="pt-2 -mx-3.5">
             {/* Cone (Spot light) */}
             {currentLight.type === 'spot' && (
                 <div className="p-3.5 space-y-2">
@@ -404,6 +446,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         max={100}
                         step={0.5}
                         decimals={1}
+                        unit="u"
                         onChange={(distance) => updateLight({ distance })}
                     />
                 </div>
@@ -421,6 +464,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                             max={50}
                             step={0.2}
                             decimals={1}
+                            unit="u"
                             onChange={(width) => updateLight({ width })}
                         />
                         <ScrubInput
@@ -430,6 +474,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                             max={50}
                             step={0.2}
                             decimals={1}
+                            unit="u"
                             onChange={(height) => updateLight({ height })}
                         />
                     </div>
@@ -455,6 +500,8 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                         onChange={(value) => isKey ? updateShot(activeShot.id, (shot) => ({ ...shot, light: { ...shot.light, shadowSoftness: value } })) : updateLight({ shadowSoftness: value })} />
                 </div>
             </div>}
+            </div>
+            </details>
             </>}
             <div className="p-3.5 border-t border-white/[0.06]"><SceneLightsList activeShot={activeShot} selectedLightId={selectedLightId}
                 onSelectLight={(id) => { if (id) selectLight(id); else onClose(); }} /></div>

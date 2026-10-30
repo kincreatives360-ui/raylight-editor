@@ -16,6 +16,7 @@ import { IconButton } from '../../../ui/primitives';
 import { MenuSurface, MenuItem } from '../../../ui/Menu';
 import { Eye, EyeOff } from 'lucide-react';
 import { generateId } from '../../../model/id';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 
 export interface SceneLightsListProps {
     activeShot: Shot;
@@ -33,11 +34,12 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
     compact: _compact = false,
 }) => {
     const updateShot = useProjectStore((s) => s.updateShot);
+    const setActiveLightTool = useSelectionStore((s) => s.setActiveLightTool);
     const [addMenuOpen, setAddMenuOpen] = useState(false);
     const [editingLightId, setEditingLightId] = useState<string | null>(null);
 
     const shotLight = activeShot.light;
-    const keyEnabled = shotLight?.keyLightEnabled !== false;
+    const keyEnabled = shotLight ? shotLight.keyLightEnabled !== false : false;
     const sources = shotLight?.sources || [];
 
     const handleToggleKeyLight = (e: React.MouseEvent) => {
@@ -54,6 +56,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                 keyLightEnabled: !keyEnabled,
             },
         });
+        if (keyEnabled) onSelectLight(null);
     };
 
     const handleToggleSource = (e: React.MouseEvent, sourceId: string) => {
@@ -110,39 +113,8 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
 
     const handleAddLight = (type: LightSourceType) => {
         setAddMenuOpen(false);
-        const currentRig = shotLight || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-        };
-        const newId = generateId();
-
-        const newLight: SceneLight = {
-            id: newId,
-            name: `${LIGHT_TYPE_META[type].label} ${sources.length + 1}`,
-            type,
-            enabled: true,
-            position: { x: 0, y: 0.5, z: 1.0 },
-            target: { x: 0, y: 0, z: 0 },
-            intensity: 1.2,
-            color: '#ffffff',
-            temperature: 6500,
-            distance: type === 'point' || type === 'spot' ? 6 : undefined,
-            angle: type === 'spot' ? Math.PI / 6 : undefined,
-            penumbra: type === 'spot' ? 0.2 : undefined,
-            width: type === 'area' ? 3 : undefined,
-            height: type === 'area' ? 3 : undefined,
-            castShadow: true,
-        };
-
-        updateShot(activeShot.id, {
-            light: {
-                ...currentRig,
-                sources: [...sources, newLight],
-            },
-        });
-        onSelectLight(newId);
+        onSelectLight(null);
+        setActiveLightTool(type);
     };
 
     const handleRename = (sourceId: string, newName: string) => {
@@ -206,17 +178,17 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                     name={<span className="truncate font-medium">Room</span>}
                     actions={<span className="text-[10px] text-[#71717a]">Environment</span>} />
                 {/* 1. Primary Sun Key Light */}
-                <SceneLightRow id="sun-key" selected={isSunSelected} onSelect={() => onSelectLight('sun-key')}
+                {keyEnabled && <SceneLightRow id="sun-key" selected={isSunSelected} onSelect={() => onSelectLight('sun-key')}
                     icon={<LightTypeIcon type="directional" />} name={<span className="truncate font-medium">Sun</span>}
                     actions={<IconButton
                         unstyled
                         tooltip={false}
-                        label="Toggle light visibility"
-                        title="Toggle light visibility"
+                        label="Remove sunlight"
+                        title="Remove sunlight"
                         onClick={handleToggleKeyLight}
                         icon={keyEnabled ? <Eye className="w-3 h-3 text-[#a1a1aa]" /> : <EyeOff className="w-3 h-3 text-red-400" />}
                         className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                    />} />
+                    />} />}
 
                 {/* 2. Additional Light Sources */}
                 {sources.map((source) => {
