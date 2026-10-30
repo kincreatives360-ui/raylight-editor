@@ -5,6 +5,7 @@ import type { AudioClip, ProjectAudio } from '../model/types';
 let audioCtx: AudioContext | null = null;
 let lastAudioContextClass: unknown = null;
 const audioBufferCache = new Map<string, AudioBuffer>();
+const MAX_AUDIO_BUFFER_CACHE_ENTRIES = 32;
 const inFlightDecodes = new Set<string>();
 
 function getAudioContext(): AudioContext | null {
@@ -42,13 +43,38 @@ const MAX_WAVEFORM_CACHE_ENTRIES = 512;
 
 // Compact identity mapping for data URLs to avoid embedding massive base64 strings into cache keys
 const urlIdMap = new Map<string, number>();
+const MAX_URL_ID_CACHE_ENTRIES = 512;
 let nextUrlId = 1;
+
+function getCachedAudioBuffer(url: string): AudioBuffer | undefined {
+  const buffer = audioBufferCache.get(url);
+  if (!buffer) return undefined;
+  audioBufferCache.delete(url);
+  audioBufferCache.set(url, buffer);
+  return buffer;
+}
+
+function cacheAudioBuffer(url: string, buffer: AudioBuffer): void {
+  audioBufferCache.delete(url);
+  audioBufferCache.set(url, buffer);
+  if (audioBufferCache.size > MAX_AUDIO_BUFFER_CACHE_ENTRIES) {
+    const oldestUrl = audioBufferCache.keys().next().value;
+    if (oldestUrl !== undefined) audioBufferCache.delete(oldestUrl);
+  }
+}
 
 function getUrlCompactId(url: string | undefined): string {
   if (!url) return '';
   let id = urlIdMap.get(url);
-  if (!id) {
+  if (id === undefined) {
     id = nextUrlId++;
+    urlIdMap.set(url, id);
+    if (urlIdMap.size > MAX_URL_ID_CACHE_ENTRIES) {
+      const oldestUrl = urlIdMap.keys().next().value;
+      if (oldestUrl !== undefined) urlIdMap.delete(oldestUrl);
+    }
+  } else {
+    urlIdMap.delete(url);
     urlIdMap.set(url, id);
   }
   return `u${id}`;
@@ -67,7 +93,7 @@ export function clearWaveformCache(): void {
  */
 export function generateWaveformPeaks(clip: AudioClip, count: number): number[] {
   const barsCount = Math.max(16, count);
-  const cachedBuffer = clip.dataUrl ? audioBufferCache.get(clip.dataUrl) : null;
+  const cachedBuffer = clip.dataUrl ? getCachedAudioBuffer(clip.dataUrl) : null;
   const hasBuffer = Boolean(cachedBuffer);
   const urlId = getUrlCompactId(clip.dataUrl);
   const cacheKey = `${clip.id}:${clip.name}:${clip.offsetMs}:${clip.durationMs}:${urlId}:${hasBuffer ? 'buf' : 'proc'}:${barsCount}`;
@@ -133,9 +159,8 @@ export function generateWaveformPeaks(clip: AudioClip, count: number): number[] 
  * Loads and decodes an audio file into an AudioBuffer
  */
 export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuffer | null> {
-  if (audioBufferCache.has(dataUrl)) {
-    return audioBufferCache.get(dataUrl)!;
-  }
+  const cachedBuffer = getCachedAudioBuffer(dataUrl);
+  if (cachedBuffer) return cachedBuffer;
   const ctx = getAudioContext();
   if (!ctx) return null;
 
@@ -146,7 +171,7 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
     }
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    audioBufferCache.set(dataUrl, audioBuffer);
+    cacheAudioBuffer(dataUrl, audioBuffer);
     // Invalidate any procedural peak entries for this dataUrl so the newly decoded buffer is used
     const compactId = urlIdMap.get(dataUrl);
     if (compactId) {
@@ -167,7 +192,7 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
 function computeAudioStateKey(audio: ProjectAudio): string {
   const clipsKey = audio.clips
     .map((c) => {
-      const ready = c.dataUrl && audioBufferCache.has(c.dataUrl) ? '1' : '0';
+      const ready = c.dataUrl && getCachedAudioBuffer(c.dataUrl) ? '1' : '0';
       return `${c.id}:${c.startMs}:${c.durationMs}:${c.offsetMs}:${c.volume}:${c.muted ? 1 : 0}:${getUrlCompactId(c.dataUrl)}:${ready}`;
     })
     .join('|');
@@ -248,7 +273,8 @@ export function syncAudioPlayback(
 
     if (!clip.dataUrl) continue;
 
-    if (!audioBufferCache.has(clip.dataUrl)) {
+    const cachedBuffer = getCachedAudioBuffer(clip.dataUrl);
+    if (!cachedBuffer) {
       // Preload into cache so it will be ready to schedule as soon as decoding completes
       if (!inFlightDecodes.has(clip.dataUrl)) {
         inFlightDecodes.add(clip.dataUrl);
@@ -260,7 +286,7 @@ export function syncAudioPlayback(
       continue;
     }
 
-    const buffer = audioBufferCache.get(clip.dataUrl)!;
+    const buffer = cachedBuffer;
     const isFutureClip = clipStart > currentTimeMs;
     const startWhenSec = isFutureClip
       ? nowSec + (clipStart - currentTimeMs) / 1000

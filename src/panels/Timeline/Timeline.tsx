@@ -1,28 +1,24 @@
-import { IconButton } from '../../ui/primitives';
-import { TimelineDragPreview } from './TimelineDragPreview';
-import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
-import { getTimelineTransition, updateTimelineTransition } from './transitionSync';
 // src/panels/Timeline/Timeline.tsx
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Play, Pause, Volume2, VolumeX, Scissors, Trash2, Copy } from 'lucide-react';
-import { ContextMenu, type ContextMenuItemDef } from '../../ui/ContextMenu';
-import { copyTimelineBlock } from '../../utils/editorClipboard';
-import type { Shot, Layer, AnimationBlock, CameraBlock, LightAnimationBlock, AudioClip, Easing } from '../../model/types';
+import React, { useMemo, useRef, useState } from 'react';
+import { useTimelineLayerInteractions } from './useTimelineLayerInteractions';
+import { useTimelineCameraLightInteractions } from './useTimelineCameraLightInteractions';
+import { useTimelineShotInteractions } from './useTimelineShotInteractions';
+import { useTimelineAudioInteractions } from './useTimelineAudioInteractions';
+import { useTimelineViewport } from './useTimelineViewport';
+import { useTimelinePlayback } from './useTimelinePlayback';
+import type { TimelineEasingPopoverTarget, TimelineGhostDragPreview } from './timelineTypes';
+import { ContextMenu } from '../../ui/ContextMenu';
 import { isBlankProjectState } from '../../model/types';
-import { recalculateShotStartTimes, useProjectStore } from '../../store/useProjectStore';
+import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { TimelineTimecode } from './TimelineTimecode';
+import { TimelineToolbar } from './TimelineToolbar';
+import { TimelineShotOverview } from './TimelineShotOverview';
+import { TimelineMediaTrack } from './TimelineMediaTrack';
+import { TimelineSceneTracks } from './TimelineSceneTracks';
 import { PlayheadOverlay } from './PlayheadOverlay';
 import { EasingPopover } from './EasingPopover';
-import { TimelineEasingCurve } from './TimelineEasingCurve';
 import { getShotTimelineWidth } from './timelineBarGeometry';
-import { AudioClipBar } from './AudioClipBar';
-import { TransitionPill } from './TransitionPill';
-import { isInteractiveElement } from '../../utils/shortcuts';
-
-const MIN_TIMELINE_ZOOM = 0.8;
-const MAX_TIMELINE_ZOOM = 2.4;
 
 interface TimelineProps {
     totalDurationMs: number;
@@ -37,8 +33,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 }) => {
     const {
         project,
-        updateProject,
         updateShot,
+        updateProject,
         updateLayer,
         addShot,
         deleteShot,
@@ -95,47 +91,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         [expandedTimelineLayerIds]
     );
 
-    const trackRef = useRef<HTMLDivElement | null>(null);
-    const timelineZoomRef = useRef(timelineZoom);
-    useEffect(() => {
-        timelineZoomRef.current = timelineZoom;
-    }, [timelineZoom]);
-
-    useEffect(() => {
-        const container = trackRef.current;
-        if (!container) return;
-
-        const handleWheel = (event: WheelEvent) => {
-            if (event.ctrlKey || event.metaKey) {
-                event.preventDefault();
-                const rect = container.getBoundingClientRect();
-                const mouseX = event.clientX - rect.left;
-                const timelineX = mouseX + container.scrollLeft;
-
-                const zoomDelta = event.deltaY < 0 ? 0.12 : -0.12;
-                const currentZoom = timelineZoomRef.current;
-                const nextZoom = Math.max(
-                    MIN_TIMELINE_ZOOM,
-                    Math.min(MAX_TIMELINE_ZOOM, Number((currentZoom + zoomDelta).toFixed(2)))
-                );
-                if (nextZoom === currentZoom) return;
-
-                const scaleRatio = nextZoom / currentZoom;
-                setTimelineZoom(nextZoom);
-
-                requestAnimationFrame(() => {
-                    if (trackRef.current) {
-                        trackRef.current.scrollLeft = Math.max(0, timelineX * scaleRatio - mouseX);
-                    }
-                });
-            }
-        };
-
-        container.addEventListener('wheel', handleWheel, { passive: false });
-        return () => {
-            container.removeEventListener('wheel', handleWheel);
-        };
-    }, [setTimelineZoom]);
+    const { trackRef, timelineViewportWidth, handleStartResizeTimelineHeight } = useTimelineViewport({
+        timelineZoom,
+        setTimelineZoom,
+        timelineHeightPx,
+        setTimelineHeightPx,
+        timelineScrollTop,
+    });
     const shotDragRef = useRef<{
         shotId: string;
         index: number;
@@ -144,129 +106,18 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     } | null>(null);
     const suppressShotClickRef = useRef<string | null>(null);
     const suppressPillClickRef = useRef<string | null>(null);
-    const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
+
     const [addShotHoverX, setAddShotHoverX] = useState<number | null>(null);
     const [addLayerHoverX, setAddLayerHoverX] = useState<number | null>(null);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
-    const isDraggingPlayheadRef = useRef(false);
-    const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
-    const [easingPopoverTarget, setEasingPopoverTarget] = useState<{
-        easing: Easing;
-        onChange: (easing: Easing) => void;
-        anchorRect?: DOMRect | null;
-    } | null>(null);
-    const [ghostDragPreview, setGhostDragPreview] = useState<{
-        id: string;
-        type: 'block' | 'entrance' | 'exit' | 'layer' | 'camera' | 'light';
-        startMs: number;
-        durationMs: number;
-        label?: string;
-        trimEdge?: 'left' | 'right';
-        snapped?: boolean;
-    } | null>(null);
-    const rafIdRef = useRef<number | null>(null);
-    const latestHoverClientXRef = useRef<number | null>(null);
-
-    useEffect(() => {
-        return () => {
-            if (rafIdRef.current !== null) {
-                cancelAnimationFrame(rafIdRef.current);
-            }
-        };
-    }, []);
+    const [easingPopoverTarget, setEasingPopoverTarget] = useState<TimelineEasingPopoverTarget | null>(null);
+    const [ghostDragPreview, setGhostDragPreview] = useState<TimelineGhostDragPreview | null>(null);
 
     const activeShot =
         project.shots.find((shot) => shot.id === selectedShotId) ??
         project.shots[0];
     const isBlankState = isBlankProjectState(project);
-
-    useEffect(() => {
-        const element = trackRef.current;
-        if (!element) return;
-        const observer = new ResizeObserver(([entry]) => {
-            setTimelineViewportWidth(Math.max(1, entry.contentRect.width));
-        });
-        observer.observe(element);
-        return () => observer.disconnect();
-    }, []);
-
-    // Sync vertical scroll position with LeftPanel's lower track rack
-    useEffect(() => {
-        const el = trackRef.current;
-        if (el && Math.abs(el.scrollTop - timelineScrollTop) > 1) {
-            el.scrollTop = timelineScrollTop;
-        }
-    }, [timelineScrollTop]);
-
-    // ArrowLeft / ArrowRight keyboard nudge for selected timeline blocks (CameraBlock, LightBlock, AnimationBlock)
-    useEffect(() => {
-        const handleKeyDown = (e: KeyboardEvent) => {
-            if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
-            if (isInteractiveElement(e.target as HTMLElement)) return;
-            if (!activeShot) return;
-
-            const stepMs = e.shiftKey ? 100 : 10;
-            const deltaMs = e.key === 'ArrowLeft' ? -stepMs : stepMs;
-
-            if (selectedCameraBlockId) {
-                const cb = activeShot.cameraBlocks.find((b) => b.id === selectedCameraBlockId);
-                if (cb) {
-                    e.preventDefault();
-                    const nextStart = Math.max(0, Math.min(activeShot.durationMs - cb.durationMs, cb.startMs + deltaMs));
-                    if (nextStart !== cb.startMs) {
-                        updateShot(activeShot.id, (s) => ({
-                            ...s,
-                            cameraBlocks: s.cameraBlocks.map((b) =>
-                                b.id === cb.id ? { ...b, startMs: nextStart } : b
-                            ),
-                        }));
-                    }
-                    return;
-                }
-            }
-
-            if (selectedLightBlockId) {
-                const lb = (activeShot.lightBlocks || []).find((b) => b.id === selectedLightBlockId);
-                if (lb) {
-                    e.preventDefault();
-                    const nextStart = Math.max(0, Math.min(activeShot.durationMs - lb.durationMs, lb.startMs + deltaMs));
-                    if (nextStart !== lb.startMs) {
-                        updateShot(activeShot.id, (s) => ({
-                            ...s,
-                            lightBlocks: (s.lightBlocks || []).map((b) =>
-                                b.id === lb.id ? { ...b, startMs: nextStart } : b
-                            ),
-                        }));
-                    }
-                    return;
-                }
-            }
-
-            if (selectedBlockId) {
-                for (const layer of activeShot.layers) {
-                    const blk = layer.blocks.find((b) => b.id === selectedBlockId);
-                    if (blk) {
-                        e.preventDefault();
-                        const layerSpan = layer.outMs - layer.inMs;
-                        const nextStart = Math.max(0, Math.min(layerSpan - blk.durationMs, blk.startMs + deltaMs));
-                        if (nextStart !== blk.startMs) {
-                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                ...l,
-                                blocks: l.blocks.map((b) =>
-                                    b.id === blk.id ? { ...b, startMs: nextStart } : b
-                                ),
-                            }));
-                        }
-                        return;
-                    }
-                }
-            }
-        };
-
-        window.addEventListener('keydown', handleKeyDown);
-        return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedCameraBlockId, selectedLightBlockId, selectedBlockId, activeShot, updateShot, updateLayer]);
 
     const visibleDurationMs = isBlankState
         ? 0
@@ -281,6 +132,34 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     const BASE_PX_PER_SECOND = 140;
     const pxPerSecond = BASE_PX_PER_SECOND * timelineZoom;
     const pxPerMs = pxPerSecond / 1000;
+    const {
+        isDraggingPlayhead,
+        clientXToLocalMs,
+        handleTimelinePointerMove,
+        handleTimelinePointerLeave,
+        handleTimelineClick,
+        handleRulerPointerDown,
+    } = useTimelinePlayback({
+        trackRef,
+        pxPerMs,
+        visibleDurationMs,
+        totalDurationMs,
+        timelineView,
+        activeShot,
+        isBlankState,
+        hoverTimeMs,
+        onHoverTimeChange,
+        isPlaying,
+        setIsPlaying,
+        setCurrentTimeMs,
+        dragging,
+        clearLayerSelection,
+        selectedCameraBlockId,
+        selectedLightBlockId,
+        selectedBlockId,
+        updateShot,
+        updateLayer,
+    });
     const addLayerLaneWidth = activeShot
         ? getShotTimelineWidth(activeShot.durationMs, pxPerMs)
         : 0;
@@ -312,1202 +191,60 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         return marks;
     }, [visibleDurationMs, totalDurationMs, rulerStepMs]);
 
-    // Top Splitter Drag: Expand Timeline Up or Contract Down
-    const handleStartResizeTimelineHeight = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        const startY = e.clientY;
-        const startHeight = timelineHeightPx;
-        const pointerId = e.pointerId;
-        const target = e.currentTarget;
-        try {
-            target.setPointerCapture(pointerId);
-        } catch {
-            // Ignore synthetic pointer capture errors
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId === pointerId) {
-                const deltaY = startY - ev.clientY;
-                setTimelineHeightPx(startHeight + deltaY);
-            }
-        };
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId === pointerId) {
-                try {
-                    if (target.hasPointerCapture(pointerId)) {
-                        target.releasePointerCapture(pointerId);
-                    }
-                } catch {
-                    // Ignore release errors
-                }
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onEnd);
-                window.removeEventListener('pointercancel', onEnd);
-            }
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    const clientXToLocalMs = (clientX: number): number => {
-        const el = trackRef.current;
-        if (!el) return 0;
-        const rect = el.getBoundingClientRect();
-        const contentX = clientX - rect.left - 16 + el.scrollLeft;
-        const localMs = contentX / pxPerMs;
-        return Math.max(0, Math.min(visibleDurationMs, localMs));
-    };
-
-    const scrubFromClientX = (clientX: number) => {
-        const localMs = clientXToLocalMs(clientX);
-        if (timelineView === 'scene' && activeShot) {
-            setCurrentTimeMs(
-                activeShot.startMs + Math.min(activeShot.durationMs, localMs)
-            );
-        } else {
-            setCurrentTimeMs(Math.min(totalDurationMs, localMs));
-        }
-    };
-
-    const timeAtClientX = (clientX: number) => {
-        const localMs = clientXToLocalMs(clientX);
-        return timelineView === 'scene' && activeShot
-            ? activeShot.startMs + Math.min(activeShot.durationMs, localMs)
-            : Math.min(totalDurationMs, localMs);
-    };
-
-    const handleTimelinePointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-        if (isBlankState || totalDurationMs <= 0 || isDraggingPlayheadRef.current || dragging) {
-            if (hoverTimeMs !== null) onHoverTimeChange(null);
-            return;
-        }
-
-        // Pause playback while skimming so the preview has full visual focus
-        if (isPlaying) {
-            setIsPlaying(false);
-        }
-
-        latestHoverClientXRef.current = event.clientX;
-        if (rafIdRef.current === null) {
-            rafIdRef.current = requestAnimationFrame(() => {
-                rafIdRef.current = null;
-                if (latestHoverClientXRef.current !== null && !isDraggingPlayheadRef.current) {
-                    const time = timeAtClientX(latestHoverClientXRef.current);
-                    onHoverTimeChange(time);
-                }
-            });
-        }
-    };
-
-    const handleTimelinePointerLeave = () => {
-        if (rafIdRef.current !== null) {
-            cancelAnimationFrame(rafIdRef.current);
-            rafIdRef.current = null;
-        }
-        latestHoverClientXRef.current = null;
-        onHoverTimeChange(null);
-    };
-
-    const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
-        // Empty timeline space seeks on click; existing controls and clips keep their own click behavior.
-        const target = event.target;
-        if (!(target instanceof HTMLElement)) return;
-        if (
-            target.closest('button, input, [role="button"], [data-timeline-item], [data-cam-pill], [data-light-pill], [data-preset-pill]')
-        ) return;
-        clearLayerSelection();
-        const targetTime = hoverTimeMs !== null ? hoverTimeMs : timeAtClientX(event.clientX);
-        setCurrentTimeMs(targetTime);
-    };
-
-    const handleRulerPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        isDraggingPlayheadRef.current = true;
-        setIsDraggingPlayhead(true);
-        onHoverTimeChange(null);
-        scrubFromClientX(e.clientX);
-
-        const pointerId = e.pointerId;
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture failure
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId === pointerId) {
-                scrubFromClientX(ev.clientX);
-            }
-        };
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId === pointerId) {
-                isDraggingPlayheadRef.current = false;
-                setIsDraggingPlayhead(false);
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', onEnd);
-                window.removeEventListener('pointercancel', onEnd);
-            }
-        };
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
     // Magnetic Snapping calculation (12px visual threshold converted into milliseconds)
     const snapThresholdMs = Math.max(15, Math.round(12 / pxPerMs));
 
-    const getSnapTargets = (shot: Shot, excludeId?: string): number[] => {
-        const targets = new Set<number>();
-        targets.add(0);
-        targets.add(shot.durationMs);
-
-        const playheadTimeMs = usePlayheadStore.getState().currentTimeMs;
-        const playheadLocalMs = playheadTimeMs - shot.startMs;
-        if (playheadLocalMs >= 0 && playheadLocalMs <= shot.durationMs) {
-            targets.add(playheadLocalMs);
-        }
-
-        for (const l of shot.layers) {
-            if (l.id !== excludeId) {
-                targets.add(l.inMs);
-                targets.add(l.outMs);
-            }
-            if (getTimelineTransition(l, 'entrance').type !== 'none' && `${l.id}-entrance` !== excludeId && l.id !== excludeId) {
-                const entStart = l.inMs + (getTimelineTransition(l, 'entrance').delayMs || 0);
-                const entDur = Math.max(80, getTimelineTransition(l, 'entrance').durationMs || 500);
-                targets.add(entStart);
-                targets.add(entStart + entDur);
-            }
-            if (getTimelineTransition(l, 'exit').type !== 'none' && `${l.id}-exit` !== excludeId && l.id !== excludeId) {
-                const extDur = Math.max(80, getTimelineTransition(l, 'exit').durationMs || 500);
-                const extEnd = l.outMs - (getTimelineTransition(l, 'exit').delayMs || 0);
-                targets.add(Math.max(l.inMs, extEnd - extDur));
-                targets.add(extEnd);
-            }
-            for (const b of l.blocks) {
-                if (b.id !== excludeId) {
-                    targets.add(b.startMs);
-                    targets.add(b.startMs + b.durationMs);
-                }
-            }
-        }
-        return Array.from(targets);
-    };
-
-    const snapTime = (val: number, targets: number[], threshold: number): { time: number; snapped: boolean } => {
-        let closest = val;
-        let minDiff = threshold;
-        let snapped = false;
-        for (const t of targets) {
-            const diff = Math.abs(val - t);
-            if (diff < minDiff) {
-                minDiff = diff;
-                closest = t;
-                snapped = true;
-            }
-        }
-        return { time: closest, snapped };
-    };
-
-    // 1. Drag / Trim Main Layer Bar (Hardened with Pointer Events & >3px deadzone + Magnetic Snapping)
-    const startLayerBarDrag = (
-        e: React.PointerEvent,
-        shot: Shot,
-        layer: Layer,
-        mode: 'move' | 'in' | 'out'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        setInspectorTab('layer');
-        selectLayer(layer.id, false);
-        const startX = e.clientX;
-        const origIn = layer.inMs;
-        const origOut = layer.outMs;
-        const pointerId = e.pointerId;
-        const snapTargets = getSnapTargets(shot, layer.id);
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture failure
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-            let nextIn = origIn;
-            let nextOut = origOut;
-
-            if (mode === 'in') {
-                const snap = snapTime(origIn + deltaMs, snapTargets, snapThresholdMs);
-                nextIn = Math.max(0, Math.min(origOut - 100, snap.time));
-                setGhostDragPreview({
-                    id: layer.id,
-                    type: 'layer',
-                    startMs: nextIn,
-                    durationMs: nextOut - nextIn,
-                    label: layer.name,
-                    trimEdge: 'left',
-                    snapped: snap.snapped,
-                });
-            } else if (mode === 'out') {
-                const snap = snapTime(origOut + deltaMs, snapTargets, snapThresholdMs);
-                nextOut = Math.max(
-                    origIn + 100,
-                    Math.min(shot.durationMs, snap.time)
-                );
-                setGhostDragPreview({
-                    id: layer.id,
-                    type: 'layer',
-                    startMs: nextIn,
-                    durationMs: nextOut - nextIn,
-                    label: layer.name,
-                    trimEdge: 'right',
-                    snapped: snap.snapped,
-                });
-            } else {
-                const dur = origOut - origIn;
-                const snapStart = snapTime(origIn + deltaMs, snapTargets, snapThresholdMs);
-                const snapEnd = snapTime(origOut + deltaMs, snapTargets, snapThresholdMs);
-                let snapped = false;
-                let targetIn = origIn + deltaMs;
-                if (snapStart.snapped) {
-                    targetIn = snapStart.time;
-                    snapped = true;
-                } else if (snapEnd.snapped) {
-                    targetIn = snapEnd.time - dur;
-                    snapped = true;
-                }
-                nextIn = Math.max(0, Math.min(shot.durationMs - dur, targetIn));
-                nextOut = nextIn + dur;
-                setGhostDragPreview({
-                    id: layer.id,
-                    type: 'layer',
-                    startMs: nextIn,
-                    durationMs: dur,
-                    label: layer.name,
-                    snapped,
-                });
-            }
-
-            updateLayer(
-                shot.id,
-                layer.id,
-                (l) => ({ ...l, inMs: nextIn, outMs: nextOut }),
-                { skipHistory: true }
-            );
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            setGhostDragPreview(null);
-            if (hasMoved) {
-                commitDragTransaction();
-                setDragging(false);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 2. Drag / Trim In (Entrance) & Out (Exit) Transition Pills! (Hardened + Magnetic Snapping)
-    const startPresetDrag = (
-        e: React.PointerEvent,
-        shot: Shot,
-        layer: Layer,
-        which: 'entrance' | 'exit',
-        mode: 'move' | 'left' | 'right'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        selectPreset(which, layer.id);
-
-        const startX = e.clientX;
-        const preset = getTimelineTransition(layer, which);
-        const origDelay = preset.delayMs || 0;
-        const origDur = Math.max(100, preset.durationMs || 500);
-        const layerSpan = Math.max(200, layer.outMs - layer.inMs);
-        const pointerId = e.pointerId;
-        const snapTargets = getSnapTargets(shot, `${layer.id}-${which}`);
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-
-            if (which === 'entrance') {
-                let nextDelay = origDelay;
-                let nextDur = origDur;
-                const origGlobalStart = layer.inMs + origDelay;
-
-                if (mode === 'move') {
-                    const snapStart = snapTime(origGlobalStart + deltaMs, snapTargets, snapThresholdMs);
-                    const snapEnd = snapTime(origGlobalStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                    let targetGlobal = origGlobalStart + deltaMs;
-                    let snapped = false;
-                    if (snapStart.snapped) {
-                        targetGlobal = snapStart.time;
-                        snapped = true;
-                    } else if (snapEnd.snapped) {
-                        targetGlobal = snapEnd.time - origDur;
-                        snapped = true;
-                    }
-                    const targetDelay = targetGlobal - layer.inMs;
-                    nextDelay = Math.max(
-                        0,
-                        Math.min(layerSpan - origDur, targetDelay)
-                    );
-                    setGhostDragPreview({
-                        id: `${layer.id}-entrance`,
-                        type: 'entrance',
-                        startMs: layer.inMs + nextDelay,
-                        durationMs: nextDur,
-                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
-                        snapped,
-                    });
-                } else if (mode === 'left') {
-                    const snap = snapTime(origGlobalStart + deltaMs, snapTargets, snapThresholdMs);
-                    const targetDelay = snap.time - layer.inMs;
-                    nextDelay = Math.max(
-                        0,
-                        Math.min(origDelay + origDur - 80, targetDelay)
-                    );
-                    nextDur = origDelay + origDur - nextDelay;
-                    setGhostDragPreview({
-                        id: `${layer.id}-entrance`,
-                        type: 'entrance',
-                        startMs: layer.inMs + nextDelay,
-                        durationMs: nextDur,
-                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
-                        trimEdge: 'left',
-                        snapped: snap.snapped,
-                    });
-                } else if (mode === 'right') {
-                    const snap = snapTime(origGlobalStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                    const targetDur = snap.time - origGlobalStart;
-                    nextDur = Math.max(
-                        80,
-                        Math.min(layerSpan - origDelay, targetDur)
-                    );
-                    setGhostDragPreview({
-                        id: `${layer.id}-entrance`,
-                        type: 'entrance',
-                        startMs: layer.inMs + nextDelay,
-                        durationMs: nextDur,
-                        label: `In: ${getTimelineTransition(layer, 'entrance').type}`,
-                        trimEdge: 'right',
-                        snapped: snap.snapped,
-                    });
-                }
-                updateLayer(
-                    shot.id,
-                    layer.id,
-                    (l) => updateTimelineTransition(l, 'entrance', {
-                            delayMs: nextDelay,
-                            durationMs: nextDur,
-                        }),
-                    { skipHistory: true }
-                );
-            } else {
-                let nextDelay = origDelay;
-                let nextDur = origDur;
-                const origGlobalEnd = layer.outMs - origDelay;
-
-                if (mode === 'move') {
-                    const snapStart = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
-                    const snapEnd = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
-                    let targetGlobalEnd = origGlobalEnd + deltaMs;
-                    let snapped = false;
-                    if (snapEnd.snapped) {
-                        targetGlobalEnd = snapEnd.time;
-                        snapped = true;
-                    } else if (snapStart.snapped) {
-                        targetGlobalEnd = snapStart.time + origDur;
-                        snapped = true;
-                    }
-                    const targetDelay = layer.outMs - targetGlobalEnd;
-                    nextDelay = Math.max(
-                        0,
-                        Math.min(layerSpan - origDur, targetDelay)
-                    );
-                    setGhostDragPreview({
-                        id: `${layer.id}-exit`,
-                        type: 'exit',
-                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
-                        durationMs: nextDur,
-                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
-                        snapped,
-                    });
-                } else if (mode === 'left') {
-                    const snap = snapTime(origGlobalEnd - origDur + deltaMs, snapTargets, snapThresholdMs);
-                    const targetDur = origGlobalEnd - snap.time;
-                    nextDur = Math.max(
-                        80,
-                        Math.min(layerSpan - origDelay, targetDur)
-                    );
-                    setGhostDragPreview({
-                        id: `${layer.id}-exit`,
-                        type: 'exit',
-                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
-                        durationMs: nextDur,
-                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
-                        trimEdge: 'left',
-                        snapped: snap.snapped,
-                    });
-                } else if (mode === 'right') {
-                    const snap = snapTime(origGlobalEnd + deltaMs, snapTargets, snapThresholdMs);
-                    const targetDelay = layer.outMs - snap.time;
-                    nextDelay = Math.max(
-                        0,
-                        Math.min(origDelay + origDur - 80, targetDelay)
-                    );
-                    nextDur = origDelay + origDur - nextDelay;
-                    setGhostDragPreview({
-                        id: `${layer.id}-exit`,
-                        type: 'exit',
-                        startMs: Math.max(layer.inMs, layer.outMs - nextDelay - nextDur),
-                        durationMs: nextDur,
-                        label: `Out: ${getTimelineTransition(layer, 'exit').type}`,
-                        trimEdge: 'right',
-                        snapped: snap.snapped,
-                    });
-                }
-                updateLayer(
-                    shot.id,
-                    layer.id,
-                    (l) => updateTimelineTransition(l, 'exit', {
-                            delayMs: nextDelay,
-                            durationMs: nextDur,
-                        }),
-                    { skipHistory: true }
-                );
-            }
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            setGhostDragPreview(null);
-            if (hasMoved) {
-                suppressPillClickRef.current = `${layer.id}-${which}`;
-                commitDragTransaction();
-                setDragging(false);
-                window.setTimeout(() => {
-                    if (suppressPillClickRef.current === `${layer.id}-${which}`) {
-                        suppressPillClickRef.current = null;
-                    }
-                }, 0);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 3. Drag / Trim Animation Block (Hardened + Magnetic Snapping)
-    const startBlockDrag = (
-        e: React.PointerEvent,
-        shot: Shot,
-        layer: Layer,
-        block: AnimationBlock,
-        mode: 'move' | 'left' | 'right'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        selectBlock(block.id, layer.id);
-        const startX = e.clientX;
-        const origStart = block.startMs;
-        const origDur = block.durationMs;
-        const pointerId = e.pointerId;
-        const snapTargets = getSnapTargets(shot, block.id);
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-            let nextStart = origStart;
-            let nextDur = origDur;
-
-            if (mode === 'left') {
-                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                nextStart = Math.max(
-                    0,
-                    Math.min(origStart + origDur - 80, snap.time)
-                );
-                nextDur = origStart + origDur - nextStart;
-                setGhostDragPreview({
-                    id: block.id,
-                    type: 'block',
-                    startMs: nextStart,
-                    durationMs: nextDur,
-                    label: block.label || block.property,
-                    trimEdge: 'left',
-                    snapped: snap.snapped,
-                });
-            } else if (mode === 'right') {
-                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                const nextEnd = Math.max(origStart + 80, Math.min(shot.durationMs, snap.time));
-                nextDur = nextEnd - origStart;
-                setGhostDragPreview({
-                    id: block.id,
-                    type: 'block',
-                    startMs: origStart,
-                    durationMs: nextDur,
-                    label: block.label || block.property,
-                    trimEdge: 'right',
-                    snapped: snap.snapped,
-                });
-            } else {
-                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                let snapped = false;
-                let targetStart = origStart + deltaMs;
-                if (snapStart.snapped) {
-                    targetStart = snapStart.time;
-                    snapped = true;
-                } else if (snapEnd.snapped) {
-                    targetStart = snapEnd.time - origDur;
-                    snapped = true;
-                }
-                nextStart = Math.max(
-                    0,
-                    Math.min(shot.durationMs - origDur, targetStart)
-                );
-                setGhostDragPreview({
-                    id: block.id,
-                    type: 'block',
-                    startMs: nextStart,
-                    durationMs: nextDur,
-                    label: block.label || block.property,
-                    snapped,
-                });
-            }
-
-            updateLayer(
-                shot.id,
-                layer.id,
-                (l) => ({
-                    ...l,
-                    blocks: l.blocks.map((b) =>
-                        b.id === block.id
-                            ? { ...b, startMs: nextStart, durationMs: nextDur }
-                            : b
-                    ),
-                }),
-                { skipHistory: true }
-            );
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            setGhostDragPreview(null);
-            if (hasMoved) {
-                suppressPillClickRef.current = block.id;
-                commitDragTransaction();
-                setDragging(false);
-                window.setTimeout(() => {
-                    if (suppressPillClickRef.current === block.id) {
-                        suppressPillClickRef.current = null;
-                    }
-                }, 0);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 4. Drag / Trim Camera Block (Hardened)
-    const startCameraBlockDrag = (
-        e: React.PointerEvent,
-        shot: Shot,
-        camBlock: CameraBlock,
-        mode: 'move' | 'left' | 'right'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        selectCameraBlock(camBlock.id);
-        const startX = e.clientX;
-        const origStart = camBlock.startMs;
-        const origDur = camBlock.durationMs;
-        const pointerId = e.pointerId;
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-            let nextStart = origStart;
-            let nextDur = origDur;
-
-            const snapThresholdMs = Math.round(10 / pxPerMs);
-            const snapTargets = [0, shot.durationMs];
-            if (activeShot) {
-                activeShot.cameraBlocks.forEach((b) => {
-                    if (b.id !== camBlock.id) {
-                        snapTargets.push(b.startMs, b.startMs + b.durationMs);
-                    }
-                });
-            }
-
-            if (mode === 'left') {
-                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                nextStart = Math.max(
-                    0,
-                    Math.min(origStart + origDur - 100, snap.time)
-                );
-                nextDur = origStart + origDur - nextStart;
-                setGhostDragPreview({
-                    id: camBlock.id,
-                    type: 'camera',
-                    startMs: nextStart,
-                    durationMs: nextDur,
-                    label: camBlock.label,
-                    trimEdge: 'left',
-                    snapped: snap.snapped,
-                });
-            } else if (mode === 'right') {
-                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                const nextEnd = Math.max(
-                    origStart + 100,
-                    Math.min(shot.durationMs, snap.time)
-                );
-                nextDur = nextEnd - origStart;
-                setGhostDragPreview({
-                    id: camBlock.id,
-                    type: 'camera',
-                    startMs: origStart,
-                    durationMs: nextDur,
-                    label: camBlock.label,
-                    trimEdge: 'right',
-                    snapped: snap.snapped,
-                });
-            } else {
-                const dur = origDur;
-                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                let snapped = false;
-                if (snapStart.snapped) {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
-                    snapped = true;
-                } else if (snapEnd.snapped) {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
-                    snapped = true;
-                } else {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
-                }
-                setGhostDragPreview({
-                    id: camBlock.id,
-                    type: 'camera',
-                    startMs: nextStart,
-                    durationMs: origDur,
-                    label: camBlock.label,
-                    snapped,
-                });
-            }
-
-            updateShot(
-                shot.id,
-                (s) => ({
-                    ...s,
-                    cameraBlocks: s.cameraBlocks.map((cb) =>
-                        cb.id === camBlock.id
-                            ? { ...cb, startMs: nextStart, durationMs: nextDur }
-                            : cb
-                    ),
-                }),
-                { skipHistory: true }
-            );
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            setGhostDragPreview(null);
-            if (hasMoved) {
-                commitDragTransaction();
-                setDragging(false);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 5. Drag / Trim Light Block (Hardened)
-    const startLightBlockDrag = (
-        e: React.PointerEvent,
-        shot: Shot,
-        lightBlock: LightAnimationBlock,
-        mode: 'move' | 'left' | 'right'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        selectLightBlock(lightBlock.id);
-        const startX = e.clientX;
-        const origStart = lightBlock.startMs;
-        const origDur = lightBlock.durationMs;
-        const pointerId = e.pointerId;
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-            let nextStart = origStart;
-            let nextDur = origDur;
-
-            const snapThresholdMs = Math.round(10 / pxPerMs);
-            const snapTargets = [0, shot.durationMs];
-            if (activeShot) {
-                (activeShot.lightBlocks || []).forEach((b) => {
-                    if (b.id !== lightBlock.id) {
-                        snapTargets.push(b.startMs, b.startMs + b.durationMs);
-                    }
-                });
-            }
-
-            if (mode === 'left') {
-                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                nextStart = Math.max(
-                    0,
-                    Math.min(origStart + origDur - 100, snap.time)
-                );
-                nextDur = origStart + origDur - nextStart;
-                setGhostDragPreview({
-                    id: lightBlock.id,
-                    type: 'light',
-                    startMs: nextStart,
-                    durationMs: nextDur,
-                    label: lightBlock.label,
-                    trimEdge: 'left',
-                    snapped: snap.snapped,
-                });
-            } else if (mode === 'right') {
-                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                const nextEnd = Math.max(
-                    origStart + 100,
-                    Math.min(shot.durationMs, snap.time)
-                );
-                nextDur = nextEnd - origStart;
-                setGhostDragPreview({
-                    id: lightBlock.id,
-                    type: 'light',
-                    startMs: origStart,
-                    durationMs: nextDur,
-                    label: lightBlock.label,
-                    trimEdge: 'right',
-                    snapped: snap.snapped,
-                });
-            } else {
-                const dur = origDur;
-                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
-                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
-                let snapped = false;
-                if (snapStart.snapped) {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
-                    snapped = true;
-                } else if (snapEnd.snapped) {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
-                    snapped = true;
-                } else {
-                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
-                }
-                setGhostDragPreview({
-                    id: lightBlock.id,
-                    type: 'light',
-                    startMs: nextStart,
-                    durationMs: origDur,
-                    label: lightBlock.label,
-                    snapped,
-                });
-            }
-
-            updateShot(
-                shot.id,
-                (s) => ({
-                    ...s,
-                    lightBlocks: (s.lightBlocks || []).map((lb) =>
-                        lb.id === lightBlock.id
-                            ? { ...lb, startMs: nextStart, durationMs: nextDur }
-                            : lb
-                    ),
-                }),
-                { skipHistory: true }
-            );
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            setGhostDragPreview(null);
-            if (hasMoved) {
-                commitDragTransaction();
-                setDragging(false);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-    // 6. Shot Edge Trim (Hardened)
-    const startShotTrim = (event: React.PointerEvent, shot: Shot) => {
-        if (event.button !== 0 && event.pointerType === 'mouse') return;
-        event.preventDefault();
-        event.stopPropagation();
-        selectShot(shot.id);
-        setInspectorTab('shot');
-        const startX = event.clientX;
-        const startDuration = shot.durationMs;
-        const pixelsPerMsAtStart = pxPerMs;
-        const pointerId = event.pointerId;
-        let hasMoved = false;
-
-        try {
-            event.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (moveEvent: PointerEvent) => {
-            if (moveEvent.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(moveEvent.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-            const deltaMs = Math.round((moveEvent.clientX - startX) / Math.max(pixelsPerMsAtStart, 0.0001) / 10) * 10;
-            const durationMs = Math.max(300, startDuration + deltaMs);
-            updateProject((current) => ({
-                ...current,
-                shots: recalculateShotStartTimes(current.shots.map((item) =>
-                    item.id === shot.id ? { ...item, durationMs } : item
-                )),
-            }), { skipHistory: true });
-        };
-
-        const onEnd = (endEvent: PointerEvent) => {
-            if (endEvent.pointerId !== pointerId) return;
-            if (hasMoved) {
-                suppressShotClickRef.current = shot.id;
-                commitDragTransaction();
-                setDragging(false);
-                window.setTimeout(() => {
-                    if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
-                }, 0);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 7. Shot Reorder (Hardened)
-    const startShotReorder = (event: React.PointerEvent, shot: Shot, shotIndex: number) => {
-        if (event.button !== 0 || (event.target as HTMLElement).closest('[data-shot-trim]')) return;
-        const drag = { shotId: shot.id, index: shotIndex, startX: event.clientX, dragging: false };
-        shotDragRef.current = drag;
-        const pointerId = event.pointerId;
-
-        try {
-            event.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture error
-        }
-
-        const onMove = (moveEvent: PointerEvent) => {
-            if (moveEvent.pointerId !== pointerId) return;
-            const currentDrag = shotDragRef.current;
-            if (!currentDrag) return;
-            if (!currentDrag.dragging && Math.abs(moveEvent.clientX - currentDrag.startX) >= 6) {
-                currentDrag.dragging = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-            if (!currentDrag.dragging) return;
-
-            let delta = moveEvent.clientX - currentDrag.startX;
-            while (delta >= 60 && currentDrag.index < useProjectStore.getState().project.shots.length - 1) {
-                const from = currentDrag.index;
-                updateProject((current) => {
-                    const shots = [...current.shots];
-                    if (from < 0 || from >= shots.length - 1) return current;
-                    [shots[from], shots[from + 1]] = [shots[from + 1], shots[from]];
-                    return { ...current, shots: recalculateShotStartTimes(shots) };
-                }, { skipHistory: true });
-                currentDrag.index += 1;
-                currentDrag.startX += 60;
-                delta -= 60;
-            }
-            while (delta <= -60 && currentDrag.index > 0) {
-                const from = currentDrag.index;
-                updateProject((current) => {
-                    const shots = [...current.shots];
-                    if (from <= 0 || from >= shots.length) return current;
-                    [shots[from], shots[from - 1]] = [shots[from - 1], shots[from]];
-                    return { ...current, shots: recalculateShotStartTimes(shots) };
-                }, { skipHistory: true });
-                currentDrag.index -= 1;
-                currentDrag.startX -= 60;
-                delta += 60;
-            }
-        };
-
-        const onEnd = (endEvent: PointerEvent) => {
-            if (endEvent.pointerId !== pointerId) return;
-            const currentDrag = shotDragRef.current;
-            if (currentDrag?.dragging) {
-                suppressShotClickRef.current = shot.id;
-                commitDragTransaction();
-                setDragging(false);
-                window.setTimeout(() => {
-                    if (suppressShotClickRef.current === shot.id) suppressShotClickRef.current = null;
-                }, 0);
-            }
-            shotDragRef.current = null;
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 8. Audio / Media Clip Drag & Trim (Hardened)
-    const startAudioClipDrag = (
-        e: React.PointerEvent,
-        clip: AudioClip,
-        mode: 'move' | 'left' | 'right'
-    ) => {
-        if (e.button !== 0 && e.pointerType === 'mouse') return;
-        e.preventDefault();
-        e.stopPropagation();
-        const startX = e.clientX;
-        const origStart = clip.startMs;
-        const origDur = clip.durationMs;
-        const origOffset = clip.offsetMs || 0;
-        const pointerId = e.pointerId;
-        let hasMoved = false;
-
-        try {
-            e.currentTarget.setPointerCapture(pointerId);
-        } catch {
-            // Ignore capture failure
-        }
-
-        const onMove = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (!hasMoved) {
-                if (Math.abs(ev.clientX - startX) < 4) return;
-                hasMoved = true;
-                beginDragTransaction();
-                setDragging(true);
-            }
-
-            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
-            let nextStart = origStart;
-            let nextDur = origDur;
-            let nextOffset = origOffset;
-
-            if (mode === 'move') {
-                nextStart = Math.max(0, origStart + deltaMs);
-            } else if (mode === 'left') {
-                const minStart = Math.max(0, origStart - origOffset);
-                const maxStart = origStart + origDur - 100;
-                nextStart = Math.max(minStart, Math.min(maxStart, origStart + deltaMs));
-                const diff = nextStart - origStart;
-                nextDur = origDur - diff;
-                nextOffset = origOffset + diff;
-            } else if (mode === 'right') {
-                nextDur = Math.max(100, origDur + deltaMs);
-            }
-
-            updateProject(
-                (p) => ({
-                    ...p,
-                    audio: {
-                        clips: (p.audio?.clips || []).map((c) =>
-                            c.id === clip.id
-                                ? { ...c, startMs: nextStart, durationMs: nextDur, offsetMs: nextOffset }
-                                : c
-                        ),
-                        muted: p.audio?.muted || false,
-                        masterVolume: p.audio?.masterVolume ?? 1,
-                    },
-                }),
-                { skipHistory: true }
-            );
-        };
-
-        const onEnd = (ev: PointerEvent) => {
-            if (ev.pointerId !== pointerId) return;
-            if (hasMoved) {
-                commitDragTransaction();
-                setDragging(false);
-            }
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', onEnd);
-            window.removeEventListener('pointercancel', onEnd);
-        };
-
-        window.addEventListener('pointermove', onMove);
-        window.addEventListener('pointerup', onEnd);
-        window.addEventListener('pointercancel', onEnd);
-    };
-
-    // 9. Delete Audio Clip helper
-    const deleteAudioClip = (clipId: string) => {
-        updateProject((p) => ({
-            ...p,
-            audio: {
-                clips: (p.audio?.clips || []).filter((c) => c.id !== clipId),
-                muted: p.audio?.muted || false,
-                masterVolume: p.audio?.masterVolume ?? 1,
-            },
-        }));
-    };
-
-    const duplicateAudioClip = (clipId: string) => {
-        updateProject((p) => {
-            const clips = p.audio?.clips || [];
-            const clip = clips.find((c) => c.id === clipId);
-            if (!clip) return p;
-            const newClip = {
-                ...clip,
-                id: `audio-${Date.now()}`,
-                startMs: clip.startMs + clip.durationMs,
-            };
-            return {
-                ...p,
-                audio: {
-                    ...p.audio,
-                    muted: p.audio?.muted ?? false,
-                    masterVolume: p.audio?.masterVolume ?? 1,
-                    clips: [...clips, newClip],
-                },
-            };
-        });
-    };
-
-    const setAudioFade = (clipId: string, type: 'in' | 'out', ms: number) => {
-        updateProject((p) => ({
-            ...p,
-            audio: {
-                ...p.audio,
-                    muted: p.audio?.muted ?? false,
-                    masterVolume: p.audio?.masterVolume ?? 1,
-                clips: (p.audio?.clips || []).map((c) =>
-                    c.id === clipId
-                        ? {
-                              ...c,
-                              ...(type === 'in' ? { fadeInMs: ms } : { fadeOutMs: ms }),
-                          }
-                        : c
-                ),
-            },
-        }));
-    };
-
-    const [contextMenu, setContextMenu] = useState<{
-        x: number;
-        y: number;
-        items: ContextMenuItemDef[];
-    } | null>(null);
-
-    // 10. Cursor-Anchored Horizontal Zoom handled via native wheel listener on trackRef
-
+    const { startLayerBarDrag, startPresetDrag, startBlockDrag } = useTimelineLayerInteractions({
+        pxPerMs,
+        snapThresholdMs,
+        setGhostDragPreview,
+        setDragging,
+        suppressPillClickRef,
+        beginDragTransaction,
+        commitDragTransaction,
+        updateLayer,
+        setInspectorTab,
+        selectLayer,
+        selectPreset,
+        selectBlock,
+    });
+    const { startCameraBlockDrag, startLightBlockDrag } = useTimelineCameraLightInteractions({
+        pxPerMs,
+        setGhostDragPreview,
+        setDragging,
+        beginDragTransaction,
+        commitDragTransaction,
+        updateShot,
+        selectCameraBlock,
+        selectLightBlock,
+    });
+    const { startShotTrim, startShotReorder } = useTimelineShotInteractions({
+        pxPerMs,
+        updateProject,
+        beginDragTransaction,
+        commitDragTransaction,
+        setDragging,
+        selectShot,
+        setInspectorTab,
+        shotDragRef,
+        suppressShotClickRef,
+    });
+    const {
+        contextMenu,
+        setContextMenu,
+        startAudioClipDrag,
+        deleteAudioClip,
+        openAudioContextMenu,
+    } = useTimelineAudioInteractions({
+        project,
+        pxPerMs,
+        updateProject,
+        beginDragTransaction,
+        commitDragTransaction,
+        setDragging,
+        splitAudioClipAtPlayhead,
+        toggleProjectAudioMuted,
+    });
     const hoverDisplayTimeMs = hoverTimeMs === null
         ? null
         : timelineView === 'scene' && activeShot
@@ -1546,75 +283,17 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 <div className="w-12 h-0.5 rounded-full bg-white/15 group-hover:bg-brand-blue transition" />
             </div>
 
-            {/* 1. TOP CONTROL ROW (h-8 = 32px) */}
-            <div className="h-8 px-4 flex items-center justify-between shrink-0">
-                <div className="flex items-center gap-3">
-                    <IconButton
-                        unstyled
-                        tooltip={false}
-                        label={isPlaying ? 'Pause playback' : 'Start playback'}
-                        type="button"
-                        onClick={togglePlay}
-                        title="Play / Pause (Space)"
-                        className="w-5 h-5 rounded-full border border-white/40 hover:border-white flex items-center justify-center text-white cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
-                        icon={isPlaying ? (
-                            <Pause className="w-2.5 h-2.5" />
-                        ) : (
-                            <Play className="w-2.5 h-2.5 ml-0.5 fill-current" />
-                        )}
-                    />
-                    <IconButton
-                        unstyled
-                        tooltip={false}
-                        label="Split clip at playhead"
-                        type="button"
-                        onClick={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
-                        title="Split Clip at Playhead (S)"
-                        className="w-5 h-5 rounded-full border border-subtle hover:border-medium flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
-                        icon={<Scissors className="w-2.5 h-2.5" />}
-                    />
-                    {activeShot && project.shots.some((shot) => shot.id === activeShot.id) && (
-                        <IconButton
-                            unstyled
-                            tooltip={false}
-                            label={`Delete shot ${activeShot.name}`}
-                            type="button"
-                            onClick={() => deleteShot(activeShot.id)}
-                            title={`Delete ${activeShot.name}`}
-                            className="w-5 h-5 rounded-full border border-subtle hover:border-rose-400/70 flex items-center justify-center text-muted-foreground hover:text-rose-300 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
-                            icon={<Trash2 className="w-2.5 h-2.5" />}
-                        />
-                    )}
-                    <TimelineTimecode totalDurationMs={totalDurationMs} />
-                </div>
-
-                <div className="flex items-center gap-2">
-                    <div className="relative w-28 h-1.5 rounded-full bg-subtle flex items-center group/zoom">
-                        <div
-                            className="h-full rounded-full bg-brand-blue transition-[width] duration-75"
-                            style={{
-                                width: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
-                            }}
-                        />
-                        <input
-                            aria-label="Timeline Zoom"
-                            type="range"
-                            min={MIN_TIMELINE_ZOOM}
-                            max={MAX_TIMELINE_ZOOM}
-                            step={0.05}
-                            value={timelineZoom}
-                            onChange={(e) => setTimelineZoom(Number(e.target.value))}
-                            className="absolute inset-0 w-full opacity-0 cursor-pointer z-10"
-                        />
-                        <div
-                            className="w-3 h-3 rounded-full bg-white shadow-md pointer-events-none absolute -ml-1.5 transition-transform group-hover/zoom:scale-110"
-                            style={{
-                                left: `${((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100}%`,
-                            }}
-                        />
-                    </div>
-                </div>
-            </div>
+            <TimelineToolbar
+                isPlaying={isPlaying}
+                onTogglePlay={togglePlay}
+                onSplitAtPlayhead={() => splitAtPlayhead(usePlayheadStore.getState().currentTimeMs)}
+                activeShot={activeShot}
+                hasActiveShot={project.shots.some((shot) => shot.id === activeShot?.id)}
+                onDeleteShot={deleteShot}
+                totalDurationMs={totalDurationMs}
+                timelineZoom={timelineZoom}
+                onTimelineZoomChange={setTimelineZoom}
+            />
 
             {/* 2. SCROLL-SYNCED TRACKS BODY (Includes Ruler + Tracks + Playhead + Skimmer) */}
             <div
@@ -1700,900 +379,103 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
 
                     {/* TRACKS CONTENT */}
                     <div className="py-2 flex-1 relative flex flex-col">
-                    {(project.audio?.clips?.length || 0) > 0 && (
-                        <div className="relative h-7 mb-2 rounded-md bg-white/[0.025] border border-white/[0.06] flex items-center" style={{ width: `${Math.max(timelineWidth, totalDurationMs * pxPerMs)}px` }} aria-label="Imported media timeline">
-                            <span className="absolute left-2 top-1 text-[10px] uppercase tracking-wider font-semibold text-slate-400 z-10">Media</span>
-                            <IconButton
-                                unstyled
-                                tooltip={false}
-                                label={project.audio?.muted ? "Unmute audio" : "Mute audio"}
-                                type="button"
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleProjectAudioMuted();
-                                }}
-                                title={project.audio?.muted ? "Unmute audio" : "Mute audio"}
-                                className="absolute right-2 top-1 text-[10px] text-slate-400 hover:text-white z-10 flex items-center gap-1 cursor-pointer"
-                                icon={project.audio?.muted ? (
-                                    <VolumeX className="w-3.5 h-3.5 text-rose-400" />
-                                ) : (
-                                    <Volume2 className="w-3.5 h-3.5 text-slate-300" />
-                                )}
-                            />
-                            {(project.audio?.clips || []).map((clip) => {
-                                const clipStart = clip.startMs;
-                                const clipEnd = clip.startMs + clip.durationMs;
-                                if (timelineView === 'scene' && activeShot) {
-                                    const shotStart = activeShot.startMs;
-                                    const shotEnd = activeShot.startMs + activeShot.durationMs;
-                                    if (clipEnd <= shotStart || clipStart >= shotEnd) return null;
-                                    const visibleStart = Math.max(clipStart, shotStart);
-                                    const visibleEnd = Math.min(clipEnd, shotEnd);
-                                    const left = (visibleStart - shotStart) * pxPerMs;
-                                    const width = Math.max(18, (visibleEnd - visibleStart) * pxPerMs);
-                                    const openAudioContextMenu = (e: React.MouseEvent) => {
-                                        e.preventDefault();
-                                        e.stopPropagation();
-                                        setContextMenu({
-                                            x: e.clientX,
-                                            y: e.clientY,
-                                            items: [
-                                                { type: 'header', label: clip.name },
-                                                {
-                                                    id: 'split',
-                                                    label: 'Split at playhead',
-                                                    shortcut: '⌘B',
-                                                    onClick: () => splitAudioClipAtPlayhead(clip.id, usePlayheadStore.getState().currentTimeMs),
-                                                },
-                                                {
-                                                    id: 'fade-in',
-                                                    label: 'Quick fade in',
-                                                    children: [
-                                                        { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
-                                                        { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
-                                                        { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
-                                                        { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
-                                                    ],
-                                                },
-                                                {
-                                                    id: 'fade-out',
-                                                    label: 'Quick fade out',
-                                                    children: [
-                                                        { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
-                                                        { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
-                                                        { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
-                                                        { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
-                                                    ],
-                                                },
-                                                {
-                                                    id: 'toggle-mute',
-                                                    label: project.audio?.muted ? 'Unmute' : 'Mute',
-                                                    shortcut: 'M',
-                                                    onClick: () => toggleProjectAudioMuted(),
-                                                },
-                                                { type: 'divider' },
-                                                {
-                                                    id: 'duplicate',
-                                                    label: 'Duplicate',
-                                                    shortcut: '⌘D',
-                                                    onClick: () => duplicateAudioClip(clip.id),
-                                                },
-                                                {
-                                                    id: 'delete',
-                                                    label: 'Delete clip',
-                                                    icon: Trash2,
-                                                    shortcut: '⌫',
-                                                    danger: true,
-                                                    onClick: () => deleteAudioClip(clip.id),
-                                                },
-                                            ],
-                                        });
-                                    };
-
-                                    return (
-                                        <AudioClipBar key={clip.id} clip={clip} left={left} width={width}
-                                            muted={clip.muted || project.audio?.muted}
-                                            onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
-                                            onSeek={() => setCurrentTimeMs(visibleStart)}
-                                            onDelete={() => deleteAudioClip(clip.id)}
-                                            onContextMenu={openAudioContextMenu} />
-                                    );
-                                }
-                                const left = Math.max(0, clipStart) * pxPerMs;
-                                const width = Math.max(18, clip.durationMs * pxPerMs);
-                                return (
-                                    <AudioClipBar key={clip.id} clip={clip} left={left} width={width}
-                                        muted={clip.muted || project.audio?.muted}
-                                        onDrag={(event, edge) => startAudioClipDrag(event, clip, edge)}
-                                        onSeek={() => setCurrentTimeMs(Math.max(0, clipStart))}
-                                        onDelete={() => deleteAudioClip(clip.id)}
-                                        onContextMenu={(e) => {
-                                            e.preventDefault();
-                                            e.stopPropagation();
-                                            setContextMenu({
-                                                x: e.clientX,
-                                                y: e.clientY,
-                                                items: [
-                                                    { type: 'header', label: clip.name },
-                                                    {
-                                                        id: 'split',
-                                                        label: 'Split at playhead',
-                                                        shortcut: '⌘B',
-                                                        onClick: () => splitAudioClipAtPlayhead(clip.id, usePlayheadStore.getState().currentTimeMs),
-                                                    },
-                                                    {
-                                                        id: 'fade-in',
-                                                        label: 'Quick fade in',
-                                                        children: [
-                                                            { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
-                                                            { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
-                                                            { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
-                                                            { id: 'fi-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'in', 1000) },
-                                                        ],
-                                                    },
-                                                    {
-                                                        id: 'fade-out',
-                                                        label: 'Quick fade out',
-                                                        children: [
-                                                            { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
-                                                            { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
-                                                            { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
-                                                            { id: 'fo-1000', label: '1.0 s', onClick: () => setAudioFade(clip.id, 'out', 1000) },
-                                                        ],
-                                                    },
-                                                    {
-                                                        id: 'toggle-mute',
-                                                        label: project.audio?.muted ? 'Unmute' : 'Mute',
-                                                        shortcut: 'M',
-                                                        onClick: () => toggleProjectAudioMuted(),
-                                                    },
-                                                    { type: 'divider' },
-                                                    {
-                                                        id: 'duplicate',
-                                                        label: 'Duplicate',
-                                                        shortcut: '⌘D',
-                                                        onClick: () => duplicateAudioClip(clip.id),
-                                                    },
-                                                    {
-                                                        id: 'delete',
-                                                        label: 'Delete clip',
-                                                        icon: Trash2,
-                                                        shortcut: '⌫',
-                                                        danger: true,
-                                                        onClick: () => deleteAudioClip(clip.id),
-                                                    },
-                                                ],
-                                            });
-                                        }} />
-                                );
-                            })}
-                        </div>
-                    )}
-                    {/* =============================================================== */}
+                    <TimelineMediaTrack
+                        clips={project.audio?.clips ?? []}
+                        muted={project.audio?.muted ?? false}
+                        timelineWidth={timelineWidth}
+                        totalDurationMs={totalDurationMs}
+                        pxPerMs={pxPerMs}
+                        timelineView={timelineView}
+                        activeShot={activeShot}
+                        onToggleMute={toggleProjectAudioMuted}
+                        onClipDrag={(event, clip, edge) => startAudioClipDrag(event, clip, edge)}
+                        onClipSeek={setCurrentTimeMs}
+                        onClipDelete={deleteAudioClip}
+                        onClipContextMenu={openAudioContextMenu}
+                    />                    {/* =============================================================== */}
                     {/* STATE 1: ZOOMED-OUT WHOLE VIDEO VIEW                            */}
                     {/* =============================================================== */}
                     {!isBlankState && timelineView === 'video' && (
-                        <div className="space-y-2 pt-2">
-                            <div className="h-8 relative flex items-center gap-1">
-                                {project.shots.map((shot, shotIndex) => {
-                                    const isSelected = inspectorTab === 'shot' && shot.id === activeShot?.id;
-                                    const width = Math.max(16, shot.durationMs * pxPerMs - 2);
-                                    return (
-                                        <div
-                                            key={shot.id}
-                                            onPointerDown={(e) => startShotReorder(e, shot, shotIndex)}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                if (suppressShotClickRef.current === shot.id) {
-                                                    suppressShotClickRef.current = null;
-                                                    return;
-                                                }
-                                                selectShot(shot.id);
-                                                setInspectorTab('shot');
-                                                setCurrentTimeMs(Math.min(totalDurationMs, clientXToLocalMs(e.clientX)));
-                                            }}
-                                            onDoubleClick={(e) => {
-                                                e.stopPropagation();
-                                                const hasSelectedLayer = shot.layers.some((layer) =>
-                                                    selectedLayerSet.has(layer.id)
-                                                );
-                                                selectShot(shot.id);
-                                                setTimelineView('scene');
-                                                setInspectorTab(hasSelectedLayer ? 'layer' : 'shot');
-                                            }}
-                                            title={`${shot.name} · ${(shot.durationMs / 1000).toFixed(2)}s · Drag to reorder, drag the right edge to trim, double-click to open layer tracks`}
-                                            style={{ width: `${width}px` }}
-                                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
-                                                    ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-sm'
-                                                    : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
-                                                }`}
-                                        >
-                                            <span className="truncate">{shot.name}</span>
-                                            <IconButton
-                                                unstyled
-                                                tooltip={false}
-                                                label={`Delete shot ${shot.name}`}
-                                                icon={<Trash2 className="w-3 h-3" />}
-                                                onPointerDown={(event) => event.stopPropagation()}
-                                                onClick={(event) => {
-                                                    event.stopPropagation();
-                                                    deleteShot(shot.id);
-                                                }}
-                                                title="Delete shot"
-                                                className="z-10 rounded p-1 text-slate-400 opacity-0 transition hover:bg-rose-500/30 hover:text-white focus-visible:opacity-100 group-hover:opacity-100"
-                                            />
-                                            <span
-                                                data-shot-trim="right"
-                                                onPointerDown={(e) => startShotTrim(e, shot)}
-                                                title="Drag to trim shot duration"
-                                                className="absolute right-0 top-0 bottom-0 w-2.5 flex items-center justify-center rounded-r-xl opacity-0 group-hover:opacity-100 hover:bg-white/15 cursor-ew-resize transition"
-                                            >
-                                                <span className="h-4 w-0.5 rounded-full bg-white/80" />
-                                            </span>
-                                        </div>
-                                    );
-                                })}
-                            </div>
-                        </div>
+                        <TimelineShotOverview
+                            shots={project.shots}
+                            activeShot={activeShot}
+                            inspectorTab={inspectorTab}
+                            pxPerMs={pxPerMs}
+                            onShotPointerDown={startShotReorder}
+                            onShotClick={(event, shot) => {
+                                event.stopPropagation();
+                                if (suppressShotClickRef.current === shot.id) {
+                                    suppressShotClickRef.current = null;
+                                    return;
+                                }
+                                selectShot(shot.id);
+                                setInspectorTab('shot');
+                                setCurrentTimeMs(Math.min(totalDurationMs, clientXToLocalMs(event.clientX)));
+                            }}
+                            onShotDoubleClick={(event, shot) => {
+                                event.stopPropagation();
+                                const hasSelectedLayer = shot.layers.some((layer) => selectedLayerSet.has(layer.id));
+                                selectShot(shot.id);
+                                setTimelineView('scene');
+                                setInspectorTab(hasSelectedLayer ? 'layer' : 'shot');
+                            }}
+                            onShotDelete={(event, shot) => {
+                                event.stopPropagation();
+                                deleteShot(shot.id);
+                            }}
+                            onShotTrimPointerDown={startShotTrim}
+                        />
                     )}
 
                     {/* =============================================================== */}
                     {/* STATE 2: ZOOMED-IN SCENE LAYER VIEW (1-to-1 Aligned with LeftPanel!) */}
                     {/* =============================================================== */}
                     {timelineView === 'scene' && activeShot && (
-                        <div className="relative flex flex-col gap-0.5">
-                            {/* Raylight exposes the add-layer lane before the layer rows. */}
-                            <button
-                                type="button"
-                                aria-label="Add layer to the open shot"
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onPointerMove={(event) => {
-                                    const bounds = event.currentTarget.getBoundingClientRect();
-                                    setAddLayerHoverX(Math.max(0, Math.min(addLayerLaneWidth, event.clientX - bounds.left)));
-                                }}
-                                onPointerLeave={() => setAddLayerHoverX(null)}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    const created = addLayerToShot(activeShot.id, 'shape', {
-                                        inMs: 0,
-                                        outMs: activeShot.durationMs,
-                                    });
-                                    setInspectorTab('layer');
-                                    selectLayer(created.id, false);
-                                }}
-                                title="Add a layer to this shot"
-                                style={{ order: 0, width: `${addLayerLaneWidth}px` }}
-                                className="h-10 shrink-0 relative overflow-hidden flex items-center justify-center rounded-lg border border-transparent bg-transparent text-[10px] text-[#8495a8] hover:text-sky-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-sky-700 cursor-pointer"
-                            >
-                                {addLayerHoverX === null ? (
-                                    <span>+ Add layer</span>
-                                ) : (
-                                    <span
-                                        aria-hidden="true"
-                                        className="absolute left-0 top-1/2 h-8 rounded-md border border-dotted border-sky-400/80 bg-sky-400/[0.06] text-sky-100 flex items-center justify-center pointer-events-none"
-                                        style={{
-                                            width: `${addLayerGhostWidth}px`,
-                                            transform: `translate3d(${addLayerGhostLeft}px, -50%, 0)`,
-                                        }}
-                                    >
-                                        + Add layer
-                                    </span>
-                                )}
-                            </button>
-
-                            {/* Camera track: always present, with a hover preview in empty space. */}
-                            <div
-                                onPointerDown={(e) => e.stopPropagation()}
-                                onMouseMove={(e) => {
-                                    e.stopPropagation();
-                                    setHoverCameraTimeMs(clientXToLocalMs(e.clientX));
-                                }}
-                                onMouseLeave={() => setHoverCameraTimeMs(null)}
-                                onClick={(e) => {
-                                    if ((e.target as HTMLElement).closest('[data-cam-pill]')) return;
-                                    addCameraBlockAtTime(clientXToLocalMs(e.clientX));
-                                }}
-                                title="Hover to preview a camera move; click to add it"
-                                aria-label="Camera track"
-                                style={{ order: 30 }}
-                                className="h-10 relative flex items-center cursor-pointer"
-                            >
-                                    {hoverCameraTimeMs !== null && !activeShot.cameraBlocks.some((block) =>
-                                        hoverCameraTimeMs >= block.startMs &&
-                                        hoverCameraTimeMs <= block.startMs + block.durationMs
-                                    ) && (
-                                        <div
-                                            aria-hidden="true"
-                                            className="absolute top-1 bottom-1 rounded-md border border-dashed border-emerald-400/80 bg-emerald-400/10 pointer-events-none"
-                                            style={{
-                                                left: `${hoverCameraTimeMs * pxPerMs}px`,
-                                                width: `${Math.max(24, Math.min(1000, activeShot.durationMs - hoverCameraTimeMs) * pxPerMs)}px`,
-                                            }}
-                                        />
-                                    )}
-                                    {activeShot.cameraBlocks.map((cb) => {
-                                        const isCamSelected = selectedCameraBlockId === cb.id;
-                                        const left = cb.startMs * pxPerMs;
-                                        const width = Math.max(36, cb.durationMs * pxPerMs);
-                                        const modeLabel =
-                                            cb.mode === 'dollyzoom'
-                                                ? 'WARP'
-                                                : cb.mode.toUpperCase();
-                                        return (
-                                            <React.Fragment key={cb.id}>
-                                                <TimelineRangeBar
-                                                    data-cam-pill="true"
-                                                    tone="camera"
-                                                    selected={isCamSelected}
-                                                    onContextMenu={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        selectCameraBlock(cb.id);
-                                                        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                        setContextMenu({
-                                                            x: e.clientX,
-                                                            y: e.clientY,
-                                                            items: [
-                                                                { type: 'header', label: `${modeLabel} Camera Move` },
-                                                                {
-                                                                    id: 'edit-easing',
-                                                                    label: 'Edit easing',
-                                                                    shortcut: '↵',
-                                                                    onClick: () => {
-                                                                        selectCameraBlock(cb.id);
-                                                                        setEasingPopoverTarget({
-                                                                            easing: cb.easing,
-                                                                            onChange: (easing) => {
-                                                                                updateShot(activeShot.id, (s) => ({
-                                                                                    ...s,
-                                                                                    cameraBlocks: s.cameraBlocks.map((b) =>
-                                                                                        b.id === cb.id ? { ...b, easing } : b
-                                                                                    ),
-                                                                                }));
-                                                                            },
-                                                                            anchorRect: targetRect,
-                                                                        });
-                                                                    },
-                                                                },
-                                                                {
-                                                                    id: 'copy',
-                                                                    label: 'Copy',
-                                                                    icon: Copy,
-                                                                    shortcut: '⌘C',
-                                                                    onClick: () => copyTimelineBlock({ type: 'camera', block: cb }),
-                                                                },
-                                                                {
-                                                                    id: 'dup',
-                                                                    label: 'Duplicate',
-                                                                    shortcut: '⌘D',
-                                                                    onClick: () => {
-                                                                        updateShot(activeShot.id, (s) => ({
-                                                                            ...s,
-                                                                            cameraBlocks: [
-                                                                                ...s.cameraBlocks,
-                                                                                {
-                                                                                    ...cb,
-                                                                                    id: `cam-blk-${Date.now()}`,
-                                                                                    startMs: Math.min(s.durationMs - cb.durationMs, cb.startMs + 50),
-                                                                                },
-                                                                            ],
-                                                                        }));
-                                                                    },
-                                                                },
-                                                                { type: 'divider' },
-                                                                {
-                                                                    id: 'del',
-                                                                    label: 'Remove',
-                                                                    icon: Trash2,
-                                                                    shortcut: '⌫',
-                                                                    danger: true,
-                                                                    onClick: () => {
-                                                                        updateShot(activeShot.id, (s) => ({
-                                                                            ...s,
-                                                                            cameraBlocks: s.cameraBlocks.filter((b) => b.id !== cb.id),
-                                                                        }));
-                                                                        if (selectedCameraBlockId === cb.id) selectCameraBlock(null);
-                                                                    },
-                                                                },
-                                                            ],
-                                                        });
-                                                    }}
-                                                    onPointerDown={(e) =>
-                                                        startCameraBlockDrag(e, activeShot, cb, 'move')
-                                                    }
-                                                    left={left} width={width}
-                                                    title={`${modeLabel} · ${(cb.durationMs / 1000).toFixed(2)}s`}
-                                                    className={`absolute top-0.5 bottom-0.5 px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab active:cursor-grabbing ${
-                                                        ghostDragPreview?.id === cb.id ? 'opacity-40' : ''
-                                                    }`}
-                                                >
-                                                    <TimelineEasingCurve easing={cb.easing} tone="camera" selected={isCamSelected} />
-                                                    <span className="relative z-10 pointer-events-none drop-shadow-sm">{modeLabel}</span>
-                                                    <TrimHandle side="left"
-                                                        onPointerDown={(e) =>
-                                                            startCameraBlockDrag(e, activeShot, cb, 'left')
-                                                        }
-                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-l-full z-10" />
-                                                    <TrimHandle side="right"
-                                                        onPointerDown={(e) =>
-                                                            startCameraBlockDrag(e, activeShot, cb, 'right')
-                                                        }
-                                                        className="w-2.5 bg-white/20 hover:bg-emerald-300 rounded-r-full z-10" />
-                                                </TimelineRangeBar>
-                                                {ghostDragPreview && ghostDragPreview.id === cb.id && (
-                                                    <TimelineDragPreview
-                                                        startMs={ghostDragPreview.startMs}
-                                                        durationMs={ghostDragPreview.durationMs}
-                                                        snapped={ghostDragPreview.snapped}
-                                                        pxPerMs={pxPerMs}
-                                                        minWidth={36}
-                                                        variant="pill"
-                                                    />
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                            </div>
-
-                            {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
-                            {hasLightBlocks && (
-                                <div style={{ order: 20 }} className="h-10 relative flex items-center">
-                                    {(activeShot.lightBlocks || []).map((lb) => {
-                                        const isLightSelected = selectedLightBlockId === lb.id;
-                                        const left = lb.startMs * pxPerMs;
-                                        const width = Math.max(36, lb.durationMs * pxPerMs);
-                                        return (
-                                            <React.Fragment key={lb.id}>
-                                                <TimelineRangeBar
-                                                    data-light-pill="true"
-                                                    tone="light"
-                                                    selected={isLightSelected}
-                                                    onContextMenu={(e) => {
-                                                        e.preventDefault();
-                                                        e.stopPropagation();
-                                                        selectLightBlock(lb.id);
-                                                        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                        setContextMenu({
-                                                            x: e.clientX,
-                                                            y: e.clientY,
-                                                            items: [
-                                                                { type: 'header', label: lb.label || 'Light Key' },
-                                                                {
-                                                                    id: 'edit-easing',
-                                                                    label: 'Edit easing',
-                                                                    shortcut: '↵',
-                                                                    onClick: () => {
-                                                                        selectLightBlock(lb.id);
-                                                                        setEasingPopoverTarget({
-                                                                            easing: lb.easing,
-                                                                            onChange: (easing) => {
-                                                                                updateShot(activeShot.id, (s) => ({
-                                                                                    ...s,
-                                                                                    lightBlocks: (s.lightBlocks || []).map((b) =>
-                                                                                        b.id === lb.id ? { ...b, easing } : b
-                                                                                    ),
-                                                                                }));
-                                                                            },
-                                                                            anchorRect: targetRect,
-                                                                        });
-                                                                    },
-                                                                },
-                                                                {
-                                                                    id: 'copy',
-                                                                    label: 'Copy',
-                                                                    icon: Copy,
-                                                                    shortcut: '⌘C',
-                                                                    onClick: () => copyTimelineBlock({ type: 'light', block: lb }),
-                                                                },
-                                                                {
-                                                                    id: 'dup',
-                                                                    label: 'Duplicate',
-                                                                    shortcut: '⌘D',
-                                                                    onClick: () => {
-                                                                        updateShot(activeShot.id, (s) => ({
-                                                                            ...s,
-                                                                            lightBlocks: [
-                                                                                ...(s.lightBlocks || []),
-                                                                                {
-                                                                                    ...lb,
-                                                                                    id: `light-blk-${Date.now()}`,
-                                                                                    startMs: Math.min(s.durationMs - lb.durationMs, lb.startMs + 50),
-                                                                                },
-                                                                            ],
-                                                                        }));
-                                                                    },
-                                                                },
-                                                                { type: 'divider' },
-                                                                {
-                                                                    id: 'del',
-                                                                    label: 'Remove',
-                                                                    icon: Trash2,
-                                                                    shortcut: '⌫',
-                                                                    danger: true,
-                                                                    onClick: () => {
-                                                                        updateShot(activeShot.id, (s) => ({
-                                                                            ...s,
-                                                                            lightBlocks: (s.lightBlocks || []).filter((b) => b.id !== lb.id),
-                                                                        }));
-                                                                        if (selectedLightBlockId === lb.id) selectLightBlock(null);
-                                                                    },
-                                                                },
-                                                            ],
-                                                        });
-                                                    }}
-                                                    onClick={(e) => {
-                                                        e.stopPropagation();
-                                                        selectLightBlock(lb.id);
-                                                        setInspectorTab('shot');
-                                                    }}
-                                                    onPointerDown={(e) =>
-                                                        startLightBlockDrag(e, activeShot, lb, 'move')
-                                                    }
-                                                    left={left} width={width}
-                                                    title={`${lb.label || 'Light animation'} · ${(lb.durationMs / 1000).toFixed(2)}s`}
-                                                    className={`group/light absolute top-0.5 bottom-0.5 px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab active:cursor-grabbing ${
-                                                        ghostDragPreview?.id === lb.id ? 'opacity-40' : ''
-                                                    }`}
-                                                >
-                                                    <TimelineEasingCurve easing={lb.easing} tone="light" selected={isLightSelected} />
-                                                    <span className="relative z-10 pointer-events-none drop-shadow-sm truncate max-w-[calc(100%-30px)]">{lb.label || 'Light'}</span>
-                                                    <IconButton
-                                                        unstyled
-                                                        tooltip={false}
-                                                        label="Delete light block"
-                                                        onClick={(e) => {
-                                                            e.stopPropagation();
-                                                            updateShot(activeShot.id, (s) => ({
-                                                                ...s,
-                                                                lightBlocks: (s.lightBlocks || []).filter(
-                                                                    (b) => b.id !== lb.id
-                                                                ),
-                                                            }));
-                                                            if (selectedLightBlockId === lb.id) {
-                                                                selectLightBlock(null);
-                                                            }
-                                                        }}
-                                                        title="Delete light block"
-                                                        className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/light:opacity-100 transition cursor-pointer ml-1 z-10"
-                                                        icon={<>&times;</>}
-                                                    />
-                                                    <TrimHandle side="left"
-                                                        onPointerDown={(e) =>
-                                                            startLightBlockDrag(e, activeShot, lb, 'left')
-                                                        }
-                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-l-full z-10" />
-                                                    <TrimHandle side="right"
-                                                        onPointerDown={(e) =>
-                                                            startLightBlockDrag(e, activeShot, lb, 'right')
-                                                        }
-                                                        className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full z-10" />
-                                                </TimelineRangeBar>
-                                                {ghostDragPreview && ghostDragPreview.id === lb.id && (
-                                                    <TimelineDragPreview
-                                                        startMs={ghostDragPreview.startMs}
-                                                        durationMs={ghostDragPreview.durationMs}
-                                                        snapped={ghostDragPreview.snapped}
-                                                        pxPerMs={pxPerMs}
-                                                        minWidth={36}
-                                                        variant="pill"
-                                                    />
-                                                )}
-                                            </React.Fragment>
-                                        );
-                                    })}
-                                </div>
-                            )}
-
-                            {/* 3. Layer Track Rows (h-7 = 28px) + Indented Sub-rows (h-6 = 24px) */}
-                                {activeShot.layers
-                                .slice()
-                                .sort((a, b) => b.order - a.order)
-                                .map((layer) => {
-                                    const isSelected = selectedLayerSet.has(layer.id);
-                                    const hasAnimations =
-                                        layer.blocks.length > 0 ||
-                                        getTimelineTransition(layer, 'entrance').type !== 'none' ||
-                                        getTimelineTransition(layer, 'exit').type !== 'none';
-                                    const isExpanded =
-                                        expandedTimelineLayerSet.has(layer.id) ||
-                                        (isSelected && hasAnimations);
-
-                                    const left = layer.inMs * pxPerMs;
-                                    const width = Math.max(
-                                        32,
-                                        (layer.outMs - layer.inMs) * pxPerMs
-                                    );
-
-                                    const barStyle = layer.kind === 'shape'
-                                        ? isSelected
-                                            ? 'border-[#7773ff] bg-gradient-to-b from-[#1b1b3c]/95 to-[#0c1023]/95 shadow-[inset_0_0_20px_rgba(99,102,241,0.12)]'
-                                            : 'border-[#4b4bc3] bg-gradient-to-b from-[#17172e]/90 to-[#0b1020]/95 hover:border-[#7773ff]'
-                                        : isSelected
-                                            ? 'border-[#16b8f4] bg-gradient-to-b from-[#0b2938]/95 to-[#08151e]/95 shadow-[inset_0_0_20px_rgba(14,165,233,0.12)]'
-                                            : 'border-[#087fad] bg-gradient-to-b from-[#0a222e]/90 to-[#07141d]/95 hover:border-[#16b8f4]';
-
-                                    const entStartMs =
-                                        layer.inMs + (getTimelineTransition(layer, 'entrance').delayMs || 0);
-                                    const entDurMs = Math.max(80, getTimelineTransition(layer, 'entrance').durationMs || 500);
-
-                                    const extDurMs = Math.max(80, getTimelineTransition(layer, 'exit').durationMs || 500);
-                                    const extEndMs = layer.outMs - (getTimelineTransition(layer, 'exit').delayMs || 0);
-                                    const extStartMs = Math.max(layer.inMs, extEndMs - extDurMs);
-
-                                    return (
-                                        <div key={layer.id} style={{ order: 10 }} className="space-y-0.5">
-                                            {/* Main layer bars use the same 40px track height as the reference. */}
-                                            <div className="h-10 relative flex items-center">
-                                                <TimelineRangeBar
-                                                    onPointerDown={(e) =>
-                                                        startLayerBarDrag(e, activeShot, layer, 'move')
-                                                    }
-                                                    left={left} width={width}
-                                                    aria-label={`${layer.name} layer bar`}
-                                                    title={`${layer.name} · ${(layer.outMs - layer.inMs) / 1000}s`}
-                                                    className={`absolute top-0.5 bottom-0.5 overflow-hidden rounded-lg border cursor-grab active:cursor-grabbing transition ${barStyle} ${
-                                                        ghostDragPreview?.id === layer.id ? 'opacity-40' : ''
-                                                    }`}
-                                                >
-                                                    <TrimHandle side="left"
-                                                        onPointerDown={(e) =>
-                                                            startLayerBarDrag(e, activeShot, layer, 'in')
-                                                        }
-                                                        title="Drag left edge to trim layer In point"
-                                                        className="w-2.5 hover:bg-white/30 rounded-l-lg" />
-                                                    <TrimHandle side="right"
-                                                        onPointerDown={(e) =>
-                                                            startLayerBarDrag(e, activeShot, layer, 'out')
-                                                        }
-                                                        title="Drag right edge to trim layer Out point"
-                                                        className="w-2.5 hover:bg-white/30 rounded-r-lg" />
-                                                </TimelineRangeBar>
-
-                                                {/* Dashed Ghost Outline during Layer Drag */}
-                                                {ghostDragPreview && ghostDragPreview.id === layer.id && (
-                                                    <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={32} variant="layer" />
-                                                )}
-                                            </div>
-
-                                            {/* Expanded Sub-rows (h-6 = 24px each, aligned 1-to-1 with LeftPanel!) */}
-                                            {isExpanded && (
-                                                <div className="space-y-0.5">
-                                                    {/* ♦ Presets Row: Movable & Resizable In / Out Pills! */}
-                                                    <div
-                                                        onPointerDown={(e) => e.stopPropagation()}
-                                                        onClick={(e) => {
-                                                            if (
-                                                                (e.target as HTMLElement).closest(
-                                                                    '[data-preset-pill]'
-                                                                )
-                                                            )
-                                                                return;
-                                                            const clickMs = clientXToLocalMs(e.clientX);
-                                                            const midMs = (layer.inMs + layer.outMs) / 2;
-                                                            if (clickMs <= midMs) {
-                                                                updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'entrance', {
-                                                                        type:
-                                                                            getTimelineTransition(l, 'entrance').type === 'none'
-                                                                                ? 'fade'
-                                                                                : getTimelineTransition(l, 'entrance').type,
-                                                                        delayMs: Math.max(0, clickMs - l.inMs),
-                                                                        durationMs: 600,
-                                                                    }));
-                                                                selectPreset('entrance', layer.id);
-                                                            } else {
-                                                                updateLayer(activeShot.id, layer.id, (l) => updateTimelineTransition(l, 'exit', {
-                                                                        type:
-                                                                            getTimelineTransition(l, 'exit').type === 'none'
-                                                                                ? 'fade'
-                                                                                : getTimelineTransition(l, 'exit').type,
-                                                                        delayMs: Math.max(0, l.outMs - clickMs),
-                                                                        durationMs: 550,
-                                                                    }));
-                                                                selectPreset('exit', layer.id);
-                                                            }
-                                                        }}
-                                                        title="Click anywhere on this row to place an In or Out transition"
-                                                        className="h-9 relative flex items-center group"
-                                                    >
-                                                        {/* Movable & resizable entrance / exit pills */}
-                                                        {(['entrance', 'exit'] as const).map(side => {
-                                                            const transition = getTimelineTransition(layer, side);
-                                                            if (transition.type === 'none') return null;
-                                                            const easing: Easing = transition.easing || { kind: 'preset', name: side === 'entrance' ? 'ease-out' : 'ease-in' };
-                                                            return <TransitionPill key={side} side={side}
-                                                                left={(side === 'entrance' ? entStartMs : extStartMs) * pxPerMs}
-                                                                width={Math.max(28, (side === 'entrance' ? entDurMs : extDurMs) * pxPerMs)}
-                                                                selected={isSelected && selectedPresetType === side}
-                                                                ghosted={ghostDragPreview?.id === `${layer.id}-${side}`}
-                                                                easing={easing}
-                                                                onDrag={(event, edge) => startPresetDrag(event, activeShot, layer, side, edge)}
-                                                                onClick={event => {
-                                                                    event.stopPropagation();
-                                                                    if (suppressPillClickRef.current === `${layer.id}-${side}`) {
-                                                                        suppressPillClickRef.current = null;
-                                                                        return;
-                                                                    }
-                                                                    selectPreset(side, layer.id);
-                                                                    setEasingPopoverTarget({
-                                                                        easing,
-                                                                        onChange: next => updateLayer(activeShot.id, layer.id, l => updateTimelineTransition(l, side, { easing: next })),
-                                                                        anchorRect: event.currentTarget.getBoundingClientRect(),
-                                                                    });
-                                                                }} />;
-                                                        })}
-
-                                                        {/* Dashed Ghost Outline during Preset Drag */}
-                                                        {ghostDragPreview && (ghostDragPreview.id === `${layer.id}-entrance` || ghostDragPreview.id === `${layer.id}-exit`) && (
-                                                            <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={28} variant="pill" showStart={false} />
-                                                        )}
-                                                    </div>
-
-                                                    {/* ♦ Property blocks use 36px rows; bars are 90% of the main layer bar. */}
-                                                    {layer.blocks.map((blk) => (
-                                                        <div
-                                                            key={blk.id}
-                                                            className="h-9 relative flex items-center"
-                                                        >
-                                                            <TimelineRangeBar
-                                                                tone="animation"
-                                                                selected={selectedBlockId === blk.id}
-                                                                onContextMenu={(e) => {
-                                                                    e.preventDefault();
-                                                                    e.stopPropagation();
-                                                                    selectBlock(blk.id, layer.id);
-                                                                    const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                                                                    setContextMenu({
-                                                                        x: e.clientX,
-                                                                        y: e.clientY,
-                                                                        items: [
-                                                                            { type: 'header', label: blk.label },
-                                                                            {
-                                                                                id: 'edit-easing',
-                                                                                label: 'Edit easing',
-                                                                                shortcut: '↵',
-                                                                                onClick: () => {
-                                                                                    setEasingPopoverTarget({
-                                                                                        easing: blk.easing,
-                                                                                        onChange: (easing) => {
-                                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                                ...l,
-                                                                                                blocks: l.blocks.map((b) =>
-                                                                                                    b.id === blk.id ? { ...b, easing } : b
-                                                                                                ),
-                                                                                            }));
-                                                                                        },
-                                                                                        anchorRect: targetRect,
-                                                                                    });
-                                                                                },
-                                                                            },
-                                                                            {
-                                                                                id: 'copy',
-                                                                                label: 'Copy',
-                                                                                icon: Copy,
-                                                                                shortcut: '⌘C',
-                                                                                onClick: () => copyTimelineBlock({ type: 'animation', block: blk, layerId: layer.id }),
-                                                                            },
-                                                                            {
-                                                                                id: 'dup',
-                                                                                label: 'Duplicate',
-                                                                                shortcut: '⌘D',
-                                                                                onClick: () => {
-                                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                        ...l,
-                                                                                        blocks: [
-                                                                                            ...l.blocks,
-                                                                                            {
-                                                                                                ...blk,
-                                                                                                id: `blk-${Date.now()}`,
-                                                                                                startMs: Math.min(activeShot.durationMs - blk.durationMs, blk.startMs + 50),
-                                                                                            },
-                                                                                        ],
-                                                                                    }));
-                                                                                },
-                                                                            },
-                                                                            { type: 'divider' },
-                                                                            {
-                                                                                id: 'del',
-                                                                                label: 'Remove',
-                                                                                icon: Trash2,
-                                                                                shortcut: '⌫',
-                                                                                danger: true,
-                                                                                onClick: () => {
-                                                                                    updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                        ...l,
-                                                                                        blocks: l.blocks.filter((b) => b.id !== blk.id),
-                                                                                    }));
-                                                                                },
-                                                                            },
-                                                                        ],
-                                                                    });
-                                                                }}
-                                                                onClick={(e) => {
-                                                                    e.stopPropagation();
-                                                                    if (suppressPillClickRef.current === blk.id) {
-                                                                        suppressPillClickRef.current = null;
-                                                                        return;
-                                                                    }
-                                                                    selectBlock(blk.id, layer.id);
-                                                                    setEasingPopoverTarget({
-                                                                        easing: blk.easing,
-                                                                        onChange: (easing) => {
-                                                                            updateLayer(activeShot.id, layer.id, (l) => ({
-                                                                                ...l,
-                                                                                blocks: l.blocks.map((b) =>
-                                                                                    b.id === blk.id ? { ...b, easing } : b
-                                                                                ),
-                                                                            }));
-                                                                        },
-                                                                        anchorRect: (e.currentTarget as HTMLElement).getBoundingClientRect(),
-                                                                    });
-                                                                }}
-                                                                onPointerDown={(e) =>
-                                                                    startBlockDrag(
-                                                                        e,
-                                                                        activeShot,
-                                                                        layer,
-                                                                        blk,
-                                                                        'move'
-                                                                    )
-                                                                }
-                                                                left={blk.startMs * pxPerMs} width={Math.max(36, blk.durationMs * pxPerMs)}
-                                                                title={`${blk.label} · ${(blk.durationMs / 1000).toFixed(2)}s · Click to edit easing`}
-                                                                aria-label={`${blk.label} animation bar`}
-                                                                className={`absolute top-1/2 h-[90%] -translate-y-1/2 px-2 flex items-center justify-between text-[10px] font-medium tracking-tight cursor-grab active:cursor-grabbing ${
-                                                                    ghostDragPreview?.id === blk.id ? 'opacity-40' : ''
-                                                                }`}
-                                                            >
-                                                                <TimelineEasingCurve easing={blk.easing} tone="animation" selected={selectedBlockId === blk.id} />
-                                                                <span className="relative z-10 pointer-events-none drop-shadow-sm truncate">{blk.label}</span>
-                                                                <TrimHandle side="left"
-                                                                    onPointerDown={(e) =>
-                                                                        startBlockDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            blk,
-                                                                            'left'
-                                                                        )
-                                                                    }
-                                                                    className="w-2 bg-white/25 hover:bg-purple-300 rounded-l-full z-10" />
-                                                                <TrimHandle side="right"
-                                                                    onPointerDown={(e) =>
-                                                                        startBlockDrag(
-                                                                            e,
-                                                                            activeShot,
-                                                                            layer,
-                                                                            blk,
-                                                                            'right'
-                                                                        )
-                                                                    }
-                                                                    className="w-2 bg-white/25 hover:bg-purple-300 rounded-r-full z-10" />
-                                                            </TimelineRangeBar>
-
-                                                            {/* Dashed Ghost Outline during Block Drag */}
-                                                            {ghostDragPreview && ghostDragPreview.id === blk.id && (
-                                                                <TimelineDragPreview startMs={ghostDragPreview.startMs} durationMs={ghostDragPreview.durationMs} snapped={ghostDragPreview.snapped} pxPerMs={pxPerMs} minWidth={36} variant="pill" />
-                                                            )}
-                                                        </div>
-                                                    ))}
-                                                </div>
-                                            )}
-                                        </div>
-                                    );
-                                })}
-
-                            {/* Dimmed Right-Hand Step-Out Curtain */}
-                            <div
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    setTimelineView('video');
-                                }}
-                                title="Click dimmed area to step back out to Whole Video view"
-                                style={{ left: `${activeShot.durationMs * pxPerMs + 8}px` }}
-                                className="absolute top-0 bottom-0 right-0 rounded-l-2xl bg-[#16202a]/80 hover:bg-[#1e2c3a]/85 border-l border-white/10 cursor-pointer transition z-10"
-                            />
-                        </div>
+                        <TimelineSceneTracks
+                            activeShot={activeShot}
+                            pxPerMs={pxPerMs}
+                            addLayerLaneWidth={addLayerLaneWidth}
+                            addLayerGhostWidth={addLayerGhostWidth}
+                            addLayerGhostLeft={addLayerGhostLeft}
+                            addLayerHoverX={addLayerHoverX}
+                            setAddLayerHoverX={setAddLayerHoverX}
+                            setInspectorTab={setInspectorTab}
+                            onAddLayer={() => {
+                                const created = addLayerToShot(activeShot.id, 'shape', {
+                                    inMs: 0,
+                                    outMs: activeShot.durationMs,
+                                });
+                                setInspectorTab('layer');
+                                selectLayer(created.id, false);
+                            }}
+                            hoverCameraTimeMs={hoverCameraTimeMs}
+                            setHoverCameraTimeMs={setHoverCameraTimeMs}
+                            clientXToLocalMs={clientXToLocalMs}
+                            addCameraBlockAtTime={addCameraBlockAtTime}
+                            selectedCameraBlockId={selectedCameraBlockId}
+                            selectCameraBlock={selectCameraBlock}
+                            updateShot={updateShot}
+                            setContextMenu={setContextMenu}
+                            setEasingPopoverTarget={setEasingPopoverTarget}
+                            startCameraBlockDrag={startCameraBlockDrag}
+                            ghostDragPreview={ghostDragPreview}
+                            hasLightBlocks={hasLightBlocks}
+                            selectedLightBlockId={selectedLightBlockId}
+                            selectLightBlock={selectLightBlock}
+                            startLightBlockDrag={startLightBlockDrag}
+                            selectedLayerSet={selectedLayerSet}
+                            expandedTimelineLayerSet={expandedTimelineLayerSet}
+                            startLayerBarDrag={startLayerBarDrag}
+                            updateLayer={updateLayer}
+                            selectPreset={selectPreset}
+                            selectedPresetType={selectedPresetType}
+                            suppressPillClickRef={suppressPillClickRef}
+                            startPresetDrag={startPresetDrag}
+                            selectedBlockId={selectedBlockId}
+                            selectBlock={selectBlock}
+                            startBlockDrag={startBlockDrag}
+                            setTimelineView={setTimelineView}
+                        />
                     )}
                     </div>
 

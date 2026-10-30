@@ -12,6 +12,7 @@ import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
 import { SHAPE_TOOL_ITEMS } from './canvasToolItems';
+import type { CanvasToolbarPlacement } from './canvasToolbarLayout';
 
 interface CanvasToolbarProps {
     selectedLayer: Layer | undefined;
@@ -23,6 +24,7 @@ interface CanvasToolbarProps {
     onOpenShortcuts?: () => void;
     onSelectAudioClick?: () => void;
     onFrameSelection?: () => void;
+    placement?: CanvasToolbarPlacement;
 }
 
 type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | null;
@@ -63,6 +65,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     onOpenShortcuts: _onOpenShortcuts,
     onSelectAudioClick,
     onFrameSelection,
+    placement = 'bottom',
 }) => {
     const {
         activeTool,
@@ -379,7 +382,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             ref={menuRef}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]"
+            data-canvas-toolbar-positioner=""
+            className={`absolute ${placement === 'top' ? 'top-3' : 'bottom-3'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]`}
         >
             {/* Transient Toast Notification */}
             {toastMessage && (
