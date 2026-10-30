@@ -3,6 +3,7 @@ import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
 import type { EvaluatedLayerWithEffects } from './evaluateShot';
 import { getArtboardDimensions } from '../stage/stageUtils';
+import { getBlurSettings } from '../model/layerEffects';
 import { applyLayerSurfaceEffects, compositeLayerEffectSurface, drawLayerHalo } from '../stage/webgl/layerEffects';
 import { drawMediaShimmer } from '../stage/webgl/mediaDecorations';
 import { layerReceivesLight } from '../model/layerLighting';
@@ -160,7 +161,11 @@ export async function drawLayerOnCanvas(
       viewAngle: 1 - Math.abs(Math.cos(layer.rotation.x) * Math.cos(layer.rotation.y)),
     });
     ctx.globalAlpha = composed ? 1 : layer.opacity;
-    if (!composed && (effects.layerBlur ?? 0) > 0) ctx.filter = `blur(${(effects.layerBlur ?? 0) * 100 * w / 1920}px)`;
+    if (!composed) {
+      const blurSettings = getBlurSettings(effects, 'layerBlur');
+      const maxBlur = Math.max((effects.layerBlur ?? 0) * 100, blurSettings.start, blurSettings.end);
+      if (maxBlur > 0) ctx.filter = `blur(${maxBlur * w / 1920}px)`;
+    }
     ctx.drawImage(composed ?? surface, 0, 0, w, h);
     ctx.restore();
   } finally { releaseCanvas(surface); }

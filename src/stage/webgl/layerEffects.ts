@@ -332,7 +332,7 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     }
     const uniforms = cachedExportUniforms;
     uniforms.layerScene.value = behind;
-    uniforms.layerAuthorSize.value.set(1920, 1080);
+    uniforms.layerAuthorSize.value.set(options.width * 1920, options.height * 1080);
     uniforms.layerResolution.value.set(source.width, source.height);
     uniforms.layerPixelRatio.value = source.width / 1920;
     uniforms.layerContentScale.value.set(1 / Math.max(.001, options.width), 1 / Math.max(.001, options.height));
@@ -395,7 +395,10 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
     float phase = (index + .5) / count;
     if (shape.x < .5) {
         float angle = index * 2.39996323;
-        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / size;
+        // Isotropic blur: normalise so kernel stays circular on non-square layers.
+        float shortSide = min(size.x, size.y);
+        vec2 aspect = vec2(shortSide / max(size.x, 1.), shortSide / max(size.y, 1.));
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius * aspect / shortSide;
     }
     vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
     if (shape.x < 1.5) {
@@ -409,9 +412,11 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
 }
 vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
     vec4 color = vec4(0.); float alpha = 0.;
+    // Blue-noise dithering to reduce concentric banding artifacts
+    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     for (int i = 0; i < 32; i++) {
         if (float(i) >= shape.w) break;
-        vec2 delta = layerBlurOffset(uv, radius, shape, float(i), shape.w, layerAuthorSize);
+        vec2 delta = layerBlurOffset(uv, radius, shape, float(i) + dither * .5, shape.w, layerAuthorSize);
         vec2 p = uv + delta;
         vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.)));
         sampleColor.a *= step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
@@ -441,7 +446,10 @@ vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float 
     float phase = (index + .5) / count;
     if (shape.x < .5) {
         float angle = index * 2.39996323;
-        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / layerResolution;
+        // Isotropic circular backdrop blur across any display aspect ratio
+        float shortSide = min(layerResolution.x, layerResolution.y);
+        vec2 aspect = vec2(shortSide / max(layerResolution.x, 1.), shortSide / max(layerResolution.y, 1.));
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius * aspect / shortSide;
     }
     vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
     if (shape.x < 1.5) {

@@ -40,18 +40,31 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
         #if EFFECT == 0
           vec3 glow=vec3(0.0);
           float radius=max(1.0,uResolution.x/240.0)*max(0.0,uParams.z);
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
-            vec4 s=sampleAt(vUv+vec2(float(x),float(y))*radius/uResolution);
+          float soft=max(.0001,uParams.w);
+          float total=0.0;
+          for(int i=0;i<16;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323;
+            float r=sqrt((fi+0.5)/16.0)*radius;
+            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
+            vec4 s=sampleAt(vUv+offset);
             float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            float soft=max(.0001,uParams.w);
-            glow+=s.rgb*smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
+            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
+            glow+=s.rgb*w;
+            total+=1.0;
           }
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
-            vec4 s=sampleAt(vUv+vec2(float(x),float(y))*radius*2.0/uResolution);
+          for(int i=0;i<8;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323+1.2;
+            float r=sqrt((fi+0.5)/8.0)*radius*2.0;
+            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
+            vec4 s=sampleAt(vUv+offset);
             float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            glow+=s.rgb*smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
+            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
+            glow+=s.rgb*w;
+            total+=1.0;
           }
-          vec3 bloom=glow/14.4*uParams.x;
+          vec3 bloom=(glow/max(1.0,total))*uParams.x;
           if(uExtra.x==1.0) col.rgb+=bloom;
           else if(uExtra.x==2.0) col.rgb=mix(col.rgb,2.0*col.rgb*bloom+col.rgb*col.rgb*(1.0-2.0*bloom),step(.5,col.rgb));
           else col.rgb=1.0-(1.0-col.rgb)*(1.0-clamp(bloom,0.0,1.0));
@@ -99,9 +112,15 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float angle=radians(uParams.w);
           vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y;
           float radius=uParams.z*uResolution.x/1920.0*max(.0,uExtra.x);
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++)
-            ghost+=sampleAt(vUv+shift+vec2(float(x),float(y))*radius/uResolution);
-          col.rgb+=ghost.rgb/9.0*uParams.x;
+          float ghostTotal=0.0;
+          for(int i=0;i<16;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323;
+            float r=sqrt((fi+0.5)/16.0)*radius;
+            ghost+=sampleAt(vUv+shift+vec2(cos(angle),sin(angle))*r/uResolution);
+            ghostTotal+=1.0;
+          }
+          col.rgb+=ghost.rgb/max(1.0,ghostTotal)*uParams.x;
         #elif EFFECT == 6
           vec3 straight=col.a>.00001?col.rgb/col.a:vec3(0.0);
           straight=raylightGrade(straight,uParams,uExtra.x);
