@@ -53,7 +53,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
         expect(html).toContain('Project Settings');
         expect(html).toContain('Aspect Ratio');
         expect(html).toContain('Lens');
-        expect(html).not.toMatch(/>\s*Shot Settings\s*<\/button>/);
+        expect(html).not.toContain('aria-label="Inspector settings view"');
+        expect(html).not.toMatch(/>\s*Shot\s*<\/button>/);
         expect(html).not.toContain('<select');
         expect(html).toContain('role="combobox"');
 
@@ -92,7 +93,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
         expect(html).not.toContain('SCENE LIGHTS');
         expect(html).not.toContain('Shader pass order');
         expect(html).not.toContain('No scene effects added');
-        expect(html).not.toMatch(/>\s*Project Settings\s*<\/button>/);
+        expect(html).not.toContain('aria-label="Inspector settings view"');
+        expect(html).not.toMatch(/>\s*Project\s*<\/button>/);
         expect(html).toContain('aria-label="Use project background"');
 
         // DOES NOT contain Project Settings section
