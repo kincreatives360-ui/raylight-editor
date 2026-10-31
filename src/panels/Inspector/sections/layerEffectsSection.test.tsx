@@ -99,7 +99,7 @@ describe('layer effect controls', () => {
     let effects: LayerEffects = {};
     for (const key of ['dropShadow', 'glow', 'liquidGlass', 'warp', 'screen'] as const) effects = addLayerEffect(effects, key);
     const html = render(effects);
-    for (const label of ['Shadow mode', 'Spread', 'Add shadow', 'Glow mode', 'Glow angle', 'Sheen', 'Rim', 'Depth', 'Glow blending', 'Frost', 'Refract', 'Disperse', 'Shine', 'Wrap mode', 'Strength', 'Size', 'Center X', 'Center Y', 'Screen type', 'Pixel', 'Moiré', 'Bands', 'Focus', 'Flicker', 'Speed', 'Off-axis', 'Snap to pixels']) expect(html).toContain(label);
+    for (const label of ['Shadow mode', 'Spread', 'Add shadow', 'Glow placement', 'Glow angle', 'Sheen', 'Rim', 'Depth', 'Glow blend', 'Frost', 'Refract', 'Disperse', 'Shine', 'Wrap mode', 'Strength', 'Size', 'Center X', 'Center Y', 'Screen type', 'Pixel', 'Moiré', 'Bands', 'Focus', 'Flicker', 'Speed', 'Off-axis', 'Snap to pixels']) expect(html).toContain(label);
   });
   it('keeps progressive endpoints and angle separate from uniform blur', () => {
     const html = render({ layerBlur: .24, layerBlurSettings: { mode: 'progressive', start: 0, end: 24, angle: 270 } });

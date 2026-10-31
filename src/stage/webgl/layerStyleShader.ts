@@ -14,6 +14,9 @@ export function getLayerStyleUniforms(effects: LayerEffects) {
         styleBalance: { value: new THREE.Vector2(grade?.temperature ?? 0, grade?.tint ?? 0) },
         styleLevels: { value: new THREE.Vector3(grade?.blackPoint ?? 0, grade?.whitePoint ?? 1, grade?.gamma ?? 1) },
         styleCurves: { value: new THREE.Vector3(grade?.curveShadows ?? 0, grade?.curveMidtones ?? 0, grade?.curveHighlights ?? 0) },
+        styleCurveR: { value: new THREE.Vector3(...(grade?.curveR ?? [0, 0, 0])) },
+        styleCurveG: { value: new THREE.Vector3(...(grade?.curveG ?? [0, 0, 0])) },
+        styleCurveB: { value: new THREE.Vector3(...(grade?.curveB ?? [0, 0, 0])) },
         styleNoise: { value: new THREE.Vector4(noise?.amount ?? 0, noise?.scale ?? 1, noise?.density ?? 1, noise?.seed ?? 0) },
         styleNoiseOptions: { value: new THREE.Vector2(noise?.monochrome === false ? 0 : 1, noise?.animated ? noise.speed : 0) },
         styleBevel: { value: new THREE.Vector4(bevel?.thickness ?? 0, bevel?.depth ?? 0, (bevel?.angle ?? 0) * Math.PI / 180, bevel?.intensity ?? 0) },
@@ -42,19 +45,12 @@ ${RANDOM_GLSL}
 uniform vec4 styleGrade, styleNoise, styleBevel, styleHalftone, stylePixelProfile, styleRgbSplit;
 uniform vec2 styleBalance, styleNoiseOptions, styleHalftoneOffset, stylePixelateOffset, styleRgbCenter;
 uniform vec3 styleLevels, styleCurves, styleBevelHighlight, styleBevelShadow;
+uniform vec3 styleCurveR, styleCurveG, styleCurveB;
 uniform vec3 stylePrintOptions, stylePrintForeground, stylePrintBackground, stylePixelate;
 uniform vec3 styleRgbChannels;
 uniform float styleBevelSoftness, styleHalftoneContrast;
 
-float styleCurve(float value) {
-    float c1 = clamp(.25 + styleCurves.x, 0., 1.);
-    float c2 = clamp(.5 + styleCurves.y, 0., 1.);
-    float c3 = clamp(.75 + styleCurves.z, 0., 1.);
-    if (value < .25) return mix(0., c1, value * 4.);
-    if (value < .5) return mix(c1, c2, (value - .25) * 4.);
-    if (value < .75) return mix(c2, c3, (value - .5) * 4.);
-    return mix(c3, 1., (value - .75) * 4.);
-}
+// styleCurve removed: use raylightCurve(v, styleCurves.x, styleCurves.y, styleCurves.z) directly
 
 vec2 layerStyleUv(vec2 uv, vec2 localUv) {
     if (stylePixelate.z < .5) return uv;
@@ -74,10 +70,18 @@ vec4 layerApplyStyles(vec4 artwork, vec2 uv, vec2 localUv) {
             direction = radial / max(length(radial), .0001);
         }
         vec2 shift = direction * styleRgbSplit.x / layerAuthorSize;
-        vec3 redSample = texture2D(map, clamp(uv + shift * styleRgbChannels.x, vec2(0.), vec2(1.))).rgb;
-        vec3 greenSample = texture2D(map, clamp(uv + shift * styleRgbChannels.y, vec2(0.), vec2(1.))).rgb;
-        vec3 blueSample = texture2D(map, clamp(uv + shift * styleRgbChannels.z, vec2(0.), vec2(1.))).rgb;
-        artwork.rgb = vec3(redSample.r, greenSample.g, blueSample.b);
+        // Border-aware sampling prevents colour fringing from inflating the apparent object size
+        vec2 rUv = uv + shift * styleRgbChannels.x;
+        vec2 gUv = uv + shift * styleRgbChannels.y;
+        vec2 bUv = uv + shift * styleRgbChannels.z;
+        float rIn = step(0., rUv.x) * step(rUv.x, 1.) * step(0., rUv.y) * step(rUv.y, 1.);
+        float gIn = step(0., gUv.x) * step(gUv.x, 1.) * step(0., gUv.y) * step(gUv.y, 1.);
+        float bIn = step(0., bUv.x) * step(bUv.x, 1.) * step(0., bUv.y) * step(bUv.y, 1.);
+        vec4 rSamp = mix(artwork, texture2D(map, clamp(rUv, vec2(0.), vec2(1.))), rIn);
+        vec4 gSamp = mix(artwork, texture2D(map, clamp(gUv, vec2(0.), vec2(1.))), gIn);
+        vec4 bSamp = mix(artwork, texture2D(map, clamp(bUv, vec2(0.), vec2(1.))), bIn);
+        artwork.rgb = vec3(rSamp.r, gSamp.g, bSamp.b);
+        // Alpha preserved: style shaders strictly alter rgb
     }
     if (styleHalftone.x > .5) {
         vec2 pixels = (uv - layerContentCenter) * layerAuthorSize - styleHalftoneOffset;
@@ -101,7 +105,11 @@ vec4 layerApplyStyles(vec4 artwork, vec2 uv, vec2 localUv) {
         vec3 color = raylightGrade(artwork.rgb, vec4(styleGrade.xyz, styleBalance.x), styleBalance.y);
         color = clamp((color - styleLevels.x) / max(.001, styleLevels.y - styleLevels.x), 0., 1.);
         color = pow(color, vec3(1. / max(.1, styleLevels.z)));
-        artwork.rgb = vec3(styleCurve(color.r), styleCurve(color.g), styleCurve(color.b));
+        artwork.rgb = vec3(
+            raylightCurve(raylightCurve(color.r, styleCurves.x, styleCurves.y, styleCurves.z), styleCurveR.x, styleCurveR.y, styleCurveR.z),
+            raylightCurve(raylightCurve(color.g, styleCurves.x, styleCurves.y, styleCurves.z), styleCurveG.x, styleCurveG.y, styleCurveG.z),
+            raylightCurve(raylightCurve(color.b, styleCurves.x, styleCurves.y, styleCurves.z), styleCurveB.x, styleCurveB.y, styleCurveB.z)
+        );
     }
     if (styleBevel.w > 0. && styleBevel.x > 0.) {
         vec2 delta = vec2(cos(styleBevel.z), -sin(styleBevel.z)) * styleBevel.x / layerAuthorSize;

@@ -28,6 +28,7 @@ function ShadowControls({ shadow, onChange }: { shadow: DropShadowEffect; onChan
             <NumberControl label="Offset X" value={shadow.offsetX * EFFECT_STAGE.width} min={-1000} max={1000} onChange={v => onChange({ offsetX: v / EFFECT_STAGE.width })} />
             <NumberControl label="Offset Y" value={shadow.offsetY * EFFECT_STAGE.height} min={-1000} max={1000} onChange={v => onChange({ offsetY: v / EFFECT_STAGE.height })} />
             <NumberControl label="Shadow blur" value={shadow.blur * EFFECT_STAGE.width} onChange={v => onChange({ blur: v / EFFECT_STAGE.width })} />
+            <NumberControl label="Distance" value={shadow.distance ?? 0} min={0} max={500} onChange={distance => onChange({ distance })} />
             <NumberControl label="Spread" value={shadow.spread ?? 0} min={-200} onChange={spread => onChange({ spread })} />
         </div>
     </div>;
@@ -96,11 +97,12 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <button type="button" className="flex items-center justify-center gap-2 w-full rounded-lg border border-subtle bg-surface/50 hover:bg-subtle py-2 mt-3 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={(effects.shadows?.length ?? 0) >= 16} onClick={() => change(current => ({ ...current, shadows: [...(current.shadows ?? []), defaultShadow()] }))}><Plus size={14} />Add shadow</button>
             </>)}
             {glow && card('glow', <Zap className="w-3.5 h-3.5" />, <div className="space-y-3 pt-3">
-                <Mode label="Glow mode" value={glow.mode ?? 'edge'} options={[["edge", "Edge"], ["fill", "Fill"]]} onChange={mode => objectPatch('glow', { mode: mode as typeof glow.mode })} />
+                <Mode label="Glow placement" value={glow.placement ?? 'outer'} options={[["outer", "Outer"], ["inner", "Inner"]]} onChange={placement => objectPatch('glow', { placement: placement as 'outer' | 'inner' })} />
                 <div className="grid grid-cols-2 gap-2"><NumberControl label="Glow blur" value={glow.radius * EFFECT_STAGE.width} max={500} onChange={v => objectPatch('glow', { radius: v / EFFECT_STAGE.width })} /><Percent label="Intensity" value={glow.intensity} max={200} onChange={intensity => objectPatch('glow', { intensity })} /></div>
-                <div className="grid grid-cols-2 gap-2"><NumberControl label="Glow angle" value={glow.angle ?? 106} min={-360} max={360} unit="°" onChange={angle => objectPatch('glow', { angle })} /><Percent label="Sheen" value={glow.sheen ?? 1} onChange={sheen => objectPatch('glow', { sheen })} /><Percent label="Rim" value={glow.rim ?? 1} onChange={rim => objectPatch('glow', { rim })} /><NumberControl label="Depth" value={glow.depth ?? 0} min={-200} onChange={depth => objectPatch('glow', { depth })} /></div>
-                <Mode label="Glow blending" value={glow.blend ?? 'normal'} options={[["add", "Add"], ["normal", "Normal"]]} onChange={blend => objectPatch('glow', { blend: blend as typeof glow.blend })} />
+                <div className="grid grid-cols-2 gap-2"><NumberControl label="Glow angle" value={glow.angle ?? 106} min={-360} max={360} unit="°" onChange={angle => objectPatch('glow', { angle })} /><Percent label="Rim" value={glow.rim ?? 1} onChange={rim => objectPatch('glow', { rim })} /></div>
+                <div className="grid grid-cols-2 gap-2"><Percent label="Sheen" value={glow.sheen ?? 1} onChange={sheen => objectPatch('glow', { sheen })} /><NumberControl label="Depth" value={glow.depth ?? 0} min={-200} max={200} onChange={depth => objectPatch('glow', { depth })} /></div>
                 <ColorPicker showGradientMode={false} label="Glow color" color={glow.color} onChange={color => objectPatch('glow', { color })} />
+                <Mode label="Glow blend" value={glow.blend ?? 'normal'} options={[["normal", "Normal"], ["add", "Add"]]} onChange={blend => objectPatch('glow', { blend: blend as typeof glow.blend })} />
             </div>)}
             {(['backdropBlur', 'layerBlur'] as const).map(key => effects[key] !== undefined && <div key={key}>{card(key, key === 'layerBlur' ? <Layers size={14} /> : <Eye size={14} />, <BlurControls effectKey={key} effects={effects} onChange={patch} />)}</div>)}
             {glass && card('liquidGlass', <Droplet size={14} />, <div className="space-y-3 pt-3">

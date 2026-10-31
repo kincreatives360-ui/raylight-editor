@@ -49,7 +49,8 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
         }
     }
     const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode === 'inner');
-    const glow = effects.glow?.enabled && effects.glow.mode ? effects.glow : undefined;
+    // Inner glow: rendered on the surface canvas when placement === 'inner'
+    const glow = effects.glow?.enabled && (effects.glow.placement === 'inner' || (!effects.glow.placement && effects.glow.mode)) ? effects.glow : undefined;
     if (!shadows.length && !glow) return;
     // Smooth masks do not need a full 4K copy of the artwork. Preserve the source,
     // and composite bounded-resolution shading over it at native resolution.
@@ -78,13 +79,25 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
             for (let pass = 0; pass < Math.min(2, Math.ceil(opacity)); pass++) { ctx.globalAlpha = Math.max(0, Math.min(1, opacity - pass)); ctx.drawImage(result, 0, 0, source.width, source.height); }
             ctx.restore();
         };
-        for (const s of shadows) if (s) composite(s.color, s.opacity, s.blur * 1920, s.offsetX * 1920, s.offsetY * 1080, s.spread ?? 0, true);
+        for (const s of shadows) if (s) {
+            // distance field overrides offsetX/Y: radial offset from object center using shadow angle
+            const angle = (s.angle ?? 0) * Math.PI / 180;
+            const dist = s.distance ?? 0;
+            const ox = dist > 0 ? dist * Math.cos(angle) : s.offsetX * 1920;
+            const oy = dist > 0 ? dist * Math.sin(angle) : s.offsetY * 1080;
+            composite(s.color, s.opacity, s.blur * 1920, ox, oy, s.spread ?? 0, true);
+        }
         if (glow) {
-            const angle = (glow.angle ?? 106) * Math.PI / 180, depth = glow.depth ?? 0, sheen = glow.sheen ?? 1, rim = glow.rim ?? 1;
-            const blur = glow.radius * 1920, offset = depth + blur * .15 * sheen;
-            const blend = glow.blend === 'add' ? 'lighter' : 'source-over';
-            if (glow.mode === 'fill') composite(glow.color, glow.intensity * (1 - rim * .5), blur * .25, 0, 0, 0, false, blend);
-            composite(glow.color, glow.intensity * rim * (1 + sheen), blur, Math.cos(angle) * offset, Math.sin(angle) * offset, depth, true, blend);
+            const isInnerPlacement = glow.placement === 'inner' || (!glow.placement && glow.mode);
+            if (isInnerPlacement) {
+                // Inner glow: render using innerColor/innerIntensity if set, fall back to main params
+                const innerColor = glow.innerColor ?? glow.color;
+                const innerIntensity = glow.innerIntensity ?? glow.intensity;
+                const innerRadius = (glow.innerRadius ?? glow.radius) * 1920;
+                const blend = glow.blend === 'add' ? 'lighter' : 'source-over';
+                if (glow.mode === 'fill') composite(innerColor, innerIntensity * 0.5, innerRadius * 0.25, 0, 0, 0, false, blend);
+                composite(innerColor, innerIntensity, innerRadius, 0, 0, 0, true, blend);
+            }
         }
     } finally { releaseCanvas(original); releaseCanvas(mask); releaseCanvas(result); }
 }
@@ -201,7 +214,8 @@ export function applyLayerReveal(ctx: CanvasRenderingContext2D, width: number, h
 }
 
 export function getLayerHaloLayout(effects: LayerEffects, width: number, height: number, intensityOffset = 0, radiusOffset = 0) {
-    const glowIntensity = Math.max(0, (effects.glow?.enabled ? effects.glow.intensity : 0) + intensityOffset);
+    const isOuterGlow = effects.glow?.placement !== 'inner';
+    const glowIntensity = Math.max(0, (effects.glow?.enabled && isOuterGlow ? effects.glow.intensity : 0) + intensityOffset);
     const glowRadius = Math.max(0, (effects.glow?.enabled ? effects.glow.radius : .05) + radiusOffset) * Math.max(width, height);
     const shadow = effects.dropShadow?.enabled && effects.dropShadow.mode !== 'inner' ? effects.dropShadow : undefined;
     const padding = Math.ceil(Math.max(glowIntensity > 0 ? glowRadius * 3 + Math.abs(effects.glow?.depth ?? 0) : 0,
@@ -246,7 +260,13 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
     };
     for (const s of shadows) if (s) {
         if (s.mode === 'long') drawLongShadow(ctx, source, { x: layout.padding * ratio, y: layout.padding * ratio, width: source.width * ratio, height: source.height * ratio, length: (s.length ?? 120) * ratio, angle: s.angle ?? 45, fade: s.fade ?? 0, color: s.color, opacity: s.opacity, blur: s.blur * Math.max(source.width, source.height) * ratio, spread: (s.spread ?? 0) * ratio, offsetX: s.offsetX * source.width * ratio, offsetY: s.offsetY * source.height * ratio });
-        else draw(s.color, s.opacity, s.blur * Math.max(source.width, source.height), s.offsetX * source.width, s.offsetY * source.height, s.spread);
+        else {
+            const sAngle = (s.angle ?? 0) * Math.PI / 180;
+            const sDist = s.distance ?? 0;
+            const sOx = sDist > 0 ? sDist * Math.cos(sAngle) * sx : s.offsetX * source.width;
+            const sOy = sDist > 0 ? sDist * Math.sin(sAngle) * sy : s.offsetY * source.height;
+            draw(s.color, s.opacity, s.blur * Math.max(source.width, source.height), sOx, sOy, s.spread);
+        }
     }
     if (layout.glowIntensity > 0) {
         const glow = effects.glow;
@@ -413,18 +433,21 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
 vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
     vec4 accum = vec4(0.); float totalW = 0.;
     float count = max(1., shape.w);
-    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
+    // No per-pixel dither: dither causes a visible noise/grain texture on smooth blurs.
+    // Use a fixed golden-angle spiral that is already well-distributed.
     for (int i = 0; i < 32; i++) {
         if (float(i) >= count) break;
         float phase = (float(i) + .5) / count;
         float rNorm = sqrt(phase);
         float w = exp(-2.5 * rNorm * rNorm);
-        vec2 delta = layerBlurOffset(uv, radius, shape, float(i) + dither * .5, count, layerAuthorSize);
+        vec2 delta = layerBlurOffset(uv, radius, shape, float(i), count, layerAuthorSize);
         vec2 p = uv + delta;
-        vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.)));
-        sampleColor.a *= step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
+        // Mask BOTH rgb and alpha for out-of-bounds samples so they do not
+        // bleed edge colours into transparent pixels (prevents size inflation).
+        float inBounds = step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
+        vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.))) * inBounds;
         accum += sampleColor * w;
-        totalW += w;
+        totalW += w * inBounds;
     }
     return accum / max(totalW, .00001);
 }

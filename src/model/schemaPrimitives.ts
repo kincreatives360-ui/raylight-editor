@@ -296,7 +296,7 @@ const DropShadowSchema = z.object({
       length: z.number().min(0).max(2000).optional(),
       angle: z.number().optional(),
       fade: z.number().min(0).max(1).optional(),
-      spread: z.number().min(-200).max(200).optional(),
+      distance: z.number().optional(), spread: z.number().min(-200).max(200).optional(),
       enabled: z.boolean(),
       color: z.string(),
       opacity: z.number().min(0).max(1),
@@ -321,7 +321,7 @@ export const LayerEffectsSchema = z.object({
     red: z.number().min(-2).max(2), green: z.number().min(-2).max(2), blue: z.number().min(-2).max(2),
   }).optional(),
   outline: z.object({ enabled: z.boolean(), width: z.number().min(0).max(200), placement: z.enum(["inside","outside"]), color: z.string(), opacity: z.number().min(0).max(1), softness: z.number().min(0).max(200) }).optional(),
-  colorCorrection: z.object({ enabled: z.boolean(), exposure: z.number().min(-5).max(5), contrast: z.number().min(0).max(3), saturation: z.number().min(0).max(3), temperature: z.number().min(-1).max(1), tint: z.number().min(-1).max(1), blackPoint: z.number().min(0).max(1), whitePoint: z.number().min(0).max(1), gamma: z.number().min(0.1).max(4), curveShadows: z.number().min(-1).max(1), curveMidtones: z.number().min(-1).max(1), curveHighlights: z.number().min(-1).max(1) }).optional(),
+  colorCorrection: z.object({ enabled: z.boolean(), exposure: z.number().min(-5).max(5), contrast: z.number().min(0).max(3), saturation: z.number().min(0).max(3), temperature: z.number().min(-1).max(1), tint: z.number().min(-1).max(1), blackPoint: z.number().min(0).max(1), whitePoint: z.number().min(0).max(1), gamma: z.number().min(0.1).max(4), curveShadows: z.number().min(-1).max(1), curveMidtones: z.number().min(-1).max(1), curveHighlights: z.number().min(-1).max(1), curveR: z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1), z.number().min(-1).max(1)]).optional(), curveG: z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1), z.number().min(-1).max(1)]).optional(), curveB: z.tuple([z.number().min(-1).max(1), z.number().min(-1).max(1), z.number().min(-1).max(1)]).optional() }).optional(),
   noise: z.object({ enabled: z.boolean(), amount: z.number().min(0).max(1), scale: z.number().min(0.5).max(100), monochrome: z.boolean(), density: z.number().min(0).max(1), seed: z.number().int(), animated: z.boolean(), speed: z.number().min(0).max(20) }).optional(),
   bevel: z.object({ softness: z.number().min(0).max(200).optional(), enabled: z.boolean(), thickness: z.number().min(0).max(200), depth: z.number().min(-200).max(200), angle: z.number(), highlightColor: z.string(), shadowColor: z.string(), intensity: z.number().min(0).max(1) }).optional(),
   halftone: z.object({ offsetX: z.number().optional(), offsetY: z.number().optional(), contrast: z.number().min(.1).max(4).optional(), enabled: z.boolean(), dotSize: z.number().min(0.5).max(200), spacing: z.number().min(0.5).max(200), angle: z.number(), shape: z.enum(["circle","square","line"]), foreground: z.string(), background: z.string(), sourceColor: z.boolean(), invert: z.boolean() }).optional(),
@@ -332,6 +332,7 @@ export const LayerEffectsSchema = z.object({
   shadows: z.array(DropShadowSchema).max(16).optional(),
   glow: z
     .object({
+      placement: z.enum(['outer', 'inner']).optional(),
       mode: z.enum(['edge', 'fill']).optional(),
       angle: z.number().optional(),
       sheen: z.number().min(0).max(1).optional(),
@@ -342,6 +343,9 @@ export const LayerEffectsSchema = z.object({
       color: z.string(),
       intensity: z.number().min(0),
       radius: z.number().min(0),
+      innerColor: z.string().optional(),
+      innerIntensity: z.number().min(0).optional(),
+      innerRadius: z.number().min(0).optional(),
     })
     .optional(),
   layerBlur: z.number().min(0).max(2).optional(),

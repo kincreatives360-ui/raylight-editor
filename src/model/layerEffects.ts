@@ -31,7 +31,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
     case 'colorKey': return { ...effects, colorKey: { enabled: true, color: '#00ff00', similarity: .3, softness: .1, spill: .5, invert: false } };
     case 'pixelate': return { ...effects, pixelate: { enabled: true, blockSize: 16, aspect: 1, offsetX: 0, offsetY: 0, mode: 'uniform', start: 1, end: 32, angle: 0 } };
     case 'dropShadow': return { ...effects, dropShadow: defaultShadow() };
-    case 'glow': return { ...effects, glow: { enabled: true, mode: 'edge', color: '#0043ff', intensity: .2, radius: 126 / 1920, angle: 106, sheen: 1, rim: 1, depth: 0, blend: 'normal' } };
+    case 'glow': return { ...effects, glow: { enabled: true, placement: 'outer', mode: 'edge', color: '#0043ff', intensity: .2, radius: 126 / 1920, angle: 106, sheen: 1, rim: 1, depth: 0, blend: 'normal', innerColor: '#0043ff', innerIntensity: 0, innerRadius: 60 / 1920 } };
     case 'backdropBlur': case 'layerBlur': return { ...effects, [key]: .24 };
     case 'liquidGlass': return { ...effects, liquidGlass: { enabled: true, refraction: .6, ior: 1.52, bevelWidth: 24, doubleBevel: .4, roughness: .05, dispersion: .45, chromaBoost: .8, shine: .7, fresnel: .6, lightAngle: 45, tint: '#ffffff', rimColor: '#cce4ff' } };
     case 'warp': return { ...effects, warp: { enabled: true, mode: 'bulge', strength: .5, size: 183, centerX: 0, centerY: 0, angle: 0, width: 61, travel: .5 } };

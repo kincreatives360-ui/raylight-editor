@@ -3,6 +3,8 @@ export interface DropShadowEffect {
   length?: number;
   angle?: number;
   fade?: number;
+  /** Radial distance from the object edge (authoring pixels). Overrides offsetX/Y when set. */
+  distance?: number;
   /** Spread in authoring pixels. */
   spread?: number;
   enabled: boolean;
@@ -14,6 +16,8 @@ export interface DropShadowEffect {
 }
 
 export interface GlowEffect {
+  /** 'outer' renders outside the object; 'inner' renders inside the alpha mask. */
+  placement?: 'outer' | 'inner';
   mode?: 'edge' | 'fill';
   angle?: number;
   sheen?: number;
@@ -24,6 +28,10 @@ export interface GlowEffect {
   color: string;
   intensity: number;
   radius: number;
+  /** Inner glow has its own color + intensity. */
+  innerColor?: string;
+  innerIntensity?: number;
+  innerRadius?: number;
 }
 
 export interface LiquidGlassEffect {
@@ -108,9 +116,14 @@ export interface ColorCorrectionEffect {
   blackPoint: number;
   whitePoint: number;
   gamma: number;
+  /** Master tone curve: shadows / midtones / highlights lift (-1..1) */
   curveShadows: number;
   curveMidtones: number;
   curveHighlights: number;
+  /** Per-channel curve offsets: shadows / midtones / highlights for R, G, B */
+  curveR?: [number, number, number];
+  curveG?: [number, number, number];
+  curveB?: [number, number, number];
 }
 
 export interface NoiseEffect {

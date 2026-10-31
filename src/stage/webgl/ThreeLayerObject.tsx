@@ -102,11 +102,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const { blurPadding, paddedCanvasW, paddedCanvasH, widthScale, heightScale } = getLayerBlurBleedLayout(
         canvasW,
         canvasH,
-        totalBlurPx + Math.max(getBlurSettings(layer.effects, 'layerBlur').start, getBlurSettings(layer.effects, 'layerBlur').end) * canvasW / authoredW,
+        totalBlurPx,
         dofBlurPx,
         evalLayer.motionBlur,
         Boolean(deviceFrameSettings),
-        layer.effects.rgbSplit?.enabled ? layer.effects.rgbSplit.amount * Math.max(Math.abs(layer.effects.rgbSplit.red), Math.abs(layer.effects.rgbSplit.green), Math.abs(layer.effects.rgbSplit.blue)) + 2 : 0
+        0
     );
 
     const maxTexSize = gl.capabilities.maxTextureSize || 4096;
