@@ -57,9 +57,6 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
       aria-label="Loading Stage Viewport"
       className="flex-1 w-full h-full bg-[var(--canvas-workspace,#080a10)] flex flex-col items-center justify-center relative overflow-hidden select-none"
     >
-      {/* Top stage toolbar skeleton */}
-      <div className="absolute top-4 z-10 w-48 h-8 rounded-full bg-[#18181f]/80 border border-white/[0.06] animate-pulse motion-reduce:animate-none" />
-
       {/* Stage Artboard Skeleton */}
       <div
         style={aspectStyle}
@@ -70,8 +67,8 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
         <div className="w-20 h-2 rounded bg-white/[0.03]" />
       </div>
 
-      {/* Bottom status skeleton */}
-      <div className="absolute bottom-4 z-10 w-64 h-6 rounded-md bg-[#18181f]/60 border border-white/[0.04] animate-pulse motion-reduce:animate-none" />
+      {/* Floating bottom toolbar skeleton */}
+      <div className="absolute bottom-3 z-10 w-96 h-10 rounded-xl bg-[#18181f]/80 border border-white/[0.06] animate-pulse motion-reduce:animate-none" />
     </div>
   );
 };
