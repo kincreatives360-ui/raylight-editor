@@ -132,7 +132,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             />
 
             {/* 1. TOP HEADER BAR */}
-            <div className="h-12 px-3 flex items-center justify-between shrink-0 border-b border-subtle">
+            <div className="h-11 px-3 flex items-center justify-between shrink-0 border-b border-subtle">
                 <div className="flex items-center">
                     <IconButton
                         unstyled
@@ -143,23 +143,21 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         </>}
                         onClick={toggleRightSidebar}
                         title="Collapse Inspector sidebar ( ] )"
-                        className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground hover:text-foreground cursor-pointer transition opacity-0 hover:opacity-100"
+                        className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground/70 hover:text-foreground cursor-pointer transition"
                     />
                 </div>
 
-                <div className="flex items-center gap-3">
-
-
+                <div className="flex items-center gap-2">
                     <IconButton
                         unstyled
                         tooltip={false}
                         label="Project Settings"
                         icon={<>
-                            <SlidersHorizontal className="w-4 h-4" />
+                            <SlidersHorizontal className="w-3.5 h-3.5" />
                         </>}
                         onClick={() => clearLayerSelection()}
                         title="Project Settings"
-                        className="p-1 text-muted-foreground hover:text-foreground cursor-pointer transition"
+                        className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground/70 hover:text-foreground cursor-pointer transition"
                     />
 
                     <button

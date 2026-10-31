@@ -349,32 +349,36 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </div>
             )}
 
-            {/* Floating Crop Pill (visible when Image/Video layer selected) */}
-            {activeTool !== 'camera' && (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
-                <button
-                    onClick={() => setIsCropping(!isCropping)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition-colors duration-100 ${
-                        isCropping
-                            ? 'bg-brand-blue text-white border-brand-blue'
-                            : 'bg-surface/95 hover:bg-muted text-foreground border-subtle'
-                    }`}
-                >
-                    {isCropping ? (
-                        <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Done</span>
-                        </>
-                    ) : (
-                        <>
-                            <Crop className="w-3.5 h-3.5 text-muted-foreground" />
-                            <span>Crop</span>
-                        </>
-                    )}
-                </button>
-            )}
-
             {/* ═══ Main Floating Toolbar ═══ */}
             <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex flex-wrap items-center justify-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full shrink-0">
+
+                {/* Contextual Crop Button (docked within toolbar when Image/Video layer selected) */}
+                {activeTool !== 'camera' && (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
+                    <>
+                        <button
+                            onClick={() => setIsCropping(!isCropping)}
+                            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border cursor-pointer transition-colors duration-100 ${
+                                isCropping
+                                    ? 'bg-brand-blue text-white border-brand-blue shadow-xs'
+                                    : 'bg-surface-elevated/80 hover:bg-surface-elevated text-foreground border-border/50'
+                            }`}
+                            title="Crop Image / Video"
+                        >
+                            {isCropping ? (
+                                <>
+                                    <Check className="w-3.5 h-3.5" />
+                                    <span>Done</span>
+                                </>
+                            ) : (
+                                <>
+                                    <Crop className="w-3.5 h-3.5 text-muted-foreground" />
+                                    <span>Crop</span>
+                                </>
+                            )}
+                        </button>
+                        <div className="w-px h-4 bg-border/50 my-auto" />
+                    </>
+                )}
 
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">
