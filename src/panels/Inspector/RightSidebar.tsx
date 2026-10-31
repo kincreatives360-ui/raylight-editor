@@ -11,7 +11,7 @@ Shot,
 import { isBlankProjectState } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { InspectorModeTabs } from '../../ui/primitives';
+import { InspectorModeTabs, SegmentedControl } from '../../ui/primitives';
 import { CameraBlockSection } from './sections/CameraBlockSection';
 import { LayerDesignInspector } from './sections/LayerDesignInspector';
 import { LayerAnimateInspector, addLayerAnimation } from './sections/LayerAnimateInspector';
@@ -55,6 +55,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         selectLightBlock,
         selectCameraBlock,
         clearLayerSelection,
+        setInspectorTab,
         toggleRightSidebar,
         rightSidebarWidth,
         inspectorTab,
@@ -155,7 +156,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         icon={<>
                             <SlidersHorizontal className="w-3.5 h-3.5" />
                         </>}
-                        onClick={() => clearLayerSelection()}
+                        onClick={() => {
+                            clearLayerSelection();
+                            setInspectorTab('project');
+                        }}
                         title="Project Settings"
                         className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground/70 hover:text-foreground cursor-pointer transition"
                     />
@@ -218,13 +222,27 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     onClose={() => selectLight(null)}
                 />
             ) : (
-                <div className="flex-1 flex flex-col overflow-hidden">
+
+                <>
+                    <div className="h-10 border-b border-subtle px-3.5 flex items-center shrink-0 bg-app">
+                        <SegmentedControl<'project' | 'shot'>
+                            value={effectiveInspectorTab === 'shot' ? 'shot' : 'project'}
+                            onChange={(tab) => setInspectorTab(tab)}
+                            ariaLabel="Inspector settings view"
+                            options={[
+                                { value: 'project', label: 'Project' },
+                                { value: 'shot', label: 'Shot' },
+                            ]}
+                        />
+                    </div>
+                    <div className="flex-1 flex flex-col overflow-hidden">
                     {effectiveInspectorTab === 'shot' ? (
                         <ShotSettingsPanel
                             activeShot={activeShot}
                             onOpenExportModal={onOpenExportModal}
                         />
                     ) : (
+
                         <ProjectSettingsPanel
                             onSwapImageClick={onSwapImageClick}
                             onOpenShortcuts={onOpenShortcuts}
@@ -232,6 +250,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         />
                     )}
                 </div>
+                </>
             )}
 
             {/* Persistent Inspector Footer: Ask Raylight & Help */}

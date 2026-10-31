@@ -155,7 +155,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         setIsCropping(false);
         setActiveTool('select');
         clearLayerSelection();
-        setInspectorTab('shot');
+        setInspectorTab('project');
         setExportModalOpen(false);
         return;
       }
@@ -450,7 +450,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
           const count = selectedLayerIds.length;
           deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
           clearLayerSelection();
-          setInspectorTab('shot');
+          setInspectorTab('project');
           setUndoToast({
             message: count === 1 ? 'Deleted layer' : `Deleted ${count} layers`,
             isOpen: true,
