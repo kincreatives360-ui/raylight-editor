@@ -33,7 +33,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
     case 'dropShadow': return { ...effects, dropShadow: defaultShadow() };
     case 'glow': return { ...effects, glow: { enabled: true, mode: 'edge', color: '#0043ff', intensity: .2, radius: 126 / 1920, angle: 106, sheen: 1, rim: 1, depth: 0, blend: 'normal' } };
     case 'backdropBlur': case 'layerBlur': return { ...effects, [key]: .24 };
-    case 'liquidGlass': return { ...effects, liquidGlass: { enabled: true, refraction: .5, roughness: .1, dispersion: .4, shine: .6, tint: '#ffffff' } };
+    case 'liquidGlass': return { ...effects, liquidGlass: { enabled: true, refraction: .6, ior: 1.52, bevelWidth: 24, roughness: .05, dispersion: .35, shine: .7, fresnel: .5, lightAngle: 45, tint: '#ffffff' } };
     case 'warp': return { ...effects, warp: { enabled: true, mode: 'bulge', strength: .5, size: 183, centerX: 0, centerY: 0, angle: 0, width: 61, travel: .5 } };
     case 'screen': return { ...effects, screen: { enabled: true, mode: 'lcd', pixelSize: 8, grid: 0.85, moire: 0, bands: 0, focus: 0, glow: 0, flicker: 0, speed: 0.5, offAxis: 0, snapToPixels: false } };
   }

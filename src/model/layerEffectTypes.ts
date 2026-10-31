@@ -27,11 +27,15 @@ export interface GlowEffect {
 }
 
 export interface LiquidGlassEffect {
-  dispersion?: number;
-  shine?: number;
   enabled: boolean;
   refraction?: number;
+  ior?: number;
+  bevelWidth?: number;
+  dispersion?: number;
   roughness?: number;
+  shine?: number;
+  fresnel?: number;
+  lightAngle?: number;
   tint?: string;
 }
 

@@ -289,11 +289,13 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerBlend: { value: ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'].indexOf(blend) },
         layerBackdrop: { value: Math.max(getBlurSettings(effects, 'backdropBlur').start, getBlurSettings(effects, 'backdropBlur').end) },
         layerGlass: { value: glass ? 1 : 0 },
-        layerRefraction: { value: glass?.refraction ?? .1 },
-        layerRoughness: { value: glass?.roughness ?? .15 },
-        layerDispersion: { value: glass?.dispersion ?? 0 },
-        layerShine: { value: glass?.shine ?? 0 },
+        layerRefraction: { value: glass?.refraction ?? .6 },
+        layerRoughness: { value: glass?.roughness ?? .05 },
+        layerDispersion: { value: glass?.dispersion ?? .35 },
+        layerShine: { value: glass?.shine ?? .7 },
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
+        layerGlassParams: { value: new THREE.Vector4(glass?.refraction ?? 0.6, glass?.ior ?? 1.52, glass?.bevelWidth ?? 24, glass?.dispersion ?? 0.35) },
+        layerGlassLighting: { value: new THREE.Vector4(glass?.roughness ?? 0.05, glass?.shine ?? 0.7, glass?.fresnel ?? 0.5, ((glass?.lightAngle ?? 45) * Math.PI) / 180) },
         // Warp is authored in stage pixels by the inspector; shaders consume UV displacement.
         layerWarp: { value: new THREE.Vector2(effects.warp?.enabled && !effects.warp.mode ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
         layerScreen: { value: new THREE.Vector4(screen ? ['lcd', 'oled', 'crt', 'led'].indexOf(screen.mode) + 1 : 0, screen?.pixelSize ?? 8, screen?.grid ?? 0.85, screen?.snapToPixels ? 1 : 0) },
@@ -376,6 +378,7 @@ uniform vec4 layerBlurShape, layerBackdropShape;
 uniform int layerBlend;
 uniform float layerBackdrop, layerGlass, layerRefraction, layerRoughness;
 uniform float layerDispersion, layerShine;
+uniform vec4 layerGlassParams, layerGlassLighting;
 uniform vec3 layerTint;
 uniform vec2 layerWarp;
 float layerBlurRadius(vec4 profile, vec2 uv, vec4 shape) {
@@ -578,28 +581,81 @@ ${LAYER_STYLE_GLSL}
 if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     if (gl_FragColor.a <= .0001) discard;
     vec2 screenUv = gl_FragCoord.xy / layerResolution;
-    vec2 refractOffset = vec2(0.);
+    vec2 localUv = gl_FragCoord.xy / layerResolution;
     #ifdef USE_MAP
-    vec2 localUv = (vMapUv - layerContentCenter) * layerContentScale + .5;
-    refractOffset = (localUv - .5) * layerRefraction * .12;
+    localUv = (vMapUv - layerContentCenter) * layerContentScale + .5;
     #endif
     float backdropRadius = layerBackdrop;
     #ifdef USE_MAP
     backdropRadius = layerBlurRadius(layerBackdropProfile, localUv, layerBackdropShape) * layerPixelRatio;
     #endif
-    float frost = max(backdropRadius, layerGlass * layerRoughness * 100. * layerPixelRatio);
-    vec3 behind = layerSampleScene(screenUv + refractOffset * layerGlass, frost, layerBackdropShape);
-    if (layerGlass > .5 && layerDispersion > .001) {
-        behind.r = layerSampleScene(screenUv + refractOffset * (1. + layerDispersion), frost, layerBackdropShape).r;
-        behind.b = layerSampleScene(screenUv + refractOffset * (1. - layerDispersion), frost, layerBackdropShape).b;
-    }
+    vec3 behind = vec3(0.);
     vec3 sourceColor = gl_FragColor.rgb;
     if (layerGlass > .5) {
-        sourceColor = behind * layerTint;
-        #ifdef USE_MAP
-        float edge = pow(clamp(max(abs(localUv.x - .5), abs(localUv.y - .5)) * 2., 0., 1.), 12.);
-        sourceColor += vec3(layerShine * edge * .4);
-        #endif
+        float ior = max(1.001, layerGlassParams.y);
+        float bevel = max(1.0, layerGlassParams.z * layerPixelRatio);
+        vec2 clLocalUv = clamp(localUv, vec2(0.0), vec2(1.0));
+        vec2 authorSize = max(vec2(1.0), layerAuthorSize);
+        vec2 p = abs((clLocalUv - 0.5) * authorSize);
+        vec2 halfSize = 0.5 * authorSize;
+        vec2 dBox = max(vec2(0.0), halfSize - p);
+        float cornerDist = bevel - length(max(vec2(0.0), vec2(bevel) - dBox));
+        float distToEdge = (dBox.x < bevel && dBox.y < bevel) ? cornerDist : min(dBox.x, dBox.y);
+        distToEdge = max(0.0, distToEdge);
+
+        vec3 N = vec3(0.0, 0.0, 1.0);
+        if (distToEdge < bevel) {
+            float t = clamp(distToEdge / bevel, 0.0, 1.0);
+            float theta = (1.0 - t) * 1.5707963;
+            vec2 signDir = vec2(clLocalUv.x >= 0.5 ? 1.0 : -1.0, clLocalUv.y >= 0.5 ? 1.0 : -1.0);
+            vec2 cornerDiff = max(vec2(0.0), vec2(bevel) - dBox);
+            vec2 edgeDir;
+            if (dBox.x < bevel && dBox.y < bevel) {
+                edgeDir = normalize(max(vec2(0.0001), cornerDiff) * signDir);
+            } else {
+                edgeDir = dBox.x < dBox.y ? vec2(signDir.x, 0.0) : vec2(0.0, signDir.y);
+            }
+            N = normalize(vec3(edgeDir * sin(theta), cos(theta)));
+        }
+
+        // Snell's Law refraction
+        vec3 I = vec3(0.0, 0.0, -1.0);
+        vec3 T = refract(I, N, 1.0 / ior);
+        if (length(T) < 0.001) T = reflect(I, N);
+
+        float refractScale = layerGlassParams.x * 0.15;
+        float frost = max(backdropRadius, layerGlassLighting.x * 80. * layerPixelRatio);
+        float disp = layerGlassParams.w * 0.08;
+
+        if (disp > 0.001 && distToEdge < bevel) {
+            vec3 Tr = refract(I, N, 1.0 / max(1.001, ior - disp));
+            vec3 Tb = refract(I, N, 1.0 / max(1.001, ior + disp));
+            if (length(Tr) < 0.001) Tr = T;
+            if (length(Tb) < 0.001) Tb = T;
+            behind.r = layerSampleScene(screenUv + Tr.xy * refractScale, frost, layerBackdropShape).r;
+            behind.g = layerSampleScene(screenUv + T.xy * refractScale, frost, layerBackdropShape).g;
+            behind.b = layerSampleScene(screenUv + Tb.xy * refractScale, frost, layerBackdropShape).b;
+        } else {
+            behind = layerSampleScene(screenUv + T.xy * refractScale, frost, layerBackdropShape);
+        }
+
+        // Specular highlight along bevel
+        float lightRad = layerGlassLighting.w;
+        vec3 L = normalize(vec3(cos(lightRad), sin(lightRad), 0.75));
+        vec3 V = vec3(0.0, 0.0, 1.0);
+        vec3 H = normalize(L + V);
+        float NdotH = max(0.0, dot(N, H));
+        float shine = layerGlassLighting.y;
+        float spec = pow(NdotH, 36.0) * shine;
+
+        // Fresnel edge sheen
+        float f0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
+        float cosTheta = max(0.0, dot(N, V));
+        float fresnelFactor = (f0 + (1.0 - f0) * pow(1.0 - cosTheta, 4.0)) * layerGlassLighting.z;
+
+        sourceColor = behind * layerTint + vec3(spec + fresnelFactor * 0.75);
+    } else {
+        behind = layerSampleScene(screenUv, backdropRadius, layerBackdropShape);
     }
     if (layerBlend == 1) sourceColor = min(sourceColor, behind);
     if (layerBlend == 2) sourceColor *= behind;
