@@ -375,7 +375,7 @@ export default function App() {
     setShortcutsModalOpen,
   });
   return (
-    <div className="flex h-full w-full flex-col bg-[#0b0b0d] text-[#e4e4e7] select-none overflow-hidden font-sans">
+    <div className="raylight-app-shell flex h-full w-full flex-col select-none overflow-hidden font-sans">
       {/* Hidden File Inputs */}
       <input
         ref={projectFileInputRef}
@@ -441,7 +441,7 @@ export default function App() {
         )}
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
-        <main className="flex-1 flex flex-col min-w-0 h-full bg-panel raylight-stage">
+        <main className="flex-1 flex flex-col min-w-0 min-h-0 h-full bg-panel raylight-stage">
           <StageErrorBoundary>
             <Suspense fallback={<StageSkeletonLoader />}>
               <Stage

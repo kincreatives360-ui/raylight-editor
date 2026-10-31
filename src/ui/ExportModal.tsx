@@ -214,17 +214,6 @@ export const ExportModal: React.FC<ExportModalProps> = ({
           </div>
         </div>
 
-        {/* Made in Raylight Badge */}
-        <div className="flex items-center justify-between p-2.5 rounded-xl bg-app border border-subtle">
-          <div>
-            <span className="text-[11px] text-foreground font-medium block">Made in Raylight Watermark</span>
-            <span className="text-[11px] text-muted-foreground">Free plan watermark included on export</span>
-          </div>
-          <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/30">
-            Included
-          </span>
-        </div>
-
         <div className="p-3 rounded-xl bg-app border border-subtle font-mono tabular-nums text-[11px] space-y-1.5 text-foreground tracking-tight">
           <div className="flex justify-between items-center">
             <span className="text-muted-foreground font-sans">Dimensions:</span>

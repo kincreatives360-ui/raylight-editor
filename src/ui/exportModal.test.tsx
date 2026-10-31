@@ -76,7 +76,7 @@ describe('ExportModal Component', () => {
     expect(html).toContain('1920×1080px');
     expect(html).toContain('~4.2 MB');
     expect(html).toContain('~6s');
-    expect(html).toContain('Made in Raylight Watermark');
+    expect(html).not.toContain('Made in Raylight Watermark');
   });
 
   it('renders progress bar and spinner during export', () => {

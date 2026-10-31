@@ -352,7 +352,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     setTimelineHeightPx: (heightPx) =>
         set({
-            timelineHeightPx: Math.max(150, Math.min(560, Math.round(heightPx))),
+            timelineHeightPx: Math.max(180, Math.min(560, Math.round(heightPx))),
         }),
 
     setTimelineScrollTop: (timelineScrollTop) => set({ timelineScrollTop }),

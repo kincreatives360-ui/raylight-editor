@@ -184,6 +184,10 @@
   --timeline-default-height: 221px;
   --timeline-max-height: 60vh;
 
+  /* Workspace shell keeps the existing Figma-like dark frame on the token path. */
+  --app-shell-background: #0b0b0d;
+  --app-shell-foreground: #e4e4e7;
+
   /* Safe Area Insets */
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -580,8 +584,8 @@ p, .typeset-body {
 
 /* Canonical Raylight App Shell & Structural Component Classes */
 .raylight-app-shell {
-  background-color: var(--bg-canvas);
-  color: var(--text-primary);
+  background-color: var(--app-shell-background);
+  color: var(--app-shell-foreground);
 }
 
 .raylight-left-panel {
@@ -597,6 +601,8 @@ p, .typeset-body {
 .raylight-timeline {
   background-color: var(--bg-panel);
   border-top: 1px solid var(--border-subtle);
+  min-height: min(var(--timeline-min-height), calc(100% - 220px));
+  max-height: min(var(--timeline-max-height), calc(100% - 220px));
 }
 
 .raylight-stage {

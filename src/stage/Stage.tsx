@@ -378,7 +378,7 @@ const StageComponent: React.FC<StageProps> = ({
             onDragOver={handleCanvasDragOver}
             onDragLeave={handleCanvasDragLeave}
             onDrop={handleCanvasDrop}
-            className={`flex-1 bg-[var(--canvas-workspace,#080a10)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
+            className={`flex-1 min-h-0 bg-[var(--canvas-workspace,#080a10)] relative flex items-center justify-center overflow-hidden select-none ${activeTool === 'hand' || isSpaceHeld
                     ? 'cursor-grab active:cursor-grabbing'
                     : activeTool === 'camera'
                         ? 'cursor-move active:cursor-grabbing'

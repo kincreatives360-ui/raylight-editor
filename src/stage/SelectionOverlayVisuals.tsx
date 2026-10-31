@@ -1,5 +1,5 @@
 import React from 'react';
-import { Crop, Lock, RotateCw } from 'lucide-react';
+import { Crop, Lock } from 'lucide-react';
 import type { Layer, TextLayer } from '../model/types';
 import type { EvaluatedLayerWithEffects } from '../engine/evaluateShot';
 import { getLayerProjectedCorners } from './webgl/cameraMath';
@@ -70,18 +70,6 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
 
                 {!isEditingInlineText && (
                     <g>
-                        {!isLocked && !isCropping && (
-                            <line
-                                x1={primaryProj.pN.x}
-                                y1={primaryProj.pN.y}
-                                x2={primaryProj.pRot.x}
-                                y2={primaryProj.pRot.y}
-                                stroke={borderColor}
-                                strokeWidth="1.5"
-                                strokeDasharray="3 2"
-                            />
-                        )}
-
                         {primaryProj.corners.length > 4 && (
                             <polygon
                                 points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
@@ -165,27 +153,6 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
 
             </svg>
 
-            {/* TOP 2D ROTATION LOLLIPOP KNOB & PERIMETER 3D TILT BADGE */}
-            {!isLocked && !isCropping && !isEditingInlineText && (
-                <>
-                    <div
-                        data-selection-handle="rotate"
-                        style={{
-                            left: `${primaryProj.pRot.x}px`,
-                            top: `${primaryProj.pRot.y}px`,
-                            transform: 'translate(-50%, -50%)',
-                        }}
-                        onPointerDown={onRotateStart}
-                        title="Drag around object to Spin / Rotate (Roll Z)"
-                        className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
-                    >
-                        <RotateCw className="w-2.5 h-2.5 text-white" />
-                    </div>
-
-                </>
-            )}
-
-            
             {/* FIGMA-STYLE CORNER ROUNDING NODES (Rectangles & Images) */}
             {!isLocked && !isCropping && !isEditingInlineText && (layer.kind === 'image' || (layer.kind === 'shape' && ((layer as any).shape === 'rectangle' || !(layer as any).shape))) && (
                 (() => {
