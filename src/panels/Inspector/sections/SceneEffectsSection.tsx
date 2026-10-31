@@ -190,17 +190,40 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
   };
 
   const renderNumber = (key: EffectKey, field: string, rawValue: number) => {
-    const percentFields = new Set(['intensity', 'threshold', 'softness', 'fog', 'mist', 'haze', 'start', 'reach', 'mistHeight', 'blend', 'amount', 'colorAmount', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'highlightThreshold', 'highlightIntensity', 'top', 'bottom', 'left', 'right']);
+    const percentFields = new Set([
+      'intensity', 'threshold', 'softness', 'fog', 'mist', 'haze',
+      'start', 'reach', 'mistHeight', 'blend', 'amount', 'colorAmount',
+      'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint',
+      'highlightThreshold', 'highlightIntensity', 'top', 'bottom', 'left', 'right', 'opacity'
+    ]);
+    const isPercent = (key === 'fishEye' && field === 'amount') || percentFields.has(field);
     const scaledPixels = (key === 'chromaticAberration' && ['offset', 'verticalOffset'].includes(field)) || (key === 'ghost' && field === 'offset');
-    const scale = scaledPixels ? 1920 : key === 'lensDistortion' && field === 'strength' ? 90 : key === 'fishEye' && field === 'amount' || percentFields.has(field) ? 100 : 1;
-    let [min, max] = FIELD_RANGES[field] ?? [0, 1, 0.01];
-    const step = FIELD_RANGES[field]?.[2] ?? 0.01;
-    if (key === 'bloom' && field === 'threshold') [min, max] = [0, 100];
-    if (field === 'intensity' && key === 'bloom') max=100;
-    if (key === 'motionBlur' && field === 'amount') [min,max]=[0,10];
-    if (key === 'lensDistortion' && field === 'strength') [min,max]=[-90,90];
-    const fieldLabel=key==='chromaticAberration'&&field==='edgeStrength'?'Edges':label(field);
-    return <ScrubInput key={field} label={fieldLabel} value={rawValue*scale} min={min} max={max} step={step} unit={scale===100?' %':scaledPixels?' px':key==='lensDistortion'&&field==='strength'?'°':['angle','shutterAngle','fringeColorAngle'].includes(field)?'°':field==='aperture'?' f':field==='sceneSize'?' cm':''} onChange={value=>setValue(key,field,value/scale)} />;
+    const scale = scaledPixels ? 1920 : key === 'lensDistortion' && field === 'strength' ? 90 : isPercent ? 100 : 1;
+    let [rawMin, rawMax, rawStep] = FIELD_RANGES[field] ?? [0, 1, 0.01];
+
+    if (key === 'bloom' && field === 'threshold') [rawMin, rawMax] = [0, 1];
+    if (key === 'bloom' && field === 'intensity') [rawMin, rawMax] = [0, 5];
+    if (key === 'motionBlur' && field === 'amount') [rawMin, rawMax] = [0, 10];
+    if (key === 'lensDistortion' && field === 'strength') [rawMin, rawMax] = [-1, 1];
+
+    const min = isPercent ? rawMin * 100 : scaledPixels ? rawMin : rawMin;
+    const max = isPercent ? rawMax * 100 : scaledPixels ? rawMax : rawMax;
+    const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : rawStep;
+    const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength' ? 'Edges' : label(field);
+    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneSize' ? ' cm' : '';
+
+    return (
+      <ScrubInput
+        key={field}
+        label={fieldLabel}
+        value={Number((rawValue * scale).toFixed(2))}
+        min={min}
+        max={max}
+        step={step}
+        unit={unit}
+        onChange={(value) => setValue(key, field, value / scale)}
+      />
+    );
   };
 
   const renderSelect = (key: EffectKey, field: string, value: string) => {
@@ -384,12 +407,109 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                     {key==='depthOfField'&&<div className="flex gap-2"><button type="button" onClick={()=>setDofFocusActive(!focusModeActive)} className={`flex-1 h-8 rounded-lg text-[11px] font-medium ${focusModeActive?'bg-sky-500 text-white':'bg-surface text-foreground hover:bg-surface-active text-foreground hover:bg-[#303035]'}`}>{focusModeActive?'Click the canvas to focus…':'Click the canvas to focus'}</button><button type="button" onClick={()=>{const selected=useSelectionStore.getState().selectedLayerIds[0];const layer=shot.layers.find(item=>item.id===selected);if(layer){setValue(key,'focusMode','subject');updateShot(shot.id,s=>({...s,effects:{...s.effects,depthOfField:{...s.effects.depthOfField,target:{...s.effects.depthOfField.target,z:layer.position.z}}}}));}}} className="h-8 px-3 rounded-lg bg-sky-500/15 text-sky-300 text-[11px] hover:bg-sky-500/25">Snap to subject</button></div>}
                     {key==='atmosphere'&&<details className="rounded-lg border border-border/60 px-2 py-1.5"><summary className="text-[11px] text-foreground/90 cursor-pointer">Depth</summary><div className="grid grid-cols-2 gap-2 pt-2">{['start','reach','mistHeight'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}<label className="flex items-center gap-2 text-[10px] text-foreground/90"><input type="checkbox" checked={Boolean(mergedFields['depthEnabled'])} onChange={e=>setValue(key,'depthEnabled',e.target.checked)}/>Use scene depth</label></div></details>}
                     {key==='gradientMap'&&<div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground">Stops</span><button type="button" aria-label="Add gradient stop" onClick={()=>{const stops=mergedFields['stops'] as GradientStop[];setValue(key,'stops',[...stops,{at:.5,color:'#ffffff',opacity:1}].sort((a,b)=>a.at-b.at).slice(0,8));}} className="w-6 h-6 rounded text-foreground/90 hover:bg-white/10"><Plus className="w-3.5 h-3.5"/></button></div>{(mergedFields['stops'] as GradientStop[]).map((stop,index)=><div key={`${stop.at}-${index}`} className="grid grid-cols-[.8fr_1fr_1fr_24px] gap-1.5 items-center"><ScrubInput label="%" value={stop.at*100} min={0} max={100} step={1} onChange={at=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,at:at/100}:item))}/><ColorPicker label={`Stop ${index+1}`} color={stop.color} onChange={color=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,color}:item))} compact/><ScrubInput label="Opacity" value={(stop.opacity??1)*100} min={0} max={100} step={1} onChange={opacity=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,opacity:opacity/100}:item))}/><button type="button" disabled={(mergedFields['stops'] as GradientStop[]).length<=2} aria-label={`Remove gradient stop ${index+1}`} onClick={()=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).filter((_,i)=>i!==index))} className="text-zinc-500 hover:text-rose-400 disabled:opacity-30"><Minus className="w-3 h-3"/></button></div>)}</div>}
-                    {settingsKey===key&&<div role="dialog" aria-label={`${EFFECT_NAMES[key]} settings`} className="absolute right-2 top-10 z-[70] w-[min(290px,calc(100vw-56px))] max-h-[70vh] overflow-y-auto rounded-xl border border-white/10 bg-surface-elevated p-3 shadow-2xl space-y-3"><div className="flex items-center justify-between"><h4 className="text-[12px] font-medium text-white">{key==='depthOfField'?'Blur settings':key==='chromaticAberration'?'Fringe settings':key==='filmGrain'?'Grain settings':'Lens settings'}</h4><button type="button" aria-label="Close settings" onClick={()=>setSettingsKey(null)} className="w-6 h-6 rounded flex items-center justify-center text-muted-foreground hover:bg-white/10 hover:text-white"><X className="w-3.5 h-3.5"/></button></div>
-                      {key==='depthOfField'&&<><div className="text-[10px] text-muted-foreground">Scene size</div>{renderNumber(key,'sceneSize',Number(mergedFields['sceneSize']))}<div className="text-[10px] text-muted-foreground">Highlights</div><div className="grid grid-cols-2 gap-2">{renderNumber(key,'highlightIntensity',Number(mergedFields['highlightIntensity']))}{renderNumber(key,'highlightThreshold',Number(mergedFields['highlightThreshold']))}</div></>}
-                      {key==='chromaticAberration'&&<><div className="text-[10px] text-muted-foreground">Edges</div>{renderNumber(key,'edgeStrength',Number(mergedFields['edgeStrength']))}<div className="text-[10px] text-muted-foreground">Center</div><div className="grid grid-cols-2 gap-2">{renderNumber(key,'centerX',Number(mergedFields['centerX']))}{renderNumber(key,'centerY',Number(mergedFields['centerY']))}</div><div className="text-[10px] text-muted-foreground">Color</div>{renderNumber(key,'fringeColorAngle',Number(mergedFields['fringeColorAngle']))}<div className="text-[10px] text-muted-foreground">Channels</div><div className="grid grid-cols-3 gap-2">{['channelRed','channelGreen','channelBlue'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}</div></>}
-                      {key==='filmGrain'&&<><div className="text-[10px] text-muted-foreground">Texture</div><div className="grid grid-cols-2 gap-2">{['softness','colorAmount','aspect','seed'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}</div><div className="text-[10px] text-muted-foreground">Tone</div><div className="grid grid-cols-3 gap-2">{['shadowStrength','midStrength','highlightStrength'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}</div>{renderNumber(key,'midpoint',Number(mergedFields['midpoint']))}<div className="grid grid-cols-2 gap-2">{renderSelect(key,'blendMode',String(mergedFields['blendMode']))}{renderSelect(key,'motion',String(mergedFields['motion']))}</div><div className="grid grid-cols-2 gap-2">{(['protectBlacks','smooth','perChannel'] as const).map(field=><label key={field} className="flex items-center gap-2 text-[10px] text-foreground/90"><input type="checkbox" checked={Boolean(mergedFields[field])} onChange={event=>setValue(key,field,event.target.checked)}/>{label(field)}</label>)}</div></>}
-                      {key==='lensDistortion'&&<><div className="grid grid-cols-2 gap-2">{renderSelect(key,'edgeMode',String(mergedFields['edgeMode']))}{renderSelect(key,'measure',String(mergedFields['measure']))}</div><div className="text-[10px] text-muted-foreground">Center</div><div className="grid grid-cols-2 gap-2">{renderNumber(key,'centerX',Number(mergedFields['centerX']))}{renderNumber(key,'centerY',Number(mergedFields['centerY']))}</div></>}
-                    </div>}
+                    {settingsKey === key && (
+                      <div
+                        role="region"
+                        aria-label={`${EFFECT_NAMES[key]} settings`}
+                        className="mt-3 pt-3 border-t border-white/[0.08] space-y-3 bg-white/[0.02] -mx-3 -mb-3 p-3 rounded-b-xl"
+                      >
+                        <div className="flex items-center justify-between pb-1">
+                          <h4 className="text-[11px] font-medium text-white/90">
+                            {key === 'depthOfField'
+                              ? 'Blur settings'
+                              : key === 'chromaticAberration'
+                              ? 'Fringe settings'
+                              : key === 'filmGrain'
+                              ? 'Grain settings'
+                              : 'Lens settings'}
+                          </h4>
+                          <button
+                            type="button"
+                            aria-label="Close settings"
+                            onClick={() => setSettingsKey(null)}
+                            className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:bg-white/10 hover:text-white transition"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {key === 'depthOfField' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Scene size</div>
+                            {renderNumber(key, 'sceneSize', Number(mergedFields['sceneSize']))}
+                            <div className="text-[10px] text-muted-foreground">Highlights</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'highlightIntensity', Number(mergedFields['highlightIntensity']))}
+                              {renderNumber(key, 'highlightThreshold', Number(mergedFields['highlightThreshold']))}
+                            </div>
+                          </>
+                        )}
+                        {key === 'chromaticAberration' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Edges</div>
+                            {renderNumber(key, 'edgeStrength', Number(mergedFields['edgeStrength']))}
+                            <div className="text-[10px] text-muted-foreground">Center</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'centerX', Number(mergedFields['centerX']))}
+                              {renderNumber(key, 'centerY', Number(mergedFields['centerY']))}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Color</div>
+                            {renderNumber(key, 'fringeColorAngle', Number(mergedFields['fringeColorAngle']))}
+                            <div className="text-[10px] text-muted-foreground">Channels</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {['channelRed', 'channelGreen', 'channelBlue'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                          </>
+                        )}
+                        {key === 'filmGrain' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Texture</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {['softness', 'colorAmount', 'aspect', 'seed'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Tone</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {['shadowStrength', 'midStrength', 'highlightStrength'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                            {renderNumber(key, 'midpoint', Number(mergedFields['midpoint']))}
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderSelect(key, 'blendMode', String(mergedFields['blendMode']))}
+                              {renderSelect(key, 'motion', String(mergedFields['motion']))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {(['protectBlacks', 'smooth', 'perChannel'] as const).map((field) => (
+                                <label key={field} className="flex items-center gap-2 text-[10px] text-foreground/90">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(mergedFields[field])}
+                                    onChange={(event) => setValue(key, field, event.target.checked)}
+                                  />
+                                  {label(field)}
+                                </label>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        {key === 'lensDistortion' && (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderSelect(key, 'edgeMode', String(mergedFields['edgeMode']))}
+                              {renderSelect(key, 'measure', String(mergedFields['measure']))}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Center</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'centerX', Number(mergedFields['centerX']))}
+                              {renderNumber(key, 'centerY', Number(mergedFields['centerY']))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

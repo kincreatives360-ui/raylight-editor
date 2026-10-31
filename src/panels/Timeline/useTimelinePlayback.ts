@@ -47,6 +47,7 @@ export function useTimelinePlayback({
     updateLayer,
 }: TimelinePlaybackOptions) {
     const isDraggingPlayheadRef = useRef(false);
+    const justDraggedPlayheadRef = useRef(false);
     const [isDraggingPlayhead, setIsDraggingPlayhead] = useState(false);
     const rafIdRef = useRef<number | null>(null);
     const latestHoverClientXRef = useRef<number | null>(null);
@@ -168,11 +169,14 @@ export function useTimelinePlayback({
     };
 
     const handleTimelineClick = (event: React.MouseEvent<HTMLDivElement>) => {
+        if (justDraggedPlayheadRef.current) {
+            justDraggedPlayheadRef.current = false;
+            return;
+        }
         const target = event.target;
         if (!(target instanceof HTMLElement)) return;
         if (target.closest('button, input, [role="button"], [data-timeline-item], [data-cam-pill], [data-light-pill], [data-preset-pill]')) return;
         clearLayerSelection();
-        setCurrentTimeMs(hoverTimeMs !== null ? hoverTimeMs : timeAtClientX(event.clientX));
     };
 
     const handleRulerPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
@@ -198,6 +202,10 @@ export function useTimelinePlayback({
             if (endEvent.pointerId !== pointerId) return;
             isDraggingPlayheadRef.current = false;
             setIsDraggingPlayhead(false);
+            justDraggedPlayheadRef.current = true;
+            window.setTimeout(() => {
+                justDraggedPlayheadRef.current = false;
+            }, 120);
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
             window.removeEventListener('pointercancel', onEnd);

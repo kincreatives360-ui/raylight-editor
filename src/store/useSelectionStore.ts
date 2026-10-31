@@ -271,7 +271,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         }),
 
     clearLayerSelection: () =>
-        set({
+        set((state) => ({
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
@@ -279,8 +279,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedLightId: null,
             selectedPresetType: null,
             isCropping: false,
-            inspectorTab: 'project',
-        }),
+            inspectorTab: state.selectedShotId ? 'shot' : 'project',
+        })),
 
     selectBlock: (blockId, layerId) =>
         set((state) => ({

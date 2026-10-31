@@ -29,11 +29,16 @@ export function useStageCameraUpdate({
         const selectedCameraBlock = currentShot.cameraBlocks?.find(
             (block) => block.id === selectedCameraBlockId
         );
+        const activeCameraBlock = currentShot.cameraBlocks?.find(
+            (b) => frame.shotLocalTimeMs >= b.startMs && frame.shotLocalTimeMs <= b.startMs + b.durationMs
+        ) || currentShot.cameraBlocks?.[0];
 
-        if (selectedCameraBlock) {
-            const midpoint = selectedCameraBlock.startMs + selectedCameraBlock.durationMs / 2;
+        const targetCameraBlock = selectedCameraBlock || activeCameraBlock;
+
+        if (targetCameraBlock) {
+            const midpoint = targetCameraBlock.startMs + targetCameraBlock.durationMs / 2;
             const endpoint = frame.shotLocalTimeMs < midpoint ? 'from' : 'to';
-            const currentEndpoint = selectedCameraBlock[endpoint] || {
+            const currentEndpoint = targetCameraBlock[endpoint] || {
                 anchorX: 0,
                 anchorY: 0,
                 anchorZ: 0,
@@ -48,7 +53,7 @@ export function useStageCameraUpdate({
                 (shot) => ({
                     ...shot,
                     cameraBlocks: (shot.cameraBlocks || []).map((block) =>
-                        block.id === selectedCameraBlock.id
+                        block.id === targetCameraBlock.id
                             ? {
                                 ...block,
                                 [endpoint]: {

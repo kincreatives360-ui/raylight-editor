@@ -410,7 +410,6 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 }
                                 selectShot(shot.id);
                                 setInspectorTab('shot');
-                                setCurrentTimeMs(Math.min(totalDurationMs, clientXToLocalMs(event.clientX)));
                             }}
                             onShotDoubleClick={(event, shot) => {
                                 event.stopPropagation();

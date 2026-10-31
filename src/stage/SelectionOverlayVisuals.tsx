@@ -185,6 +185,76 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                 </>
             )}
 
+            
+            {/* FIGMA-STYLE RECTANGLE CORNER ROUNDING NODES */}
+            {!isLocked && !isCropping && !isEditingInlineText && layer.kind === 'shape' && ((layer as any).shape === 'rectangle' || !(layer as any).shape) && (
+                (() => {
+                    const shapeL = layer as any;
+                    const center = primaryProj.pCenter;
+                    const corners = [
+                        { id: 'nw', pt: primaryProj.pNW },
+                        { id: 'ne', pt: primaryProj.pNE },
+                        { id: 'se', pt: primaryProj.pSE },
+                        { id: 'sw', pt: primaryProj.pSW },
+                    ];
+                    const currentRadius = shapeL.cornerRadius ?? 0;
+
+                    return corners.map((c) => {
+                        const vx = center.x - c.pt.x;
+                        const vy = center.y - c.pt.y;
+                        const dist = Math.hypot(vx, vy);
+                        if (dist < 18) return null;
+                        const nx = vx / dist;
+                        const ny = vy / dist;
+                        const offset = Math.min(dist * 0.45, Math.max(14, 14 + currentRadius * 80));
+                        const posX = c.pt.x + nx * offset;
+                        const posY = c.pt.y + ny * offset;
+
+                        return (
+                            <div
+                                key={c.id}
+                                data-testid={`corner-radius-${c.id}`}
+                                style={{
+                                    left: `${posX}px`,
+                                    top: `${posY}px`,
+                                    transform: 'translate(-50%, -50%)',
+                                }}
+                                title="Drag to adjust corner rounding"
+                                className="w-2.5 h-2.5 rounded-full bg-white border border-[var(--accent-primary,#0088ff)] shadow-md absolute pointer-events-auto cursor-crosshair hover:scale-125 transition-transform duration-75 ease-out z-20 hover:bg-sky-50"
+                                onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    const startX = e.clientX;
+                                    const startY = e.clientY;
+                                    const initialRadius = shapeL.cornerRadius ?? 0;
+
+                                    const onMove = (moveEv: PointerEvent) => {
+                                        const dx = moveEv.clientX - startX;
+                                        const dy = moveEv.clientY - startY;
+                                        const dot = dx * nx + dy * ny;
+                                        const deltaRadius = dot / 120;
+                                        const nextRadius = Math.max(0, Math.min(0.5, Number((initialRadius + deltaRadius).toFixed(3))));
+                                        updateLayer(activeShotId, layer.id, (l) =>
+                                            l.kind === 'shape' ? { ...l, cornerRadius: nextRadius } : l
+                                        );
+                                    };
+
+                                    const onUp = () => {
+                                        window.removeEventListener('pointermove', onMove);
+                                        window.removeEventListener('pointerup', onUp);
+                                        window.removeEventListener('pointercancel', onUp);
+                                    };
+
+                                    window.addEventListener('pointermove', onMove);
+                                    window.addEventListener('pointerup', onUp);
+                                    window.addEventListener('pointercancel', onUp);
+                                }}
+                            />
+                        );
+                    });
+                })()
+            )}
+
             {/* 8 RESIZE / CROP HANDLES */}
             {!isLocked &&
                 !isEditingInlineText &&
