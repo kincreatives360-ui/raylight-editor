@@ -75,8 +75,10 @@ describe('layer effect rendering', () => {
     installLayerEffects(shader, uniforms);
     expect(shader.uniforms.layerBlend).toBeDefined();
     expect(shader.uniforms.layerBlend.value).toBe(2); // multiply
+    expect(shader.uniforms.layerBackdrop.value).toBe(20); // 0.2 * 100
     expect(shader.uniforms.layerWarp.value.x).toBeCloseTo(0.1);
     expect(shader.fragmentShader).toContain('layerSampleScene');
+    expect(shader.fragmentShader).toContain('blendAlpha');
     expect(shader.fragmentShader).toContain('layerWarp');
     expect(shader.fragmentShader).toContain('layerBlend == 2');
   });

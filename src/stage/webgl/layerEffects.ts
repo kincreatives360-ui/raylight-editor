@@ -287,7 +287,7 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerBlurShape: { value: blurShape('layerBlur') },
         layerBackdropShape: { value: blurShape('backdropBlur') },
         layerBlend: { value: ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'].indexOf(blend) },
-        layerBackdrop: { value: Math.max(0, effects.backdropBlur ?? 0) },
+        layerBackdrop: { value: Math.max(getBlurSettings(effects, 'backdropBlur').start, getBlurSettings(effects, 'backdropBlur').end) },
         layerGlass: { value: glass ? 1 : 0 },
         layerRefraction: { value: glass?.refraction ?? .1 },
         layerRoughness: { value: glass?.roughness ?? .15 },
@@ -556,7 +556,8 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     float artworkAlpha = 1.0;
     #endif
     if (layerBackdrop > 0. && layerGlass <= .5) {
-        sourceColor = mix(behind, sourceColor, gl_FragColor.a);
+        float blendAlpha = gl_FragColor.a >= 0.999 ? 0.6 : gl_FragColor.a;
+        sourceColor = mix(behind, sourceColor, blendAlpha);
         gl_FragColor = vec4(sourceColor, artworkAlpha);
     } else {
         gl_FragColor = vec4(sourceColor, gl_FragColor.a);

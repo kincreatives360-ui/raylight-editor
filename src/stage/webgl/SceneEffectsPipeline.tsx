@@ -140,8 +140,10 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         composer.setPixelRatio(dpr);
         const pixelW = Math.round(size.width * dpr);
         const pixelH = Math.round(size.height * dpr);
-        const sampleCount = getSafeMsaaSampleCount(pixelW, pixelH, gl.capabilities?.maxSamples ?? 4);
-        composer.renderTarget1.samples = composer.renderTarget2.samples = sampleCount;
+        // Beauty targets are single-sampled (samples = 0) so gl.copyTexSubImage2D works for backdrop blur.
+        // Anti-aliasing is provided by the downstream FXAAPass. Setting beauty samples to 0
+        // allows WebGL2 gl.copyTexSubImage2D to capture the framebuffer for backdrop blur & glass.
+        composer.renderTarget1.samples = composer.renderTarget2.samples = 0;
         
         // Depth-buffer texture attachment for screen-space depth-of-field
         const depthTexture = new THREE.DepthTexture(pixelW, pixelH);

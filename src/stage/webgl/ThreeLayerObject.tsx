@@ -153,10 +153,14 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             sceneCopy.current.minFilter = THREE.LinearFilter;
             sceneCopy.current.magFilter = THREE.LinearFilter;
         }
-        renderer.copyFramebufferToTexture(sceneCopy.current);
-        uniforms.layerScene.value = sceneCopy.current;
-        uniforms.layerResolution.value.copy(dimensions);
-        uniforms.layerPixelRatio.value = dimensions.x / 1920;
+        try {
+            renderer.copyFramebufferToTexture(sceneCopy.current);
+            uniforms.layerScene.value = sceneCopy.current;
+            uniforms.layerResolution.value.copy(dimensions);
+            uniforms.layerPixelRatio.value = dimensions.x / 1920;
+        } catch {
+            // Guard against driver-level framebuffer read errors
+        }
     };
     const compileEffects = (shader: THREE.WebGLProgramParametersWithUniforms) => installLayerEffects(shader, effectUniformsRef.current);
 
@@ -680,9 +684,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     <planeGeometry args={[meshW * widthScale, meshH * heightScale]} />
                 )}
                 {receivesLight ? (
-                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video')} depthTest />
+                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${JSON.stringify(layer.effects)}-${layer.blendMode}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video') && !layer.effects.backdropBlur && !layer.effects.liquidGlass} depthTest />
                 ) : (
-                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video')} depthTest />
+                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${JSON.stringify(layer.effects)}-${layer.blendMode}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings || renderOpacity < 1 || Boolean(layer.effects.backdropBlur) || Boolean(layer.effects.liquidGlass) || layer.blendMode !== 'normal'} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video') && !layer.effects.backdropBlur && !layer.effects.liquidGlass} depthTest />
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (
