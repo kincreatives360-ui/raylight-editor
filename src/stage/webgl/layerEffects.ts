@@ -143,16 +143,16 @@ export function applyMotionBlur(
     let sY = 0;
     let sampleCount = samples;
 
-    if (typeof motionX === 'object' && motionX !== null) {
+    if (typeof motionX === 'number') {
+        mX = motionX;
+        mY = motionY;
+    } else {
         mX = motionX.motionX;
         mY = motionX.motionY;
         rZ = motionX.rotZ ?? 0;
         sX = motionX.scaleX ?? 0;
         sY = motionX.scaleY ?? 0;
         sampleCount = motionX.samples ?? 8;
-    } else {
-        mX = motionX;
-        mY = motionY;
     }
 
     const dist = Math.hypot(mX, mY);
