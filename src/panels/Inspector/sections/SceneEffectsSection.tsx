@@ -199,7 +199,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     const isPercent = (key === 'fishEye' && field === 'amount') || percentFields.has(field);
     const scaledPixels = (key === 'chromaticAberration' && ['offset', 'verticalOffset'].includes(field)) || (key === 'ghost' && field === 'offset');
     const scale = scaledPixels ? 1920 : key === 'lensDistortion' && field === 'strength' ? 90 : isPercent ? 100 : 1;
-    let [rawMin, rawMax, rawStep] = FIELD_RANGES[field] ?? [0, 1, 0.01];
+    const [rangeMin, rangeMax, rangeStep] = FIELD_RANGES[field] ?? [0, 1, 0.01];
+    const rawStep = rangeStep;
+    let rawMin = rangeMin;
+    let rawMax = rangeMax;
 
     if (key === 'bloom' && field === 'threshold') [rawMin, rawMax] = [0, 1];
     if (key === 'bloom' && field === 'intensity') [rawMin, rawMax] = [0, 5];

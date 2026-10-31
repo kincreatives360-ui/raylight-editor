@@ -24,10 +24,14 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    allowedHosts: true,
+    // Keep Vite's secure host check: localhost and raw IP addresses are always
+    // allowed; add specific tunnel hostnames to server.allowedHosts if needed
+    // instead of disabling validation for every host.
   },
   build: {
-    chunkSizeWarningLimit: 1000,
+    // First-party chunks should stay under ~500 KB raw. The vendor-three and
+    // vendor-r3f framework chunks legitimately exceed this; app chunks should not.
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks(id) {

@@ -154,9 +154,11 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
             </svg>
 
             {/* FIGMA-STYLE CORNER ROUNDING NODES (Rectangles & Images) */}
-            {!isLocked && !isCropping && !isEditingInlineText && (layer.kind === 'image' || (layer.kind === 'shape' && ((layer as any).shape === 'rectangle' || !(layer as any).shape))) && (
+            {!isLocked && !isCropping && !isEditingInlineText && (layer.kind === 'image' || (layer.kind === 'shape' && (layer.shape === 'rectangle' || !layer.shape))) && (
                 (() => {
-                    const itemL = layer as any;
+                    // Image and shape layers both expose cornerRadius; re-narrow
+                    // here so the visual needs no unsafe casts.
+                    const itemL = layer.kind === 'image' || layer.kind === 'shape' ? layer : null;
                     const center = primaryProj.pCenter;
                     const corners = [
                         { id: 'nw', pt: primaryProj.pNW },
@@ -164,7 +166,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                         { id: 'se', pt: primaryProj.pSE },
                         { id: 'sw', pt: primaryProj.pSW },
                     ];
-                    const currentRadius = itemL.cornerRadius ?? 0;
+                    const currentRadius = itemL?.cornerRadius ?? 0;
 
                     return corners.map((c) => {
                         const vx = center.x - c.pt.x;
@@ -195,7 +197,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                     const pointerId = e.pointerId;
                                     const startX = e.clientX;
                                     const startY = e.clientY;
-                                    const initialRadius = itemL.cornerRadius ?? 0;
+                                    const initialRadius = itemL?.cornerRadius ?? 0;
 
                                     const onMove = (moveEv: PointerEvent) => {
                                         if (moveEv.pointerId !== pointerId) return;

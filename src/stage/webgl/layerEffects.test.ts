@@ -101,7 +101,7 @@ describe('layer effect rendering', () => {
         rimColor: '#cce4ff',
       },
     };
-    const uniforms = getLayerEffectUniforms(glassEffects, 'normal') as Record<string, any>;
+    const uniforms = getLayerEffectUniforms(glassEffects, 'normal');
     expect(uniforms.layerGlass.value).toBe(1);
     expect(uniforms.layerGlassParams.value.x).toBe(0.75);
     expect(uniforms.layerGlassParams.value.y).toBe(1.6);
@@ -114,17 +114,17 @@ describe('layer effect rendering', () => {
     expect(uniforms.layerGlassOptics.value.x).toBe(0.5);
     expect(uniforms.layerGlassOptics.value.y).toBe(0.9);
     expect(uniforms.layerRimColor.value.getHexString()).toBe('cce4ff');
-    expect(uniforms.layerRefraction).toBeUndefined();
-    expect(uniforms.layerRoughness).toBeUndefined();
-    expect(uniforms.layerDispersion).toBeUndefined();
-    expect(uniforms.layerShine).toBeUndefined();
+    expect('layerRefraction' in uniforms).toBe(false);
+    expect('layerRoughness' in uniforms).toBe(false);
+    expect('layerDispersion' in uniforms).toBe(false);
+    expect('layerShine' in uniforms).toBe(false);
 
     const shader = {
       uniforms: {} as Record<string, { value: unknown }>,
       vertexShader: 'void main() {}',
       fragmentShader: '#include <map_fragment>\n#include <colorspace_fragment>',
     } as unknown as Parameters<typeof installLayerEffects>[0];
-    installLayerEffects(shader, uniforms as any);
+    installLayerEffects(shader, uniforms);
     expect(shader.fragmentShader).toContain('float bevel = max(1.0, layerGlassParams.z);');
     expect(shader.fragmentShader).not.toContain('layerGlassParams.z * layerPixelRatio');
     expect(shader.fragmentShader).not.toContain('uniform float layerBackdrop, layerGlass, layerRefraction');
