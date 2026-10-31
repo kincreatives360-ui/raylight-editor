@@ -21,7 +21,7 @@ Raylight Editor empowers motion designers, developers, and product creators to c
 ## 🚀 Quickstart
 
 ### Prerequisites
-Node.js 18+ and npm.
+Node.js 20.19+ (or 22.12+) and npm.
 
 ### Installation & Development
 ```sh
@@ -70,7 +70,7 @@ raylight-editor/
 │   │   ├── webgl/             # React Three Fiber 3D scene and device objects
 │   │   ├── ViewportCanvas.tsx # Canvas wrapper with zoom and pan controls
 │   │   └── Guides.tsx         # Snap guides, safe zones, and rule-of-thirds
-│   ├── storage/              # LocalStorage autosave and JSON project I/O
+│   ├── storage/              # localStorage recovery, IndexedDB projects, OPFS media
 │   ├── store/                # Zustand domain state stores
 │   │   ├── useProjectStore.ts # Project data, layers, and undo/redo history
 │   │   ├── usePlayheadStore.ts# High-frequency playback clock and state
@@ -106,7 +106,7 @@ raylight-editor/
 
 ## 💾 Project Data & Portability
 
-* **Automatic Autosave:** The current project is automatically serialized to browser `localStorage` on every change.
+* **Automatic Autosave:** Every change writes a lightweight recovery snapshot to browser `localStorage` and persists the full project transactionally to IndexedDB, with OPFS used as supplementary media storage.
 * **Defensive Schema Migration:** On launch, projects are checked against Zod schemas; corrupted or outdated configurations are gracefully repaired.
 * **Portable Project Files:** Click the project title menu in the top bar to **Export Project JSON** (`.raylight.json`) or **Import Project** to transfer projects across browsers and workstations without data loss.
 
