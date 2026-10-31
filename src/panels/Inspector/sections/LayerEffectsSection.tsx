@@ -106,15 +106,20 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
             {glass && card('liquidGlass', <Droplet size={14} />, <div className="space-y-3 pt-3">
                 <div className="grid grid-cols-2 gap-2">
                     <NumberControl label="Bevel" value={glass.bevelWidth ?? 24} min={0} max={150} unit=" px" onChange={bevelWidth => objectPatch('liquidGlass', { bevelWidth })} />
+                    <Percent label="Double bevel" value={glass.doubleBevel ?? .4} max={100} onChange={doubleBevel => objectPatch('liquidGlass', { doubleBevel })} />
                     <Percent label="Refract" value={glass.refraction ?? .6} max={200} onChange={refraction => objectPatch('liquidGlass', { refraction })} />
                     <NumberControl label="IOR" value={glass.ior ?? 1.52} min={1} max={2.5} step={0.01} unit="" onChange={ior => objectPatch('liquidGlass', { ior })} />
-                    <Percent label="Disperse" value={glass.dispersion ?? .35} onChange={dispersion => objectPatch('liquidGlass', { dispersion })} />
+                    <Percent label="Disperse" value={glass.dispersion ?? .45} max={200} onChange={dispersion => objectPatch('liquidGlass', { dispersion })} />
+                    <Percent label="Chroma boost" value={glass.chromaBoost ?? .8} max={200} onChange={chromaBoost => objectPatch('liquidGlass', { chromaBoost })} />
                     <NumberControl label="Frost" value={(glass.roughness ?? .05) * 100} max={100} unit=" %" onChange={v => objectPatch('liquidGlass', { roughness: v / 100 })} />
                     <Percent label="Shine" value={glass.shine ?? .7} max={200} onChange={shine => objectPatch('liquidGlass', { shine })} />
-                    <Percent label="Fresnel" value={glass.fresnel ?? .5} onChange={fresnel => objectPatch('liquidGlass', { fresnel })} />
+                    <Percent label="Fresnel" value={glass.fresnel ?? .6} onChange={fresnel => objectPatch('liquidGlass', { fresnel })} />
                     <NumberControl label="Light angle" value={glass.lightAngle ?? 45} min={-180} max={180} unit="°" onChange={lightAngle => objectPatch('liquidGlass', { lightAngle })} />
                 </div>
-                <ColorPicker showGradientMode={false} label="Glass tint" color={glass.tint ?? '#ffffff'} onChange={tint => objectPatch('liquidGlass', { tint })} />
+                <div className="grid grid-cols-2 gap-2">
+                    <ColorPicker showGradientMode={false} label="Glass tint" color={glass.tint ?? '#ffffff'} onChange={tint => objectPatch('liquidGlass', { tint })} />
+                    <ColorPicker showGradientMode={false} label="Rim color" color={glass.rimColor ?? '#cce4ff'} onChange={rimColor => objectPatch('liquidGlass', { rimColor })} />
+                </div>
             </div>)}
             {warp && card('warp', <Spline size={14} />, <div className="space-y-3 pt-3">
                 <Mode label="Wrap mode" value={warp.mode ?? 'legacy'} options={[...(!warp.mode ? [['legacy', 'Wave (existing)'] as const] : []), ['bulge', 'Bulge'], ['ripple', 'Ripple'], ['bend', 'Bend'], ['curl', 'Curl'], ['turbulent', 'Turbulent']]} onChange={selectWarpMode} />

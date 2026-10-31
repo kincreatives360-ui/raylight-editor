@@ -354,12 +354,15 @@ export const LayerEffectsSchema = z.object({
       refraction: z.number().optional(),
       ior: z.number().min(1).max(3).optional(),
       bevelWidth: z.number().min(0).max(500).optional(),
-      dispersion: z.number().min(0).max(1).optional(),
+      doubleBevel: z.number().min(0).max(2).optional(),
+      dispersion: z.number().min(0).max(2).optional(),
+      chromaBoost: z.number().min(0).max(3).optional(),
       roughness: z.number().optional(),
       shine: z.number().optional(),
       fresnel: z.number().min(0).max(1).optional(),
       lightAngle: z.number().min(-360).max(360).optional(),
       tint: z.string().optional(),
+      rimColor: z.string().optional(),
     })
     .optional(),
   warp: z

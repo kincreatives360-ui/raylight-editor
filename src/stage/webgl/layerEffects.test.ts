@@ -90,12 +90,15 @@ describe('layer effect rendering', () => {
         refraction: 0.75,
         ior: 1.6,
         bevelWidth: 32,
+        doubleBevel: 0.5,
         dispersion: 0.45,
+        chromaBoost: 0.9,
         roughness: 0.08,
         shine: 0.85,
         fresnel: 0.6,
         lightAngle: 60,
         tint: '#a0c0ff',
+        rimColor: '#cce4ff',
       },
     };
     const uniforms = getLayerEffectUniforms(glassEffects, 'normal') as Record<string, any>;
@@ -108,6 +111,9 @@ describe('layer effect rendering', () => {
     expect(uniforms.layerGlassLighting.value.y).toBe(0.85);
     expect(uniforms.layerGlassLighting.value.z).toBe(0.6);
     expect(uniforms.layerGlassLighting.value.w).toBeCloseTo((60 * Math.PI) / 180);
+    expect(uniforms.layerGlassOptics.value.x).toBe(0.5);
+    expect(uniforms.layerGlassOptics.value.y).toBe(0.9);
+    expect(uniforms.layerRimColor.value.getHexString()).toBe('cce4ff');
     expect(uniforms.layerRefraction).toBeUndefined();
     expect(uniforms.layerRoughness).toBeUndefined();
     expect(uniforms.layerDispersion).toBeUndefined();

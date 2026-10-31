@@ -31,12 +31,15 @@ export interface LiquidGlassEffect {
   refraction?: number;
   ior?: number;
   bevelWidth?: number;
+  doubleBevel?: number;
   dispersion?: number;
+  chromaBoost?: number;
   roughness?: number;
   shine?: number;
   fresnel?: number;
   lightAngle?: number;
   tint?: string;
+  rimColor?: string;
 }
 
 export interface WarpEffect {

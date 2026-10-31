@@ -290,8 +290,10 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerBackdrop: { value: Math.max(getBlurSettings(effects, 'backdropBlur').start, getBlurSettings(effects, 'backdropBlur').end) },
         layerGlass: { value: glass ? 1 : 0 },
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
-        layerGlassParams: { value: new THREE.Vector4(glass?.refraction ?? 0.6, glass?.ior ?? 1.52, glass?.bevelWidth ?? 24, glass?.dispersion ?? 0.35) },
-        layerGlassLighting: { value: new THREE.Vector4(glass?.roughness ?? 0.05, glass?.shine ?? 0.7, glass?.fresnel ?? 0.5, ((glass?.lightAngle ?? 45) * Math.PI) / 180) },
+        layerRimColor: { value: new THREE.Color(glass?.rimColor ?? '#cce4ff') },
+        layerGlassParams: { value: new THREE.Vector4(glass?.refraction ?? 0.6, glass?.ior ?? 1.52, glass?.bevelWidth ?? 24, glass?.dispersion ?? 0.45) },
+        layerGlassLighting: { value: new THREE.Vector4(glass?.roughness ?? 0.05, glass?.shine ?? 0.7, glass?.fresnel ?? 0.6, ((glass?.lightAngle ?? 45) * Math.PI) / 180) },
+        layerGlassOptics: { value: new THREE.Vector4(glass?.doubleBevel ?? 0.4, glass?.chromaBoost ?? 0.8, 0, 0) },
         // Warp is authored in stage pixels by the inspector; shaders consume UV displacement.
         layerWarp: { value: new THREE.Vector2(effects.warp?.enabled && !effects.warp.mode ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
         layerScreen: { value: new THREE.Vector4(screen ? ['lcd', 'oled', 'crt', 'led'].indexOf(screen.mode) + 1 : 0, screen?.pixelSize ?? 8, screen?.grid ?? 0.85, screen?.snapToPixels ? 1 : 0) },
@@ -373,8 +375,8 @@ uniform vec4 layerBlurProfile, layerBackdropProfile, layerScreen, layerScreenCam
 uniform vec4 layerBlurShape, layerBackdropShape;
 uniform int layerBlend;
 uniform float layerBackdrop, layerGlass;
-uniform vec4 layerGlassParams, layerGlassLighting;
-uniform vec3 layerTint;
+uniform vec4 layerGlassParams, layerGlassLighting, layerGlassOptics;
+uniform vec3 layerTint, layerRimColor;
 uniform vec2 layerWarp;
 float layerBlurRadius(vec4 profile, vec2 uv, vec4 shape) {
     if (shape.x > .5) {
@@ -610,7 +612,13 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
             } else {
                 edgeDir = dBox.x < dBox.y ? vec2(signDir.x, 0.0) : vec2(0.0, signDir.y);
             }
-            N = normalize(vec3(edgeDir * sin(theta), cos(theta)));
+            float doubleBevel = layerGlassOptics.x;
+            float s1 = bevel * 0.62;
+            float w2 = max(1.0, bevel * 0.22);
+            float t2 = clamp((distToEdge - s1) / w2, -1.0, 1.0);
+            float dh2 = doubleBevel * bevel * 0.16;
+            float dd = dh2 * 0.5 * cos(t2 * 1.5707963) * 1.5707963 / w2 * step(abs(t2), 0.999);
+            N = normalize(vec3(edgeDir * (sin(theta) + dd), cos(theta)));
         }
 
         // Snell's Law refraction
@@ -621,15 +629,33 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
         float refractScale = layerGlassParams.x * 0.15;
         float frost = max(backdropRadius, layerGlassLighting.x * 80. * layerPixelRatio);
         float disp = layerGlassParams.w * 0.08;
+        float chromaBoost = layerGlassOptics.y;
 
         if (disp > 0.001 && distToEdge < bevel) {
-            vec3 Tr = refract(I, N, 1.0 / max(1.001, ior - disp));
-            vec3 Tb = refract(I, N, 1.0 / max(1.001, ior + disp));
-            if (length(Tr) < 0.001) Tr = T;
-            if (length(Tb) < 0.001) Tb = T;
-            behind.r = layerSampleScene(screenUv + Tr.xy * refractScale, frost, layerBackdropShape).r;
-            behind.g = layerSampleScene(screenUv + T.xy * refractScale, frost, layerBackdropShape).g;
-            behind.b = layerSampleScene(screenUv + Tb.xy * refractScale, frost, layerBackdropShape).b;
+            vec3 trans = vec3(0.0);
+            vec3 wsum = vec3(0.0);
+            for (int i = 0; i < 5; i++) {
+                float lam = (float(i) + 0.5) / 5.0;
+                float c = (1.0 - 2.0 * lam);
+                float etaW = max(1.001, ior - disp * c);
+                vec3 Tw = refract(I, N, 1.0 / etaW);
+                if (length(Tw) < 0.001) Tw = T;
+                vec3 samp = layerSampleScene(screenUv + Tw.xy * refractScale, frost, layerBackdropShape);
+                float dR = (lam - 0.34) / 0.20;
+                float wR = exp(-0.5 * dR * dR) + 0.08 * exp(-0.5 * pow((lam - 0.93) / 0.05, 2.0));
+                float dG = (lam - 0.58) / 0.10;
+                float wG = exp(-0.5 * dG * dG);
+                float dB = (lam - 0.80) / 0.11;
+                float wB = exp(-0.5 * dB * dB);
+                vec3 w = vec3(wR, wG, wB);
+                trans += samp * w;
+                wsum += w;
+            }
+            behind = trans / max(vec3(0.0001), wsum);
+
+            // Split light reads as colour, not grey: lift the chroma of whatever the dispersion separated
+            float tl = dot(behind, vec3(0.2126, 0.7152, 0.0722));
+            behind = clamp(tl + (behind - tl) * (1.0 + chromaBoost), 0.0, 1.0);
         } else {
             behind = layerSampleScene(screenUv + T.xy * refractScale, frost, layerBackdropShape);
         }
@@ -643,12 +669,14 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
         float shine = layerGlassLighting.y;
         float spec = pow(NdotH, 36.0) * shine;
 
-        // Fresnel edge sheen
+        // Fresnel edge sheen and cool dielectric rim light
         float f0 = pow((1.0 - ior) / (1.0 + ior), 2.0);
         float cosTheta = max(0.0, dot(N, V));
         float fresnelFactor = (f0 + (1.0 - f0) * pow(1.0 - cosTheta, 4.0)) * layerGlassLighting.z;
+        float edgeSteep = clamp(1.0 - N.z, 0.0, 1.0);
+        vec3 rimGlow = layerRimColor * pow(edgeSteep, 1.5) * layerGlassLighting.z * 0.8;
 
-        sourceColor = behind * layerTint + vec3(spec + fresnelFactor * 0.75);
+        sourceColor = behind * layerTint + vec3(spec + fresnelFactor * 0.4) + rimGlow;
     } else {
         behind = layerSampleScene(screenUv, backdropRadius, layerBackdropShape);
     }
