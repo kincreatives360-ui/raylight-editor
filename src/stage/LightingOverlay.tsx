@@ -3,6 +3,7 @@ import { LightTypeIcon } from '../ui/LightTypeIcon';
 import { SelectedLightGizmo, type UnifiedLight } from './SelectedLightGizmo';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { SceneLight } from '../model/types';
+import { generateId } from '../model/id';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import {
@@ -13,10 +14,13 @@ import {
 import {
     projectLightToScreen,
     unprojectScreenDeltaToLightDelta,
+    unprojectScreenToWorldPlane,
     calculateDepthDeltaFromScreen,
     lightToWorld,
+    worldToLight,
     type Vec3Like,
 } from './lightingMath';
+import { createVirtualCamera } from './lightingMath';
 
 interface LightingOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -30,7 +34,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     frameHeight,
 }) => {
     const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
-    const { selectedLightId, selectLight, canvasZoom } = useSelectionStore();
+    const { selectedLightId, selectLight, canvasZoom, activeLightTool, setActiveLightTool } = useSelectionStore();
 
     const activeShot = frame.activeShot;
     const shotLight = activeShot.light;
@@ -59,8 +63,8 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             type: 'directional',
             position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
             target: (shotLight as unknown as { target?: Vec3Like })?.target || { x: 0, y: 0, z: 0 },
-            intensity: shotLight?.intensity ?? 1.2,
-            color: '#ffffff',
+            intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
+            color: shotLight?.keyColor ?? '#ffffff',
             temperature: shotLight?.temperature ?? 6100,
         };
 
@@ -80,7 +84,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             distance: s.distance ?? 5,
         }));
 
-        return [keyLight, ...sources];
+        return [...(shotLight?.keyLightEnabled === false ? [] : [keyLight]), ...sources];
     }, [shotLight]);
 
     const selectedLight = useMemo(
@@ -89,6 +93,48 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     );
 
     const [activeDepthDrag, setActiveDepthDrag] = useState<number | null>(null);
+
+    const placeLight = useCallback((event: React.PointerEvent<SVGRectElement>) => {
+        if (!activeLightTool) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+        const screenX = (event.clientX - bounds.left) * frameWidth / bounds.width;
+        const screenY = (event.clientY - bounds.top) * frameHeight / bounds.height;
+        const camera = createVirtualCamera(cameraPose, aspect);
+        const world = unprojectScreenToWorldPlane(screenX, screenY, 5, camera, frameWidth, frameHeight);
+        const position = worldToLight(world);
+        const rig = activeShot.light || {
+            position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45,
+        };
+
+        if (activeLightTool === 'directional') {
+            updateShot(activeShot.id, { light: { ...rig, position, keyLightEnabled: true } });
+            selectLight('sun-key');
+        } else {
+            const source: SceneLight = {
+                id: generateId(activeLightTool),
+                name: `${activeLightTool === 'area' ? 'Area' : activeLightTool[0].toUpperCase() + activeLightTool.slice(1)} Light`,
+                type: activeLightTool,
+                enabled: true,
+                position,
+                target: { x: 0, y: 0, z: 0 },
+                intensity: 1.2,
+                color: '#ffffff',
+                temperature: 6500,
+                distance: activeLightTool === 'point' || activeLightTool === 'spot' ? 6 : undefined,
+                angle: activeLightTool === 'spot' ? Math.PI / 6 : undefined,
+                penumbra: activeLightTool === 'spot' ? 0.2 : undefined,
+                width: activeLightTool === 'area' ? 3 : undefined,
+                height: activeLightTool === 'area' ? 3 : undefined,
+                castShadow: true,
+            };
+            updateShot(activeShot.id, { light: { ...rig, sources: [...(rig.sources ?? []), source] } });
+            selectLight(source.id);
+        }
+        setActiveLightTool(null);
+    }, [activeLightTool, activeShot.id, activeShot.light, aspect, cameraPose, frameHeight, frameWidth, selectLight, setActiveLightTool, updateShot]);
 
     // Update light helper
     const updateLight = useCallback((patch: Partial<SceneLight>) => {
@@ -371,20 +417,21 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         startDrag(onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
-    if (!showGizmos && !selectedLightId) {
+    if (!showGizmos && !selectedLightId && !activeLightTool) {
         return null;
     }
 
     return (
         <div
             data-testid="lighting-overlay"
-            className="absolute inset-0 pointer-events-none select-none z-30"
+            className={`absolute inset-0 pointer-events-none select-none z-30 ${activeLightTool ? 'cursor-crosshair' : ''}`}
             style={{ width: `${frameWidth}px`, height: `${frameHeight}px` }}
         >
             <svg
                 className="w-full h-full pointer-events-none overflow-visible"
                 viewBox={`0 0 ${frameWidth} ${frameHeight}`}
             >
+                {activeLightTool && <rect x={0} y={0} width={frameWidth} height={frameHeight} fill="transparent" pointerEvents="all" onPointerDown={placeLight} />}
                 {/* 1. Unselected Light Badges */}
                 {allLights.map((l) => {
                     if (l.id === selectedLightId) return null;

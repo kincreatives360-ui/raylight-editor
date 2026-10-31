@@ -680,9 +680,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     <planeGeometry args={[meshW * widthScale, meshH * heightScale]} />
                 )}
                 {receivesLight ? (
-                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
+                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video')} depthTest />
                 ) : (
-                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={layer.kind === 'image' || layer.kind === 'video'} depthTest />
+                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video')} depthTest />
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (

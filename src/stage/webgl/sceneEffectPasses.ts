@@ -40,21 +40,34 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
         #if EFFECT == 0
           vec3 glow=vec3(0.0);
           float radius=max(1.0,uResolution.x/240.0)*max(0.0,uParams.z);
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
-            vec4 s=sampleAt(vUv+vec2(float(x),float(y))*radius/uResolution);
+          float soft=max(.0001,uParams.w);
+          float total=0.0;
+          for(int i=0;i<16;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323;
+            float r=sqrt((fi+0.5)/16.0)*radius;
+            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
+            vec4 s=sampleAt(vUv+offset);
             float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            float soft=max(.0001,uParams.w);
-            glow+=s.rgb*smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
+            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
+            glow+=s.rgb*w;
+            total+=1.0;
           }
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++){
-            vec4 s=sampleAt(vUv+vec2(float(x),float(y))*radius*2.0/uResolution);
+          for(int i=0;i<8;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323+1.2;
+            float r=sqrt((fi+0.5)/8.0)*radius*2.0;
+            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
+            vec4 s=sampleAt(vUv+offset);
             float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            glow+=s.rgb*smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
+            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
+            glow+=s.rgb*w;
+            total+=0.45;
           }
-          vec3 bloom=glow/14.4*uParams.x;
-          if(uExtra.x==1.0) col.rgb+=bloom;
-          else if(uExtra.x==2.0) col.rgb=mix(col.rgb,2.0*col.rgb*bloom+col.rgb*col.rgb*(1.0-2.0*bloom),step(.5,col.rgb));
-          else col.rgb=1.0-(1.0-col.rgb)*(1.0-clamp(bloom,0.0,1.0));
+          vec3 bloom = (glow / max(0.001, total)) * (uParams.x * 2.5);
+          if (uExtra.x == 1.0) col.rgb += bloom;
+          else if (uExtra.x == 2.0) col.rgb = mix(col.rgb, 2.0 * col.rgb * bloom + col.rgb * col.rgb * (1.0 - 2.0 * bloom), step(.5, col.rgb));
+          else col.rgb = 1.0 - (1.0 - col.rgb) * (1.0 - clamp(bloom, 0.0, 1.0));
         #elif EFFECT == 1
           vec2 centered=(vUv-.5)*vec2(1.0,max(.1,uParams.z));
           float edge=clamp((length(centered)-uParams.y)*2.0+0.5,0.0,1.0);
@@ -62,7 +75,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
         #elif EFFECT == 2
           vec4 accum=vec4(0.0); float count=clamp(uParams.y,2.0,32.0);
           for(int i=0;i<32;i++){ if(float(i)>=count) break;
-            accum+=sampleAt(vUv-uMotion*(float(i)/(count-1.0))*uParams.x/360.0);
+            accum += sampleAt(vUv - uMotion * ((float(i) - count * 0.5) / (count - 1.0)) * (uParams.x / 180.0));
           }
           col=accum/count;
         #elif EFFECT == 3
@@ -99,9 +112,16 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float angle=radians(uParams.w);
           vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y;
           float radius=uParams.z*uResolution.x/1920.0*max(.0,uExtra.x);
-          for(int y=-1;y<=1;y++) for(int x=-1;x<=1;x++)
-            ghost+=sampleAt(vUv+shift+vec2(float(x),float(y))*radius/uResolution);
-          col.rgb+=ghost.rgb/9.0*uParams.x;
+          float ghostTotal=0.0;
+          for(int i=0;i<16;i++){
+            float fi=float(i);
+            float angle=fi*2.39996323;
+            float r=sqrt((fi+0.5)/16.0)*radius;
+            ghost+=sampleAt(vUv+shift+vec2(cos(angle),sin(angle))*r/uResolution);
+            ghostTotal+=1.0;
+          }
+          vec3 ghostColor = ghost.rgb / max(1.0, ghostTotal);
+          col.rgb = mix(col.rgb, 1.0 - (1.0 - col.rgb) * (1.0 - ghostColor), uParams.x);
         #elif EFFECT == 6
           vec3 straight=col.a>.00001?col.rgb/col.a:vec3(0.0);
           straight=raylightGrade(straight,uParams,uExtra.x);
@@ -132,12 +152,13 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float depthVal = texture2D(tDepth, vUv).r;
           float zNear = uExtra.y > 0.0 ? uExtra.y : 0.1;
           float zFar = uExtra.z > 0.0 ? uExtra.z : 100.0;
-          float linearDepth = (2.0 * zNear) / (zFar + zNear - depthVal * (zFar - zNear));
+          float viewZ = (zNear * zFar) / max(0.0001, zFar - depthVal * (zFar - zNear));
           
           float focalPlane = uParams.x;
-          float focusRange = max(0.001, uParams.y);
+          float focusRange = max(0.01, uParams.y);
           float bokehScale = max(0.0, uParams.z);
-          float coc = clamp(abs(linearDepth - focalPlane) / focusRange * bokehScale * (2.8 / max(.1,uParams.w)) * max(.01,uMotion.y), 0.0, 1.0);
+          float deltaZ = abs(viewZ - focalPlane);
+          float coc = clamp((deltaZ / max(0.1, viewZ)) * (bokehScale * 2.0 / max(0.1, uParams.w)) / focusRange * max(.01,uMotion.y), 0.0, 1.0);
           
           if (coc > 0.003) {
             vec4 accum = vec4(0.0);
@@ -237,8 +258,13 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'vignette': p.set(e.vignette.intensity, e.vignette.midpoint ?? 0.5, e.vignette.roundness ?? 1, 0); break;
     case 'motionBlur': {
       const blur = e.motionBlur;
-      p.set(blur.shutterAngle, Math.max(2, Math.min(32, Math.round(blur.samples ?? 8))), blur.angle ?? 0, blur.amount ?? 0.01);
-      if (blur.direction === 'angle') pass.uniforms.uMotion.value.set(Math.cos(THREE.MathUtils.degToRad(blur.angle ?? 0)) * (blur.amount ?? 0.01), -Math.sin(THREE.MathUtils.degToRad(blur.angle ?? 0)) * (blur.amount ?? 0.01));
+      p.set(blur.shutterAngle, Math.max(2, Math.min(32, Math.round(blur.samples ?? 8))), blur.angle ?? 0, blur.amount ?? 0.02);
+      if (blur.direction === 'angle') {
+        const rad = THREE.MathUtils.degToRad(blur.angle ?? 0);
+        pass.uniforms.uMotion.value.set(Math.cos(rad) * (blur.amount ?? 0.02), -Math.sin(rad) * (blur.amount ?? 0.02));
+      } else {
+        pass.uniforms.uMotion.value.set(motion.x, -motion.y);
+      }
       break;
     }
     case 'chromaticAberration': {
@@ -264,11 +290,13 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'glitch': p.set(e.glitch.intensity, e.glitch.bandSize ?? 50, e.glitch.colorShift ?? 0.5, 0); break;
     case 'depthOfField': {
       const dof = e.depthOfField;
-      const focusDist = Math.max(0.01, Math.min(1.0, (dof.target?.z ?? 0) * 0.1 + 0.5));
+      const camZ = 3.2;
+      const targetZ = dof.target?.z ?? 0;
+      const focusDist = Math.max(0.1, Math.abs(camZ - targetZ));
       p.set(
         focusDist,
-        Math.max(0.005, dof.focusRange ?? 0.1),
-        Math.max(0.0, dof.bokehScale ?? 1.0),
+        Math.max(0.01, dof.focusRange ?? 0.35),
+        Math.max(0.0, dof.bokehScale ?? 4.5),
         dof.aperture ?? 2.8
       );
       pass.uniforms.uExtra.value.set(

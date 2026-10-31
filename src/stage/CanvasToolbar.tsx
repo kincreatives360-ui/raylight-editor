@@ -5,8 +5,7 @@ import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
 import React, { useState, useRef } from 'react';
 import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus, Feather } from 'lucide-react';
-import type { Layer, SceneLight } from '../model/types';
-import { generateId } from '../model/id';
+import type { Layer } from '../model/types';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
@@ -73,7 +72,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         isCropping,
         selectedShotId,
         selectedLightId,
+        activeLightTool,
         selectLight,
+        setActiveLightTool,
         setActiveTool,
         toggleAnimateMode,
         setIsCropping,
@@ -242,6 +243,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         if (selectedLightId) {
             selectLight(null);
         } else {
+            if (activeShot?.light?.keyLightEnabled === false && activeShot) {
+                updateShot(activeShot.id, (shot) => ({
+                    ...shot,
+                    light: { ...shot.light, keyLightEnabled: true },
+                }));
+            }
             selectLight('sun-key');
         }
         if (onToggleLightRig) onToggleLightRig();
@@ -249,59 +256,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
     const handleSelectOrCreateLight = (type: 'directional' | 'spot' | 'point' | 'area') => {
         if (!activeShot) return;
-        if (type === 'directional') {
-            selectLight('sun-key');
-            setOpenMenu(null);
-            return;
-        }
-
-        const currentRig = activeShot.light || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-            sources: [],
-        };
-
-        const existing = (currentRig.sources || []).find((s) => s.type === type);
-        if (existing) {
-            selectLight(existing.id);
-            setOpenMenu(null);
-            return;
-        }
-
-        const newId = generateId(type);
-        const newSource: SceneLight = {
-            id: newId,
-            name: type === 'spot' ? 'Spot Light' : type === 'point' ? 'Point Light' : 'Area Light',
-            type,
-            enabled: true,
-            position:
-                type === 'spot'
-                    ? { x: 0.2, y: 0.5, z: 1.2 }
-                    : type === 'area'
-                    ? { x: -0.4, y: 0.3, z: 0.8 }
-                    : { x: 0, y: 0.3, z: 0.6 },
-            target: { x: 0, y: 0, z: 0 },
-            intensity: 1.2,
-            color: '#ffffff',
-            temperature: 6500,
-            angle: Math.PI / 5,
-            penumbra: 0.25,
-            width: 3.0,
-            height: 2.5,
-            distance: 6.0,
-            castShadow: true,
-        };
-
-        updateShot(activeShot.id, {
-            light: {
-                ...currentRig,
-                sources: [...(currentRig.sources || []), newSource],
-            },
-        });
-
-        selectLight(newId);
+        selectLight(null);
+        setActiveTool('select');
+        setActiveLightTool(type);
         setOpenMenu(null);
     };
 
@@ -417,7 +374,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             )}
 
             {/* ═══ Main Floating Toolbar ═══ */}
-            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex items-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full overflow-x-auto no-scrollbar shrink-0">
+            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex flex-wrap items-center justify-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full shrink-0">
 
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">
@@ -610,7 +567,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                         </>}
                         onClick={handleToggleLightButton}
                         title="Scene Lighting Rig & Reflections"
-                        className={toolBtn(selectedLightId !== null || openMenu === 'light')}
+                        className={toolBtn(selectedLightId !== null || activeLightTool !== null || openMenu === 'light')}
                     />
                     <IconButton
                         unstyled

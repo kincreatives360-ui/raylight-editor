@@ -3,8 +3,11 @@ import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
 import type { EvaluatedLayerWithEffects } from './evaluateShot';
 import { getArtboardDimensions } from '../stage/stageUtils';
+import { getBlurSettings } from '../model/layerEffects';
 import { applyLayerSurfaceEffects, compositeLayerEffectSurface, drawLayerHalo } from '../stage/webgl/layerEffects';
 import { drawMediaShimmer } from '../stage/webgl/mediaDecorations';
+import { layerReceivesLight } from '../model/layerLighting';
+import { renderSceneLightSources } from './canvasLighting';
 import { applyLayerAlphaEffects } from './layerAlphaEffects';
 import { acquireCanvas, releaseCanvas } from './canvasPool';
 import { hexToRgba } from './canvasColorUtils';
@@ -121,7 +124,8 @@ export async function drawLayerOnCanvas(
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
 ): Promise<void> {
   const effects = layer.layer.effects;
-  if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0) {
+  const receivesLight = layerReceivesLight(layer.layer) && Boolean(frame.activeShot?.light);
+  if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0 && !receivesLight) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }
   const surface = acquireCanvas(w, h);
@@ -135,6 +139,9 @@ export async function drawLayerOnCanvas(
     }, project, frame, w, h);
     applyLayerAlphaEffects(surface, effects, 1920, 1080, (frame.shotLocalTimeMs ?? 0) / 1000);
     applyLayerSurfaceEffects(surface, effects, 1920, 1080);
+    if (receivesLight && frame.activeShot) {
+      renderSceneLightSources(content, frame.activeShot.light, frame.camera, w, h, project.aspectRatio, surface);
+    }
     const halo = drawLayerHalo(surface, effects, layer.glowIntensityOffset, layer.glowRadiusOffset, 8192, 1920, 1080);
     ctx.save();
     ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
@@ -154,7 +161,11 @@ export async function drawLayerOnCanvas(
       viewAngle: 1 - Math.abs(Math.cos(layer.rotation.x) * Math.cos(layer.rotation.y)),
     });
     ctx.globalAlpha = composed ? 1 : layer.opacity;
-    if (!composed && (effects.layerBlur ?? 0) > 0) ctx.filter = `blur(${(effects.layerBlur ?? 0) * 100 * w / 1920}px)`;
+    if (!composed) {
+      const blurSettings = getBlurSettings(effects, 'layerBlur');
+      const maxBlur = Math.max((effects.layerBlur ?? 0) * 100, blurSettings.start, blurSettings.end);
+      if (maxBlur > 0) ctx.filter = `blur(${maxBlur * w / 1920}px)`;
+    }
     ctx.drawImage(composed ?? surface, 0, 0, w, h);
     ctx.restore();
   } finally { releaseCanvas(surface); }

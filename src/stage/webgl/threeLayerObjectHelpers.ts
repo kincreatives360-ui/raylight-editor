@@ -68,43 +68,43 @@ export function drawStudioPlaceholder(
         ctx.filter = `blur(${Math.min(24, blurPx) * pixelRatio}px)`;
     }
 
-    const bgGrad = ctx.createLinearGradient(0, 0, w, h);
-    bgGrad.addColorStop(0, '#0f172a');
-    bgGrad.addColorStop(0.55, '#1e1b4b');
-    bgGrad.addColorStop(1, '#1e293b');
-    ctx.fillStyle = bgGrad;
+    ctx.fillStyle = '#18181b';
     ctx.fillRect(0, 0, w, h);
 
-    const pad = w * 0.05;
-    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.08)';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(0.5, 0.5, w - 1, h - 1);
+
+    const iconSize = Math.min(48, Math.min(w, h) * 0.2);
+    const cx = w / 2;
+    const cy = h / 2 - (layerName ? 10 : 0);
+
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.lineWidth = 1.5;
     ctx.beginPath();
-    ctx.roundRect(pad, pad * 1.4, w * 0.56, h - pad * 2.6, 16);
+    ctx.roundRect(cx - iconSize / 2, cy - iconSize / 2, iconSize, iconSize, 4);
+    ctx.stroke();
+
+    ctx.beginPath();
+    ctx.arc(cx - iconSize * 0.2, cy - iconSize * 0.15, iconSize * 0.1, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
     ctx.fill();
 
-    ctx.fillStyle = '#ffffff';
-    ctx.font = `700 ${Math.max(18, Math.round(h * 0.075))}px Inter, sans-serif`;
-    ctx.fillText('$148,920.00', pad * 1.6, h * 0.34);
+    ctx.beginPath();
+    ctx.moveTo(cx - iconSize * 0.35, cy + iconSize * 0.35);
+    ctx.lineTo(cx - iconSize * 0.05, cy);
+    ctx.lineTo(cx + iconSize * 0.15, cy + iconSize * 0.2);
+    ctx.lineTo(cx + iconSize * 0.35, cy + iconSize * 0.35);
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+    ctx.stroke();
 
-    ctx.fillStyle = '#38bdf8';
-    ctx.font = `600 ${Math.max(13, Math.round(h * 0.042))}px Inter, sans-serif`;
-    ctx.fillText(layerName || 'Pasted image', pad * 1.6, h * 0.44);
-
-    const bars = [0.35, 0.52, 0.44, 0.7, 0.62, 0.86, 0.75, 0.95];
-    const chartX = pad * 1.6;
-    const chartY = h * 0.54;
-    const chartW = w * 0.46;
-    const chartH = h * 0.26;
-    const barW = chartW / (bars.length * 1.35);
-
-    bars.forEach((b, i) => {
-        const bh = chartH * b;
-        const bx = chartX + i * barW * 1.35;
-        const by = chartY + (chartH - bh);
-        ctx.fillStyle = '#0088ff';
-        ctx.beginPath();
-        ctx.roundRect(bx, by, barW, bh, 4);
-        ctx.fill();
-    });
+    if (layerName) {
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.35)';
+        ctx.font = `500 ${Math.max(11, Math.round(h * 0.035))}px Inter, sans-serif`;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(layerName, cx, cy + iconSize * 0.75);
+    }
 
     ctx.restore();
 }

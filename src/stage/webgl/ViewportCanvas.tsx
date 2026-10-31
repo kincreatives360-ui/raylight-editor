@@ -281,7 +281,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <SceneLighting light={activeShot?.light} />
 
                 {/* 3. Screen-Space Shot-Aware Background with Transition Support */}
-                <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} />
+                <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} light={activeShot?.light} />
 
                 {/* 4. 3D Scene Objects / Layers with Depth Awareness & Shot Transition Parity */}
                 <group name="raylight_layers_root">

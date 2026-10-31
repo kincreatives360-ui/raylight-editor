@@ -9,7 +9,9 @@ import type {
   Background,
   AssetRecord,
   AspectRatio,
+  LightRig,
 } from '../../model/types';
+import { resolveLighting } from '../../engine/lightingSystem';
 import { resolveShotBackground } from '../../model/types';
 import type { EvaluatedProjectFrame } from '../../engine/evaluateShot';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -39,6 +41,7 @@ export interface SceneBackgroundProps {
   background?: Background;
   assets?: Record<string, AssetRecord>;
   aspectRatio?: AspectRatio;
+  light?: LightRig;
 }
 
 const NOISE_FRAGMENT_SHADER = `
@@ -117,11 +120,63 @@ EMPTY_BG_TEXTURE.needsUpdate = true;
 
 const _scratchBgVec3 = new THREE.Vector3();
 
+const BACKGROUND_LIGHT_FRAGMENT_SHADER = `
+  precision highp float;
+  uniform vec3 uAmbientColor;
+  uniform float uAmbientAmount;
+  uniform vec3 uKeyColor;
+  uniform vec2 uKeyDirection;
+  uniform float uKeyAmount;
+  uniform int uSourceCount;
+  uniform vec4 uSources[8];
+  uniform vec3 uSourceColors[8];
+  uniform float uOpacity;
+  varying vec2 vUv;
+  void main() {
+    vec3 light = uAmbientColor * uAmbientAmount;
+    float directional = clamp(0.5 + dot(vUv - 0.5, normalize(uKeyDirection)) * 1.3, 0.0, 1.0);
+    light += uKeyColor * uKeyAmount * (0.35 + directional * 0.65);
+    for (int i = 0; i < 8; i++) {
+      if (i >= uSourceCount) break;
+      vec2 delta = vUv - uSources[i].xy;
+      float falloff = max(0.0, 1.0 - length(delta) / max(0.04, uSources[i].z));
+      light += uSourceColors[i] * uSources[i].w * falloff * falloff;
+    }
+    gl_FragColor = vec4(min(light, vec3(0.32)) * uOpacity, 1.0);
+  }
+`;
+
+function getBackgroundLightUniforms(light?: LightRig, opacity: number = 1) {
+  const resolved = resolveLighting(light);
+  const sources = resolved.sources.filter((source) => source.type !== 'ambient').slice(0, 8);
+  const keyDirection = new THREE.Vector2(
+    (light?.target?.x ?? 0) - (light?.position?.x ?? -0.28),
+    (light?.target?.y ?? 0) - (light?.position?.y ?? 0.36),
+  );
+  if (keyDirection.lengthSq() < 0.0001) keyDirection.set(1, -1);
+  return {
+    uAmbientColor: { value: new THREE.Color(resolved.room.environmentTint) },
+    uAmbientAmount: { value: Math.min(0.12, resolved.room.intensity * 0.04) },
+    uKeyColor: { value: new THREE.Color(resolved.key.color) },
+    uKeyDirection: { value: keyDirection.normalize() },
+    uKeyAmount: { value: light?.keyLightEnabled === false ? 0 : Math.min(0.16, resolved.key.intensity * 0.035) },
+    uSourceCount: { value: sources.length },
+    uSources: { value: Array.from({ length: 8 }, (_, index) => {
+      const source = sources[index];
+      return new THREE.Vector4(source ? 0.5 + source.position[0] / 24 : 0, source ? 0.5 - source.position[1] / 24 : 0,
+        source ? Math.min(0.8, Math.max(0.08, source.distance / 20)) : 0.08, source ? Math.min(0.12, source.intensity * 0.012) : 0);
+    }) },
+    uSourceColors: { value: Array.from({ length: 8 }, (_, index) => new THREE.Color(sources[index]?.color ?? '#ffffff')) },
+    uOpacity: { value: opacity },
+  };
+}
+
 interface SingleBackgroundBillboardProps {
   bg: Background;
   opacity?: number;
   slideX?: number;
   assets?: Record<string, AssetRecord>;
+  light?: LightRig;
 }
 
 const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
@@ -129,9 +184,11 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   opacity = 1,
   slideX = 0,
   assets = {},
+  light,
 }) => {
   const { camera, invalidate } = useThree();
   const meshRef = useRef<THREE.Mesh>(null);
+  const lightMeshRef = useRef<THREE.Mesh>(null);
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
   const continuousTimeRef = useRef<number>(0);
   const prevTimeMsRef = useRef<number>(0);
@@ -259,6 +316,24 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     }
     return {};
   }, [bg, opacity, gradientTexture, imageTexture]);
+  const lightUniforms = useMemo(() => getBackgroundLightUniforms(light, opacity), []);
+
+  useEffect(() => {
+    if (!lightUniforms) return;
+    const next = getBackgroundLightUniforms(light, opacity);
+    lightUniforms.uAmbientColor.value.copy(next.uAmbientColor.value);
+    lightUniforms.uAmbientAmount.value = next.uAmbientAmount.value;
+    lightUniforms.uKeyColor.value.copy(next.uKeyColor.value);
+    lightUniforms.uKeyDirection.value.copy(next.uKeyDirection.value);
+    lightUniforms.uKeyAmount.value = next.uKeyAmount.value;
+    lightUniforms.uSourceCount.value = next.uSourceCount.value;
+    for (let i = 0; i < 8; i++) {
+      lightUniforms.uSources.value[i].copy(next.uSources.value[i]);
+      lightUniforms.uSourceColors.value[i].copy(next.uSourceColors.value[i]);
+    }
+    lightUniforms.uOpacity.value = next.uOpacity.value;
+    invalidate();
+  }, [light, opacity, lightUniforms, invalidate]);
 
   // Keep uniforms updated
   useEffect(() => {
@@ -351,6 +426,11 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     mesh.position.copy(pCam.position).add(_scratchBgVec3);
     mesh.quaternion.copy(pCam.quaternion);
     mesh.scale.set(planeW, planeH, 1);
+    if (lightMeshRef.current) {
+      lightMeshRef.current.position.copy(mesh.position);
+      lightMeshRef.current.quaternion.copy(mesh.quaternion);
+      lightMeshRef.current.scale.copy(mesh.scale);
+    }
 
     const currentTimeMs = usePlayheadStore.getState().currentTimeMs;
     const cfg = bg.kind === 'shader' ? (DEFAULT_SHADER_CONFIGS[bg.preset] || DEFAULT_SHADER_CONFIGS.silk) : null;
@@ -448,25 +528,33 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   }
 
   return (
-    <mesh
-      ref={meshRef}
-      renderOrder={-1000}
-      frustumCulled={false}
-      userData={{ raylightFrameBillboard: true }}
-    >
-      <planeGeometry args={[1, 1]} />
-      <shaderMaterial
-        ref={shaderMatRef}
-        key={bg.kind === 'shader' ? bg.preset : bg.kind === 'image' ? `image-${dataUrl || 'none'}-${imageTexture ? 'loaded' : 'loading'}` : bg.kind}
-        vertexShader={vertShader}
-        fragmentShader={fragShader}
-        uniforms={uniforms as Record<string, THREE.IUniform>}
-        depthTest={false}
-        depthWrite={false}
-        toneMapped={false}
-        {...BACKGROUND_RENDER_STATE}
-      />
-    </mesh>
+    <>
+      <mesh
+        ref={meshRef}
+        renderOrder={-1000}
+        frustumCulled={false}
+        userData={{ raylightFrameBillboard: true }}
+      >
+        <planeGeometry args={[1, 1]} />
+        <shaderMaterial
+          ref={shaderMatRef}
+          key={bg.kind === 'shader' ? bg.preset : bg.kind === 'image' ? `image-${dataUrl || 'none'}-${imageTexture ? 'loaded' : 'loading'}` : bg.kind}
+          vertexShader={vertShader}
+          fragmentShader={fragShader}
+          uniforms={uniforms as Record<string, THREE.IUniform>}
+          depthTest={false}
+          depthWrite={false}
+          toneMapped={false}
+          {...BACKGROUND_RENDER_STATE}
+        />
+      </mesh>
+      {light?.backgroundReceivesLight && <mesh ref={lightMeshRef} renderOrder={-999} frustumCulled={false}>
+        <planeGeometry args={[1, 1]} />
+        <shaderMaterial vertexShader={BACKGROUND_VERTEX_SHADER} fragmentShader={BACKGROUND_LIGHT_FRAGMENT_SHADER}
+          uniforms={lightUniforms as Record<string, THREE.IUniform>} depthTest={false} depthWrite={false}
+          transparent toneMapped={false} blending={THREE.AdditiveBlending} />
+      </mesh>}
+    </>
   );
 };
 
@@ -477,6 +565,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   frame,
   background,
   assets,
+  light,
 }) => {
   const { scene, invalidate } = useThree();
   const targetShot = activeShot ?? shot ?? frame?.activeShot ?? project?.shots[0];
@@ -546,6 +635,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
           opacity={outOpacity}
           slideX={outSlideX}
           assets={effectiveAssets}
+          light={frame?.shotTransition?.outgoingFrame?.activeShot.light ?? light}
         />
       )}
       <SingleBackgroundBillboard
@@ -553,6 +643,7 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
         opacity={inOpacity}
         slideX={inSlideX}
         assets={effectiveAssets}
+        light={light ?? targetShot?.light}
       />
     </>
   );

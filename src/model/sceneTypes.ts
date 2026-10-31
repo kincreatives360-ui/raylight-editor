@@ -136,12 +136,14 @@ export interface LightRig {
   shadowSoftness?: number;
   /** Toggle key light on/off */
   keyLightEnabled?: boolean;
-  /** Key light only; intensity remains a master gain for additional sources. */
+  /** Key light intensity. Additional sources use their own intensity. */
   keyIntensity?: number;
   /** Toggle fill light on/off */
   fillEnabled?: boolean;
   /** Fill light intensity level (0 - 1) */
   fillIntensity?: number;
+  /** Let scene lighting add a screen-space light response to the background. */
+  backgroundReceivesLight?: boolean;
   /** Tone mapping rolloff mode */
   toneMapping?: 'none' | 'neutral';
   /** Whether the directional key light casts shadows */

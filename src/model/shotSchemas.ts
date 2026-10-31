@@ -148,6 +148,7 @@ export const ShotSchema = z.object({
     keyIntensity: z.number().min(0).optional(),
     fillEnabled: z.boolean().optional(),
     fillIntensity: z.number().min(0).max(1).optional(),
+    backgroundReceivesLight: z.boolean().optional(),
     toneMapping: z.enum(['none', 'neutral']).optional(),
     castShadow: z.boolean().optional(),
     showGizmos: z.boolean().optional(),

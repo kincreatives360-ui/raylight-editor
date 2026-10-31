@@ -1,4 +1,4 @@
-import type { LightRig, SceneLight, Vec3 } from '../model/types';
+import type { LightAnimationBlock, LightRig, SceneLight, Vec3 } from '../model/types';
 
 export const MAX_SHADOW_CASTERS = 3;
 export const DEFAULT_FILL_INTENSITY = 0.38;
@@ -115,7 +115,7 @@ function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet
     enabled: true,
     position: worldPosition(source.position, { x: 0, y: 0, z: 1 }),
     target: worldPosition(source.target, FALLBACK_TARGET),
-    intensity: (source.intensity ?? 1) * (rig.intensity ?? 1.2) * 2,
+    intensity: (source.intensity ?? 1) * 2,
     color: resolveKelvinColor(temperature, source.color || '#ffffff'),
     distance: Math.max(0, source.distance ?? (source.type === 'spot' ? 12 : 10)),
     decay: Math.max(0, source.decay ?? 2),
@@ -136,6 +136,8 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     intensity: 1.2,
     temperature: 6100,
     ambience: 0.45,
+    keyLightEnabled: false,
+    fillEnabled: false,
   } satisfies LightRig;
   const keyEnabled = light.keyLightEnabled !== false;
   const keyIntensity = light.keyIntensity ?? light.intensity ?? 1.2;
@@ -184,9 +186,102 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     },
     fill,
     sources: (light.sources ?? []).filter((source) => source.enabled).map((source) => resolveSource(source, light, shadowIds)),
-    showGizmos: light.showGizmos ?? false,
+    showGizmos: light.showGizmos ?? true,
   };
 }
+
+export function getKelvinPreviewColor(kelvin: number): string {
+  const [r, g, b] = kelvinRgb(kelvin);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export interface LightMovementPreset {
+  id: string;
+  label: string;
+  description: string;
+  property: NonNullable<LightAnimationBlock['property']>;
+  apply: (base: LightAnimationBlock) => Partial<LightAnimationBlock>;
+}
+
+export const LIGHT_ANIMATION_PRESETS: LightMovementPreset[] = [
+  {
+    id: 'gleam-sweep',
+    label: 'Gleam Sweep',
+    description: 'Smooth diagonal highlight across device surface',
+    property: 'position',
+    apply: () => ({
+      label: 'Gleam Sweep',
+      property: 'position',
+      durationMs: 1400,
+      fromX: -0.6,
+      fromY: 0.4,
+      fromZ: 0.9,
+      toX: 0.6,
+      toY: -0.4,
+      toZ: 0.9,
+      easing: { kind: 'bezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 },
+    }),
+  },
+  {
+    id: 'rim-reveal',
+    label: 'Dramatic Rim',
+    description: 'Sweeps light from behind to highlight metallic edges',
+    property: 'position',
+    apply: () => ({
+      label: 'Dramatic Rim',
+      property: 'position',
+      durationMs: 1600,
+      fromX: 0.0,
+      fromY: 0.6,
+      fromZ: -0.6,
+      toX: -0.5,
+      toY: 0.2,
+      toZ: 0.8,
+      easing: { kind: 'preset', name: 'ease-out' },
+    }),
+  },
+  {
+    id: 'power-pulse',
+    label: 'Power Pulse',
+    description: 'Gradual cinematic rise and fall in light intensity',
+    property: 'intensity',
+    apply: () => ({
+      label: 'Power Pulse',
+      property: 'intensity',
+      durationMs: 1200,
+      fromIntensity: 0.4,
+      toIntensity: 2.2,
+      easing: { kind: 'bezier', x1: 0.33, y1: 1, x2: 0.68, y2: 1 },
+    }),
+  },
+  {
+    id: 'dawn-warmth',
+    label: 'Dawn Warmth',
+    description: 'Warm golden sunrise shift from cool sky blue to warm amber',
+    property: 'temperature',
+    apply: () => ({
+      label: 'Dawn Warmth',
+      property: 'temperature',
+      durationMs: 2000,
+      fromTemperature: 8500,
+      toTemperature: 3200,
+      easing: { kind: 'preset', name: 'ease-in-out' },
+    }),
+  },
+];
+
+export function applyLightAnimationPreset(
+  block: LightAnimationBlock,
+  presetId: string
+): LightAnimationBlock {
+  const preset = LIGHT_ANIMATION_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return block;
+  return {
+    ...block,
+    ...preset.apply(block),
+  };
+}
+
 
 
 

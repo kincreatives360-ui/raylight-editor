@@ -332,7 +332,7 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     }
     const uniforms = cachedExportUniforms;
     uniforms.layerScene.value = behind;
-    uniforms.layerAuthorSize.value.set(1920, 1080);
+    uniforms.layerAuthorSize.value.set(source.width, source.height);
     uniforms.layerResolution.value.set(source.width, source.height);
     uniforms.layerPixelRatio.value = source.width / 1920;
     uniforms.layerContentScale.value.set(1 / Math.max(.001, options.width), 1 / Math.max(.001, options.height));
@@ -395,7 +395,10 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
     float phase = (index + .5) / count;
     if (shape.x < .5) {
         float angle = index * 2.39996323;
-        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / size;
+        // Isotropic blur: normalise so kernel stays circular on non-square layers.
+        float shortSide = min(size.x, size.y);
+        vec2 aspect = vec2(shortSide / max(size.x, 1.), shortSide / max(size.y, 1.));
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius * aspect / shortSide;
     }
     vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
     if (shape.x < 1.5) {
@@ -408,17 +411,22 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
     return (center - uv) * phase * min(1., radius * 2. / max(size.x, size.y));
 }
 vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
-    vec4 color = vec4(0.); float alpha = 0.;
+    vec4 accum = vec4(0.); float totalW = 0.;
+    float count = max(1., shape.w);
+    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     for (int i = 0; i < 32; i++) {
-        if (float(i) >= shape.w) break;
-        vec2 delta = layerBlurOffset(uv, radius, shape, float(i), shape.w, layerAuthorSize);
+        if (float(i) >= count) break;
+        float phase = (float(i) + .5) / count;
+        float rNorm = sqrt(phase);
+        float w = exp(-2.5 * rNorm * rNorm);
+        vec2 delta = layerBlurOffset(uv, radius, shape, float(i) + dither * .5, count, layerAuthorSize);
         vec2 p = uv + delta;
         vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.)));
         sampleColor.a *= step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
-        color.rgb += sampleColor.rgb * sampleColor.a;
-        alpha += sampleColor.a;
+        accum += sampleColor * w;
+        totalW += w;
     }
-    return vec4(color.rgb / max(alpha, .00001), alpha / shape.w);
+    return accum / max(totalW, .00001);
 }
 vec3 layerScreenMask(vec2 pixels) {
     vec2 cell = pixels / max(.5, layerScreen.y);
@@ -441,7 +449,10 @@ vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float 
     float phase = (index + .5) / count;
     if (shape.x < .5) {
         float angle = index * 2.39996323;
-        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius / layerResolution;
+        // Isotropic circular backdrop blur across any display aspect ratio
+        float shortSide = min(layerResolution.x, layerResolution.y);
+        vec2 aspect = vec2(shortSide / max(layerResolution.x, 1.), shortSide / max(layerResolution.y, 1.));
+        return vec2(cos(angle), sin(angle)) * sqrt(phase) * radius * aspect / shortSide;
     }
     vec2 center = layerContentCenter + (shape.yz - .5) / max(layerContentScale, vec2(.0001));
     if (shape.x < 1.5) {
@@ -453,14 +464,20 @@ vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float 
     return (center - uv) * phase * min(1., radius * 2. / max(layerResolution.x, layerResolution.y));
 }
 vec3 layerSampleScene(vec2 uv, float radius, vec4 shape) {
-    vec3 c = texture2D(layerScene, uv).rgb * .2;
+    if (radius <= .001) return texture2D(layerScene, uv).rgb;
+    vec3 accum = vec3(0.); float totalW = 0.;
     float count = min(shape.w, 32.);
+    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
     for (int i = 0; i < 32; i++) {
         if (float(i) >= count) break;
-        vec2 offset = layerSceneBlurOffset(uv, radius, shape, float(i), count);
-        c += texture2D(layerScene, clamp(uv + offset, vec2(0.), vec2(1.))).rgb * (.8/count);
+        float phase = (float(i) + .5) / count;
+        float rNorm = sqrt(phase);
+        float w = exp(-2.5 * rNorm * rNorm);
+        vec2 offset = layerSceneBlurOffset(uv, radius, shape, float(i) + dither * .5, count);
+        accum += texture2D(layerScene, clamp(uv + offset, vec2(0.), vec2(1.))).rgb * w;
+        totalW += w;
     }
-    return c;
+    return accum / max(totalW, .00001);
 }
 ${LAYER_STYLE_GLSL}
 `;
@@ -533,9 +550,17 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     if (layerBlend == 4) sourceColor = 1. - (1. - sourceColor) * (1. - behind);
     if (layerBlend == 5) sourceColor = min(vec3(1.), sourceColor + behind);
     if (layerBlend == 6) sourceColor = abs(behind - sourceColor);
-    // Resolve here so a translucent layer composites against the blurred backdrop.
-    float coverage = clamp(gl_FragColor.a / max(opacity, .00001), 0., 1.);
-    gl_FragColor = vec4(mix(behind, sourceColor, opacity), coverage);
+    #ifdef USE_MAP
+    float artworkAlpha = artwork.a;
+    #else
+    float artworkAlpha = 1.0;
+    #endif
+    if (layerBackdrop > 0. && layerGlass <= .5) {
+        sourceColor = mix(behind, sourceColor, gl_FragColor.a);
+        gl_FragColor = vec4(sourceColor, artworkAlpha);
+    } else {
+        gl_FragColor = vec4(sourceColor, gl_FragColor.a);
+    }
 }
 `);
 }

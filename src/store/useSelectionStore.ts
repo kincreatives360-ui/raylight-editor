@@ -1,6 +1,7 @@
 import { MIN_STAGE_WIDTH, defaultInspectorWidth, DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
 // src/store/useSelectionStore.ts
 import { create } from 'zustand';
+import type { LightSourceType } from '../model/types';
 
 export type InspectorTab =
     | 'project'
@@ -44,6 +45,8 @@ interface SelectionStore {
     selectedCameraBlockId: string | null;
     selectedLightBlockId: string | null;
     selectedLightId: string | null;
+    activeLightTool: LightSourceType | null;
+    setActiveLightTool: (type: LightSourceType | null) => void;
     selectedPresetType: 'entrance' | 'exit' | null;
     inspectorTab: InspectorTab;
 
@@ -148,6 +151,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedCameraBlockId: null,
     selectedLightBlockId: null,
     selectedLightId: null,
+    activeLightTool: null,
     selectedPresetType: null,
     inspectorTab: 'project',
 
@@ -185,6 +189,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',
@@ -198,6 +203,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: defaultLayerId ? 'layer' : 'shot',
@@ -265,7 +271,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         }),
 
     clearLayerSelection: () =>
-        set({
+        set((state) => ({
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
@@ -273,8 +279,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedLightId: null,
             selectedPresetType: null,
             isCropping: false,
-            inspectorTab: 'project',
-        }),
+            inspectorTab: state.selectedShotId ? 'shot' : 'project',
+        })),
 
     selectBlock: (blockId, layerId) =>
         set((state) => ({
@@ -311,6 +317,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectLight: (lightId) =>
         set({
             selectedLightId: lightId,
+            activeLightTool: null,
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
@@ -374,8 +381,11 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     setActiveTool: (activeTool) =>
         set((state) => ({
             activeTool,
+            activeLightTool: null,
             isCropping: activeTool !== 'select' ? false : state.isCropping,
         })),
+
+    setActiveLightTool: (activeLightTool) => set({ activeLightTool }),
 
     toggleAnimateMode: () =>
         set((state) => ({ isAnimateMode: !state.isAnimateMode })),

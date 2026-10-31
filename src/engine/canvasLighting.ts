@@ -3,6 +3,7 @@ import type { EvaluatedCamera } from './evaluateCamera';
 import { getArtboardDimensions } from '../stage/stageUtils';
 import { resolveLighting } from './lightingSystem';
 import { hexToRgba } from './canvasColorUtils';
+import { acquireCanvas, releaseCanvas } from './canvasPool';
 
 export function renderSceneLightSources(
   ctx: CanvasRenderingContext2D,
@@ -10,9 +11,26 @@ export function renderSceneLightSources(
   camera: EvaluatedCamera,
   canvasW: number,
   canvasH: number,
-  aspectRatio?: Project['aspectRatio']
+  aspectRatio?: Project['aspectRatio'],
+  alphaMask?: HTMLCanvasElement,
 ): void {
-  if (!light) return;
+  if (alphaMask) {
+    const overlay = acquireCanvas(canvasW, canvasH);
+    const overlayCtx = overlay.getContext('2d');
+    if (!overlayCtx) {
+      releaseCanvas(overlay);
+      return;
+    }
+    renderSceneLightSources(overlayCtx, light, camera, canvasW, canvasH, aspectRatio);
+    overlayCtx.globalCompositeOperation = 'destination-in';
+    overlayCtx.drawImage(alphaMask, 0, 0, canvasW, canvasH);
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    ctx.drawImage(overlay, 0, 0);
+    ctx.restore();
+    releaseCanvas(overlay);
+    return;
+  }
   const resolved = resolveLighting(light);
   const artboard = getArtboardDimensions(aspectRatio);
   const targetX = (camera.target?.x ?? 0) / artboard.width;
@@ -35,20 +53,20 @@ export function renderSceneLightSources(
     gradient.addColorStop(0, hexToRgba(color, Math.min(0.38, intensity * 0.12)));
     gradient.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'screen';
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, canvasW, canvasH);
     ctx.restore();
   };
 
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalCompositeOperation = 'screen';
   ctx.fillStyle = hexToRgba(resolved.room.environmentTint, Math.min(0.22, resolved.room.intensity * 0.08));
   ctx.fillRect(0, 0, canvasW, canvasH);
   ctx.restore();
 
-  const keyPosition = projectPosition(light.position?.x ?? -0.28, light.position?.y ?? 0.36);
-  const keyTarget = projectPosition(light.target?.x ?? 0, light.target?.y ?? 0);
+  const keyPosition = projectPosition(light?.position?.x ?? -0.28, light?.position?.y ?? 0.36);
+  const keyTarget = projectPosition(light?.target?.x ?? 0, light?.target?.y ?? 0);
   if (resolved.key.enabled) {
     drawWash(resolved.key.color, resolved.key.intensity, keyTarget.x - keyPosition.x, keyTarget.y - keyPosition.y);
   }
@@ -56,7 +74,7 @@ export function renderSceneLightSources(
     drawWash(resolved.fill.color, resolved.fill.intensity, -keyTarget.x + keyPosition.x, -keyTarget.y + keyPosition.y);
   }
 
-  const sourceById = new Map((light.sources ?? []).map((source) => [source.id, source]));
+  const sourceById = new Map((light?.sources ?? []).map((source) => [source.id, source]));
   for (const source of resolved.sources) {
     const model = sourceById.get(source.id);
     if (!model) continue;
@@ -67,7 +85,7 @@ export function renderSceneLightSources(
 
     if (source.type === 'ambient') {
       ctx.save();
-      ctx.globalCompositeOperation = 'lighter';
+      ctx.globalCompositeOperation = 'screen';
       ctx.fillStyle = hexToRgba(source.color, Math.min(0.25, baseIntensity * 0.06));
       ctx.fillRect(0, 0, canvasW, canvasH);
       ctx.restore();
@@ -88,7 +106,7 @@ export function renderSceneLightSources(
     gradient.addColorStop(source.type === 'spot' ? 0.62 : 0.5, hexToRgba(source.color, Math.min(0.2, centerAlpha * halfDistanceFalloff)));
     gradient.addColorStop(1, 'rgba(0,0,0,0)');
     ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalCompositeOperation = 'screen';
     if (source.type === 'spot') {
       const direction = Math.atan2(target.y - position.y, target.x - position.x);
       ctx.translate(position.x, position.y);

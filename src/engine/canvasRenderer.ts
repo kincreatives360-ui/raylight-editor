@@ -223,6 +223,34 @@ function renderSingleBackground(
   ctx.restore();
 }
 
+function renderBackgroundWithLighting(
+  ctx: CanvasRenderingContext2D,
+  project: Project,
+  background: Background,
+  light: EvaluatedProjectFrame['activeShot']['light'],
+  camera: EvaluatedProjectFrame['camera'],
+  canvasW: number,
+  canvasH: number,
+  alpha = 1,
+  offsetX = 0,
+): void {
+  if (!light?.backgroundReceivesLight || background.kind === 'transparent') {
+    renderSingleBackground(ctx, project, background, canvasW, canvasH, alpha, offsetX);
+    return;
+  }
+  const canvas = acquireCanvas(canvasW, canvasH);
+  const backgroundCtx = canvas.getContext('2d');
+  if (!backgroundCtx) {
+    releaseCanvas(canvas);
+    renderSingleBackground(ctx, project, background, canvasW, canvasH, alpha, offsetX);
+    return;
+  }
+  renderSingleBackground(backgroundCtx, project, background, canvasW, canvasH, alpha, offsetX);
+  renderSceneLightSources(backgroundCtx, light, camera, canvasW, canvasH, project.aspectRatio, canvas);
+  ctx.drawImage(canvas, 0, 0);
+  releaseCanvas(canvas);
+}
+
 export async function renderProjectFrameToCanvas(
   ctx: CanvasRenderingContext2D,
   project: Project,
@@ -283,18 +311,10 @@ export async function renderProjectFrameToCanvas(
     const outgoingCtx = outgoingCanvas.getContext('2d');
     if (outgoingCtx) {
       const outgoingBg = resolveShotBackground(project, outgoing.activeShot);
-      renderSingleBackground(outgoingCtx, project, outgoingBg, canvasW, canvasH, 1, 0);
+      renderBackgroundWithLighting(outgoingCtx, project, outgoingBg, outgoing.activeShot.light, outgoing.camera, canvasW, canvasH, 1, 0);
       for (const outLayer of outgoing.layers) {
         await drawLayerOnCanvas(outgoingCtx, outLayer, project, outgoing, canvasW, canvasH);
       }
-      renderSceneLightSources(
-        outgoingCtx,
-        outgoing.activeShot.light,
-        outgoing.camera,
-        canvasW,
-        canvasH,
-        project.aspectRatio
-      );
       if (outgoing.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
         const outImg = outgoingCtx.getImageData(0, 0, canvasW, canvasH);
         applyCanvasSceneEffects(outImg.data, canvasW, canvasH, outgoing.effects);
@@ -306,18 +326,10 @@ export async function renderProjectFrameToCanvas(
     const incomingCanvas = acquireCanvas(canvasW, canvasH);
     const incomingCtx = incomingCanvas.getContext('2d');
     if (incomingCtx) {
-      renderSingleBackground(incomingCtx, project, incomingBg, canvasW, canvasH, 1, 0);
+      renderBackgroundWithLighting(incomingCtx, project, incomingBg, frame.activeShot.light, frame.camera, canvasW, canvasH, 1, 0);
       for (const evalLayer of frame.layers) {
         await drawLayerOnCanvas(incomingCtx, evalLayer, project, frame, canvasW, canvasH);
       }
-      renderSceneLightSources(
-        incomingCtx,
-        frame.activeShot.light,
-        frame.camera,
-        canvasW,
-        canvasH,
-        project.aspectRatio
-      );
       if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
         const inImg = incomingCtx.getImageData(0, 0, canvasW, canvasH);
         applyCanvasSceneEffects(inImg.data, canvasW, canvasH, frame.effects);
@@ -346,7 +358,7 @@ export async function renderProjectFrameToCanvas(
     releaseCanvas(incomingCanvas);
   } else {
     // Non-transitioning single shot: render directly to destination canvas
-    renderSingleBackground(ctx, project, incomingBg, canvasW, canvasH, 1, 0);
+    renderBackgroundWithLighting(ctx, project, incomingBg, frame.activeShot.light, frame.camera, canvasW, canvasH, 1, 0);
 
     ctx.save();
     ctx.globalAlpha = incomingOpacity;
@@ -355,15 +367,6 @@ export async function renderProjectFrameToCanvas(
     for (const evalLayer of frame.layers) {
       await drawLayerOnCanvas(ctx, evalLayer, project, frame, canvasW, canvasH);
     }
-
-    renderSceneLightSources(
-      ctx,
-      frame.activeShot.light,
-      frame.camera,
-      canvasW,
-      canvasH,
-      project.aspectRatio
-    );
     ctx.restore();
 
     if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
