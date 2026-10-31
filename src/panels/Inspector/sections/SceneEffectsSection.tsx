@@ -206,9 +206,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     if (key === 'motionBlur' && field === 'amount') [rawMin, rawMax] = [0, 10];
     if (key === 'lensDistortion' && field === 'strength') [rawMin, rawMax] = [-1, 1];
 
-    const min = isPercent ? rawMin * 100 : scaledPixels ? rawMin : rawMin;
-    const max = isPercent ? rawMax * 100 : scaledPixels ? rawMax : rawMax;
-    const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : rawStep;
+    const isLensDistortionStrength = key === 'lensDistortion' && field === 'strength';
+    const min = isPercent ? rawMin * 100 : isLensDistortionStrength ? rawMin * scale : rawMin;
+    const max = isPercent ? rawMax * 100 : isLensDistortionStrength ? rawMax * scale : rawMax;
+    const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : isLensDistortionStrength ? rawStep * scale : rawStep;
     const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength' ? 'Edges' : label(field);
     const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneSize' ? ' cm' : '';
 

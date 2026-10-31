@@ -189,6 +189,8 @@ export function useTimelinePlayback({
         scrubFromClientX(event.clientX);
 
         const pointerId = event.pointerId;
+        const startX = event.clientX;
+        let hasDragged = false;
         try {
             event.currentTarget.setPointerCapture(pointerId);
         } catch {
@@ -196,16 +198,23 @@ export function useTimelinePlayback({
         }
 
         const onMove = (moveEvent: PointerEvent) => {
-            if (moveEvent.pointerId === pointerId) scrubFromClientX(moveEvent.clientX);
+            if (moveEvent.pointerId === pointerId) {
+                if (Math.abs(moveEvent.clientX - startX) > 3) {
+                    hasDragged = true;
+                }
+                scrubFromClientX(moveEvent.clientX);
+            }
         };
         const onEnd = (endEvent: PointerEvent) => {
             if (endEvent.pointerId !== pointerId) return;
             isDraggingPlayheadRef.current = false;
             setIsDraggingPlayhead(false);
-            justDraggedPlayheadRef.current = true;
-            window.setTimeout(() => {
-                justDraggedPlayheadRef.current = false;
-            }, 120);
+            if (hasDragged) {
+                justDraggedPlayheadRef.current = true;
+                window.setTimeout(() => {
+                    justDraggedPlayheadRef.current = false;
+                }, 120);
+            }
             window.removeEventListener('pointermove', onMove);
             window.removeEventListener('pointerup', onEnd);
             window.removeEventListener('pointercancel', onEnd);

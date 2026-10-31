@@ -62,9 +62,9 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
             float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
             float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
             glow+=s.rgb*w;
-            total+=1.0;
+            total+=0.45;
           }
-          vec3 bloom = glow * (uParams.x * 2.5);
+          vec3 bloom = (glow / max(0.001, total)) * (uParams.x * 2.5);
           if (uExtra.x == 1.0) col.rgb += bloom;
           else if (uExtra.x == 2.0) col.rgb = mix(col.rgb, 2.0 * col.rgb * bloom + col.rgb * col.rgb * (1.0 - 2.0 * bloom), step(.5, col.rgb));
           else col.rgb = 1.0 - (1.0 - col.rgb) * (1.0 - clamp(bloom, 0.0, 1.0));
@@ -263,7 +263,7 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
         const rad = THREE.MathUtils.degToRad(blur.angle ?? 0);
         pass.uniforms.uMotion.value.set(Math.cos(rad) * (blur.amount ?? 0.02), -Math.sin(rad) * (blur.amount ?? 0.02));
       } else {
-        pass.uniforms.uMotion.value.set((blur.amount ?? 0.02), 0);
+        pass.uniforms.uMotion.value.set(motion.x, -motion.y);
       }
       break;
     }

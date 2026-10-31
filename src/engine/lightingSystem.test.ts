@@ -90,6 +90,17 @@ describe('lightingSystem', () => {
     expect(warm).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
     expect(daylight).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
     expect(cool).toMatch(/^rgb\(\d+,\s*\d+,\s*\d+\)$/);
+
+    const parseRgb = (rgbStr: string) => {
+      const match = rgbStr.match(/^rgb\((\d+),\s*(\d+),\s*(\d+)\)$/);
+      return match ? { r: Number(match[1]), g: Number(match[2]), b: Number(match[3]) } : { r: 0, g: 0, b: 0 };
+    };
+
+    const warmRgb = parseRgb(warm);
+    const coolRgb = parseRgb(cool);
+
+    expect(warmRgb.r).toBeGreaterThan(warmRgb.b);
+    expect(coolRgb.b).toBeGreaterThanOrEqual(coolRgb.r);
   });
 
   it('provides and applies cinematic light animation movement presets', () => {

@@ -17,6 +17,7 @@ import { useSelectionStore } from '../../../store/useSelectionStore';
 import { SceneLightsList } from './SceneLightsList';
 import {
     LIGHT_ANIMATION_PRESETS,
+    applyLightAnimationPreset,
     getKelvinPreviewColor,
 } from '../../../engine/lightingSystem';
 
@@ -206,12 +207,12 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             fromTemperature: currentLight.temperature ?? 6500,
             toTemperature: currentLight.temperature ?? 6500,
             easing: { kind: 'preset', name: 'ease-in-out' },
-            ...preset.apply({} as LightAnimationBlock),
         };
+        const configuredBlock = applyLightAnimationPreset(baseBlock, presetId);
 
         updateShot(activeShot.id, (s) => ({
             ...s,
-            lightBlocks: [...(s.lightBlocks || []), baseBlock],
+            lightBlocks: [...(s.lightBlocks || []), configuredBlock],
         }));
         selectLightBlock(id);
         setAddAnimationOpen(false);
@@ -280,22 +281,26 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                                         </MenuItem>
                                     ))}
 
-                                    <div className="my-1 border-t border-white/[0.08]" />
-                                    <span className="block px-2.5 pt-1 pb-1 text-[10px] text-sky-400 uppercase tracking-wider font-semibold flex items-center gap-1">
-                                        <Wand2 className="w-3 h-3" />
-                                        <span>Movement Presets</span>
-                                    </span>
-                                    {LIGHT_ANIMATION_PRESETS.map((preset) => (
-                                        <MenuItem
-                                            unstyled
-                                            key={preset.id}
-                                            onClick={() => handleApplyAnimationPreset(preset.id)}
-                                            className="w-full px-2.5 py-1.5 rounded-lg text-left text-[11px] text-foreground hover:bg-sky-500/15 hover:text-sky-300 cursor-pointer transition flex flex-col"
-                                        >
-                                            <span className="font-medium">{preset.label}</span>
-                                            <span className="text-[9px] text-muted-foreground">{preset.description}</span>
-                                        </MenuItem>
-                                    ))}
+                                    {!isRoom && (
+                                        <>
+                                            <div className="my-1 border-t border-white/[0.08]" />
+                                            <span className="block px-2.5 pt-1 pb-1 text-[10px] text-sky-400 uppercase tracking-wider font-semibold flex items-center gap-1">
+                                                <Wand2 className="w-3 h-3" />
+                                                <span>Movement Presets</span>
+                                            </span>
+                                            {LIGHT_ANIMATION_PRESETS.map((preset) => (
+                                                <MenuItem
+                                                    unstyled
+                                                    key={preset.id}
+                                                    onClick={() => handleApplyAnimationPreset(preset.id)}
+                                                    className="w-full px-2.5 py-1.5 rounded-lg text-left text-[11px] text-foreground hover:bg-sky-500/15 hover:text-sky-300 cursor-pointer transition flex flex-col"
+                                                >
+                                                    <span className="font-medium">{preset.label}</span>
+                                                    <span className="text-[9px] text-muted-foreground">{preset.description}</span>
+                                                </MenuItem>
+                                            ))}
+                                        </>
+                                    )}
                                 </MenuSurface>
                             )}
                         </div>
@@ -495,17 +500,17 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                             </div>
 
                             {/* Aim at controls */}
-                            <details
-                                className="group border-t border-white/[0.06] px-3.5 py-2"
-                                open={aimOpen}
-                                onToggle={(e) => setAimOpen(e.currentTarget.open)}
-                            >
-                                <summary className="flex items-center justify-between cursor-pointer select-none text-[11px] font-medium text-foreground hover:text-white transition list-none [&::-webkit-details-marker]:hidden">
-                                    <span>Aim controls</span>
-                                    <ChevronDown className="w-3.5 h-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
-                                </summary>
-                                <div className="pt-2 -mx-3.5">
-                                    {hasTarget && (
+                            {hasTarget && (
+                                <details
+                                    className="group border-t border-white/[0.06] px-3.5 py-2"
+                                    open={aimOpen}
+                                    onToggle={(e) => setAimOpen(e.currentTarget.open)}
+                                >
+                                    <summary className="flex items-center justify-between cursor-pointer select-none text-[11px] font-medium text-foreground hover:text-white transition list-none [&::-webkit-details-marker]:hidden">
+                                        <span>Aim controls</span>
+                                        <ChevronDown className="w-3.5 h-3.5 text-muted-foreground transition-transform group-open:rotate-180" />
+                                    </summary>
+                                    <div className="pt-2 -mx-3.5">
                                         <div className="p-3.5 space-y-2">
                                             <span className="text-[11px] font-medium text-foreground">Aim at</span>
                                             <AxisFields
@@ -537,9 +542,9 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
                                                 onChange={(z) => updateLight({ target: { ...target, z: z / 5 } })}
                                             />
                                         </div>
-                                    )}
-                                </div>
-                            </details>
+                                    </div>
+                                </details>
+                            )}
 
                             {/* Effect: Intensity + Temperature with live Kelvin indicator */}
                             <div className="p-3.5 space-y-2">

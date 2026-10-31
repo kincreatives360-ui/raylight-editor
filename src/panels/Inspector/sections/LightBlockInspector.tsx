@@ -87,36 +87,38 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
             </div>
 
             {/* Movement Presets (Beyond Parity) */}
-            <InspectorDisclosure
-                title={
-                    <span className="flex items-center gap-1.5 text-sky-400">
-                        <Wand2 className="w-3.5 h-3.5" />
-                        <span>Movement Presets</span>
-                    </span>
-                }
-                open={presetsOpen}
-                onOpenChange={setPresetsOpen}
-                defaultOpen={false}
-            >
-                <div className="grid grid-cols-2 gap-1.5 pt-1">
-                    {LIGHT_ANIMATION_PRESETS.map((preset) => (
-                        <button
-                            key={preset.id}
-                            type="button"
-                            onClick={() => handleApplyPreset(preset.id)}
-                            title={preset.description}
-                            className="p-2 text-left rounded-lg bg-surface-elevated/70 hover:bg-surface-elevated border border-border/50 hover:border-sky-500/40 text-foreground transition group cursor-pointer"
-                        >
-                            <span className="text-[11px] font-medium block text-white group-hover:text-sky-300">
-                                {preset.label}
-                            </span>
-                            <span className="text-[9px] text-muted-foreground line-clamp-1">
-                                {preset.description}
-                            </span>
-                        </button>
-                    ))}
-                </div>
-            </InspectorDisclosure>
+            {!isRoomAnimation && (
+                <InspectorDisclosure
+                    title={
+                        <span className="flex items-center gap-1.5 text-sky-400">
+                            <Wand2 className="w-3.5 h-3.5" />
+                            <span>Movement Presets</span>
+                        </span>
+                    }
+                    open={presetsOpen}
+                    onOpenChange={setPresetsOpen}
+                    defaultOpen={false}
+                >
+                    <div className="grid grid-cols-2 gap-1.5 pt-1">
+                        {LIGHT_ANIMATION_PRESETS.map((preset) => (
+                            <button
+                                key={preset.id}
+                                type="button"
+                                onClick={() => handleApplyPreset(preset.id)}
+                                title={preset.description}
+                                className="p-2 text-left rounded-lg bg-surface-elevated/70 hover:bg-surface-elevated border border-border/50 hover:border-sky-500/40 text-foreground transition group cursor-pointer"
+                            >
+                                <span className="text-[11px] font-medium block text-white group-hover:text-sky-300">
+                                    {preset.label}
+                                </span>
+                                <span className="text-[9px] text-muted-foreground line-clamp-1">
+                                    {preset.description}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
+                </InspectorDisclosure>
+            )}
 
             {/* Timing Section */}
             <InspectorDisclosure

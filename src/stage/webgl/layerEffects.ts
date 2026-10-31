@@ -332,7 +332,7 @@ export function compositeLayerEffectSurface(source: HTMLCanvasElement, backdrop:
     }
     const uniforms = cachedExportUniforms;
     uniforms.layerScene.value = behind;
-    uniforms.layerAuthorSize.value.set(options.width * 1920, options.height * 1080);
+    uniforms.layerAuthorSize.value.set(source.width, source.height);
     uniforms.layerResolution.value.set(source.width, source.height);
     uniforms.layerPixelRatio.value = source.width / 1920;
     uniforms.layerContentScale.value.set(1 / Math.max(.001, options.width), 1 / Math.max(.001, options.height));
@@ -550,10 +550,17 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     if (layerBlend == 4) sourceColor = 1. - (1. - sourceColor) * (1. - behind);
     if (layerBlend == 5) sourceColor = min(vec3(1.), sourceColor + behind);
     if (layerBlend == 6) sourceColor = abs(behind - sourceColor);
+    #ifdef USE_MAP
+    float artworkAlpha = artwork.a;
+    #else
+    float artworkAlpha = 1.0;
+    #endif
     if (layerBackdrop > 0. && layerGlass <= .5) {
-        sourceColor = mix(behind, sourceColor, artwork.a);
+        sourceColor = mix(behind, sourceColor, gl_FragColor.a);
+        gl_FragColor = vec4(sourceColor, artworkAlpha);
+    } else {
+        gl_FragColor = vec4(sourceColor, gl_FragColor.a);
     }
-    gl_FragColor = vec4(sourceColor, gl_FragColor.a);
 }
 `);
 }

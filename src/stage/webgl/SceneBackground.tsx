@@ -130,6 +130,7 @@ const BACKGROUND_LIGHT_FRAGMENT_SHADER = `
   uniform int uSourceCount;
   uniform vec4 uSources[8];
   uniform vec3 uSourceColors[8];
+  uniform float uOpacity;
   varying vec2 vUv;
   void main() {
     vec3 light = uAmbientColor * uAmbientAmount;
@@ -141,11 +142,11 @@ const BACKGROUND_LIGHT_FRAGMENT_SHADER = `
       float falloff = max(0.0, 1.0 - length(delta) / max(0.04, uSources[i].z));
       light += uSourceColors[i] * uSources[i].w * falloff * falloff;
     }
-    gl_FragColor = vec4(min(light, vec3(0.32)), 1.0);
+    gl_FragColor = vec4(min(light, vec3(0.32)) * uOpacity, 1.0);
   }
 `;
 
-function getBackgroundLightUniforms(light?: LightRig) {
+function getBackgroundLightUniforms(light?: LightRig, opacity: number = 1) {
   const resolved = resolveLighting(light);
   const sources = resolved.sources.filter((source) => source.type !== 'ambient').slice(0, 8);
   const keyDirection = new THREE.Vector2(
@@ -166,6 +167,7 @@ function getBackgroundLightUniforms(light?: LightRig) {
         source ? Math.min(0.8, Math.max(0.08, source.distance / 20)) : 0.08, source ? Math.min(0.12, source.intensity * 0.012) : 0);
     }) },
     uSourceColors: { value: Array.from({ length: 8 }, (_, index) => new THREE.Color(sources[index]?.color ?? '#ffffff')) },
+    uOpacity: { value: opacity },
   };
 }
 
@@ -314,7 +316,24 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     }
     return {};
   }, [bg, opacity, gradientTexture, imageTexture]);
-  const lightUniforms = useMemo(() => getBackgroundLightUniforms(light), [light]);
+  const lightUniforms = useMemo(() => getBackgroundLightUniforms(light, opacity), []);
+
+  useEffect(() => {
+    if (!lightUniforms) return;
+    const next = getBackgroundLightUniforms(light, opacity);
+    lightUniforms.uAmbientColor.value.copy(next.uAmbientColor.value);
+    lightUniforms.uAmbientAmount.value = next.uAmbientAmount.value;
+    lightUniforms.uKeyColor.value.copy(next.uKeyColor.value);
+    lightUniforms.uKeyDirection.value.copy(next.uKeyDirection.value);
+    lightUniforms.uKeyAmount.value = next.uKeyAmount.value;
+    lightUniforms.uSourceCount.value = next.uSourceCount.value;
+    for (let i = 0; i < 8; i++) {
+      lightUniforms.uSources.value[i].copy(next.uSources.value[i]);
+      lightUniforms.uSourceColors.value[i].copy(next.uSourceColors.value[i]);
+    }
+    lightUniforms.uOpacity.value = next.uOpacity.value;
+    invalidate();
+  }, [light, opacity, lightUniforms, invalidate]);
 
   // Keep uniforms updated
   useEffect(() => {

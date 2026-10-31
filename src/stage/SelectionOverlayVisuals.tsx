@@ -186,10 +186,10 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
             )}
 
             
-            {/* FIGMA-STYLE RECTANGLE CORNER ROUNDING NODES */}
-            {!isLocked && !isCropping && !isEditingInlineText && layer.kind === 'shape' && ((layer as any).shape === 'rectangle' || !(layer as any).shape) && (
+            {/* FIGMA-STYLE CORNER ROUNDING NODES (Rectangles & Images) */}
+            {!isLocked && !isCropping && !isEditingInlineText && (layer.kind === 'image' || (layer.kind === 'shape' && ((layer as any).shape === 'rectangle' || !(layer as any).shape))) && (
                 (() => {
-                    const shapeL = layer as any;
+                    const itemL = layer as any;
                     const center = primaryProj.pCenter;
                     const corners = [
                         { id: 'nw', pt: primaryProj.pNW },
@@ -197,7 +197,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                         { id: 'se', pt: primaryProj.pSE },
                         { id: 'sw', pt: primaryProj.pSW },
                     ];
-                    const currentRadius = shapeL.cornerRadius ?? 0;
+                    const currentRadius = itemL.cornerRadius ?? 0;
 
                     return corners.map((c) => {
                         const vx = center.x - c.pt.x;
@@ -218,28 +218,32 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                     left: `${posX}px`,
                                     top: `${posY}px`,
                                     transform: 'translate(-50%, -50%)',
+                                    touchAction: 'none',
                                 }}
                                 title="Drag to adjust corner rounding"
-                                className="w-2.5 h-2.5 rounded-full bg-white border border-[var(--accent-primary,#0088ff)] shadow-md absolute pointer-events-auto cursor-crosshair hover:scale-125 transition-transform duration-75 ease-out z-20 hover:bg-sky-50"
+                                className="w-2.5 h-2.5 rounded-full bg-white border border-[var(--accent-primary,#0088ff)] shadow-md absolute pointer-events-auto cursor-crosshair hover:scale-125 transition-transform duration-75 ease-out z-20 hover:bg-sky-50 touch-none"
                                 onPointerDown={(e) => {
                                     e.stopPropagation();
                                     e.preventDefault();
+                                    const pointerId = e.pointerId;
                                     const startX = e.clientX;
                                     const startY = e.clientY;
-                                    const initialRadius = shapeL.cornerRadius ?? 0;
+                                    const initialRadius = itemL.cornerRadius ?? 0;
 
                                     const onMove = (moveEv: PointerEvent) => {
+                                        if (moveEv.pointerId !== pointerId) return;
                                         const dx = moveEv.clientX - startX;
                                         const dy = moveEv.clientY - startY;
                                         const dot = dx * nx + dy * ny;
                                         const deltaRadius = dot / 120;
                                         const nextRadius = Math.max(0, Math.min(0.5, Number((initialRadius + deltaRadius).toFixed(3))));
                                         updateLayer(activeShotId, layer.id, (l) =>
-                                            l.kind === 'shape' ? { ...l, cornerRadius: nextRadius } : l
+                                            l.kind !== 'text' ? { ...l, cornerRadius: nextRadius } : l
                                         );
                                     };
 
-                                    const onUp = () => {
+                                    const onUp = (upEv: PointerEvent) => {
+                                        if (upEv.pointerId !== pointerId) return;
                                         window.removeEventListener('pointermove', onMove);
                                         window.removeEventListener('pointerup', onUp);
                                         window.removeEventListener('pointercancel', onUp);
@@ -253,6 +257,31 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                         );
                     });
                 })()
+            )}
+
+            {/* CORNER ROTATION ZONES (Figma / Illustrator style) */}
+            {!isLocked && !isCropping && !isEditingInlineText && (
+                [
+                    { id: 'rot-nw', pt: primaryProj.pNW, ox: -10, oy: -10 },
+                    { id: 'rot-ne', pt: primaryProj.pNE, ox: 10, oy: -10 },
+                    { id: 'rot-se', pt: primaryProj.pSE, ox: 10, oy: 10 },
+                    { id: 'rot-sw', pt: primaryProj.pSW, ox: -10, oy: 10 },
+                ].map((rot) => (
+                    <div
+                        key={rot.id}
+                        data-selection-handle={rot.id}
+                        style={{
+                            left: `${rot.pt.x + rot.ox}px`,
+                            top: `${rot.pt.y + rot.oy}px`,
+                            transform: 'translate(-50%, -50%)',
+                            cursor: 'grab',
+                            touchAction: 'none',
+                        }}
+                        onPointerDown={onRotateStart}
+                        title="Drag to rotate"
+                        className="w-5 h-5 rounded-full absolute pointer-events-auto z-10 opacity-0 hover:opacity-100 hover:bg-sky-400/20 transition-opacity"
+                    />
+                ))
             )}
 
             {/* 8 RESIZE / CROP HANDLES */}
@@ -269,12 +298,12 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                 transform: 'translate(-50%, -50%)',
                                 cursor: h.cursor,
                             }}
-                            className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
+                            className={`w-2.5 h-2.5 rounded-[1px] border-[1.5px] shadow-xs absolute pointer-events-auto select-none ${isCropping
                                     ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
                                     : isAnimateMode
                                         ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
                                         : 'bg-white border-[var(--accent-primary,#0088ff)]'
-                                } hover:scale-125 transition-transform duration-100 ease-out`}
+                                } hover:scale-125 transition-transform duration-75 ease-out`}
                         />
                 ))}
 

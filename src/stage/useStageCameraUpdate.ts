@@ -31,7 +31,7 @@ export function useStageCameraUpdate({
         );
         const activeCameraBlock = currentShot.cameraBlocks?.find(
             (b) => frame.shotLocalTimeMs >= b.startMs && frame.shotLocalTimeMs <= b.startMs + b.durationMs
-        ) || currentShot.cameraBlocks?.[0];
+        );
 
         const targetCameraBlock = selectedCameraBlock || activeCameraBlock;
 
