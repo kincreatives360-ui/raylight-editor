@@ -187,7 +187,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             ) : selectedLayer ? (
                 <>
                     {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
-                    <div className="h-10 border-b border-subtle px-3.5 flex items-center shrink-0 bg-panel">
+                    <div className="h-10 border-b border-subtle px-3.5 flex items-center shrink-0 bg-app">
                         <InspectorModeTabs
                             mode={effectiveMainTab}
                             onChange={setMainTab}
@@ -235,7 +235,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             )}
 
             {/* Persistent Inspector Footer: Ask Raylight & Help */}
-            <div className="p-3 border-t border-subtle flex items-center justify-end gap-2 shrink-0 bg-app">
+            <div className="px-3.5 py-2.5 border-t border-subtle flex items-center justify-end gap-2 shrink-0 bg-app">
                 <button
                     type="button"
                     onClick={onOpenShortcuts}

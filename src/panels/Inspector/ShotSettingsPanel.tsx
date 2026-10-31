@@ -21,20 +21,20 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
 
     return (
         <div className="shot-settings-panel flex-1 min-h-0 overflow-y-auto select-none" data-testid="shot-settings-section">
-            <div className="space-y-4">
+            <div className="space-y-5 px-3.5 py-3">
                 {/* Header: Design / Animate tabs matching mockup */}
                 <InspectorModeTabs
                     mode={shotTab}
                     onChange={setShotTab}
                     ariaLabel="Shot settings"
                     fullWidth
-                    className="shot-settings-tabs flex items-center gap-2 px-3 py-2 border-b border-subtle"
+                    className="shot-settings-tabs flex items-center gap-2 -mx-3.5 -mt-3 px-3.5 py-2.5 border-b border-subtle mb-1"
                 />
 
                 {/* Shot Title & Duration */}
                 <div className="space-y-1.5">
                     <div className="flex items-center justify-between">
-                        <label className="text-[11px] text-muted-foreground block font-normal">Shot Name</label>
+                        <label className="text-[11px] text-muted-foreground block font-medium uppercase tracking-[.04em]">Shot Name</label>
                         <span className="text-[11px] font-mono text-disabled">
                             {(activeShot.durationMs / 1000).toFixed(1)}s
                         </span>
@@ -51,8 +51,8 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                 {shotTab === 'design' ? (
                     <>
                         {/* Background Section */}
-                        <div className="space-y-2.5">
-                            <h3 className="text-[12px] font-semibold text-foreground tracking-wide">Background</h3>
+                        <div className="space-y-2">
+                        <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em]">Background</h3>
 
                             {/* Use project toggle switch */}
                             <div className="flex items-center justify-between py-2">
@@ -125,10 +125,10 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     </>
                 ) : (
                     /* Animate Tab for Shot: Camera Animation / Controls */
-                    <div className="space-y-3">
+                    <div className="space-y-2.5">
                         <div className="flex items-center justify-between">
-                            <h3 className="text-[12px] font-semibold text-foreground tracking-wide">Camera Motion</h3>
-                            <span className="text-[10px] text-disabled">
+                            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em]">Camera Motion</h3>
+                            <span className="text-[11px] font-mono text-disabled">
                                 {activeShot.cameraBlocks?.length || 0} moves
                             </span>
                         </div>

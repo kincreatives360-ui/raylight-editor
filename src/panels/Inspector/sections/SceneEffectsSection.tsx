@@ -265,9 +265,9 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
           {/* Add Effect Flyout Menu */}
           {addMenuOpen && (
             <MenuSurface
-                className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/15 p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right"
+                className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-surface/85 backdrop-blur-xl saturate-180 border border-subtle p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right"
             >
-              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-[.06em]">
                 Add Effect
               </div>
               {order.map((key) => {
@@ -310,7 +310,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                 <div className="flex items-center gap-1.5">
                   {/* Left Icon Badge */}
                   <div
-                    className="w-7 h-7 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-center text-[#a1a1aa] shrink-0"
+                    className="w-7 h-7 rounded-lg bg-surface border border-subtle flex items-center justify-center text-muted-foreground shrink-0"
                     title={EFFECT_NAMES[key]}
                   >
                     <EffectIcon effectKey={key} className="w-3.5 h-3.5" />

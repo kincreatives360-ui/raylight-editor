@@ -11,13 +11,13 @@ interface ProjectDetailsSectionProps {
 
 export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ project, updateProject }) => (
     <>
-        <h2 className="text-[13px] font-semibold text-foreground tracking-wide">Project Settings</h2>
+        <h2 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em] mb-1">Project Settings</h2>
 
         <InspectorRow
             unstyled
             className="space-y-1.5"
             labelTag="label"
-            labelClassName="text-[11px] text-muted-foreground block font-normal"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
             label={<>Name</>}
         >
             <input
@@ -33,7 +33,7 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
             unstyled
             className="space-y-1.5"
             labelTag="label"
-            labelClassName="text-[11px] text-muted-foreground block font-normal"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
             label={<>Aspect Ratio</>}
         >
             <div className="relative">
@@ -57,7 +57,7 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
             unstyled
             className="space-y-1.5"
             labelTag="label"
-            labelClassName="text-[11px] text-muted-foreground block font-normal"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
             label={<>Lens</>}
         >
             <ScrubInput

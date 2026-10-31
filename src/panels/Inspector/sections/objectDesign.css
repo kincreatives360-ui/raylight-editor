@@ -1,9 +1,9 @@
 .object-design-inspector {
-    --object-surface: #111111;
-    --object-field: #202020;
-    --object-divider: #252525;
+    --object-surface: var(--bg-app, #111111);
+    --object-field: var(--surface-bg, #1c1c1f);
+    --object-divider: var(--surface-border, #252525);
     background: var(--object-surface);
-    color: #b8b8b8;
+    color: var(--text-secondary, #b8b8b8);
     font-size: 12px;
 }
 .object-design-section, .object-design-inspector [role="region"], .object-design-inspector > section {
@@ -11,15 +11,18 @@
     border-bottom: 1px solid var(--object-divider);
 }
 .object-design-heading {
-    height: 52px;
-    padding: 12px 14px;
+    height: 44px;
+    padding: 0 14px;
     border: 0;
-    font-size: 12px;
-    font-weight: 500;
-    color: #b8b8b8;
-    letter-spacing: .01em;
+    display: flex;
+    align-items: center;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text-secondary, #b8b8b8);
+    letter-spacing: .04em;
+    text-transform: uppercase;
 }
-.object-design-fields { display: flex; flex-direction: column; gap: 14px; padding: 0 14px 22px; }
+.object-design-fields { display: flex; flex-direction: column; gap: 12px; padding: 0 14px 16px; }
 .object-design-fields:empty { display: none; }
 .object-design-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; min-width: 0; }
 .object-design-triple { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -34,17 +37,17 @@
     border-radius: 8px;
     background: var(--object-field);
     padding: 0 8px;
-    color: #ededed;
+    color: var(--text-primary, #ededed);
     font-size: 12px;
     box-shadow: none;
 }
 .object-design-inspector [role="spinbutton"] > span { font-size: 12px; font-weight: 400; }
 .object-design-inspector [role="spinbutton"] > span:first-child { color: #a5a5a5; }
-.object-design-inspector [role="spinbutton"]:hover, .object-design-inspector .figma-select:hover { background: #292929; }
+.object-design-inspector [role="spinbutton"]:hover, .object-design-inspector .figma-select:hover { background: var(--panel-hover, #292929); }
 .object-design-inspector [role="spinbutton"]:focus-visible, .object-design-input:focus-visible { outline: 1px solid #0088ff; }
 .object-design-input { width: 100%; outline: none; }
 .object-design-inspector svg { width: 14px; height: 14px; stroke-width: 1.65; flex: none; }
-.object-design-fields > .flex-col > .flex:first-child > span { font-weight: 400; color: #a5a5a5; font-size: 11px; }
+.object-design-fields > .flex-col > .flex:first-child > span { font-weight: 400; color: var(--text-muted, #a5a5a5); font-size: 11px; }
 .object-design-action-strip { display: flex; align-items: center; border-radius: 8px; background: var(--object-field); padding: 1px 3px; }
 .object-design-action-strip > div { flex: 1; min-width: 0; }
 .object-design-action-strip > div > button { width: 100%; height: 26px; }
@@ -54,14 +57,14 @@
 .object-design-alignment > div:nth-child(1) > button, .object-design-alignment > div:nth-child(4) > button { border-radius: 8px 0 0 8px; }
 .object-design-alignment > div:nth-child(3) > button, .object-design-alignment > div:nth-child(6) > button { border-radius: 0 8px 8px 0; }
 .object-design-alignment > div:nth-child(3) { padding-right: 6px; }
-.object-design-alignment button:hover, .object-design-action-strip button:hover { background: #303030; }
-.object-design-content { width: 100%; min-height: 52px; resize: vertical; border: 1px solid transparent; border-radius: 18px; background: #1c1c1c; padding: 10px 12px; color: #f2f2f2; font-size: 12px; outline: none; }
+.object-design-alignment button:hover, .object-design-action-strip button:hover { background: var(--panel-hover, #303030); }
+.object-design-content { width: 100%; min-height: 52px; resize: vertical; border: 1px solid transparent; border-radius: 12px; background: var(--object-field); padding: 10px 12px; color: var(--text-primary, #f2f2f2); font-size: 12px; outline: none; }
 .object-design-content:focus { border-color: #0088ff; }
 .object-design-source { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 52px; }
 .object-design-thumbnail { display: flex; align-items: center; width: 38px; height: 48px; }
 .object-design-thumbnail img, .object-design-thumbnail video { width: 100%; height: 100%; object-fit: contain; }
-.object-design-swap { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid #393939; border-radius: 8px; background: var(--object-field); color: #eee; cursor: pointer; white-space: nowrap; }
-.object-design-swap > span { height: 16px; border-left: 1px solid #393939; margin-left: 4px; }
+.object-design-swap { display: flex; align-items: center; gap: 6px; padding: 6px 9px; border: 1px solid var(--surface-border, #393939); border-radius: 8px; background: var(--object-field); color: var(--text-primary, #eee); cursor: pointer; white-space: nowrap; }
+.object-design-swap > span { height: 16px; border-left: 1px solid var(--surface-border, #393939); margin-left: 4px; }
 .object-design-inspector [role="region"] { padding: 18px 14px; }
 .object-design-inspector [role="region"] > div:first-child { margin-bottom: 18px; }
 .object-design-inspector [role="region"] > div:first-child > span,
@@ -94,7 +97,7 @@
 .object-design-inspector > section[aria-label="Layer effects"] > div { padding: 18px 14px; }
 .object-design-inspector > section[aria-label="Layer effects"] > div > div:first-child { margin-bottom: 14px; }
 .object-design-inspector .object-design-fields .border-t { border-color: var(--object-divider); }
-.object-design-label { font-size: 11px; color: #a5a5a5; }
+.object-design-label { font-size: 11px; color: var(--text-muted, #a5a5a5); }
 .object-design-color-row { display: flex; align-items: center; gap: 6px; min-width: 0; border-radius: 8px; background: var(--object-field); padding-right: 6px; }
 .object-design-color-row > button:first-child { flex: 1; min-width: 0; border: 0; background: transparent; }
 .object-design-color-row > button:last-child { flex: none; width: 20px; }

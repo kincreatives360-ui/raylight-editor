@@ -94,13 +94,13 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                             onDone();
                         }}
                         title="Delete Camera Move"
-                        className="p-1.5 text-[#a1a1aa] hover:text-rose-400 cursor-pointer"
+                        className="p-1.5 text-muted-foreground hover:text-rose-400 cursor-pointer transition"
                     />
                     <button
                         type="button"
                         onClick={onDone}
                         aria-label="Close camera move settings"
-                        className="text-[10px] text-[#a1a1aa] hover:text-white cursor-pointer px-2 py-0.5 rounded hover:bg-white/5"
+                        className="text-[11px] text-muted-foreground hover:text-foreground cursor-pointer px-2 py-0.5 rounded hover:bg-subtle font-medium transition"
                     >
                         Done
                     </button>

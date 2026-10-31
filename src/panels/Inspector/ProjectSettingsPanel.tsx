@@ -195,14 +195,14 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     };
 
     return (
-        <div className={backgroundOnly ? "min-w-0" : "flex-1 overflow-y-auto px-4 py-3.5 flex flex-col select-none"} data-testid={backgroundOnly ? "shot-background-editor" : "project-settings-section"}>
+        <div className={backgroundOnly ? "min-w-0" : "flex-1 overflow-y-auto px-3.5 py-3 flex flex-col select-none"} data-testid={backgroundOnly ? "shot-background-editor" : "project-settings-section"}>
             <div className="space-y-4">
                 {!backgroundOnly && <>
                 <ProjectDetailsSection project={project} updateProject={updateProject} />
                 </>}
                 {/* Background Section */}
                 <div className="space-y-2.5">
-                    {!backgroundOnly && <label className="text-[11px] text-muted-foreground block font-normal">Background</label>}
+                    {!backgroundOnly && <label className="text-[11px] font-semibold text-muted-foreground block uppercase tracking-[.04em]">Background</label>}
                     {/* 3-segmented button */}
                     <SegmentedControl
                         unstyled
@@ -217,7 +217,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                     {/* Mode == 'color' */}
                     {bgMode === 'color' && (
                         <div className="space-y-2.5 pt-0.5">
-                            <label className="text-[11px] text-muted-foreground block font-normal">Color & Gradient</label>
+                            <label className="text-[11px] font-medium text-muted-foreground block">Color & Gradient</label>
                             <ColorPicker
                                 color={bg.kind === 'solid' ? bg.color : (bg.kind === 'gradient' ? bg.stops[0]?.color || '#090a12' : '#000000')}
                                 gradientValue={bg.kind === 'gradient' ? {
@@ -273,7 +273,7 @@ export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
                                 unstyled
                                 className="space-y-1.5"
                                 labelTag="label"
-                                labelClassName="text-[11px] text-muted-foreground block font-normal"
+                                labelClassName="text-[11px] font-semibold text-muted-foreground block uppercase tracking-[.04em]"
                                 label={<>Image</>}
                             >
                                 {bg.kind === 'image' && (bg.src || (bg.assetId && project.assets[bg.assetId]?.dataUrl)) ? (

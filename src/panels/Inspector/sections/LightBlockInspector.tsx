@@ -70,7 +70,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                         <span className="text-[12px] font-semibold text-white tracking-wide block truncate">
                             {activeLightBlock.label || 'Light Animation'}
                         </span>
-                        <span className="text-[10px] text-muted-foreground font-mono">
+                        <span className="text-[11px] text-muted-foreground font-mono tabular-nums">
                             Target: {activeLightBlock.targetLightId ?? 'key'}
                         </span>
                     </div>
@@ -81,7 +81,7 @@ export const LightBlockInspector: React.FC<LightBlockInspectorProps> = ({
                     label="Done"
                     onClick={onDone}
                     title="Done"
-                    className="w-6 h-6 rounded-md hover:bg-white/10 flex items-center justify-center text-[#a1a1aa] hover:text-white transition cursor-pointer"
+                    className="w-6 h-6 rounded-md hover:bg-subtle flex items-center justify-center text-muted-foreground hover:text-foreground transition cursor-pointer"
                     icon={<X className="w-3.5 h-3.5" />}
                 />
             </div>

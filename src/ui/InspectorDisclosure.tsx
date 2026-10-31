@@ -3,8 +3,8 @@ import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export function InspectorDisclosure({ title, children, open, onOpenChange, defaultOpen = true,
     className = 'p-3.5 space-y-3', headerClassName = 'flex items-center justify-between cursor-pointer w-full text-left',
-    titleClassName = 'text-[11px] font-medium text-[#e4e4e7]', bodyClassName,
-    headerContent, toggleLabel, chevronClassName = 'w-3.5 h-3.5 text-[#a1a1aa]',
+    titleClassName = 'text-[11px] font-medium text-foreground', bodyClassName,
+    headerContent, toggleLabel, chevronClassName = 'w-3.5 h-3.5 text-muted-foreground',
 }: {
     title: ReactNode;
     children: ReactNode;
