@@ -81,8 +81,8 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
             speed: current.warp?.speed ?? 60,
         } }));
     };
-    return <section aria-label="Layer effects" className="p-3.5 space-y-3">
-        <div className="flex items-center justify-between"><span className="text-[13px] font-semibold text-foreground">Layer effects</span>
+    return <section aria-label="Layer effects" className="p-3.5 space-y-3 border-t border-[var(--object-divider)]">
+        <div className="flex items-center justify-between"><span className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em]">Layer effects</span>
             <FigmaSelect aria-label="Add layer effect" title="Add layer effect" className="object-design-effect-add" value="" onChange={e => change(current => addLayerEffect(current, e.target.value as AddableLayerEffect))}>
                 <option value="">+</option>{(Object.entries(LAYER_EFFECT_NAMES) as [AddableLayerEffect, string][]).map(([key, name]) => <option key={key} value={key} disabled={effects[key] !== undefined}>{name}</option>)}
             </FigmaSelect>
@@ -90,10 +90,10 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
         <div className="space-y-3">
             {effects.dropShadow && card('dropShadow', <Copy className="w-3.5 h-3.5" />, <>
                 {shadows.map((shadow, index) => shadow && <div key={index} className={index ? 'pt-3 mt-3 border-t border-border' : ''}>
-                    {index > 0 && <button type="button" aria-label={`Delete shadow ${index + 1}`} onClick={() => change(current => ({ ...current, shadows: current.shadows?.filter((_, i) => i !== index - 1) }))} className="text-xs text-muted-foreground hover:text-foreground">Delete shadow {index + 1}</button>}
+                    {index > 0 && <button type="button" aria-label={`Delete shadow ${index + 1}`} onClick={() => change(current => ({ ...current, shadows: current.shadows?.filter((_, i) => i !== index - 1) }))} className="text-[11px] text-rose-400 hover:text-rose-300 mb-1">Delete shadow {index + 1}</button>}
                     <ShadowControls shadow={shadow} onChange={next => index === 0 ? objectPatch('dropShadow', next) : change(current => ({ ...current, shadows: current.shadows?.map((s, i) => i === index - 1 ? { ...s, ...next } : s) }))} />
                 </div>)}
-                <button type="button" className="flex items-center justify-center gap-2 w-full rounded bg-white/5 py-2 mt-3 text-xs hover:bg-white/10 disabled:opacity-40" disabled={(effects.shadows?.length ?? 0) >= 16} onClick={() => change(current => ({ ...current, shadows: [...(current.shadows ?? []), defaultShadow()] }))}><Plus size={14} />Add shadow</button>
+                <button type="button" className="flex items-center justify-center gap-2 w-full rounded-lg border border-subtle bg-surface/50 hover:bg-subtle py-2 mt-3 text-[11px] text-muted-foreground hover:text-foreground disabled:opacity-40" disabled={(effects.shadows?.length ?? 0) >= 16} onClick={() => change(current => ({ ...current, shadows: [...(current.shadows ?? []), defaultShadow()] }))}><Plus size={14} />Add shadow</button>
             </>)}
             {glow && card('glow', <Zap className="w-3.5 h-3.5" />, <div className="space-y-3 pt-3">
                 <Mode label="Glow mode" value={glow.mode ?? 'edge'} options={[["edge", "Edge"], ["fill", "Fill"]]} onChange={mode => objectPatch('glow', { mode: mode as typeof glow.mode })} />
@@ -118,7 +118,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                     <Mode label="Pinned edges" value={warp.pinning ?? 'none'} options={['none', 'all', 'horizontal', 'vertical', 'left', 'right', 'top', 'bottom'].map(v => [v, v] as const)} onChange={pinning => objectPatch('warp', { pinning: pinning as typeof warp.pinning })} />
                     <NumberControl label="Evolution" value={warp.evolution ?? 0} min={-3600} max={3600} unit="°" onChange={evolution => objectPatch('warp', { evolution })} />
                     {!warp.loop && <NumberControl label="Evolution speed" value={warp.speed ?? 60} min={-360} max={360} unit="°/s" onChange={speed => objectPatch('warp', { speed })} />}
-                    <label className="flex items-center justify-between text-xs text-muted-foreground">Loop<input type="checkbox" checked={warp.loop ?? false} onChange={e => objectPatch('warp', { loop: e.target.checked })} /></label>
+                    <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Loop<input type="checkbox" checked={warp.loop ?? false} onChange={e => objectPatch('warp', { loop: e.target.checked })} /></label>
                     <NumberControl label="Loop duration" value={warp.loopDuration ?? 4} min={.1} max={60} step={.1} unit=" s" onChange={loopDuration => objectPatch('warp', { loopDuration })} />
                 </div>}
                 {warp.mode ? <><div className="grid grid-cols-2 gap-2">{warp.mode !== 'turbulent' && <NumberControl label="Strength" value={(warp.strength ?? .5) * 100} min={-200} max={200} unit=" %" onChange={v => objectPatch('warp', { strength: v / 100 })} />}<NumberControl label="Size" value={warp.size ?? (warp.mode === 'turbulent' ? 100 : 183)} min={1} max={2000} onChange={size => objectPatch('warp', { size })} /><NumberControl label="Center X" value={warp.centerX ?? 0} min={-1920} max={1920} onChange={centerX => objectPatch('warp', { centerX })} /><NumberControl label="Center Y" value={warp.centerY ?? 0} min={-1080} max={1080} onChange={centerY => objectPatch('warp', { centerY })} /></div>
@@ -147,10 +147,10 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
             {effects.noise && card('noise', <Layers size={14} />, <div className="space-y-3 pt-3">
                 <Percent label="Amount" ariaLabel="Noise amount" value={effects.noise.amount} onChange={value => objectPatch('noise', { amount: value })} />
                 <NumberControl label="Scale" ariaLabel="Noise scale" value={effects.noise.scale} min={0.5} max={100} step={0.1} unit=" px" onChange={value => objectPatch('noise', { scale: value })} />
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Noise monochrome<input aria-label="Noise monochrome" type="checkbox" checked={effects.noise.monochrome} onChange={e => objectPatch('noise', { monochrome: e.target.checked })} /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Noise monochrome<input aria-label="Noise monochrome" type="checkbox" checked={effects.noise.monochrome} onChange={e => objectPatch('noise', { monochrome: e.target.checked })} /></label>
                 <Percent label="Density" ariaLabel="Noise density" value={effects.noise.density} onChange={value => objectPatch('noise', { density: value })} />
                 <NumberControl label="Seed" ariaLabel="Noise seed" value={effects.noise.seed} min={0} max={2147483647} step={1} unit="" onChange={value => objectPatch('noise', { seed: Math.round(value) })} />
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Noise animated<input aria-label="Noise animated" type="checkbox" checked={effects.noise.animated} onChange={e => objectPatch('noise', { animated: e.target.checked })} /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Noise animated<input aria-label="Noise animated" type="checkbox" checked={effects.noise.animated} onChange={e => objectPatch('noise', { animated: e.target.checked })} /></label>
                 <NumberControl label="Speed" ariaLabel="Noise speed" value={effects.noise.speed} min={0} max={20} step={0.1} unit=" /s" onChange={value => objectPatch('noise', { speed: value })} />
             </div>)}
             {effects.rgbSplit && card('rgbSplit', <Layers size={14} />, <div className="space-y-3 pt-3">
@@ -180,8 +180,8 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <Mode label="Halftone shape" value={effects.halftone.shape} options={[["circle","Circle"],["square","Square"],["line","Line"]]} onChange={value => objectPatch('halftone', { shape: value as typeof effects.halftone.shape })} />
                 <ColorPicker showGradientMode={false} label="Halftone foreground" color={effects.halftone.foreground} onChange={value => objectPatch('halftone', { foreground: value })} />
                 <ColorPicker showGradientMode={false} label="Halftone background" color={effects.halftone.background} onChange={value => objectPatch('halftone', { background: value })} />
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Halftone source color<input aria-label="Halftone source color" type="checkbox" checked={effects.halftone.sourceColor} onChange={e => objectPatch('halftone', { sourceColor: e.target.checked })} /></label>
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Halftone invert<input aria-label="Halftone invert" type="checkbox" checked={effects.halftone.invert} onChange={e => objectPatch('halftone', { invert: e.target.checked })} /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Halftone source color<input aria-label="Halftone source color" type="checkbox" checked={effects.halftone.sourceColor} onChange={e => objectPatch('halftone', { sourceColor: e.target.checked })} /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Halftone invert<input aria-label="Halftone invert" type="checkbox" checked={effects.halftone.invert} onChange={e => objectPatch('halftone', { invert: e.target.checked })} /></label>
             </div>)}
             {effects.roughen && card('roughen', <Layers size={14} />, <div className="space-y-3 pt-3">
                 <NumberControl label="Border" ariaLabel="Roughen edges border" value={effects.roughen.border} min={0} max={200} step={0.1} unit=" px" onChange={value => objectPatch('roughen', { border: value })} />
@@ -197,7 +197,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                 <Percent label="Similarity" ariaLabel="Color key similarity" value={effects.colorKey.similarity} onChange={value => objectPatch('colorKey', { similarity: value })} />
                 <Percent label="Softness" ariaLabel="Color key softness" value={effects.colorKey.softness} onChange={value => objectPatch('colorKey', { softness: value })} />
                 <Percent label="Spill" ariaLabel="Color key spill" value={effects.colorKey.spill} onChange={value => objectPatch('colorKey', { spill: value })} />
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Color key invert<input aria-label="Color key invert" type="checkbox" checked={effects.colorKey.invert} onChange={e => objectPatch('colorKey', { invert: e.target.checked })} /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Color key invert<input aria-label="Color key invert" type="checkbox" checked={effects.colorKey.invert} onChange={e => objectPatch('colorKey', { invert: e.target.checked })} /></label>
             </div>)}
             {effects.pixelate && card('pixelate', <Layers size={14} />, <div className="space-y-3 pt-3">
                 <div className="grid grid-cols-2 gap-2"><NumberControl label="Offset X" ariaLabel="Pixelate offset X" value={effects.pixelate.offsetX ?? 0} min={-2000} max={2000} onChange={offsetX => objectPatch('pixelate', { offsetX })} /><NumberControl label="Offset Y" ariaLabel="Pixelate offset Y" value={effects.pixelate.offsetY ?? 0} min={-2000} max={2000} onChange={offsetY => objectPatch('pixelate', { offsetY })} /></div>
@@ -217,7 +217,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                     {(['focus', 'glow', 'flicker', 'offAxis'] as const).map(key => <Percent key={key} label={key === 'offAxis' ? 'Off-axis' : key[0].toUpperCase() + key.slice(1)} value={screen[key]} max={key === 'glow' ? 200 : 100} onChange={v => objectPatch('screen', { [key]: v })} />)}
                     <NumberControl label="Speed" value={screen.speed} max={20} step={.1} unit=" /s" onChange={speed => objectPatch('screen', { speed })} />
                 </div></details>
-                <label className="flex items-center justify-between text-xs text-muted-foreground">Snap to pixels<input type="checkbox" checked={screen.snapToPixels} onChange={e => objectPatch('screen', { snapToPixels: e.target.checked })} className="accent-primary" /></label>
+                <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Snap to pixels<input type="checkbox" checked={screen.snapToPixels} onChange={e => objectPatch('screen', { snapToPixels: e.target.checked })} className="accent-primary" /></label>
             </div>)}
         </div>
     </section>;

@@ -82,18 +82,19 @@
 .object-design-screen .screen-fit-value { margin-left: auto; color: #a5a5a5; }
 .object-design-screen-fields { padding: 10px 8px; display: flex; flex-direction: column; gap: 12px; }
 .object-design-frame-fields > details:not(.object-design-screen) { background: transparent; border: 0; }
-.object-design-effect { padding: 0; background: transparent; border: 0; }
-.object-design-effect > summary { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; padding: 6px 0; }
+.object-design-effect { padding: 0; background: var(--object-field); border: 1px solid var(--object-divider); border-radius: 10px; overflow: hidden; }
+.object-design-effect > summary { display: flex; align-items: center; justify-content: space-between; list-style: none; cursor: pointer; padding: 7px 10px; }
 .object-design-effect > summary::-webkit-details-marker { display: none; }
 .object-design-effect > summary > div { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
-.object-design-effect > summary > div > span { border-radius: 18px; background: var(--object-field); padding: 6px 10px; flex: 1; color: #eee; font-size: 12px; }
-.object-design-effect > summary > div > span::after { content: ''; float: right; width: 6px; height: 6px; margin: 4px 0 0 8px; border-right: 1px solid #888; border-bottom: 1px solid #888; transform: rotate(45deg); }
-.object-design-effect > div { margin: 8px 0; }
-.object-design-inspector .object-design-effect-add { background: transparent; border: 0; width: 24px; height: 24px; padding: 4px; }
+.object-design-effect > summary > div > span { border-radius: 6px; background: var(--object-surface); border: 1px solid var(--object-divider); padding: 4px 8px; flex: 1; color: var(--text-primary); font-size: 11px; }
+.object-design-effect > summary > div > span::after { content: ''; float: right; width: 5px; height: 5px; margin: 4px 0 0 8px; border-right: 1px solid var(--text-secondary); border-bottom: 1px solid var(--text-secondary); transform: rotate(45deg); }
+.object-design-effect > div { padding: 0 10px 12px; }
+.object-design-inspector .object-design-effect-add { appearance: none; -webkit-appearance: none; background: var(--object-field); border: 1px solid var(--object-divider); border-radius: 6px; width: 26px; height: 22px; padding: 0; cursor: pointer; font-size: 14px; color: var(--text-secondary); text-align: center; line-height: 20px; }
+.object-design-inspector .object-design-effect-add:hover { background: var(--panel-hover); color: var(--text-primary); }
 .object-design-effect-add > svg { display: none; }
 .object-design-inspector [role="radiogroup"] { border: 0; border-radius: 7px; background: var(--object-field); }
 .object-design-inspector [role="radiogroup"] button { padding: 4px; }
-.object-design-inspector [role="radiogroup"] button[aria-checked="true"] { border: 1px solid #666; background: #363636; box-shadow: none; }
+.object-design-inspector [role="radiogroup"] button[aria-checked="true"] { border: 1px solid var(--object-divider); background: var(--object-surface); box-shadow: none; }
 .object-design-inspector > section[aria-label="Layer effects"] > div { padding: 18px 14px; }
 .object-design-inspector > section[aria-label="Layer effects"] > div > div:first-child { margin-bottom: 14px; }
 .object-design-inspector .object-design-fields .border-t { border-color: var(--object-divider); }

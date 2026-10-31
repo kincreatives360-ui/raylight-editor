@@ -21,7 +21,7 @@ export function LayerEffectCard({ title, icon, removeLabel = `Remove ${title}`, 
             </div>
             <span className="flex items-center gap-1">
                 {onToggle && <IconButton unstyled tooltip={false} label={`${enabled ? 'Disable' : 'Enable'} ${title}`} icon={enabled ? <Eye size={13} /> : <EyeOff size={13} />} onClick={event => { event.preventDefault(); onToggle(); }} className="p-1 text-muted-foreground hover:text-foreground" />}
-                <IconButton unstyled tooltip={false} label={removeLabel} icon={<Minus className="w-3 h-3" />} onClick={event => { event.preventDefault(); onRemove(); }} className="p-1 rounded hover:bg-white/10 text-muted-foreground hover:text-foreground cursor-pointer" title={removeLabel} />
+                <IconButton unstyled tooltip={false} label={removeLabel} icon={<Minus className="w-3 h-3" />} onClick={event => { event.preventDefault(); onRemove(); }} className="p-1 rounded hover:bg-subtle text-muted-foreground hover:text-foreground cursor-pointer transition" title={removeLabel} />
             </span>
         </summary>
         {children}
