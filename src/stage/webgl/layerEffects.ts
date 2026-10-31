@@ -289,10 +289,6 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerBlend: { value: ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'].indexOf(blend) },
         layerBackdrop: { value: Math.max(getBlurSettings(effects, 'backdropBlur').start, getBlurSettings(effects, 'backdropBlur').end) },
         layerGlass: { value: glass ? 1 : 0 },
-        layerRefraction: { value: glass?.refraction ?? .6 },
-        layerRoughness: { value: glass?.roughness ?? .05 },
-        layerDispersion: { value: glass?.dispersion ?? .35 },
-        layerShine: { value: glass?.shine ?? .7 },
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
         layerGlassParams: { value: new THREE.Vector4(glass?.refraction ?? 0.6, glass?.ior ?? 1.52, glass?.bevelWidth ?? 24, glass?.dispersion ?? 0.35) },
         layerGlassLighting: { value: new THREE.Vector4(glass?.roughness ?? 0.05, glass?.shine ?? 0.7, glass?.fresnel ?? 0.5, ((glass?.lightAngle ?? 45) * Math.PI) / 180) },
@@ -376,8 +372,7 @@ uniform float layerTime, layerViewAngle, layerPixelRatio;
 uniform vec4 layerBlurProfile, layerBackdropProfile, layerScreen, layerScreenCamera, layerScreenPattern;
 uniform vec4 layerBlurShape, layerBackdropShape;
 uniform int layerBlend;
-uniform float layerBackdrop, layerGlass, layerRefraction, layerRoughness;
-uniform float layerDispersion, layerShine;
+uniform float layerBackdrop, layerGlass;
 uniform vec4 layerGlassParams, layerGlassLighting;
 uniform vec3 layerTint;
 uniform vec2 layerWarp;
@@ -593,7 +588,7 @@ if (layerBlend != 0 || layerBackdrop > 0. || layerGlass > .5) {
     vec3 sourceColor = gl_FragColor.rgb;
     if (layerGlass > .5) {
         float ior = max(1.001, layerGlassParams.y);
-        float bevel = max(1.0, layerGlassParams.z * layerPixelRatio);
+        float bevel = max(1.0, layerGlassParams.z);
         vec2 clLocalUv = clamp(localUv, vec2(0.0), vec2(1.0));
         vec2 authorSize = max(vec2(1.0), layerAuthorSize);
         vec2 p = abs((clLocalUv - 0.5) * authorSize);

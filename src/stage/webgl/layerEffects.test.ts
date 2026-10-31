@@ -83,6 +83,47 @@ describe('layer effect rendering', () => {
     expect(shader.fragmentShader).toContain('layerBlend == 2');
   });
 
+  it('configures physical liquid glass uniforms and shader without obsolete uniforms', () => {
+    const glassEffects = {
+      liquidGlass: {
+        enabled: true,
+        refraction: 0.75,
+        ior: 1.6,
+        bevelWidth: 32,
+        dispersion: 0.45,
+        roughness: 0.08,
+        shine: 0.85,
+        fresnel: 0.6,
+        lightAngle: 60,
+        tint: '#a0c0ff',
+      },
+    };
+    const uniforms = getLayerEffectUniforms(glassEffects, 'normal') as Record<string, any>;
+    expect(uniforms.layerGlass.value).toBe(1);
+    expect(uniforms.layerGlassParams.value.x).toBe(0.75);
+    expect(uniforms.layerGlassParams.value.y).toBe(1.6);
+    expect(uniforms.layerGlassParams.value.z).toBe(32);
+    expect(uniforms.layerGlassParams.value.w).toBe(0.45);
+    expect(uniforms.layerGlassLighting.value.x).toBe(0.08);
+    expect(uniforms.layerGlassLighting.value.y).toBe(0.85);
+    expect(uniforms.layerGlassLighting.value.z).toBe(0.6);
+    expect(uniforms.layerGlassLighting.value.w).toBeCloseTo((60 * Math.PI) / 180);
+    expect(uniforms.layerRefraction).toBeUndefined();
+    expect(uniforms.layerRoughness).toBeUndefined();
+    expect(uniforms.layerDispersion).toBeUndefined();
+    expect(uniforms.layerShine).toBeUndefined();
+
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      vertexShader: 'void main() {}',
+      fragmentShader: '#include <map_fragment>\n#include <colorspace_fragment>',
+    } as unknown as Parameters<typeof installLayerEffects>[0];
+    installLayerEffects(shader, uniforms as any);
+    expect(shader.fragmentShader).toContain('float bevel = max(1.0, layerGlassParams.z);');
+    expect(shader.fragmentShader).not.toContain('layerGlassParams.z * layerPixelRatio');
+    expect(shader.fragmentShader).not.toContain('uniform float layerBackdrop, layerGlass, layerRefraction');
+  });
+
   it('drawLayerHalo produces valid canvas and scales when shadow or glow is enabled', () => {
     const mockCtx = {
       save: vi.fn(),

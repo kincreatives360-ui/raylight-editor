@@ -143,6 +143,13 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         uniforms.layerContentScale.value.set(widthScale, heightScale);
         const profile = getBlurSettings(layer.effects, 'backdropBlur');
         uniforms.layerBackdrop.value = Math.max(profile.start, profile.end);
+        const glass = layer.effects.liquidGlass?.enabled ? layer.effects.liquidGlass : undefined;
+        uniforms.layerGlass.value = glass ? 1 : 0;
+        if (glass) {
+            uniforms.layerGlassParams.value.set(glass.refraction ?? 0.6, glass.ior ?? 1.52, glass.bevelWidth ?? 24, glass.dispersion ?? 0.35);
+            uniforms.layerGlassLighting.value.set(glass.roughness ?? 0.05, glass.shine ?? 0.7, glass.fresnel ?? 0.5, ((glass.lightAngle ?? 45) * Math.PI) / 180);
+            uniforms.layerTint.value.set(glass.tint ?? '#ffffff');
+        }
         if (!uniforms.layerBlend.value && !uniforms.layerBackdrop.value && !uniforms.layerGlass.value) return;
         const target = renderer.getRenderTarget();
         const dimensions = target ? new THREE.Vector2(target.width, target.height) : renderer.getDrawingBufferSize(new THREE.Vector2());
