@@ -35,7 +35,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
     case 'backdropBlur': case 'layerBlur': return { ...effects, [key]: .24 };
     case 'liquidGlass': return { ...effects, liquidGlass: { enabled: true, refraction: .5, roughness: .1, dispersion: .4, shine: .6, tint: '#ffffff' } };
     case 'warp': return { ...effects, warp: { enabled: true, mode: 'bulge', strength: .5, size: 183, centerX: 0, centerY: 0, angle: 0, width: 61, travel: .5 } };
-    case 'screen': return { ...effects, screen: { enabled: true, mode: 'lcd', pixelSize: 11.4, grid: 1, moire: .8, bands: .5, focus: .14, glow: .3, flicker: 0, speed: .5, offAxis: 1, snapToPixels: true } };
+    case 'screen': return { ...effects, screen: { enabled: true, mode: 'lcd', pixelSize: 8, grid: 0.85, moire: 0, bands: 0, focus: 0, glow: 0, flicker: 0, speed: 0.5, offAxis: 0, snapToPixels: false } };
   }
 }
 

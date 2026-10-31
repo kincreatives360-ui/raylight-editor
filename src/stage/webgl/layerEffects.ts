@@ -296,7 +296,7 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
         layerTint: { value: new THREE.Color(glass?.tint ?? '#ffffff') },
         // Warp is authored in stage pixels by the inspector; shaders consume UV displacement.
         layerWarp: { value: new THREE.Vector2(effects.warp?.enabled && !effects.warp.mode ? (effects.warp.amount ?? 0) / 1920 : 0, effects.warp?.frequency ?? 3) },
-        layerScreen: { value: new THREE.Vector4(screen ? ['lcd', 'oled', 'crt', 'led'].indexOf(screen.mode) + 1 : 0, screen?.pixelSize ?? 11.4, screen?.grid ?? 0, screen?.snapToPixels ? 1 : 0) },
+        layerScreen: { value: new THREE.Vector4(screen ? ['lcd', 'oled', 'crt', 'led'].indexOf(screen.mode) + 1 : 0, screen?.pixelSize ?? 8, screen?.grid ?? 0.85, screen?.snapToPixels ? 1 : 0) },
         layerScreenCamera: { value: new THREE.Vector4(screen?.focus ?? 0, screen?.glow ?? 0, screen?.flicker ?? 0, screen?.speed ?? .5) },
         layerScreenPattern: { value: new THREE.Vector4(screen?.moire ?? 0, screen?.bands ?? 0, screen?.offAxis ?? 0, 0) },
     };
@@ -428,21 +428,61 @@ vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
     }
     return accum / max(totalW, .00001);
 }
-vec3 layerScreenMask(vec2 pixels) {
-    vec2 cell = pixels / max(.5, layerScreen.y);
-    vec2 f = fract(cell);
-    vec3 stripes = vec3(1.) * .12;
-    int channel = int(floor(f.x * 3.));
-    if (channel == 0) stripes.r = 1.; else if (channel == 1) stripes.g = 1.; else stripes.b = 1.;
-    if (layerScreen.x < 1.5) return stripes * smoothstep(0., .08, f.y) * (1. - smoothstep(.92, 1., f.y));
-    if (layerScreen.x < 2.5) {
-        vec2 stagger = vec2(fract(cell.x + mod(floor(cell.y), 2.) * .5), f.y);
-        float diamond = 1. - smoothstep(.35, .48, abs(stagger.x - .5) + abs(stagger.y - .5));
-        vec3 subpixel = mod(floor(cell.x) + floor(cell.y), 3.) < 1. ? vec3(1., .12, .12) : (mod(floor(cell.x) + floor(cell.y), 3.) < 2. ? vec3(.12, 1., .12) : vec3(.12, .12, 1.));
-        return subpixel * diamond;
+vec3 layerScreenLcd(vec3 color, vec2 f) {
+    float subX = fract(f.x * 3.0);
+    int subIdx = int(floor(f.x * 3.0));
+    float hSlit = smoothstep(0.0, 0.12, subX) * smoothstep(1.0, 0.88, subX);
+    float vSlit = smoothstep(0.0, 0.08, f.y) * smoothstep(1.0, 0.92, f.y);
+    float mask = hSlit * vSlit;
+    vec3 subColor;
+    if (subIdx == 0) {
+        subColor = vec3(color.r * 2.85, color.g * 0.1, color.b * 0.06);
+    } else if (subIdx == 1) {
+        subColor = vec3(color.r * 0.06, color.g * 2.85, color.b * 0.1);
+    } else {
+        subColor = vec3(color.r * 0.08, color.g * 0.1, color.b * 2.85);
     }
-    if (layerScreen.x < 3.5) return stripes * (.35 + .65 * pow(sin(f.y * 3.14159265), 2.));
-    return vec3(1. - smoothstep(.3, .46, length(f - .5)));
+    return subColor * mask;
+}
+vec3 layerScreenOled(vec3 color, vec2 cellCoord, vec2 f) {
+    vec2 stagger = vec2(fract(cellCoord.x + mod(floor(cellCoord.y), 2.0) * 0.5), f.y);
+    float diamond = 1.0 - smoothstep(0.26, 0.46, abs(stagger.x - 0.5) + abs(stagger.y - 0.5));
+    int oledPattern = int(mod(floor(cellCoord.x) + floor(cellCoord.y), 3.0));
+    vec3 oledColor;
+    if (oledPattern == 0) {
+        oledColor = vec3(color.r * 2.8, color.g * 0.08, color.b * 0.05);
+    } else if (oledPattern == 1) {
+        oledColor = vec3(color.r * 0.05, color.g * 2.8, color.b * 0.08);
+    } else {
+        oledColor = vec3(color.r * 0.08, color.g * 0.08, color.b * 2.8);
+    }
+    return oledColor * diamond;
+}
+vec3 layerScreenCrt(vec3 color, vec2 f) {
+    float subX = fract(f.x * 3.0);
+    int subIdx = int(floor(f.x * 3.0));
+    float hSlit = smoothstep(0.0, 0.14, subX) * smoothstep(1.0, 0.86, subX);
+    float scanline = 0.35 + 0.65 * pow(sin(f.y * 3.14159265), 1.6);
+    vec3 crtSub;
+    if (subIdx == 0) {
+        crtSub = vec3(color.r * 2.8, color.g * 0.08, color.b * 0.05);
+    } else if (subIdx == 1) {
+        crtSub = vec3(color.r * 0.05, color.g * 2.8, color.b * 0.08);
+    } else {
+        crtSub = vec3(color.r * 0.08, color.g * 0.08, color.b * 2.8);
+    }
+    return crtSub * hSlit * scanline;
+}
+vec3 layerScreenLed(vec3 color, vec2 f) {
+    float dotDist = length(f - 0.5);
+    float ledDot = 1.0 - smoothstep(0.33, 0.47, dotDist);
+    return color * 2.3 * ledDot;
+}
+vec3 layerScreenPhosphor(vec3 color, vec2 cellCoord, vec2 f) {
+    if (layerScreen.x < 1.5) return layerScreenLcd(color, f);
+    if (layerScreen.x < 2.5) return layerScreenOled(color, cellCoord, f);
+    if (layerScreen.x < 3.5) return layerScreenCrt(color, f);
+    return layerScreenLed(color, f);
 }
 #endif
 vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count) {
@@ -494,23 +534,40 @@ ${LAYER_STYLE_GLSL}
     float radius = layerBlurRadius(layerBlurProfile, localUv, layerBlurShape);
     vec2 sampleUv = layerUv;
     if (layerScreen.x > .5 && layerScreen.w > .5) {
-        vec2 cell = layerScreen.y / layerAuthorSize;
-        sampleUv = (floor(layerUv / cell) + .5) * cell;
+        vec2 cellCount = max(vec2(1.0), layerAuthorSize / max(.5, layerScreen.y));
+        sampleUv = (floor(layerUv * cellCount) + .5) / cellCount;
     }
     sampleUv = layerStyleUv(sampleUv, localUv);
     vec4 artwork = radius > .01 ? layerSampleArtwork(sampleUv, radius, layerBlurShape) : texture2D(map, sampleUv);
     if (layerScreen.x > .5) {
-        vec2 pixels = (layerUv - .5) * layerAuthorSize;
-        if (layerScreenCamera.x > .001) artwork.rgb = mix(artwork.rgb, layerSampleArtwork(sampleUv, layerScreenCamera.x * layerScreen.y, vec4(0., .5, .5, 16.)).rgb, layerScreenCamera.x);
-        vec3 maskColor = layerScreenMask(pixels);
-        float moire = sin(gl_FragCoord.x * 1.7 + pixels.y * .13) * sin(gl_FragCoord.y * 1.3 - pixels.x * .11);
-        maskColor *= 1. - layerScreenPattern.x * (.15 + .15 * moire);
-        float bands = .5 + .5 * sin(pixels.y / max(.5, layerScreen.y) * 3.14159265);
-        float refresh = .5 + .5 * sin((localUv.y - layerTime * layerScreenCamera.w) * 6.2831853);
-        artwork.rgb *= mix(vec3(1.), maskColor, layerScreen.z);
-        artwork.rgb *= (1. - layerScreenPattern.y * .3 * bands) * (1. - layerScreenCamera.z * .7 * refresh);
-        artwork.rgb *= 1. - layerScreenPattern.z * layerViewAngle * .7;
-        artwork.rgb += layerSampleArtwork(sampleUv, layerScreen.y * .5, vec4(0., .5, .5, 16.)).rgb * layerScreenCamera.y * .25;
+        vec2 cellCount = max(vec2(1.0), layerAuthorSize / max(.5, layerScreen.y));
+        vec2 cellCoord = layerUv * cellCount;
+        vec2 f = fract(cellCoord);
+        vec3 screenColor = layerScreenPhosphor(artwork.rgb, cellCoord, f);
+        artwork.rgb = mix(artwork.rgb, screenColor, layerScreen.z);
+        if (layerScreenPattern.x > 0.001) {
+            float m = 0.5 + 0.5 * sin(cellCoord.x * 0.5 + cellCoord.y * 0.3);
+            artwork.rgb *= 1.0 - layerScreenPattern.x * 0.15 * m;
+        }
+        if (layerScreenPattern.y > 0.001) {
+            float bands = 0.5 + 0.5 * sin((localUv.y - layerTime * layerScreenCamera.w * 0.25) * 6.2831853 * 2.0);
+            artwork.rgb *= 1.0 - layerScreenPattern.y * 0.2 * bands;
+        }
+        if (layerScreenCamera.x > 0.001) {
+            vec3 defocus = layerSampleArtwork(sampleUv, layerScreenCamera.x * layerScreen.y * 0.5, vec4(0., .5, .5, 16.)).rgb;
+            artwork.rgb = mix(artwork.rgb, defocus, layerScreenCamera.x * 0.5);
+        }
+        if (layerScreenCamera.y > 0.001) {
+            vec3 bloom = layerSampleArtwork(sampleUv, layerScreen.y * 0.5, vec4(0., .5, .5, 16.)).rgb;
+            artwork.rgb += bloom * layerScreenCamera.y * 0.25;
+        }
+        if (layerScreenCamera.z > 0.001) {
+            float flick = 1.0 - layerScreenCamera.z * 0.15 * sin(layerTime * layerScreenCamera.w * 30.0);
+            artwork.rgb *= flick;
+        }
+        if (layerScreenPattern.z > 0.001 && layerViewAngle > 0.01) {
+            artwork.rgb *= 1.0 - layerScreenPattern.z * layerViewAngle * 0.3;
+        }
     }
     artwork = layerApplyStyles(artwork, sampleUv, localUv);
     diffuseColor *= artwork;
