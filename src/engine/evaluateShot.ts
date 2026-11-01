@@ -364,7 +364,7 @@ export function evaluateProjectAtTime(
                 const eased = evaluateEasing(rawP, eb.easing);
                 const val = lerp(eb.fromValue, eb.toValue, eased);
 
-                const handler = EFFECT_BLOCK_HANDLERS[eb.effectKey];
+                const handler = Object.hasOwn(EFFECT_BLOCK_HANDLERS, eb.effectKey) ? EFFECT_BLOCK_HANDLERS[eb.effectKey] : undefined;
                 if (handler) {
                     handler(evaluatedEffectsConfig, val);
                 }

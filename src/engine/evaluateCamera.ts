@@ -202,11 +202,11 @@ export function evaluateShotCameraAtTime(
         if (currentShakePct > 0) {
             const amp = (currentShakePct / 100) * CAMERA_SHAKE_AMPLITUDE_SCALE;
             const freq = block.shake?.frequency ?? 1.0;
-            // Deterministic shake: use frameNumber hash + shotLocalTimeMs for reproducible exports
-            const seed = frameNumber !== undefined
-                ? ((frameNumber * 1664525 + 1013904223) % 4294967296 + 4294967296) % 4294967296
+            // Deterministic shake: use block ID hash as stable phase offset, advance continuously with shot-local time
+            const stableSeed = block.id
+                ? [...block.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0)
                 : shotLocalTimeMs;
-            const tSec = (seed * 0.001 + shotLocalTimeMs * 0.001) * freq;
+            const tSec = (shotLocalTimeMs * 0.001 + stableSeed * 0.001) * freq;
             const { xPrimary, xSecondary, yPrimary, ySecondary, rotZ: rotZFreq } = CAMERA_SHAKE_FREQ_MULTIPLIERS;
             targetX +=
                 (Math.sin(tSec * xPrimary) * 0.6 + Math.cos(tSec * xSecondary) * 0.4) * amp;

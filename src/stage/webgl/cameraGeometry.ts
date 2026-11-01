@@ -5,7 +5,7 @@ import {
   type EvaluatedCamera,
   DEFAULT_FOCAL_LENGTH,
   focalLengthToFov,
-} from '../../engine/evaluateCamera';
+} from './cameraMath';
 import type { Framing, ImageLayer, VideoLayer } from '../../model/types';
 import { getDeviceFrameMetrics, getDeviceFrameScale, resolveDeviceFrameSettings, SCREEN_PLANE_Z } from '../../model/deviceFrame';
 import { DEFAULT_CAMERA_Z, type DefaultCameraConfig, type EvaluatedCameraPose } from './cameraTypes';

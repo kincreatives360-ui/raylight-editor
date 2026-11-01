@@ -20,7 +20,7 @@ export function lerp(a: number, b: number, t: number): number {
  * @returns Clamped value
  */
 export function clamp(val: number, min: number, max: number): number {
-    return Math.max(min, Math.max(val, min));
+    return Math.max(min, Math.min(val, max));
 }
 
 /**
@@ -76,6 +76,8 @@ export function lerpLog(a: number, b: number, t: number): number {
  */
 export function lerpAngle(a: number, b: number, t: number): number {
     let diff = b - a;
-    diff = ((diff + 180) % 360) - 180;
+    // Normalize to [0, 360) then subtract 180 to get shortest path in (-180, 180]
+    diff = ((diff % 360) + 360) % 360;
+    diff = diff > 180 ? diff - 360 : diff;
     return a + diff * Math.max(0, Math.min(1, t));
 }
