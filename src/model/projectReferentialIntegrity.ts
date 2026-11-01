@@ -1,5 +1,6 @@
 import type { Project } from './types';
 import { generateId } from './id';
+import { AssetRecordSchema } from './projectSchemas';
 
 /**
  * Enforces unique entity IDs and repairs dangling references (groups, parent groups, mask layers, and missing assets).
@@ -101,6 +102,18 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
     });
 
     const validLayerIds = new Set(rawLayers.map((l) => l.id));
+    
+    // Detect circular mask layer references
+    const detectMaskCycle = (startId: string, currentId: string, visited: Set<string>): boolean => {
+      if (visited.has(currentId)) return true;
+      visited.add(currentId);
+      const layer = rawLayers.find((l) => l.id === currentId);
+      if (layer?.maskLayerId) {
+        return detectMaskCycle(startId, layer.maskLayerId, visited);
+      }
+      return false;
+    };
+
     const repairedLayers = rawLayers.map((l) => {
       let groupId = l.groupId ? groupRemap.get(l.groupId) ?? l.groupId : undefined;
       if (groupId && !validGroupIds.has(groupId)) {
@@ -110,20 +123,27 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
       let maskLayerId = l.maskLayerId ? layerRemap.get(l.maskLayerId) ?? l.maskLayerId : undefined;
       if (maskLayerId && (!validLayerIds.has(maskLayerId) || maskLayerId === l.id)) {
         maskLayerId = undefined;
+      } else if (maskLayerId) {
+        // Check for circular mask references
+        if (detectMaskCycle(l.id, maskLayerId, new Set([l.id]))) {
+          maskLayerId = undefined;
+        }
       }
 
       // If an image or video layer references an asset not yet in assets, supply a safe fallback stub
       if ((l.kind === 'image' || l.kind === 'video') && 'assetId' in l && l.assetId) {
         const assetId = l.assetId;
         if (!assets[assetId]) {
-          assets[assetId] = {
+          // Use schema default values instead of hardcoded
+          const fallbackAsset = AssetRecordSchema.parse({
             id: assetId,
             name: l.name || 'Imported media',
             mimeType: l.kind === 'video' ? 'video/mp4' : 'image/png',
             dataUrl: '',
             width: 1920,
             height: 1080,
-          };
+          });
+          assets[assetId] = fallbackAsset;
         }
       }
 

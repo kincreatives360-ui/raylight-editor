@@ -1,5 +1,5 @@
-import type { PresetEasingName, AnimationBlockProperty } from './schema';
-export type { PresetEasingName, AnimationBlockProperty };
+import type { BlendMode, TransitionType } from './enums';
+export type { BlendMode, TransitionType };
 
 export type AspectRatio =
   | '16:9'
@@ -11,15 +11,6 @@ export type AspectRatio =
   | '3:4'
   | '2:3'
   | '4:5';
-
-export type BlendMode =
-  | 'normal'
-  | 'darken'
-  | 'multiply'
-  | 'lighten'
-  | 'screen'
-  | 'add'
-  | 'difference';
 
 export interface Vec2 {
   x: number;

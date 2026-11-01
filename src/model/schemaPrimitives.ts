@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { SHADER_PRESET_IDS } from './backgroundPresets';
 import { resolveDeviceFrameSettings } from './deviceFrame';
+import { TRANSITION_TYPES, type TransitionType } from './enums';
 
 export const Vec2Schema = z.object({
   x: z.number(),
@@ -212,28 +213,7 @@ export const EasingSchema = z.discriminatedUnion('kind', [
   }),
 ]);
 
-export const TransitionTypeSchema = z.enum([
-  'none',
-  'fade',
-  'slide-up',
-  'slide-down',
-  'slide-left',
-  'slide-right',
-  'float-out',
-  'scale-out',
-  'mask-sweep',
-  'wipe',
-  'blur',
-  'focus',
-  'rack-focus',
-  'pop',
-  'spin',
-  'flip-x',
-  'flip-y',
-  'swing',
-  'typewriter',
-  'scramble',
-]);
+export const TransitionTypeSchema = z.enum(TRANSITION_TYPES as [TransitionType, ...TransitionType[]]);
 
 export const TransitionishSchema = z.object({
   enabled: z.boolean().optional(),

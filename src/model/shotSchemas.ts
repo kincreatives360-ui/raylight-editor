@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { BackgroundSchema, EasingSchema, Vec3Schema } from './schemaPrimitives';
 import { GroupSchema, LayerSchema } from './schemaLayers';
+import { EFFECT_KEYS, type EffectKey } from './enums';
 
 export const FramingSchema = z.object({
   id: z.string(),
@@ -74,22 +75,7 @@ export const LightAnimationBlockSchema = z.object({
   easing: EasingSchema,
 });
 
-export const EffectKeySchema = z.enum([
-  'depthOfField',
-  'bloom',
-  'vignette',
-  'motionBlur',
-  'chromaticAberration',
-  'filmGrain',
-  'ghost',
-  'colorGrade',
-  'edgeFade',
-  'glitch',
-  'atmosphere',
-  'gradientMap',
-  'fishEye',
-  'lensDistortion',
-]);
+export const EffectKeySchema = z.enum(EFFECT_KEYS as [EffectKey, ...EffectKey[]]);
 
 export const SceneEffectAnimationBlockSchema = z.object({
   sourceStartMs: z.number().optional(),
@@ -172,7 +158,7 @@ export const ShotSchema = z.object({
       castShadow: z.boolean().optional(),
       shadowStrength: z.number().min(0).max(1).optional(),
       shadowSoftness: z.number().min(0).max(100).optional(),
-    })).optional(),
+    })).default([]),
   }),
   effects: z.object({
     atmosphere: z.object({

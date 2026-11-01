@@ -8,16 +8,9 @@ import {
   TransitionishSchema,
   Vec3Schema,
 } from './schemaPrimitives';
+import { BLEND_MODES, type BlendMode } from './enums';
 
-export const BlendModeSchema = z.enum([
-  'normal',
-  'darken',
-  'multiply',
-  'lighten',
-  'screen',
-  'add',
-  'difference',
-]);
+export const BlendModeSchema = z.enum(BLEND_MODES as [BlendMode, ...BlendMode[]]);
 
 const LayerBaseSchema = z.object({
   id: z.string(),

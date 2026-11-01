@@ -8,12 +8,12 @@ import type {
   TextLayer,
   Transitionish,
   SceneEffects,
-  EffectKey,
   LightRig,
   ProjectAudio,
   CameraBlock,
 } from './types';
 import { generateId } from './id';
+import { DEFAULT_EFFECTS_ORDER } from './enums';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -101,23 +101,6 @@ export const DEFAULT_LIGHT_RIG: LightRig = {
   showGizmos: true,
   sources: [],
 };
-
-export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
-  'depthOfField',
-  'bloom',
-  'motionBlur',
-  'chromaticAberration',
-  'colorGrade',
-  'vignette',
-  'filmGrain',
-  'ghost',
-  'edgeFade',
-  'glitch',
-  'atmosphere',
-  'gradientMap',
-  'fishEye',
-  'lensDistortion',
-];
 
 export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
   atmosphere: { enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 },

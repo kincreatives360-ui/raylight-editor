@@ -1,7 +1,7 @@
 // src/engine/evaluateEffects.ts
 import type { Shot, Effects, EffectKey } from '../model/types';
 
-import { DEFAULT_EFFECTS_ORDER } from '../model/defaults';
+import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
 import { evaluateEasing } from './easing';
 
 export interface ActiveEffectPass {

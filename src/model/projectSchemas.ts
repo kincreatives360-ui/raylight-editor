@@ -20,6 +20,16 @@ export const ProjectAudioSchema = z.object({
   masterVolume: z.number().min(0).max(1),
 });
 
+export const AssetRecordSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  mimeType: z.string(),
+  dataUrl: z.string().default(''),
+  thumbUrl: z.string().optional(),
+  width: z.number(),
+  height: z.number(),
+});
+
 export const ProjectSchema = z.object({
   id: z.string(),
   name: z.string(),
@@ -47,18 +57,7 @@ export const ProjectSchema = z.object({
       focalLength: z.number(),
     })
     .optional(),
-  assets: z.record(
-    z.string(),
-    z.object({
-      id: z.string(),
-      name: z.string(),
-      mimeType: z.string(),
-      dataUrl: z.string().default(''),
-      thumbUrl: z.string().optional(),
-      width: z.number(),
-      height: z.number(),
-    })
-  ),
+  assets: z.record(z.string(), AssetRecordSchema),
   shots: z.array(ShotSchema),
   audio: ProjectAudioSchema.optional(),
 });
