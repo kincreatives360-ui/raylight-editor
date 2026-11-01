@@ -1,7 +1,7 @@
 // src/stage/orientationGizmo.test.tsx
 import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { CameraWorkflowActions, OrientationGizmo } from './OrientationGizmo';
+import { OrientationGizmo } from './OrientationGizmo';
 import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 
 describe('OrientationGizmo HUD & Presets UI', () => {
@@ -74,14 +74,5 @@ describe('OrientationGizmo HUD & Presets UI', () => {
             />
         );
         expect(html).not.toContain('>Angle</span>');
-    });
-
-    it('shows Pin and Back to camera in the contextual Orbit controls', () => {
-        const html = renderToStaticMarkup(<CameraWorkflowActions hasBookmark isPinned onPin={() => {}} onBack={() => {}} />);
-        expect(html).toContain('>Pin</button>');
-        expect(html).toContain('>Back to camera</button>');
-        expect(html).not.toContain('disabled=""');
-        const unpinned = renderToStaticMarkup(<CameraWorkflowActions hasBookmark={false} isPinned={false} onPin={() => {}} onBack={() => {}} />);
-        expect(unpinned).toContain('disabled=""');
     });
 });

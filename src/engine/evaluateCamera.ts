@@ -20,8 +20,6 @@ export function focalLengthToFov(focalLengthMm: number): number {
     return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
 }
 
-const BASE_FOV_DEGREES = 27.0006;
-
 function lerp(a: number, b: number, t: number): number {
     return a + (b - a) * t;
 }
@@ -48,7 +46,7 @@ export function evaluateShotCameraAtTime(
     let rotX = degToRad(defaultFraming.tilt ?? 0);
     let rotY = degToRad(defaultFraming.orbit ?? 0);
     let rotZ = degToRad(defaultFraming.roll ?? 0);
-    let fovDegrees = BASE_FOV_DEGREES;
+    let fovDegrees = 27.0006;
     let focalLength = DEFAULT_FOCAL_LENGTH;
     let activeMode: EvaluatedCamera['activeMode'] = 'static';
 
@@ -123,13 +121,13 @@ export function evaluateShotCameraAtTime(
                 activeMode = block.mode;
                 const baseFocal = fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH;
                 if (block.mode === 'zoom') {
-                    fovDegrees = BASE_FOV_DEGREES / zoom;
+                    fovDegrees = 27.0006 / zoom;
                     focalLength = baseFocal * zoom;
                 } else if (block.mode === 'dollyzoom') {
                     const fromBaseZoom = Math.max(0.2, safeFromZoom);
                     fovDegrees = Math.max(
                         10,
-                        Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
+                        Math.min(95, 27.0006 * (zoom / fromBaseZoom))
                     );
                     focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
                 } else {
@@ -172,14 +170,14 @@ export function evaluateShotCameraAtTime(
 
         if (block.mode === 'zoom') {
             // Lens Zoom: changes focal length without 3D parallax shift
-            fovDegrees = BASE_FOV_DEGREES / zoom;
+            fovDegrees = 27.0006 / zoom;
             focalLength = fromFocal * zoom;
         } else if (block.mode === 'dollyzoom') {
             // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
             const fromBaseZoom = Math.max(0.2, Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1);
             fovDegrees = Math.max(
                 10,
-                Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
+                Math.min(95, 27.0006 * (zoom / fromBaseZoom))
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
             if (Math.abs(toZ - fromZ) < 1e-6) {

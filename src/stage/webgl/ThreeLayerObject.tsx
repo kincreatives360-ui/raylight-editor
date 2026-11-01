@@ -2,10 +2,6 @@ import React, { useMemo, useState, useEffect, useLayoutEffect, useRef } from 're
 import * as THREE from 'three';
 import { createNormalizedRoundedGeometry, drawStudioPlaceholder, getLayerBlurBleedLayout } from './threeLayerObjectHelpers';
 import { configureLayerTexture } from './threeLayerTexture';
-// eslint-disable-next-line react-refresh/only-export-components
-export { getLayerBlurBleedLayout } from './threeLayerObjectHelpers';
-// eslint-disable-next-line react-refresh/only-export-components
-export { configureLayerTexture } from './threeLayerTexture';
 import { useThree, useFrame } from '@react-three/fiber';
 import { DeviceOpacityGroup } from './DeviceOpacityGroup';
 import { drawMediaFrame, getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';

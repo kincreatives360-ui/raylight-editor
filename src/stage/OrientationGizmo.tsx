@@ -20,18 +20,6 @@ interface OrientationGizmoProps {
     topInset?: number;
 }
 
-export const CameraWorkflowActions: React.FC<{
-    hasBookmark: boolean;
-    isPinned: boolean;
-    onPin: () => void;
-    onBack: () => void;
-}> = ({ hasBookmark, isPinned, onPin, onBack }) => (
-    <div className="flex items-center gap-1.5">
-        <button type="button" aria-label={isPinned ? 'Unpin camera view' : 'Pin current camera view'} aria-pressed={isPinned} onClick={onPin} title={isPinned ? 'Unpin camera view' : 'Pin current camera view'} className={`rounded-full border px-2.5 py-0.5 text-[11px] transition ${isPinned ? 'border-sky-400/50 bg-sky-500/15 text-sky-300' : 'border-subtle bg-surface/90 text-muted-foreground hover:text-foreground'}`}>Pin</button>
-        <button type="button" onClick={onBack} disabled={!hasBookmark} title="Back to pinned camera view" className="rounded-full border border-subtle bg-surface/90 px-2.5 py-0.5 text-[11px] text-muted-foreground transition hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40">Back to camera</button>
-    </div>
-);
-
 export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
     cameraRotation,
     onSetOrientation,

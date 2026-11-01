@@ -20,7 +20,6 @@ interface PanelProfile {
   scale: Vector3Tuple;
   intensity: number;
   color: string;
-  form?: 'rect' | 'ring';
 }
 
 const ENVIRONMENT_PANELS: Record<NonNullable<LightRig['environment']>, PanelProfile[]> = {

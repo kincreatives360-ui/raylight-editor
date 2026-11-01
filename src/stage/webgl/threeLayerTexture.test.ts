@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { configureLayerTexture, getLayerBlurBleedLayout } from './ThreeLayerObject';
+import { configureLayerTexture } from './threeLayerTexture';
+import { getLayerBlurBleedLayout } from './threeLayerObjectHelpers';
 
 describe('Layer Texture High-Resolution Filtering', () => {
   it('enables mipmaps and trilinear filtering with sRGB color space', () => {
