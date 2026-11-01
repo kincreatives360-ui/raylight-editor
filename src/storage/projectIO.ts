@@ -363,21 +363,25 @@ export function loadProjectFromBrowser(): Project | null {
         if (result.success) {
             const project = result.data;
 
+            // Normalize project structure before migration checks to ensure
+            // required arrays exist and have safe defaults
+            const normalizedProject = normalizeProjectStructure(project);
+
             // Migrate older blank projects that still contain the previous default
             // background. Do not overwrite the background of projects with layers.
             const isUntouchedBlankProject =
-                project.name === 'Untitled project' &&
-                project.aspectRatio === '16:9' &&
-                project.fps === 60 &&
-                Object.keys(project.assets ?? {}).length === 0 &&
-                (project.audio?.clips?.length ?? 0) === 0 &&
-                project.shots.length === 1 &&
-                project.shots[0].layers.length === 0 &&
-                (project.shots[0].cameraBlocks?.length ?? 0) === 0 &&
-                (project.shots[0].lightBlocks?.length ?? 0) === 0 &&
-                (project.shots[0].effectBlocks?.length ?? 0) === 0 &&
-                project.background.kind === 'solid' &&
-                project.background.color.toUpperCase() ===
+                normalizedProject.name === 'Untitled project' &&
+                normalizedProject.aspectRatio === '16:9' &&
+                normalizedProject.fps === 60 &&
+                Object.keys(normalizedProject.assets ?? {}).length === 0 &&
+                (normalizedProject.audio?.clips?.length ?? 0) === 0 &&
+                normalizedProject.shots.length === 1 &&
+                normalizedProject.shots[0].layers.length === 0 &&
+                (normalizedProject.shots[0].cameraBlocks?.length ?? 0) === 0 &&
+                (normalizedProject.shots[0].lightBlocks?.length ?? 0) === 0 &&
+                (normalizedProject.shots[0].effectBlocks?.length ?? 0) === 0 &&
+                normalizedProject.background.kind === 'solid' &&
+                normalizedProject.background.color.toUpperCase() ===
                 LEGACY_DEFAULT_CANVAS_BACKGROUND;
 
             if (isUntouchedBlankProject) {
@@ -386,12 +390,35 @@ export function loadProjectFromBrowser(): Project | null {
 
             // Ensure the project has all required structural properties
             // that the app's components assume exist
-            return ensureProjectStructure(project);
+            return ensureProjectStructure(normalizedProject);
         }
     } catch (err) {
         console.error('Failed to load project from browser storage:', err);
     }
     return null;
+}
+
+/**
+ * Lightweight structure normalization to ensure required arrays exist
+ * before migration checks. Does not fill in full defaults - that's done
+ * by ensureProjectStructure after migration checks.
+ */
+function normalizeProjectStructure(project: Project): Project {
+    try {
+        const shots = Array.isArray(project.shots) && project.shots.length > 0
+            ? project.shots
+            : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
+
+        return {
+            ...project,
+            shots,
+            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
+            audio: project.audio || { clips: [], muted: false, masterVolume: 1.0 },
+            background: project.background || { kind: 'solid', color: '#0c0e17' },
+        };
+    } catch {
+        return DEFAULT_PROJECT;
+    }
 }
 
 /**
@@ -407,29 +434,46 @@ function ensureProjectStructure(project: Project): Project {
             : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
 
         // Ensure each shot has all required properties
-        const safeShots = shots.map((shot) => ({
-            ...shot,
-            id: shot.id || generateId('shot'),
-            name: shot.name || 'Shot',
-            isPlaceholder: shot.isPlaceholder ?? true,
-            startMs: typeof shot.startMs === 'number' ? shot.startMs : 0,
-            durationMs: typeof shot.durationMs === 'number' && shot.durationMs > 0 ? shot.durationMs : 4000,
-            lane: typeof shot.lane === 'number' ? shot.lane : 0,
-            layers: Array.isArray(shot.layers) ? shot.layers : [],
-            cameraBlocks: Array.isArray(shot.cameraBlocks) ? shot.cameraBlocks : [],
-            lightBlocks: Array.isArray(shot.lightBlocks) ? shot.lightBlocks : [],
-            effectBlocks: Array.isArray(shot.effectBlocks) ? shot.effectBlocks : [],
-            groups: Array.isArray(shot.groups) ? shot.groups : [],
-            useProjectBackground: shot.useProjectBackground ?? true,
-            background: shot.background || { kind: 'solid', color: '#0c0e17' },
-            transition: shot.transition || { type: 'none', durationMs: 650, delayMs: 0, distance: 0.16, easing: { kind: 'preset', name: 'ease-out-expo' } },
-        }));
+        const safeShots = shots.map((shot) => {
+            // Only default isPlaceholder to true for the fallback shot (no layers, no blocks)
+            // If shot has user content (layers, cameraBlocks, etc.), don't force isPlaceholder=true
+            const hasUserContent =
+                (shot.layers?.length ?? 0) > 0 ||
+                (shot.cameraBlocks?.length ?? 0) > 0 ||
+                (shot.lightBlocks?.length ?? 0) > 0 ||
+                (shot.effectBlocks?.length ?? 0) > 0;
+            const defaultIsPlaceholder = hasUserContent ? false : true;
+
+            return {
+                ...shot,
+                id: shot.id || generateId('shot'),
+                name: shot.name || 'Shot',
+                isPlaceholder: shot.isPlaceholder ?? defaultIsPlaceholder,
+                startMs: typeof shot.startMs === 'number' ? shot.startMs : 0,
+                durationMs: typeof shot.durationMs === 'number' && shot.durationMs > 0 ? shot.durationMs : 4000,
+                lane: typeof shot.lane === 'number' ? shot.lane : 0,
+                layers: Array.isArray(shot.layers) ? shot.layers : [],
+                cameraBlocks: Array.isArray(shot.cameraBlocks) ? shot.cameraBlocks : [],
+                lightBlocks: Array.isArray(shot.lightBlocks) ? shot.lightBlocks : [],
+                effectBlocks: Array.isArray(shot.effectBlocks) ? shot.effectBlocks : [],
+                groups: Array.isArray(shot.groups) ? shot.groups : [],
+                useProjectBackground: shot.useProjectBackground ?? true,
+                background: shot.background || { kind: 'solid', color: '#0c0e17' },
+                transition: shot.transition || { type: 'none', durationMs: 650, delayMs: 0, distance: 0.16, easing: { kind: 'preset', name: 'ease-out-expo' } },
+            };
+        });
 
         // Ensure assets object exists
         const assets = project.assets && typeof project.assets === 'object' ? project.assets : {};
 
-        // Ensure audio object exists
-        const audio = project.audio || { clips: [], muted: false, masterVolume: 1.0 };
+        // Ensure audio object exists with all required fields
+        const audio = project.audio
+            ? {
+                clips: Array.isArray(project.audio.clips) ? project.audio.clips : [],
+                muted: typeof project.audio.muted === 'boolean' ? project.audio.muted : false,
+                masterVolume: typeof project.audio.masterVolume === 'number' ? project.audio.masterVolume : 1.0,
+            }
+            : { clips: [], muted: false, masterVolume: 1.0 };
 
         // Ensure project background exists
         const background = project.background || { kind: 'solid', color: '#0c0e17' };
@@ -445,7 +489,7 @@ function ensureProjectStructure(project: Project): Project {
             aspectRatio: project.aspectRatio || '16:9',
             fps: typeof project.fps === 'number' && project.fps > 0 ? project.fps : 60,
             background,
-            assets,
+            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
             audio,
             shots: safeShots,
         };

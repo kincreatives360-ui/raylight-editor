@@ -205,7 +205,7 @@ export function evaluateShotCameraAtTime(
             // Deterministic shake: use block ID hash as stable phase offset, advance continuously with shot-local time
             const stableSeed = block.id
                 ? [...block.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0)
-                : shotLocalTimeMs;
+                : 0;
             const tSec = (shotLocalTimeMs * 0.001 + stableSeed * 0.001) * freq;
             const { xPrimary, xSecondary, yPrimary, ySecondary, rotZ: rotZFreq } = CAMERA_SHAKE_FREQ_MULTIPLIERS;
             targetX +=

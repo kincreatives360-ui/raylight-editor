@@ -76,7 +76,7 @@ export function lerpLog(a: number, b: number, t: number): number {
  */
 export function lerpAngle(a: number, b: number, t: number): number {
     let diff = b - a;
-    // Normalize to [0, 360) then subtract 180 to get shortest path in (-180, 180]
+    // Normalize to [0, 360) then subtract 360 when > 180 to get shortest path in (-180, 180]
     diff = ((diff % 360) + 360) % 360;
     diff = diff > 180 ? diff - 360 : diff;
     return a + diff * Math.max(0, Math.min(1, t));
