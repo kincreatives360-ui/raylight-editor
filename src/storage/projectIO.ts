@@ -1,8 +1,8 @@
 // src/storage/projectIO.ts
-import { useState, useEffect } from 'react';
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
-import { DEFAULT_PROJECT } from '../model/defaults';
+import { DEFAULT_PROJECT, createDefaultShot, CURRENT_SCHEMA_VERSION } from '../model/defaults';
+import { generateId } from '../model/id';
 import {
     saveMediaToOPFS,
     loadMediaBlobFromOPFS,
@@ -383,12 +383,75 @@ export function loadProjectFromBrowser(): Project | null {
                 return DEFAULT_PROJECT;
             }
 
-            return project;
+            // Ensure the project has all required structural properties
+            // that the app's components assume exist
+            return ensureProjectStructure(project);
         }
     } catch (err) {
         console.error('Failed to load project from browser storage:', err);
     }
     return null;
+}
+
+/**
+ * Ensures a validated project has all structural properties that the app assumes exist.
+ * This is a safety net for projects that pass Zod validation but are missing
+ * nested properties that components directly access.
+ */
+function ensureProjectStructure(project: Project): Project {
+    try {
+        // Ensure shots array exists and has at least one shot
+        const shots = Array.isArray(project.shots) && project.shots.length > 0
+            ? project.shots
+            : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
+
+        // Ensure each shot has all required properties
+        const safeShots = shots.map((shot) => ({
+            ...shot,
+            id: shot.id || generateId('shot'),
+            name: shot.name || 'Shot',
+            isPlaceholder: shot.isPlaceholder ?? true,
+            startMs: typeof shot.startMs === 'number' ? shot.startMs : 0,
+            durationMs: typeof shot.durationMs === 'number' && shot.durationMs > 0 ? shot.durationMs : 4000,
+            lane: typeof shot.lane === 'number' ? shot.lane : 0,
+            layers: Array.isArray(shot.layers) ? shot.layers : [],
+            cameraBlocks: Array.isArray(shot.cameraBlocks) ? shot.cameraBlocks : [],
+            lightBlocks: Array.isArray(shot.lightBlocks) ? shot.lightBlocks : [],
+            effectBlocks: Array.isArray(shot.effectBlocks) ? shot.effectBlocks : [],
+            groups: Array.isArray(shot.groups) ? shot.groups : [],
+            useProjectBackground: shot.useProjectBackground ?? true,
+            background: shot.background || { kind: 'solid', color: '#0c0e17' },
+            transition: shot.transition || { type: 'none', durationMs: 650, delayMs: 0, distance: 0.16, easing: { kind: 'preset', name: 'ease-out-expo' } },
+        }));
+
+        // Ensure assets object exists
+        const assets = project.assets && typeof project.assets === 'object' ? project.assets : {};
+
+        // Ensure audio object exists
+        const audio = project.audio || { clips: [], muted: false, masterVolume: 1.0 };
+
+        // Ensure project background exists
+        const background = project.background || { kind: 'solid', color: '#0c0e17' };
+
+        return {
+            ...project,
+            id: project.id || generateId('project'),
+            name: project.name || 'Untitled project',
+            version: project.version || CURRENT_SCHEMA_VERSION,
+            schemaVersion: project.schemaVersion || CURRENT_SCHEMA_VERSION,
+            updatedAt: project.updatedAt || new Date().toISOString(),
+            createdAt: project.createdAt || new Date().toISOString(),
+            aspectRatio: project.aspectRatio || '16:9',
+            fps: typeof project.fps === 'number' && project.fps > 0 ? project.fps : 60,
+            background,
+            assets,
+            audio,
+            shots: safeShots,
+        };
+    } catch {
+        // If anything goes wrong, return a fresh default project
+        return DEFAULT_PROJECT;
+    }
 }
 
 // Trigger browser download of .raylight.json project recipe file
