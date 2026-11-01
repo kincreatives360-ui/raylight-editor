@@ -163,14 +163,13 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             style={{ top: topInset }}
         >
             {/* 3D Trackball Sphere (The Ball Method) */}
-            <div
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onLostPointerCapture={handleLostPointerCapture}
-                onMouseDown={(e) => e.stopPropagation()}
-                title="Drag 3D trackball sphere to orbit camera"
+<div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onLostPointerCapture={handleLostPointerCapture}
+            title="Drag 3D trackball sphere to orbit camera"
                 className={`relative group flex items-center justify-center w-13 h-13 rounded-full border touch-none cursor-grab active:cursor-grabbing transition-[transform,border-color,box-shadow] duration-150 ${
                     isDragging
                         ? 'cursor-grabbing border-sky-400 ring-2 ring-sky-500/30 scale-105 shadow-2xl'
