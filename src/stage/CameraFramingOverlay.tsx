@@ -280,7 +280,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
 
     return (
-        <div className="absolute inset-0 pointer-events-none z-26 overflow-visible select-none">
+        <div className="absolute inset-0 pointer-events-none z-26 overflow-visible select-none" onMouseDown={(e) => e.stopPropagation()}>
             {/* SVG Connecting Arc and Snap Guides */}
             <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
                 {/* Full-width / full-height green alignment snap lines */}

@@ -416,7 +416,8 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
 
     const pCam = camera as THREE.PerspectiveCamera;
     const aspect = pCam.aspect || (16 / 9);
-    const distance = DEFAULT_CAMERA_Z + 0.05;
+    // Position background at camera far plane to avoid Z-fighting with scene geometry
+    const distance = pCam.far - 10;
     const fovRad = ((pCam.fov ?? focalLengthToFov(DEFAULT_FOCAL_LENGTH)) * Math.PI) / 180;
     const planeH = 2 * distance * Math.tan(fovRad / 2);
     const planeW = planeH * aspect;

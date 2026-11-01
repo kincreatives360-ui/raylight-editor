@@ -156,7 +156,6 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         <div
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            onMouseDown={(e) => e.stopPropagation()}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             className="absolute right-3 z-35 flex flex-col items-center gap-1.5 select-none"

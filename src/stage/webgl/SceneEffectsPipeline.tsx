@@ -221,7 +221,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 if (pass.uniforms.tDepth) {
                     pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
                 }
-                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
                 composer.addPass(pass);
             }
 
@@ -240,7 +240,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                     if (pass.uniforms.tDepth) {
                         pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
                     }
-                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
                 }
             }
         }

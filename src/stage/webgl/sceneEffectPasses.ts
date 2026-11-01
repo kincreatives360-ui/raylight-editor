@@ -250,7 +250,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
   });
 }
 
-export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }) {
+export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }, cameraNear = 0.1, cameraFar = 2000) {
   const e = effects.state, p = pass.uniforms.uParams.value as THREE.Vector4;
   p.set(0, 0, 0, 0);
   pass.uniforms.uExtra.value.set(0, 0, 0, 0);
@@ -311,8 +311,8 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       );
       pass.uniforms.uExtra.value.set(
         dof.highlightThreshold ?? 0.8,
-        0.1,
-        100.0,
+        cameraNear,
+        cameraFar,
         dof.bokehShape === 'anamorphic' ? 1.0 : 0.0
       );
       pass.uniforms.uMotion.value.x = dof.highlightIntensity ?? 0;

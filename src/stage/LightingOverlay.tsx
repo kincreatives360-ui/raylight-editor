@@ -426,6 +426,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             data-testid="lighting-overlay"
             className={`absolute inset-0 pointer-events-none select-none z-30 ${activeLightTool ? 'cursor-crosshair' : ''}`}
             style={{ width: `${frameWidth}px`, height: `${frameHeight}px` }}
+            onMouseDown={(e) => e.stopPropagation()}
         >
             <svg
                 className="w-full h-full pointer-events-none overflow-visible"
