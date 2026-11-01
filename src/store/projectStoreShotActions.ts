@@ -72,7 +72,8 @@ export const createShotActions: ProjectStoreActionCreator<'addShot' | 'duplicate
                 const sel = useSelectionStore.getState();
                 if (sel.selectedShotId === shotId && remainingShots.length > 0) {
                     sel.selectShot(remainingShots[0].id);
-                } else if (sel.selectedShotId === shotId) {
+                } else if (sel.selectedShotId === shotId || remainingShots.length === 0) {
+                    sel.clearLayerSelection();
                     sel.selectProject();
                 }
             } catch {

@@ -10,7 +10,7 @@ type ProjectState = ReturnType<typeof useProjectStore.getState>;
 type SelectionState = ReturnType<typeof useSelectionStore.getState>;
 
 type LeftTimelineRackProps = {
-    activeShot: Shot;
+    activeShot?: Shot;
     project: Project;
     timelineView: SelectionState['timelineView'];
     timelineHeightPx: number;
@@ -56,10 +56,10 @@ export const LeftTimelineRack: React.FC<LeftTimelineRackProps> = ({
     selectPreset,
     selectBlock,
 }) => {
-    const hasCameraBlocks = (activeShot.cameraBlocks?.length || 0) > 0;
+    const hasCameraBlocks = (activeShot?.cameraBlocks?.length || 0) > 0;
 
     return (
-        <>                    {timelineView === 'scene' && (
+        <>                    {timelineView === 'scene' && activeShot && (
                         <div
                             style={{ height: `${timelineHeightPx}px` }}
                             className="border-t border-subtle bg-app flex flex-col shrink-0"

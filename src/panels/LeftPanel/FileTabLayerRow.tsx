@@ -19,7 +19,7 @@ type ContextMenuState = { x: number; y: number; items: ContextMenuItemDef[] } | 
 interface FileTabLayerRowProps {
     shot: Shot;
     layer: Layer;
-    activeShot: Shot;
+    activeShot?: Shot;
     orderedIdsInShot: string[];
     indentLevel: number;
     isInsideSelectedContainer: boolean;
@@ -64,7 +64,7 @@ export const FileTabLayerRow: React.FC<FileTabLayerRowProps> = ({
         }
 
         const isSelected =
-            shot.id === activeShot.id && selectedLayerSet.has(layer.id);
+            shot.id === activeShot?.id && selectedLayerSet.has(layer.id);
         const isEditing = editingId === layer.id;
         const isDragTarget = dragOverId === layer.id;
 
@@ -112,7 +112,7 @@ export const FileTabLayerRow: React.FC<FileTabLayerRowProps> = ({
                 onClick={(e) => {
                     e.stopPropagation();
                     setInspectorTab('layer');
-                    if (shot.id !== activeShot.id) {
+                    if (shot.id !== activeShot?.id) {
                         selectShot(shot.id, layer.id);
                         setCurrentTimeMs(shot.startMs + 100);
                         return;
@@ -147,7 +147,7 @@ export const FileTabLayerRow: React.FC<FileTabLayerRowProps> = ({
                                 id: 'focus',
                                 label: 'Focus in timeline',
                                 onClick: () => {
-                                    if (shot.id !== activeShot.id) {
+                                    if (shot.id !== activeShot?.id) {
                                         selectShot(shot.id);
                                     }
                                     selectLayer(layer.id, false);
@@ -163,7 +163,7 @@ export const FileTabLayerRow: React.FC<FileTabLayerRowProps> = ({
                                 icon: Copy,
                                 shortcut: '⌘D',
                                 onClick: () => {
-                                    if (shot.id !== activeShot.id) {
+                                    if (shot.id !== activeShot?.id) {
                                         selectShot(shot.id);
                                     }
                                     const dup = duplicateLayerInShot(shot.id, layer.id);
@@ -233,7 +233,7 @@ export const FileTabLayerRow: React.FC<FileTabLayerRowProps> = ({
                         e.preventDefault();
                         e.stopPropagation();
                         setInspectorTab('layer');
-                        if (shot.id !== activeShot.id) {
+                        if (shot.id !== activeShot?.id) {
                             selectShot(shot.id, layer.id);
                             setCurrentTimeMs(shot.startMs + 100);
                         } else {

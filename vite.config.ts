@@ -24,9 +24,7 @@ export default defineConfig({
   server: {
     host: '0.0.0.0',
     port: 3000,
-    // Keep Vite's secure host check: localhost and raw IP addresses are always
-    // allowed; add specific tunnel hostnames to server.allowedHosts if needed
-    // instead of disabling validation for every host.
+    allowedHosts: true,
   },
   build: {
     // First-party chunks should stay under ~500 KB raw. The vendor-three and

@@ -38,6 +38,7 @@ export interface Shot {
   focusBlocks?: FocusBlock[];
 }
 
+
 export type Effects = SceneEffects;
 
 export interface FocusBlock {

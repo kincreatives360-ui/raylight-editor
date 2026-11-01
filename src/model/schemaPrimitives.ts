@@ -89,7 +89,7 @@ export const FillSchema = z.discriminatedUnion('kind', [
     mesh: z.array(MeshGradientPointSchema).length(9).optional(),
     handles: z.object({ start: z.object({ x: z.number(), y: z.number() }), end: z.object({ x: z.number(), y: z.number() }), width: z.number().optional() }).optional(),
   }).superRefine((fill, ctx) => {
-    if (fill.gradientType === 'mesh' && fill.mesh?.length !== 9) {
+    if (fill.gradientType === 'mesh' && fill.mesh && fill.mesh.length !== 9) {
       ctx.addIssue({ code: 'custom', path: ['mesh'], message: 'Mesh gradients require exactly nine control points.' });
     }
   }),

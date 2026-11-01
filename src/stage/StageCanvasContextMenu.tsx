@@ -265,7 +265,7 @@ export const StageCanvasContextMenu: React.FC<StageCanvasContextMenuProps> = ({ 
                                       label: 'Select All Layers',
                                       icon: Layers,
                                       shortcut: '⌘A',
-                                      onClick: () => setSelectedLayerIds(frame.activeShot.layers.map((l) => l.id)),
+                                      onClick: () => setSelectedLayerIds((frame.activeShot?.layers || []).map((l) => l.id)),
                                   },
                                   {
                                       id: 'reset-fit',

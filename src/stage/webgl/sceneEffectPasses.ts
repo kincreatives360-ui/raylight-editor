@@ -263,7 +263,7 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
   switch (key) {
     case 'bloom':
       p.set(e.bloom.intensity, e.bloom.threshold, e.bloom.radius ?? 1, e.bloom.softness ?? 0.5);
-      pass.uniforms.uExtra.value.x = ({ screen: 0, add: 1, softLight: 2 } as const)[e.bloom.blendMode ?? 'screen'];
+      pass.uniforms.uExtra.value.x = ({ screen: 0, add: 1, softLight: 2 } as const)[(e.bloom.blendMode ?? 'screen') as 'screen' | 'add' | 'softLight'];
       break;
     case 'vignette': p.set(e.vignette.intensity, e.vignette.midpoint ?? 0.5, e.vignette.roundness ?? 1, 0); break;
     case 'motionBlur': {
@@ -287,10 +287,10 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'filmGrain': {
       const grain=e.filmGrain;
       p.set(grain.intensity, grain.size, grain.softness ?? 0, grain.colorAmount ?? 0.4);
-      pass.uniforms.uExtra.value.set(grain.aspect ?? 1, grain.midpoint ?? 0.4, grain.protectBlacks ? 1 : 0, ({ film: 0, overlay: 1, softLight: 2, multiply: 3 } as const)[grain.blendMode ?? 'film']);
+      pass.uniforms.uExtra.value.set(grain.aspect ?? 1, grain.midpoint ?? 0.4, grain.protectBlacks ? 1 : 0, ({ film: 0, overlay: 1, softLight: 2, multiply: 3 } as const)[(grain.blendMode ?? 'film') as 'film' | 'overlay' | 'softLight' | 'multiply']);
       pass.uniforms.uExtra2.value.set(grain.shadowStrength ?? 0.7, grain.midStrength ?? 1, grain.highlightStrength ?? 0.45, grain.smooth ? 1 : 0);
       pass.uniforms.uFringe.value.set(grain.perChannel ? 1 : 0, grain.smooth ? 1 : 0, grain.protectBlacks ? 1 : 0, grain.colorAmount ?? 0.4);
-      (pass.uniforms.uColor.value as THREE.Color).set(({ 'Tungsten 500': '#c4d9ff', 'Kodak 5219': '#ffd5a1', 'Fuji 400': '#d3ffd9', Custom: '#ffffff' } as const)[grain.stock ?? 'Tungsten 500']);
+      (pass.uniforms.uColor.value as THREE.Color).set(({ 'Tungsten 500': '#c4d9ff', 'Kodak 5219': '#ffd5a1', 'Fuji 400': '#d3ffd9', Custom: '#ffffff' } as const)[(grain.stock ?? 'Tungsten 500') as 'Tungsten 500' | 'Kodak 5219' | 'Fuji 400' | 'Custom']);
       pass.uniforms.uSeed.value = grain.motion === 'static' ? (grain.seed ?? 0) : grain.motion === '12fps' ? Math.floor(effects.deterministicSeed * 5) / 5 + (grain.seed ?? 0) : effects.deterministicSeed + (grain.seed ?? 0);
       break;
     }
@@ -341,20 +341,20 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
         }
       }
       p.set(gradient.blend,gradient.shift,gradient.spread,0);
-      pass.uniforms.uExtra.value.x=({ normal: 0, multiply: 1, screen: 2, overlay: 3, softLight: 4, hardLight: 5, difference: 6, exclusion: 7, lighten: 8, darken: 9, colorDodge: 10, colorBurn: 11 } as const)[gradient.blendMode];
+      pass.uniforms.uExtra.value.x=({ normal: 0, multiply: 1, screen: 2, overlay: 3, softLight: 4, hardLight: 5, difference: 6, exclusion: 7, lighten: 8, darken: 9, colorDodge: 10, colorBurn: 11 } as const)[gradient.blendMode as 'normal' | 'multiply' | 'screen' | 'overlay' | 'softLight' | 'hardLight' | 'difference' | 'exclusion' | 'lighten' | 'darken' | 'colorDodge' | 'colorBurn'];
       break;
     }
     case 'fishEye': {
       const fish=e.fishEye;
       p.set(fish.amount,fish.centerX,fish.centerY,fish.scale);
-      pass.uniforms.uExtra.value.x=({ fill: 0, balanced: 1, none: 2 } as const)[fish.edgeMode];
+      pass.uniforms.uExtra.value.x=({ fill: 0, balanced: 1, none: 2 } as const)[fish.edgeMode as 'fill' | 'balanced' | 'none'];
       break;
     }
     case 'lensDistortion': {
       const lens=e.lensDistortion;
       const measure=lens.measure==='width'?1:lens.measure==='height'?width/height:Math.hypot(width,height)/height;
       p.set(lens.strength,lens.centerX,lens.centerY,measure);
-      pass.uniforms.uExtra.value.x=({ fill: 0, balanced: 1, none: 2 } as const)[lens.edgeMode];
+      pass.uniforms.uExtra.value.x=({ fill: 0, balanced: 1, none: 2 } as const)[lens.edgeMode as 'fill' | 'balanced' | 'none'];
       pass.uniforms.uExtra.value.z=lens.mode==='barrel'?1:0;
       break;
     }

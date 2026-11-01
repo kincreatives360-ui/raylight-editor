@@ -13,46 +13,37 @@ import type { CommandItem } from '../ui/CommandMenu';
 interface UseAppCommandListOptions {
   project: Project;
   activeShotId: string;
-  isPlaying: boolean;
-  leftPanelOpen: boolean;
-  rightSidebarOpen: boolean;
   projectFileInputRef: RefObject<HTMLInputElement | null>;
-  togglePlay: ReturnType<typeof usePlayheadStore.getState>['togglePlay'];
-  splitAtPlayhead: ReturnType<typeof useProjectStore.getState>['splitAtPlayhead'];
-  addLayerToShot: ReturnType<typeof useProjectStore.getState>['addLayerToShot'];
-  setActiveTool: ReturnType<typeof useSelectionStore.getState>['setActiveTool'];
   handleOpenExportModal: () => void;
-  setLeftPanelOpen: ReturnType<typeof useSelectionStore.getState>['setLeftPanelOpen'];
-  setRightSidebarOpen: ReturnType<typeof useSelectionStore.getState>['setRightSidebarOpen'];
-  toggleLeftPanel: ReturnType<typeof useSelectionStore.getState>['toggleLeftPanel'];
-  toggleRightSidebar: ReturnType<typeof useSelectionStore.getState>['toggleRightSidebar'];
-  undo: ReturnType<typeof useProjectStore.getState>['undo'];
-  redo: ReturnType<typeof useProjectStore.getState>['redo'];
-  toggleProjectAudioMuted: ReturnType<typeof useProjectStore.getState>['toggleProjectAudioMuted'];
   setShortcutsModalOpen: (open: boolean) => void;
 }
 
 export function useAppCommandList({
   project,
   activeShotId,
-  isPlaying,
-  leftPanelOpen,
-  rightSidebarOpen,
   projectFileInputRef,
-  togglePlay,
-  splitAtPlayhead,
-  addLayerToShot,
-  setActiveTool,
   handleOpenExportModal,
-  setLeftPanelOpen,
-  setRightSidebarOpen,
-  toggleLeftPanel,
-  toggleRightSidebar,
-  undo,
-  redo,
-  toggleProjectAudioMuted,
   setShortcutsModalOpen,
 }: UseAppCommandListOptions): CommandItem[] {
+  const isPlaying = usePlayheadStore((s) => s.isPlaying);
+  const togglePlay = usePlayheadStore((s) => s.togglePlay);
+
+  const leftPanelOpen = useSelectionStore((s) => s.leftPanelOpen);
+  const rightSidebarOpen = useSelectionStore((s) => s.rightSidebarOpen);
+  const setLeftPanelOpen = useSelectionStore((s) => s.setLeftPanelOpen);
+  const setRightSidebarOpen = useSelectionStore((s) => s.setRightSidebarOpen);
+  const toggleLeftPanel = useSelectionStore((s) => s.toggleLeftPanel);
+  const toggleRightSidebar = useSelectionStore((s) => s.toggleRightSidebar);
+  const setActiveTool = useSelectionStore((s) => s.setActiveTool);
+
+  const {
+    splitAtPlayhead,
+    addLayerToShot,
+    undo,
+    redo,
+    toggleProjectAudioMuted,
+  } = useProjectStore.getState();
+
   return useMemo(() => [
     {
       id: 'play-pause',

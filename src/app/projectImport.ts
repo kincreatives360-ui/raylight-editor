@@ -6,7 +6,8 @@ type UpdateProject = ReturnType<typeof useProjectStore.getState>['updateProject'
 
 export async function handleAppProjectImport(
   event: ChangeEvent<HTMLInputElement>,
-  updateProject: UpdateProject
+  updateProject: UpdateProject,
+  onError?: (message: string) => void
 ): Promise<void> {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -16,7 +17,10 @@ export async function handleAppProjectImport(
   if (result.success) {
     updateProject(() => result.project, { skipHistory: false });
   } else {
-    console.error('Failed to import project file:', result.errors);
-    alert('Failed to import project: ' + (result.errors?.[0] || 'Invalid file format'));
+    const errorMsg = 'Failed to import project: ' + (result.errors?.[0] || 'Invalid file format');
+    console.error(errorMsg, result.errors);
+    if (onError) {
+      onError(errorMsg);
+    }
   }
 }

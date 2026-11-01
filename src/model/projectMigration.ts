@@ -147,6 +147,8 @@ export function migrateLegacyProject(raw: unknown): unknown {
     }
   }
 
+  project.schemaVersion = 2;
+  project.version = 2;
   return project;
 }
 

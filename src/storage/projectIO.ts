@@ -56,12 +56,22 @@ let saveQueue: Promise<boolean> = Promise.resolve(true);
 const opfsSavedDataUrls = new WeakMap<AssetRecord, string>();
 const indexedDbSavedDataUrls = new WeakMap<AssetRecord, string>();
 
+export function stripAssetDataUrls(assets: Record<string, AssetRecord> = {}): Record<string, AssetRecord> {
+  const lightweight: Record<string, AssetRecord> = {};
+  for (const [id, asset] of Object.entries(assets)) {
+    if (!asset) continue;
+    const { dataUrl: _drop, ...meta } = asset;
+    lightweight[id] = { ...meta, dataUrl: '' } as AssetRecord;
+  }
+  return lightweight;
+}
+
 export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
     const execute = async (): Promise<boolean> => {
         const db = await openIndexedDb();
         if (!db) return false;
 
-        const lightweightAssets: Record<string, AssetRecord> = {};
+        const lightweightAssets = stripAssetDataUrls(project.assets);
         const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
         // Media absent from the in-memory document is NOT evidence of deletion.
@@ -69,8 +79,6 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
         await Promise.allSettled(
             Object.entries(project.assets || {}).map(async ([id, asset]) => {
                 if (!asset) return;
-                const { dataUrl: _drop, ...meta } = asset;
-                lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
                 if (asset.dataUrl && opfsSavedDataUrls.get(asset) !== asset.dataUrl) {
                     try {
                         // OPFS is a supplementary copy; IDB stores the full asset in the
@@ -309,23 +317,9 @@ export function saveProjectToBrowser(project: Project): void {
         localStorageFailed = true;
         // If localStorage throws QuotaExceededError, fallback to saving without heavy asset base64s
         try {
-            const lightweightAssets: Record<string, AssetRecord> = {};
-            for (const [id, a] of Object.entries(project.assets || {})) {
-                if (a) {
-                    lightweightAssets[id] = {
-                        id: a.id,
-                        name: a.name,
-                        mimeType: a.mimeType,
-                        dataUrl: '',
-                        thumbUrl: a.thumbUrl,
-                        width: a.width,
-                        height: a.height,
-                    };
-                }
-            }
             const fallbackPayload = JSON.stringify({
                 ...project,
-                assets: lightweightAssets,
+                assets: stripAssetDataUrls(project.assets),
                 updatedAt: new Date().toISOString(),
             });
             localStorage.setItem(AUTO_SAVE_KEY, fallbackPayload);

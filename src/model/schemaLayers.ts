@@ -107,7 +107,7 @@ export const TextLayerSchema = LayerBaseSchema.extend({
   verticalAlign: z.enum(['top', 'middle', 'bottom']).optional(),
   font: z.object({
     family: z.string(),
-    size: z.number().min(0.005),
+    size: z.number().positive(),
     weight: z.number().min(100).max(900),
     color: z.string(),
     align: z.enum(['left', 'center', 'right']),

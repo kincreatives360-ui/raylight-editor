@@ -1,5 +1,5 @@
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
-import { MAX_HISTORY_STEPS } from './projectStoreConstants';
+import { appendHistoryState } from './projectStoreConstants';
 
 export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'updateProject' | 'updateShot' | 'updateLayer'> = (set, get) => ({
     setHydrated: (status) => set({ isHydrating: !status }),
@@ -21,7 +21,7 @@ export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'up
 
             return {
                 project: updated,
-                past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
+                past: appendHistoryState(state.past, state.project),
                 future: [],
                 validation,
                 hydrationRevision: nextRevision,

@@ -168,7 +168,7 @@ const StageComponent: React.FC<StageProps> = ({
         gradientCameraPose,
     } = useStageViewportModel({ project, frame, viewportSize, isCameraSelected, activeTool, isPlaying });
     const isTransparentBg = effectiveBackground.kind === 'transparent';
-    const gradientShapeLayer = gradientEditorLayerId
+    const gradientShapeLayer = gradientEditorLayerId && frame.activeShot?.layers
         ? frame.activeShot.layers.find((layer) => layer.id === gradientEditorLayerId && layer.kind === 'shape')
         : undefined;
     const showShapeGradientAngleControl = gradientEditorActive
@@ -229,14 +229,16 @@ const StageComponent: React.FC<StageProps> = ({
         commitDragTransaction();
     }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
 
-    const currentShotCameraBookmark = cameraBookmarks[frame.activeShot.id];
+    const currentShotId = frame.activeShot?.id;
+    const currentShotCameraBookmark = currentShotId ? cameraBookmarks[currentShotId] : undefined;
     const handlePinCameraView = useCallback(() => {
-        if (useSelectionStore.getState().cameraBookmarks[frame.activeShot.id]) {
-            setCameraBookmark(frame.activeShot.id, null);
+        if (!currentShotId) return;
+        if (useSelectionStore.getState().cameraBookmarks[currentShotId]) {
+            setCameraBookmark(currentShotId, null);
             return;
         }
         const camera = frame.camera;
-        setCameraBookmark(frame.activeShot.id, {
+        setCameraBookmark(currentShotId, {
             orbit: radToDeg(camera.rotation.y),
             tilt: radToDeg(camera.rotation.x),
             roll: radToDeg(camera.rotation.z),
@@ -246,7 +248,7 @@ const StageComponent: React.FC<StageProps> = ({
             targetZ: camera.target.z,
             focalLength: camera.focalLength,
         });
-    }, [frame.camera, frame.activeShot.id, setCameraBookmark]);
+    }, [frame.camera, currentShotId, setCameraBookmark]);
 
     const handleBackFromOrbitCamera = useCallback(() => {
         if (currentShotCameraBookmark) {
@@ -300,10 +302,10 @@ const StageComponent: React.FC<StageProps> = ({
 
     const selectedLayer = useMemo(
         () =>
-            selectedLayerIds.length > 0
+            selectedLayerIds.length > 0 && frame.activeShot?.layers
                 ? frame.activeShot.layers.find((l) => selectedLayerSet.has(l.id))
                 : undefined,
-        [frame.activeShot.layers, selectedLayerIds.length, selectedLayerSet]
+        [frame.activeShot, selectedLayerIds.length, selectedLayerSet]
     );
 
     // ============================================================================
@@ -319,7 +321,7 @@ const StageComponent: React.FC<StageProps> = ({
         setContextMenu,
     });
 
-    const contextMenuLayer = contextMenu?.layerId
+    const contextMenuLayer = contextMenu?.layerId && frame.activeShot?.layers
         ? frame.activeShot.layers.find((l) => l.id === contextMenu.layerId) || null
         : null;
 

@@ -12,7 +12,7 @@ import { FileTabLayerRow } from './FileTabLayerRow';
 
 interface FileTabProps {
     activeTab: 'file' | 'assets';
-    activeShot: Shot;
+    activeShot?: Shot;
     searchQuery: string;
 }
 
@@ -119,6 +119,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
         isInsideSelectedContainer = false
     ) => (
         <FileTabLayerRow
+            key={layer.id}
             shot={shot}
             layer={layer}
             activeShot={activeShot}
@@ -153,7 +154,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
     ): React.ReactNode => {
         const childLayers = layersTopDown.filter((l) => l.groupId === group.id);
         const isGroupSelected =
-            shot.id === activeShot.id &&
+            shot.id === activeShot?.id &&
             childLayers.length > 0 &&
             childLayers.every((l) => selectedLayerSet.has(l.id));
         const isEditing = editingId === group.id;
@@ -280,7 +281,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
     };
 
 
-    const hasLightBlocks = (activeShot.lightBlocks?.length || 0) > 0;
+    const hasLightBlocks = (activeShot?.lightBlocks?.length || 0) > 0;
 
     return (
         <>
@@ -315,7 +316,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                             </div>
                         )}
                         {project.shots.filter((shot) => !shot.isPlaceholder && !(isBlankProjectState(project) && shot === project.shots[0])).map((shot) => {
-                            const isShotSelected = shot.id === activeShot.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
+                            const isShotSelected = shot.id === activeShot?.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
                             const isCollapsed = Boolean(collapsedShots[shot.id]);
                             const isEditingShot = editingId === shot.id;
 

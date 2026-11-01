@@ -14,7 +14,7 @@ import { exportProjectToFile, importProjectFromFile, useStorageStatus } from '..
 import { createDefaultProject } from '../../model/defaults';
 
 interface LeftPanelProps {
-    activeShot: Shot;
+    activeShot?: Shot;
     onUploadClick: () => void;
     audioLabel: string;
     onSelectAudioClick: () => void;
@@ -322,7 +322,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <MenuItem
                             unstyled
                             onClick={() => {
-                                const l = addLayerToShot(activeShot.id, 'image');
+                                let shotId = activeShot?.id;
+                                if (!shotId) {
+                                    const created = addShot();
+                                    shotId = created.id;
+                                    selectShot(shotId);
+                                }
+                                const l = addLayerToShot(shotId, 'image');
                                 selectLayer(l.id);
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
@@ -334,7 +340,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <MenuItem
                             unstyled
                             onClick={() => {
-                                const l = addLayerToShot(activeShot.id, 'shape');
+                                let shotId = activeShot?.id;
+                                if (!shotId) {
+                                    const created = addShot();
+                                    shotId = created.id;
+                                    selectShot(shotId);
+                                }
+                                const l = addLayerToShot(shotId, 'shape');
                                 selectLayer(l.id);
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
@@ -346,7 +358,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <MenuItem
                             unstyled
                             onClick={() => {
-                                const l = addLayerToShot(activeShot.id, 'text');
+                                let shotId = activeShot?.id;
+                                if (!shotId) {
+                                    const created = addShot();
+                                    shotId = created.id;
+                                    selectShot(shotId);
+                                }
+                                const l = addLayerToShot(shotId, 'text');
                                 selectLayer(l.id);
                                 setInspectorTab('layer');
                                 setAddMenuOpen(false);
@@ -358,7 +376,13 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <MenuItem
                             unstyled
                             onClick={() => {
-                                const block = addCameraBlockToShot(activeShot.id);
+                                let shotId = activeShot?.id;
+                                if (!shotId) {
+                                    const created = addShot();
+                                    shotId = created.id;
+                                    selectShot(shotId);
+                                }
+                                const block = addCameraBlockToShot(shotId);
                                 if (!block) return;
                                 selectCameraBlock(block.id);
                                 setTimelineView('scene');

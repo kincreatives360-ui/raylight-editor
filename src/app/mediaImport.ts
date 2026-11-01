@@ -1,13 +1,13 @@
 import type { ChangeEvent } from 'react';
-import type { Layer, Project, VideoLayer } from '../model/types';
-import { createDefaultShot } from '../model/defaults';
+import type { Layer, Project } from '../model/types';
+import { createDefaultShot, createDefaultVideoLayer } from '../model/defaults';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import { parseFigmaSvgToLayers, readImageFileWithThumbnail } from '../engine/figmaSvgImporter';
 
 interface MediaImportOptions {
-  activeShot: Project['shots'][number];
+  activeShot?: Project['shots'][number];
   selectedLayer: Layer | undefined;
   updateProject: ReturnType<typeof useProjectStore.getState>['updateProject'];
   addLayerToShot: ReturnType<typeof useProjectStore.getState>['addLayerToShot'];
@@ -35,6 +35,24 @@ export async function handleAppMediaUpload(
   const file = event.target.files?.[0];
   if (!file) return;
 
+  // Resolve target shot or create one if the project has no shots
+  let targetShot = activeShot;
+  if (!targetShot) {
+    const store = useProjectStore.getState();
+    const existing = store.project.shots.find((s) => !s.isPlaceholder);
+    if (existing) {
+      targetShot = existing;
+    } else {
+      targetShot = store.addShot();
+      useSelectionStore.getState().selectShot(targetShot.id);
+    }
+  }
+
+  const shotId = targetShot.id;
+  const shotDurationMs = targetShot.durationMs ?? 4000;
+  const shotStartMs = targetShot.startMs ?? 0;
+  const layerCount = targetShot.layers?.length ?? 0;
+
   if (file.type.startsWith('video/')) {
     const dataUrl = await new Promise<string>((resolve, reject) => {
       const reader = new FileReader();
@@ -61,28 +79,15 @@ export async function handleAppMediaUpload(
       const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
       const clipEnd = currentPlayheadMs + clipDuration;
 
-      const videoLayer: VideoLayer = {
+      const videoLayer = createDefaultVideoLayer({
         id: `layer-video-${Date.now()}`,
         name: file.name,
-        kind: 'video',
-        order: activeShot?.layers.length + 1 || 1,
-        hidden: false,
-        locked: false,
+        order: layerCount + 1,
         inMs: 0,
-        outMs: activeShot?.durationMs || 4000,
-        position: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        scale: { x: 1, y: 1, z: 1 },
-        opacity: 1,
-        blendMode: 'normal',
-        entrance: { type: 'none', durationMs: 400, delayMs: 0, distance: 0.2, easing: { kind: 'preset', name: 'ease-out' } },
-        exit: { type: 'none', durationMs: 400, delayMs: 0, distance: 0.2, easing: { kind: 'preset', name: 'ease-out' } },
-        blocks: [],
-        effects: {},
+        outMs: shotDurationMs,
         assetId,
         size: { width: 0.65, height: Math.min(0.85, 0.65 * (videoHeight / (videoWidth || 1))) },
-        cornerRadius: 0.04,
-      };
+      });
 
       updateProject((project) => {
         const currentTotal = project.shots.reduce((max, shot) => Math.max(max, shot.startMs + shot.durationMs), 0);
@@ -97,9 +102,9 @@ export async function handleAppMediaUpload(
             );
           }
         }
-        const targetShotId = activeShot?.id || nextShots[0]?.id;
+        const effectiveShotId = shotId || nextShots[0]?.id;
         nextShots = nextShots.map((shot) =>
-          shot.id === targetShotId ? { ...shot, layers: [...shot.layers, videoLayer] } : shot
+          shot.id === effectiveShotId ? { ...shot, layers: [...shot.layers, videoLayer] } : shot
         );
 
         return {
@@ -139,9 +144,9 @@ export async function handleAppMediaUpload(
 
   if (file.name.endsWith('.svg') || file.type === 'image/svg+xml') {
     const svgText = await file.text();
-    const parsed = parseFigmaSvgToLayers(svgText, activeShot.durationMs, activeShot.layers.length);
+    const parsed = parseFigmaSvgToLayers(svgText, shotDurationMs, layerCount);
     if (parsed.layers.length > 0) {
-      addMultipleLayersToShot(activeShot.id, parsed.layers, parsed.assets);
+      addMultipleLayersToShot(shotId, parsed.layers, parsed.assets);
       setInspectorTab('layer');
       setSelectedLayerIds(parsed.layers.map((layer) => layer.id));
     }
@@ -154,7 +159,7 @@ export async function handleAppMediaUpload(
   if (selectedLayer?.kind === 'image') {
     updateProject((project) => ({
       ...project,
-      shots: project.shots.map((shot) => shot.id !== activeShot.id ? shot : ({
+      shots: project.shots.map((shot) => shot.id !== shotId ? shot : ({
         ...shot,
         layers: shot.layers.map((layer) =>
           layer.id === selectedLayer.id && layer.kind === 'image'
@@ -166,17 +171,17 @@ export async function handleAppMediaUpload(
     selectLayer(selectedLayer.id, false);
   } else {
     const currentPlayheadMs = usePlayheadStore.getState().currentTimeMs;
-    const newLayer = addLayerToShot(activeShot.id, 'image', {
+    const newLayer = addLayerToShot(shotId, 'image', {
       name: file.name,
       assetId: assetRecord.id,
       position: { x: 0, y: 0, z: 0.1 },
       rotation: { x: 0, y: 0, z: 0 },
       size: {
-        width: Math.min(0.85, assetRecord.width / Math.max(1, assetRecord.height) * 0.42),
+        width: Math.min(0.85, (assetRecord.width / Math.max(1, assetRecord.height)) * 0.42),
         height: 0.72,
       },
-      inMs: Math.max(0, Math.min(Math.max(0, activeShot.durationMs - 1), currentPlayheadMs - activeShot.startMs)),
-      outMs: activeShot.durationMs,
+      inMs: Math.max(0, Math.min(Math.max(0, shotDurationMs - 1), currentPlayheadMs - shotStartMs)),
+      outMs: shotDurationMs,
     });
     selectLayer(newLayer.id, false);
   }

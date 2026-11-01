@@ -1,7 +1,7 @@
 import type { Project } from '../model/types';
 import { DEFAULT_PROJECT, createDefaultProject } from '../model/defaults';
 import { validateProject } from '../model/schema';
-import { MAX_HISTORY_STEPS } from './projectStoreConstants';
+import { MAX_HISTORY_STEPS, appendHistoryState } from './projectStoreConstants';
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
 
 export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransaction' | 'commitDragTransaction' | 'undo' | 'redo' | 'resetProject' | 'loadProjectJson'> = (set) => ({
@@ -18,10 +18,7 @@ export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransacti
                 return { dragSnapshot: null };
             }
             return {
-                past: [
-                    ...state.past.slice(-(MAX_HISTORY_STEPS - 1)),
-                    state.dragSnapshot,
-                ],
+                past: appendHistoryState(state.past, state.dragSnapshot),
                 future: [],
                 dragSnapshot: null,
                 validation: validateProject(state.project),
@@ -47,7 +44,7 @@ export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransacti
             const next = state.future[0];
             return {
                 project: next,
-                past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
+                past: appendHistoryState(state.past, state.project),
                 future: state.future.slice(1),
                 dragSnapshot: null,
                 validation: state.validation,
@@ -90,7 +87,7 @@ export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransacti
         if (result.success) {
             set((state) => ({
                 project: result.data,
-                past: [...state.past.slice(-(MAX_HISTORY_STEPS - 1)), state.project],
+                past: appendHistoryState(state.past, state.project),
                 future: [],
                 validation: result,
                 isHydrating: false,

@@ -55,7 +55,7 @@ interface UndoToast {
 
 interface UseAppKeyboardShortcutsOptions extends ProjectActions, SelectionActions, PlayheadActions {
   project: Project;
-  activeShot: Project['shots'][number];
+  activeShot?: Project['shots'][number];
   selectedLayer: Layer | undefined;
   selectedLayerIds: string[];
   selectedLayerSet: Set<string>;
@@ -205,15 +205,17 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
       // Cmd/Ctrl + A: Select All Layers in Active Shot
       if ((e.metaKey || e.ctrlKey) && key === 'a') {
         e.preventDefault();
-        setInspectorTab('layer');
-        setSelectedLayerIds(activeShot.layers.map((l) => l.id));
+        if (activeShot) {
+          setInspectorTab('layer');
+          setSelectedLayerIds(activeShot.layers.map((l) => l.id));
+        }
         return;
       }
 
       // Cmd/Ctrl + Shift + H: Toggle Hide/Show Selected Layer(s)
       if ((e.metaKey || e.ctrlKey) && e.shiftKey && key === 'h') {
         e.preventDefault();
-        if (selectedLayerIds.length > 0) {
+        if (activeShot && selectedLayerIds.length > 0) {
           updateShot(activeShot.id, (s) => ({
             ...s,
             layers: s.layers.map((l) =>
@@ -228,11 +230,13 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
 
       // Cmd/Ctrl + C: Copy Selected Layer(s)
       if ((e.metaKey || e.ctrlKey) && key === 'c') {
-        const toCopy = activeShot.layers.filter((l) =>
-          selectedLayerSet.has(l.id)
-        );
-        if (toCopy.length > 0) {
-          copiedLayersRef.current = structuredClone(toCopy);
+        if (activeShot) {
+          const toCopy = activeShot.layers.filter((l) =>
+            selectedLayerSet.has(l.id)
+          );
+          if (toCopy.length > 0) {
+            copiedLayersRef.current = structuredClone(toCopy);
+          }
         }
         return;
       }
@@ -308,7 +312,8 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
       if (
         (e.metaKey || e.ctrlKey) &&
         (e.code === 'BracketRight' || e.code === 'BracketLeft') &&
-        selectedLayer
+        selectedLayer &&
+        activeShot
       ) {
         e.preventDefault();
         const isForward = e.code === 'BracketRight';
@@ -373,12 +378,14 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
       // Cmd/Ctrl + G / Cmd/Ctrl + Shift + G: Group / Ungroup
       if ((e.metaKey || e.ctrlKey) && key === 'g') {
         e.preventDefault();
-        if (e.shiftKey) {
-          if (selectedLayer?.groupId) {
-            ungroupInShot(activeShot.id, selectedLayer.groupId);
+        if (activeShot) {
+          if (e.shiftKey) {
+            if (selectedLayer?.groupId) {
+              ungroupInShot(activeShot.id, selectedLayer.groupId);
+            }
+          } else if (selectedLayerIds.length > 0) {
+            createGroupFromLayers(activeShot.id, selectedLayerIds);
           }
-        } else if (selectedLayerIds.length > 0) {
-          createGroupFromLayers(activeShot.id, selectedLayerIds);
         }
         return;
       }
@@ -386,7 +393,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
       // Cmd/Ctrl + D: Duplicate Layer
       if ((e.metaKey || e.ctrlKey) && key === 'd') {
         e.preventDefault();
-        if (selectedLayer) {
+        if (selectedLayer && activeShot) {
           const dup = duplicateLayerInShot(activeShot.id, selectedLayer.id);
           if (dup) {
             setInspectorTab('layer');
@@ -445,7 +452,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
           });
           return;
         }
-        if (selectedLayerIds.length > 0) {
+        if (selectedLayerIds.length > 0 && activeShot) {
           e.preventDefault();
           const count = selectedLayerIds.length;
           deleteMultipleLayersFromShot(activeShot.id, selectedLayerIds);
@@ -457,7 +464,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
             historyLength: useProjectStore.getState().past.length,
           });
           return;
-        } else if (project.shots.length > 1) {
+        } else if (activeShot && project.shots.length > 1) {
           e.preventDefault();
           const shotIndex = project.shots.findIndex((s) => s.id === activeShot.id);
           deleteShot(activeShot.id);
@@ -488,7 +495,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
       if (e.defaultPrevented) return;
 
       // Arrow Keys: Nudge Layer (or Record Block if Shift+A Animate Mode is ON)
-      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) {
+      if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && activeShot) {
         e.preventDefault();
         const step = e.shiftKey ? 0.025 : 0.005;
         const dx =
@@ -539,9 +546,9 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
     selectedLayer,
     selectedLayerIds,
     selectedLayerSet,
-    activeShot.id,
-    activeShot.layers,
-    activeShot.groups,
+    activeShot?.id,
+    activeShot?.layers,
+    activeShot?.groups,
     isAnimateMode,
     updateShot,
     restackLayerInShot,

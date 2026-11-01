@@ -12,8 +12,6 @@ export type ValidationResult =
   | { success: true; data: Project; project: Project }
   | { success: false; errors: string[] };
 
-export { repairProjectReferentialIntegrity } from './projectReferentialIntegrity';
-
 export function validateProject(raw: unknown): ValidationResult {
   const migrated = migrateLegacyProject(raw);
   const parsed = ProjectSchema.safeParse(migrated);

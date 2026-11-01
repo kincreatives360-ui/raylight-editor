@@ -6,7 +6,7 @@ import type { Shot } from '../../model/types';
 
 interface UploadedAssetsPanelProps {
     assetCategory: 'uploads';
-    activeShot: Shot;
+    activeShot?: Shot;
     onUploadClick: () => void;
 }
 
@@ -15,8 +15,8 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
     activeShot,
     onUploadClick,
 }) => {
-    const { project, updateProject, addLayerToShot } = useProjectStore();
-    const { selectLayer, setInspectorTab } = useSelectionStore();
+    const { project, updateProject, addLayerToShot, addShot } = useProjectStore();
+    const { selectLayer, selectShot, setInspectorTab } = useSelectionStore();
     const assetList = Object.values(project.assets);
 
     return (
@@ -43,7 +43,13 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
                                             e.dataTransfer.effectAllowed = 'copy';
                                         }}
                                         onClick={() => {
-                                            const created = addLayerToShot(activeShot.id, 'image', {
+                                            let shotId = activeShot?.id;
+                                            if (!shotId) {
+                                                const createdShot = addShot();
+                                                shotId = createdShot.id;
+                                                selectShot(shotId);
+                                            }
+                                            const created = addLayerToShot(shotId, 'image', {
                                                 assetId: asset.id,
                                                 name: asset.name,
                                                 rotation: { x: 0, y: 0, z: 0 },

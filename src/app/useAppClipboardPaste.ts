@@ -5,7 +5,7 @@ import { useSelectionStore } from '../store/useSelectionStore';
 import { parseFigmaSvgToLayers, readImageFileWithThumbnail } from '../engine/figmaSvgImporter';
 
 interface UseAppClipboardPasteOptions {
-  activeShot: Project['shots'][number];
+  activeShot?: Project['shots'][number];
   copiedLayersRef: MutableRefObject<Layer[]>;
   addLayerToShot: ReturnType<typeof useProjectStore.getState>['addLayerToShot'];
   addMultipleLayersToShot: ReturnType<typeof useProjectStore.getState>['addMultipleLayersToShot'];
@@ -27,6 +27,7 @@ export function useAppClipboardPaste({
 }: UseAppClipboardPasteOptions): void {
   useEffect(() => {
     const handlePaste = async (event: ClipboardEvent) => {
+      if (!activeShot) return;
       const tag = document.activeElement?.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
 
@@ -90,9 +91,7 @@ export function useAppClipboardPaste({
     window.addEventListener('paste', handlePaste);
     return () => window.removeEventListener('paste', handlePaste);
   }, [
-    activeShot.id,
-    activeShot.durationMs,
-    activeShot.layers.length,
+    activeShot,
     addLayerToShot,
     addMultipleLayersToShot,
     copiedLayersRef,

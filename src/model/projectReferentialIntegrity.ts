@@ -1,16 +1,16 @@
 import type { Project } from './types';
+import { generateId } from './id';
 
 /**
  * Enforces unique entity IDs and repairs dangling references (groups, parent groups, mask layers, and missing assets).
  */
 export function repairProjectReferentialIntegrity(project: Project): Project {
   const seenIds = new Set<string>();
-  let idCounter = 1;
 
   const ensureUniqueId = (id: string | undefined, prefix: string): string => {
-    let candidate = id && typeof id === 'string' && id.trim().length > 0 ? id.trim() : `${prefix}-${idCounter++}`;
+    let candidate = id && typeof id === 'string' && id.trim().length > 0 ? id.trim() : generateId(prefix);
     while (seenIds.has(candidate)) {
-      candidate = `${prefix}-${Date.now().toString(36)}-${idCounter++}`;
+      candidate = generateId(prefix);
     }
     seenIds.add(candidate);
     return candidate;

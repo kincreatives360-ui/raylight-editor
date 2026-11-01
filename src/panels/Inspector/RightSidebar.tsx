@@ -27,7 +27,7 @@ import { ShotSettingsPanel } from './ShotSettingsPanel';
 
 
 interface RightSidebarProps {
-    activeShot: Shot;
+    activeShot?: Shot;
     selectedLayer: Layer | undefined;
     selectedLayerIds: string[];
     onSwapImageClick: () => void;
@@ -86,14 +86,14 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     const effectiveMainTab = isBlankState ? 'design' : mainTab;
 
     const activeCameraBlock: CameraBlock | undefined =
-        activeShot.cameraBlocks?.find((cb) => cb.id === selectedCameraBlockId);
+        activeShot?.cameraBlocks?.find((cb) => cb.id === selectedCameraBlockId);
 
     const activeLightBlock: LightAnimationBlock | undefined =
-        activeShot.lightBlocks?.find((lb) => lb.id === selectedLightBlockId);
+        activeShot?.lightBlocks?.find((lb) => lb.id === selectedLightBlockId);
 
     const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
-        if (!file || !selectedLayer || selectedLayer.kind !== 'text') return;
+        if (!file || !selectedLayer || selectedLayer.kind !== 'text' || !activeShot) return;
         const fontName = file.name
             .replace(/\.[^/.]+$/, '')
             .replace(/[^a-zA-Z0-9_-]/g, '_');
@@ -114,8 +114,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     };
 
     const handleAddAnimationBlock = (property: AnimationBlockProperty) => {
-        addLayerAnimation(activeShot, selectedLayerIds, property);
-        setMainTab('animate');
+        if (activeShot) {
+            addLayerAnimation(activeShot, selectedLayerIds, property);
+            setMainTab('animate');
+        }
     };
 
     return (
@@ -176,19 +178,19 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
             {/* =================================================================== */}
             {/* CAMERA BLOCK INSPECTOR (When Camera Move is Selected)               */}
             {/* =================================================================== */}
-            {activeCameraBlock ? (
+            {activeCameraBlock && activeShot ? (
                 <CameraBlockSection
                     activeShotId={activeShot.id}
                     activeCameraBlock={activeCameraBlock}
                     onDone={() => selectCameraBlock(null)}
                 />
-            ) : activeLightBlock ? (
+            ) : activeLightBlock && activeShot ? (
                 <LightBlockInspector
                     activeShotId={activeShot.id}
                     activeLightBlock={activeLightBlock}
                     onDone={() => selectLightBlock(null)}
                 />
-            ) : selectedLayer ? (
+            ) : selectedLayer && activeShot ? (
                 <>
                     {/* 2. SUB-HEADER: Context navigation (Only when layer is selected) */}
                     <div className="h-10 border-b border-subtle px-3.5 flex items-center shrink-0 bg-app">
@@ -215,7 +217,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                         activeShot={activeShot} selectedLayer={selectedLayer} selectedLayerIds={selectedLayerIds}
                     />}
                 </>
-            ) : selectedLightId && isSelectedLightValid ? (
+            ) : selectedLightId && isSelectedLightValid && activeShot ? (
                 <LightInspector
                     activeShot={activeShot}
                     selectedLightId={selectedLightId}
@@ -223,7 +225,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 />
             ) : (
                 <div className="flex-1 flex flex-col overflow-hidden">
-                    {effectiveInspectorTab === 'shot' ? (
+                    {effectiveInspectorTab === 'shot' && activeShot ? (
                         <ShotSettingsPanel
                             activeShot={activeShot}
                             onOpenExportModal={onOpenExportModal}

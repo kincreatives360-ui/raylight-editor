@@ -1,17 +1,18 @@
-import { defaultInspectorWidth, MIN_STAGE_WIDTH } from './ui/workspaceLayout';
-import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
-import type { Layer } from './model/types';
-import { useProjectStore } from './store/useProjectStore';
-import { usePlayheadStore } from './store/usePlayheadStore';
 import {
-  useSelectionStore,
+  defaultInspectorWidth,
+  MIN_STAGE_WIDTH,
   MIN_LEFT_PANEL_WIDTH,
   MAX_LEFT_PANEL_WIDTH,
   DEFAULT_LEFT_PANEL_WIDTH,
   MIN_RIGHT_SIDEBAR_WIDTH,
   MAX_RIGHT_SIDEBAR_WIDTH,
-} from './store/useSelectionStore';
+} from './ui/workspaceLayout';
+import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import type { Layer } from './model/types';
+import { useProjectStore } from './store/useProjectStore';
+import { usePlayheadStore } from './store/usePlayheadStore';
+import { useSelectionStore } from './store/useSelectionStore';
 import { decodeAudioFromDataUrl } from './engine/audioEngine';
 import { useAppPlayback } from './app/useAppPlayback';
 import { useAppProjectPersistence } from './app/useAppProjectPersistence';
@@ -41,7 +42,6 @@ import { SidebarResizeHandle } from './ui/SidebarResizeHandle';
 import { IconButton } from './ui/primitives';
 import { UndoToast } from './ui/UndoToast';
 import { StageSkeletonLoader } from './ui/StageSkeletonLoader';
-import { SpeedInsights } from '@vercel/speed-insights/react';
 
 export default function App() {
   const {
@@ -62,7 +62,6 @@ export default function App() {
     splitAtPlayhead,
     undo,
     redo,
-    toggleProjectAudioMuted,
     isHydrating,
     setHydrated,
   } = useProjectStore();
@@ -181,10 +180,10 @@ export default function App() {
   // When selectedLayerIds is empty, selectedLayer is undefined so RightSidebar shows Shot Settings.
   const selectedLayer = useMemo(
     () =>
-      selectedLayerIds.length > 0
+      selectedLayerIds.length > 0 && projectActiveShot?.layers
         ? projectActiveShot.layers.find((l) => selectedLayerSet.has(l.id))
         : undefined,
-    [selectedLayerIds.length, projectActiveShot.layers, selectedLayerSet]
+    [selectedLayerIds.length, projectActiveShot, selectedLayerSet]
   );
 
   const {
@@ -199,15 +198,15 @@ export default function App() {
     handleOpenExportModal,
     handleStartExport,
     cancelExport,
-  } = useAppExport({ project, selectedShotId: activeShot.id, setIsPlaying, setCurrentTimeMs });
+  } = useAppExport({ project, selectedShotId: activeShot?.id ?? '', setIsPlaying, setCurrentTimeMs });
 
   const exportMetrics = useMemo(
     () =>
       estimateExportMetrics(project, {
         ...exportSettings,
-        selectedShotId: activeShot.id,
+        selectedShotId: activeShot?.id ?? '',
       }),
-    [project, exportSettings, activeShot.id]
+    [project, exportSettings, activeShot?.id]
   );
 
   const handleUploadClick = useCallback(() => {
@@ -355,23 +354,9 @@ export default function App() {
     });
   const commandList = useAppCommandList({
     project,
-    activeShotId: activeShot.id,
-    isPlaying,
-    leftPanelOpen,
-    rightSidebarOpen,
+    activeShotId: activeShot?.id ?? '',
     projectFileInputRef,
-    togglePlay,
-    splitAtPlayhead,
-    addLayerToShot,
-    setActiveTool,
     handleOpenExportModal,
-    setLeftPanelOpen,
-    setRightSidebarOpen,
-    toggleLeftPanel,
-    toggleRightSidebar,
-    undo,
-    redo,
-    toggleProjectAudioMuted,
     setShortcutsModalOpen,
   });
   return (
@@ -381,7 +366,7 @@ export default function App() {
         ref={projectFileInputRef}
         type="file"
         accept=".json,.raylight.json,application/json"
-        onChange={(event) => handleAppProjectImport(event, updateProject)}
+        onChange={(event) => handleAppProjectImport(event, updateProject, (msg) => setUndoToast({ message: msg, isOpen: true }))}
         className="hidden"
       />
       <input
@@ -538,7 +523,6 @@ export default function App() {
           </Suspense>
         </ModalErrorBoundary>
       )}
-      <SpeedInsights />
     </div>
   );
 }

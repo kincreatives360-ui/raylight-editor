@@ -47,6 +47,15 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
     };
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (exportCloseTimerRef.current !== null) {
+        window.clearTimeout(exportCloseTimerRef.current);
+        exportCloseTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const handleOpenExportModal = useCallback(() => {
     setExportProgressText('');
     setExportError('');

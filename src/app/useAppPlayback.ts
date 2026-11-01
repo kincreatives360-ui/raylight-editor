@@ -47,8 +47,8 @@ export function useAppPlayback({
       if (drift > 45) {
         lastSyncPlayhead = state.currentTimeMs;
         lastSyncWallTime = performance.now();
+        syncAudioPlayback(project.audio, true, state.currentTimeMs);
       }
-      syncAudioPlayback(project.audio, true, state.currentTimeMs);
     });
     return unsubscribe;
   }, [project.audio]);
