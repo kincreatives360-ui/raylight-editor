@@ -1,4 +1,5 @@
 // src/storage/projectIO.ts
+import { useState, useEffect } from 'react';
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { DEFAULT_PROJECT, createDefaultShot, CURRENT_SCHEMA_VERSION } from '../model/defaults';
