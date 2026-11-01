@@ -1,4 +1,4 @@
-import { DEFAULT_FOCAL_LENGTH } from '../../engine/evaluateCamera';
+import { DEFAULT_FOCAL_LENGTH } from '../../engine/constants';
 import type { CameraBlock, CameraKeyframeEndpoint } from '../../model/types';
 
 export type CameraMovementId =
