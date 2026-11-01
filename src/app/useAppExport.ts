@@ -1,7 +1,7 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Project } from '../model/types';
 import type { ExportSettings } from '../engine/exporter';
-import { isMediaRecorderMp4Supported } from '../engine/exportCapabilities';
+import { getExportCapabilities } from '../engine/export/capabilities';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 
 interface UseAppExportOptions {
@@ -14,7 +14,7 @@ interface UseAppExportOptions {
 export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrentTimeMs }: UseAppExportOptions) {
   const [exportModalOpen, setExportModalOpen] = useState(false);
   const [exportSettings, setExportSettings] = useState<ExportSettings>(() => ({
-    format: isMediaRecorderMp4Supported() ? 'mp4' : 'webm',
+    format: 'mp4',
     resolution: '1080p',
     fps: 60,
     quality: 'social',
@@ -26,6 +26,26 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
   const [exportError, setExportError] = useState('');
   const exportAbortRef = useRef<AbortController | null>(null);
   const exportCloseTimerRef = useRef<number | null>(null);
+
+  // Fall back from MP4 when this browser cannot encode H.264 video.
+  useEffect(() => {
+    let cancelled = false;
+    getExportCapabilities().then((caps) => {
+      if (cancelled) return;
+      setExportSettings((current) => {
+        if (current.format === 'mp4' && !caps.mp4.available && caps.webm.available) {
+          return { ...current, format: 'webm' };
+        }
+        if (current.format === 'webm' && !caps.webm.available && caps.mp4.available) {
+          return { ...current, format: 'mp4' };
+        }
+        return current;
+      });
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const handleOpenExportModal = useCallback(() => {
     setExportProgressText('');
@@ -39,18 +59,6 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
     setExportProgressText('');
     let controller: AbortController | null = null;
     try {
-      if (exportSettings.format === 'png') {
-        const { exportCurrentFrameAsPng } = await import('../engine/exporter');
-        await exportCurrentFrameAsPng(
-          project,
-          project.name,
-          usePlayheadStore.getState().currentTimeMs,
-          exportSettings.resolution
-        );
-        setExportModalOpen(false);
-        return;
-      }
-
       if (exportCloseTimerRef.current !== null) {
         window.clearTimeout(exportCloseTimerRef.current);
         exportCloseTimerRef.current = null;

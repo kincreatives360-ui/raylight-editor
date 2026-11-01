@@ -64,9 +64,11 @@ export function estimateExportMetrics(
     const resScale = (width * height) / (1920 * 1080);
     const estimatedSizeMb = settings.format === 'png'
         ? 1.4 * resScale
-        : settings.format === 'gif'
-            ? durationSec * 0.85
-            : (durationSec * effectiveBitrateMbps) / 8;
+        : settings.format === 'png-seq'
+            ? totalFrames * 0.9 * resScale
+            : settings.format === 'gif'
+                ? durationSec * 0.85
+                : (durationSec * effectiveBitrateMbps) / 8;
     const estimatedTimeSec = settings.format === 'png'
         ? 1
         : Math.max(2, Math.ceil((totalFrames * (resScale > 2 ? 32 : 16)) / 1000));

@@ -92,6 +92,9 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           col.b=sampleAt(vUv+vec2(blue.x,-blue.y)).b;
         #elif EFFECT == 4
           vec2 pixel=vec2(vUv.x,1.0-vUv.y)*uResolution-0.5;
+          // Normalize to 1080p-equivalent author space: grain cells keep the
+          // same size relative to the frame at 720p, 4K, or any viewport.
+          pixel*=1080.0/max(1.0,uResolution.y);
           pixel.y*=uExtra.x;
           float coarse=random(floor(pixel/max(1.0,uParams.y)))-.5;
           float fine=random(floor(pixel))- .5;
@@ -163,7 +166,10 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           if (coc > 0.003) {
             vec4 accum = vec4(0.0);
             float total = 0.0;
-            float maxR = coc * min(32.0, uResolution.y * 0.035);
+            // Bokeh radius is authored in 1080p-equivalent author space and hard-capped,
+            // so the same focus geometry renders identical blur at 720p, 1080p, or any
+            // export resolution — never relatively finer at higher resolutions.
+            float maxR = min(coc * 32.0, 32.0) * max(1.0, uResolution.y) / 108.0;
             for (int i = 0; i < 24; i++) {
               float fi = float(i);
               float angle = fi * 2.39996323;

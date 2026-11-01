@@ -316,7 +316,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     }
     return {};
   }, [bg, opacity, gradientTexture, imageTexture]);
-  const lightUniforms = useMemo(() => getBackgroundLightUniforms(light, opacity), []);
+  const lightUniforms = useMemo(() => getBackgroundLightUniforms(light, opacity), [light, opacity]);
 
   useEffect(() => {
     if (!lightUniforms) return;

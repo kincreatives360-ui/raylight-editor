@@ -118,6 +118,7 @@ export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, 
     return hwCap;
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function shouldRebuildPassList(activePassKey: string | null, currentPassKey: string, passCount = 1): boolean {
     return passCount === 0 || activePassKey !== currentPassKey;
 }

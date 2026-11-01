@@ -270,5 +270,18 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
 
     pass.material.dispose();
   });
+
+  it('caps the DoF bokeh radius in 1080p-equivalent author space', () => {
+    const pass = createSceneEffectPass('depthOfField');
+    const shader = pass.material.fragmentShader as string;
+    // The bokeh radius must be authored in 1080p-equivalent author space and
+    // hard-capped, so preview/playback and exports render identical blur at any
+    // resolution instead of scaling relatively with the render target.
+    expect(shader).toContain('float maxR');
+    expect(shader).toContain('min(coc * 32.0');
+    expect(shader).toContain('/ 108.0');
+    expect(shader).not.toContain('uResolution.y * 0.035');
+    pass.material.dispose();
+  });
 });
 

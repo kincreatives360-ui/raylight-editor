@@ -19,7 +19,10 @@ import type {
   ExportResolution,
   ExportSettings,
 } from '../engine/exporter';
-import { isMediaRecorderMp4Supported } from '../engine/exportCapabilities';
+import {
+  getExportCapabilities,
+  type ExportCapabilities,
+} from '../engine/export/capabilities';
 
 export interface ExportModalProps {
   isOpen: boolean;
@@ -57,7 +60,43 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onStartExport,
   onCancelExport,
 }) => {
+  const [capabilities, setCapabilities] = React.useState<ExportCapabilities | null>(null);
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+    let cancelled = false;
+    getExportCapabilities().then((caps) => {
+      if (!cancelled) setCapabilities(caps);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen]);
+
   if (!isOpen) return null;
+
+  const formatOptions: {
+    id: ExportFormat;
+    label: string;
+    desc: string;
+    disabledReason?: string;
+  }[] = [
+    {
+      id: 'mp4',
+      label: 'MP4 Video',
+      desc: 'H.264 with sound',
+      disabledReason: capabilities?.mp4.available ? undefined : capabilities?.mp4.reason,
+    },
+    {
+      id: 'webm',
+      label: 'WebM Video',
+      desc: 'VP9 with sound',
+      disabledReason: capabilities?.webm.available ? undefined : capabilities?.webm.reason,
+    },
+    { id: 'gif', label: 'Animated GIF', desc: 'Silent loop' },
+    { id: 'png', label: 'PNG Still', desc: 'Current frame' },
+    { id: 'png-seq', label: 'PNG Sequence', desc: 'Lossless frames' },
+  ];
 
   return (
     <ModalShell
@@ -78,7 +117,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 Export &amp; Share Video
               </h3>
               <p className="text-xs text-muted-foreground">
-                Render MP4, Looping GIF, or High-Res PNG
+                Render MP4, WebM, Looping GIF, or lossless PNG
               </p>
             </div>
           </div>
@@ -96,34 +135,30 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         </div>
 
         <div className="grid grid-cols-3 gap-2">
-          {(
-            [
-              {
-                id: isMediaRecorderMp4Supported() ? ('mp4' as const) : ('webm' as const),
-                label: isMediaRecorderMp4Supported() ? 'MP4 Video' : 'WebM Video',
-                desc: isMediaRecorderMp4Supported() ? 'With sound' : 'VP9 with sound',
-              },
-              { id: 'gif' as const, label: 'Animated GIF', desc: 'Silent loop' },
-              { id: 'png' as const, label: 'PNG Still', desc: 'Current frame' },
-            ] as { id: ExportFormat; label: string; desc: string }[]
-          ).map((fmt) => (
-            <button
-              key={fmt.id}
-              disabled={exporting}
-              onClick={() =>
-                setExportSettings((s) => ({ ...s, format: fmt.id }))
-              }
-              className={`p-2.5 rounded-xl border text-left cursor-pointer transition ${exportSettings.format === fmt.id
-                ? 'bg-brand-blue/20 border-brand-blue text-white'
-                : 'bg-subtle border-subtle text-muted-foreground hover:text-foreground'
-                }`}
-            >
-              <div className="font-semibold text-xs">{fmt.label}</div>
-              <div className="text-[11px] text-muted-foreground mt-0.5">
-                {fmt.desc}
-              </div>
-            </button>
-          ))}
+          {formatOptions.map((fmt) => {
+            const selected = exportSettings.format === fmt.id;
+            return (
+              <button
+                key={fmt.id}
+                disabled={exporting || !!fmt.disabledReason}
+                title={fmt.disabledReason}
+                onClick={() =>
+                  setExportSettings((s) => ({ ...s, format: fmt.id }))
+                }
+                className={`p-2.5 rounded-xl border text-left transition ${selected
+                  ? 'bg-brand-blue/20 border-brand-blue text-white'
+                  : fmt.disabledReason
+                    ? 'bg-subtle/50 border-subtle text-muted-foreground/40 cursor-not-allowed'
+                    : 'bg-subtle border-subtle text-muted-foreground hover:text-foreground cursor-pointer'
+                  }`}
+              >
+                <div className="font-semibold text-xs">{fmt.label}</div>
+                <div className="text-[11px] text-muted-foreground mt-0.5">
+                  {fmt.disabledReason ? 'Unavailable' : fmt.desc}
+                </div>
+              </button>
+            );
+          })}
         </div>
 
         {/* Scope */}
@@ -172,7 +207,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
                 <button
                   key={f}
                   type="button"
-                  disabled={exporting || exportSettings.format !== 'mp4'}
+                  disabled={exporting || exportSettings.format === 'gif' || exportSettings.format === 'png'}
                   onClick={() => setExportSettings((s) => ({ ...s, fps: f }))}
                   className={`rounded-md text-[11px] font-medium transition cursor-pointer flex items-center justify-center ${
                     exportSettings.fps === f
@@ -279,7 +314,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             <span>
               {exporting
                 ? 'Rendering...'
-                : `Export ${exportSettings.format === 'webm' ? 'WebM' : exportSettings.format.toUpperCase()}`}
+                : `Export ${
+                    exportSettings.format === 'png-seq'
+                      ? 'PNG Sequence'
+                      : exportSettings.format === 'png'
+                        ? 'PNG Still'
+                        : exportSettings.format === 'webm'
+                          ? 'WebM'
+                          : exportSettings.format.toUpperCase()
+                  }`}
             </span>
           </button>
         </div>

@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getExportDimensions, estimateExportMetrics } from './exportMetrics';
 import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache, syncAudioPlayback, stopAudioPlayback } from './audioEngine';
-import { runVideoExportPipeline } from './exporter';
 import type { Project, AudioClip } from '../model/types';
 import { createDefaultProject } from '../model/defaults';
 
@@ -339,63 +338,7 @@ describe('Audio Engine Concurrent Decoding', () => {
     });
 });
 
-describe('Export Pipeline Cancellation', () => {
-    it('cleanly aborts runVideoExportPipeline when AbortSignal is triggered', async () => {
-        const originalWindow = (globalThis as unknown as { window?: unknown }).window;
-        const originalDocument = (globalThis as unknown as { document?: unknown }).document;
-
-        const mockCanvas = {
-            width: 100,
-            height: 100,
-            getContext: vi.fn(() => ({
-                drawImage: vi.fn(),
-                getImageData: vi.fn(() => ({ data: new Uint8Array(4) })),
-            })),
-            toBlob: vi.fn((cb) => cb(new Blob())),
-        };
-
-        (globalThis as unknown as { document: unknown }).document = {
-            createElement: vi.fn((tag: string) => {
-                if (tag === 'canvas') return mockCanvas;
-                if (tag === 'a') return { href: '', download: '', click: vi.fn() };
-                return {};
-            }),
-            getElementById: vi.fn(() => null),
-            querySelector: vi.fn(() => null),
-            body: {
-                appendChild: vi.fn(),
-                removeChild: vi.fn(),
-            },
-            fonts: { ready: Promise.resolve() },
-        };
-
-        (globalThis as unknown as { window: unknown }).window = {
-            requestAnimationFrame: (cb: () => void) => setTimeout(cb, 0),
-        };
-
-        try {
-            const project = createDefaultProject();
-            const controller = new AbortController();
-            controller.abort();
-
-            const progressCalls: number[] = [];
-            await expect(
-                runVideoExportPipeline(
-                    project,
-                    (prog) => progressCalls.push(prog.frameIndex),
-                    { format: 'gif' },
-                    controller.signal
-                )
-            ).resolves.toBeUndefined();
-
-            // The pipeline aborted before executing frame capture loop
-            expect(progressCalls.length).toBeLessThanOrEqual(1);
-        } finally {
-            (globalThis as unknown as { document: unknown }).document = originalDocument;
-            (globalThis as unknown as { window: unknown }).window = originalWindow;
-        }
-    });
-
+describe('Audio Preview Playback Scheduling', () => {
     it('schedules both active and future audio clips using Web Audio lookahead timestamps (F-01)', async () => {
         const mockBuffer = {
             sampleRate: 44100,

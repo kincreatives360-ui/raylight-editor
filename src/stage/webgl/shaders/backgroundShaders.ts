@@ -633,8 +633,11 @@ export const SHADER_PRESET_FRAGMENTS: Record<string, string> = {
     float gradient = q.x * 0.4 + q.y * 0.3 + sin(q.x * 2.0 + t) * 0.15;
     gradient = clamp(gradient * 0.5 + 0.5, 0.0, 1.0);
 
+    // Bayer cells are defined in 1080p-equivalent author space (uResolution is
+    // pinned to the author size), so the dither grid looks identical at 720p,
+    // 4K, or any viewport — never relatively finer at higher resolutions.
     float pixelSize = max(2.0, 5.0 * (1.0 / focus));
-    float bayer = getBayer4x4(gl_FragCoord.xy / pixelSize);
+    float bayer = getBayer4x4(vUv * uResolution / pixelSize);
 
     float ditherVal = gradient + (bayer - 0.5) * (0.6 * shine);
     ditherVal = clamp(ditherVal, 0.0, 1.0);
