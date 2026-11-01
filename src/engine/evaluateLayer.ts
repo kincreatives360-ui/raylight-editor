@@ -60,7 +60,7 @@ export function revealText(
     return resolved + scrambledTail;
 }
 
-function evaluateSplineOffset(amount: Vec3 | number, u: number): Vec3 {
+export function evaluateSplineOffset(amount: Vec3 | number, u: number): Vec3 {
     const ax = typeof amount === 'number' ? amount : amount.x;
     const ay = typeof amount === 'number' ? 0 : amount.y;
     const az = typeof amount === 'number' ? 0 : amount.z;

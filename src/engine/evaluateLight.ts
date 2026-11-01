@@ -1,6 +1,7 @@
 import type { LightRig, LightAnimationBlock } from '../model/types';
 import { evaluateEasing } from './easing';
-import { lerp, lerpHex } from './lightingSystem';
+import { lerpHex } from './lightingSystem';
+import { lerp } from './math';
 
 /** Deep clone of a rig (position, target, rotation and every source). */
 export function cloneLightRig(rig: LightRig): LightRig {

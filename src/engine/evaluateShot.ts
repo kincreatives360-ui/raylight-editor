@@ -10,7 +10,34 @@ import {
     resolveDepthOfFieldFocusZ,
     type EvaluatedEffects,
 } from './evaluateEffects';
+import { lerp } from './math';
 export { resolveDepthOfFieldFocusZ };
+
+/** Deep clone SceneEffects to prevent mutation of original shot object. */
+function deepCloneEffects(effects: SceneEffects): SceneEffects {
+    return JSON.parse(JSON.stringify(effects));
+}
+
+/** Effect block handler type: receives the config object and the animated value, mutates config. */
+type EffectBlockHandler = (config: SceneEffects, val: number) => void;
+
+/** Map of effectKey to handler function. Replaces long if-else chain for extensibility. */
+const EFFECT_BLOCK_HANDLERS: Record<string, EffectBlockHandler> = {
+    depthOfField: (config, val) => { config.depthOfField.enabled = true; config.depthOfField.target.z = val; },
+    bloom: (config, val) => { config.bloom.enabled = true; config.bloom.intensity = Math.max(0, val); },
+    vignette: (config, val) => { config.vignette.enabled = true; config.vignette.intensity = Math.max(0, Math.min(1, val)); },
+    filmGrain: (config, val) => { config.filmGrain.enabled = true; config.filmGrain.intensity = Math.max(0, val); },
+    chromaticAberration: (config, val) => { config.chromaticAberration.enabled = true; config.chromaticAberration.offset = Math.max(0, val); },
+    glitch: (config, val) => { config.glitch.enabled = true; config.glitch.intensity = Math.max(0, val); },
+    colorGrade: (config, val) => { config.colorGrade.enabled = true; config.colorGrade.exposure = Math.max(0.2, val); },
+    motionBlur: (config, val) => { config.motionBlur.enabled = true; config.motionBlur.shutterAngle = Math.max(0, val); },
+    ghost: (config, val) => { config.ghost.enabled = true; config.ghost.opacity = Math.max(0, Math.min(1, val)); },
+    edgeFade: (config, val) => { config.edgeFade.enabled = true; config.edgeFade.top = Math.max(0, Math.min(1, val)); config.edgeFade.bottom = Math.max(0, Math.min(1, val)); },
+    atmosphere: (config, val) => { config.atmosphere.enabled = true; config.atmosphere.fog = Math.max(0, Math.min(1, val)); },
+    gradientMap: (config, val) => { config.gradientMap.enabled = true; config.gradientMap.blend = Math.max(0, Math.min(1, val)); },
+    fishEye: (config, val) => { config.fishEye.enabled = true; config.fishEye.amount = Math.max(-1, Math.min(1, val)); },
+    lensDistortion: (config, val) => { config.lensDistortion.enabled = true; config.lensDistortion.strength = Math.max(-1, Math.min(1, val)); },
+};
 
 export interface ShotTransitionCompositeState {
     isActive: boolean;
@@ -128,10 +155,6 @@ export interface EvaluatedProjectFrame {
         progress: number;
         outgoingFrame?: EvaluatedProjectFrame;
     };
-}
-
-function lerp(a: number, b: number, t: number): number {
-    return a + (b - a) * t;
 }
 
 export function isLayerEffectivelyHidden(
@@ -288,13 +311,18 @@ export function evaluateProjectAtTime(
         ) {
             shotIndex = shots.length - 1;
         } else {
-            let latestIdx = 0;
-            for (let i = 0; i < shots.length; i++) {
-                if (shots[i].startMs <= clampedGlobalMs) {
-                    latestIdx = i;
+            // Time is before the first shot's startMs - clamp to first shot
+            if (clampedGlobalMs < shots[0].startMs) {
+                shotIndex = 0;
+            } else {
+                let latestIdx = 0;
+                for (let i = 0; i < shots.length; i++) {
+                    if (shots[i].startMs <= clampedGlobalMs) {
+                        latestIdx = i;
+                    }
                 }
+                shotIndex = latestIdx;
             }
-            shotIndex = latestIdx;
         }
     }
 
@@ -325,26 +353,8 @@ export function evaluateProjectAtTime(
             }
         }
         if (hasActiveBlock) {
-            evaluatedEffectsConfig = {
-                ...baseShot.effects,
-                atmosphere: { ...baseShot.effects.atmosphere },
-                gradientMap: { ...baseShot.effects.gradientMap, stops: baseShot.effects.gradientMap.stops.map(stop => ({ ...stop })) },
-                fishEye: { ...baseShot.effects.fishEye },
-                lensDistortion: { ...baseShot.effects.lensDistortion },
-                depthOfField: {
-                    ...baseShot.effects.depthOfField,
-                    target: { ...baseShot.effects.depthOfField.target },
-                },
-                bloom: { ...baseShot.effects.bloom },
-                vignette: { ...baseShot.effects.vignette },
-                filmGrain: { ...baseShot.effects.filmGrain },
-                chromaticAberration: { ...baseShot.effects.chromaticAberration },
-                glitch: { ...baseShot.effects.glitch },
-                colorGrade: { ...baseShot.effects.colorGrade },
-                motionBlur: { ...baseShot.effects.motionBlur },
-                ghost: { ...baseShot.effects.ghost },
-                edgeFade: { ...baseShot.effects.edgeFade },
-            };
+            // Deep clone ALL effects to prevent mutation of original shot object
+            evaluatedEffectsConfig = deepCloneEffects(baseShot.effects);
             for (const eb of effectBlocks) {
                 if (shotLocalTimeMs < eb.startMs) continue;
                 const rawP =
@@ -354,49 +364,9 @@ export function evaluateProjectAtTime(
                 const eased = evaluateEasing(rawP, eb.easing);
                 const val = lerp(eb.fromValue, eb.toValue, eased);
 
-                if (eb.effectKey === 'depthOfField') {
-                    evaluatedEffectsConfig.depthOfField.enabled = true;
-                    evaluatedEffectsConfig.depthOfField.target.z = val;
-                } else if (eb.effectKey === 'bloom') {
-                    evaluatedEffectsConfig.bloom.enabled = true;
-                    evaluatedEffectsConfig.bloom.intensity = Math.max(0, val);
-                } else if (eb.effectKey === 'vignette') {
-                    evaluatedEffectsConfig.vignette.enabled = true;
-                    evaluatedEffectsConfig.vignette.intensity = Math.max(0, Math.min(1, val));
-                } else if (eb.effectKey === 'filmGrain') {
-                    evaluatedEffectsConfig.filmGrain.enabled = true;
-                    evaluatedEffectsConfig.filmGrain.intensity = Math.max(0, val);
-                } else if (eb.effectKey === 'chromaticAberration') {
-                    evaluatedEffectsConfig.chromaticAberration.enabled = true;
-                    evaluatedEffectsConfig.chromaticAberration.offset = Math.max(0, val);
-                } else if (eb.effectKey === 'glitch') {
-                    evaluatedEffectsConfig.glitch.enabled = true;
-                    evaluatedEffectsConfig.glitch.intensity = Math.max(0, val);
-                } else if (eb.effectKey === 'colorGrade') {
-                    evaluatedEffectsConfig.colorGrade.enabled = true;
-                    evaluatedEffectsConfig.colorGrade.exposure = Math.max(0.2, val);
-                } else if (eb.effectKey === 'motionBlur') {
-                    evaluatedEffectsConfig.motionBlur.enabled = true;
-                    evaluatedEffectsConfig.motionBlur.shutterAngle = Math.max(0, val);
-                } else if (eb.effectKey === 'ghost') {
-                    evaluatedEffectsConfig.ghost.enabled = true;
-                    evaluatedEffectsConfig.ghost.opacity = Math.max(0, Math.min(1, val));
-                } else if (eb.effectKey === 'edgeFade') {
-                    evaluatedEffectsConfig.edgeFade.enabled = true;
-                    evaluatedEffectsConfig.edgeFade.top = Math.max(0, Math.min(1, val));
-                    evaluatedEffectsConfig.edgeFade.bottom = Math.max(0, Math.min(1, val));
-                } else if (eb.effectKey === 'atmosphere') {
-                    evaluatedEffectsConfig.atmosphere.enabled = true;
-                    evaluatedEffectsConfig.atmosphere.fog = Math.max(0, Math.min(1, val));
-                } else if (eb.effectKey === 'gradientMap') {
-                    evaluatedEffectsConfig.gradientMap.enabled = true;
-                    evaluatedEffectsConfig.gradientMap.blend = Math.max(0, Math.min(1, val));
-                } else if (eb.effectKey === 'fishEye') {
-                    evaluatedEffectsConfig.fishEye.enabled = true;
-                    evaluatedEffectsConfig.fishEye.amount = Math.max(-1, Math.min(1, val));
-                } else if (eb.effectKey === 'lensDistortion') {
-                    evaluatedEffectsConfig.lensDistortion.enabled = true;
-                    evaluatedEffectsConfig.lensDistortion.strength = Math.max(-1, Math.min(1, val));
+                const handler = EFFECT_BLOCK_HANDLERS[eb.effectKey];
+                if (handler) {
+                    handler(evaluatedEffectsConfig, val);
                 }
             }
         }
@@ -409,7 +379,7 @@ export function evaluateProjectAtTime(
     };
 
     // 3. Evaluate Camera Rig
-    const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs);
+    const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs, frameNumber);
 
     // 4. Evaluate Scene Effects Rack
     const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
@@ -426,6 +396,20 @@ export function evaluateProjectAtTime(
 
     const sortedLayers = [...(activeShot.layers || [])].sort((a, b) => a.order - b.order);
 
+    // 6. Pre-evaluate all layers at prevShotLocalTime for motion blur memoization
+    // This avoids re-evaluating each layer at t-frameDt for every layer with motion blur
+    const prevLayersMap = new Map<string, EvaluatedLayer>();
+    if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
+        for (const layer of sortedLayers) {
+            const isHidden = isLayerEffectivelyHidden(layer, groupById);
+            prevLayersMap.set(layer.id, evaluateLayerAtTime(
+                isHidden ? { ...layer, hidden: true } : layer,
+                prevShotLocalTime
+            ));
+        }
+    }
+
+    // 7. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
         const isHidden = isLayerEffectivelyHidden(layer, groupById);
         const rawEvalLayer = evaluateLayerAtTime(
@@ -462,10 +446,25 @@ export function evaluateProjectAtTime(
 
         let motionBlur: EvaluatedLayerWithEffects['motionBlur'] | undefined;
         if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
-            const rawPrev = evaluateLayerAtTime(
-                isHidden ? { ...layer, hidden: true } : layer,
-                prevShotLocalTime
-            );
+            const rawPrev = prevLayersMap.get(layer.id);
+            if (!rawPrev) {
+                // Fallback if not memoized (shouldn't happen)
+                const isHidden = isLayerEffectivelyHidden(layer, groupById);
+                const rawPrevFallback = evaluateLayerAtTime(
+                    isHidden ? { ...layer, hidden: true } : layer,
+                    prevShotLocalTime
+                );
+                return {
+                    ...evalLayer,
+                    layer:
+                        layer.kind !== 'text'
+                            ? { ...layer, cornerRadius: evalLayer.cornerRadius }
+                            : layer,
+                    dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
+                    dofBokehShape: effects.state.depthOfField.bokehShape,
+                    totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur).toFixed(2)),
+                };
+            }
             const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
             const prevX = rawPrev.position.x * prevGroupTransform.scale.x + prevGroupTransform.position.x;
             const prevY = rawPrev.position.y * prevGroupTransform.scale.y + prevGroupTransform.position.y;
@@ -514,15 +513,16 @@ export function evaluateProjectAtTime(
                 layer.kind !== 'text'
                     ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                     : layer,
-            dofBlurPx,
+            dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
             dofBokehShape: effects.state.depthOfField.bokehShape,
-            totalBlurPx: Number((dofBlurPx + manualBlurPx).toFixed(2)),
+            totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + manualBlurPx).toFixed(2)),
             motionBlur,
         };
     });
 
     if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
-        const prevCamera = evaluateShotCameraAtTime(activeShot, prevShotLocalTime);
+        const prevFrameNumber = frameNumber > 0 ? frameNumber - 1 : 0;
+        const prevCamera = evaluateShotCameraAtTime(activeShot, prevShotLocalTime, prevFrameNumber);
         const camDx = -(camera.target.x - prevCamera.target.x) / 1920 + (camera.zoom - prevCamera.zoom) * 0.25;
         const camDy = -(camera.target.y - prevCamera.target.y) / 1080 + (camera.rotation.x - prevCamera.rotation.x) * 0.25;
         const mvX = Math.abs(camDx) > Math.abs(maxLayerMotionX) ? camDx : maxLayerMotionX;

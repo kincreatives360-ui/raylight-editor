@@ -2,6 +2,17 @@
 import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { degToRad } from '../model/defaults';
 import { evaluateEasing } from './easing';
+import { lerp } from './math';
+import {
+    BASE_FOV_DEGREES,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    DEFAULT_CAMERA_Z,
+    CAMERA_SHAKE_AMPLITUDE_SCALE,
+    CAMERA_SHAKE_FREQ_MULTIPLIERS,
+    CAMERA_Z_COMPENSATION,
+    CAMERA_ROT_X_COMPENSATION,
+} from './constants';
 
 export interface EvaluatedCamera {
     target: { x: number; y: number; z: number };
@@ -12,21 +23,15 @@ export interface EvaluatedCamera {
     activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom' | 'shake';
 }
 
-export const DEFAULT_FOCAL_LENGTH = 50;
-export const SENSOR_HEIGHT_MM = 24;
-
 export function focalLengthToFov(focalLengthMm: number): number {
     const safeFocal = Math.max(12, Math.min(200, focalLengthMm || DEFAULT_FOCAL_LENGTH));
     return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
 }
 
-function lerp(a: number, b: number, t: number): number {
-    return a + (b - a) * t;
-}
-
 export function evaluateShotCameraAtTime(
     shot: Shot,
-    shotLocalTimeMs: number
+    shotLocalTimeMs: number,
+    frameNumber?: number
 ): EvaluatedCamera {
     const framings = shot.framings || [];
     const defaultFraming = framings[0] || {
@@ -46,7 +51,7 @@ export function evaluateShotCameraAtTime(
     let rotX = degToRad(defaultFraming.tilt ?? 0);
     let rotY = degToRad(defaultFraming.orbit ?? 0);
     let rotZ = degToRad(defaultFraming.roll ?? 0);
-    let fovDegrees = 27.0006;
+    let fovDegrees = BASE_FOV_DEGREES;
     let focalLength = DEFAULT_FOCAL_LENGTH;
     let activeMode: EvaluatedCamera['activeMode'] = 'static';
 
@@ -121,13 +126,13 @@ export function evaluateShotCameraAtTime(
                 activeMode = block.mode;
                 const baseFocal = fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH;
                 if (block.mode === 'zoom') {
-                    fovDegrees = 27.0006 / zoom;
+                    fovDegrees = BASE_FOV_DEGREES / zoom;
                     focalLength = baseFocal * zoom;
                 } else if (block.mode === 'dollyzoom') {
                     const fromBaseZoom = Math.max(0.2, safeFromZoom);
                     fovDegrees = Math.max(
                         10,
-                        Math.min(95, 27.0006 * (zoom / fromBaseZoom))
+                        Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
                     );
                     focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
                 } else {
@@ -170,19 +175,19 @@ export function evaluateShotCameraAtTime(
 
         if (block.mode === 'zoom') {
             // Lens Zoom: changes focal length without 3D parallax shift
-            fovDegrees = 27.0006 / zoom;
+            fovDegrees = BASE_FOV_DEGREES / zoom;
             focalLength = fromFocal * zoom;
         } else if (block.mode === 'dollyzoom') {
             // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
             const fromBaseZoom = Math.max(0.2, Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1);
             fovDegrees = Math.max(
                 10,
-                Math.min(95, 27.0006 * (zoom / fromBaseZoom))
+                Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
             if (Math.abs(toZ - fromZ) < 1e-6) {
                 // Compensate Z distance when no explicit Z shift was authored so subject width stays locked
-                targetZ = fromZ + (1 - fromBaseZoom / zoom) * 0.45;
+                targetZ = fromZ + (1 - fromBaseZoom / zoom) * CAMERA_Z_COMPENSATION;
             }
         } else {
             // Dolly: physical 3D camera push with configured focal length (e.g. 50mm or custom lens)
@@ -195,14 +200,19 @@ export function evaluateShotCameraAtTime(
         const shakeTo = block.shake?.to ?? 0;
         const currentShakePct = lerp(shakeFrom, shakeTo, eased);
         if (currentShakePct > 0) {
-            const amp = (currentShakePct / 100) * 0.045;
+            const amp = (currentShakePct / 100) * CAMERA_SHAKE_AMPLITUDE_SCALE;
             const freq = block.shake?.frequency ?? 1.0;
-            const tSec = shotLocalTimeMs * 0.001 * freq;
+            // Deterministic shake: use frameNumber hash + shotLocalTimeMs for reproducible exports
+            const seed = frameNumber !== undefined
+                ? ((frameNumber * 1664525 + 1013904223) % 4294967296 + 4294967296) % 4294967296
+                : shotLocalTimeMs;
+            const tSec = (seed * 0.001 + shotLocalTimeMs * 0.001) * freq;
+            const { xPrimary, xSecondary, yPrimary, ySecondary, rotZ: rotZFreq } = CAMERA_SHAKE_FREQ_MULTIPLIERS;
             targetX +=
-                (Math.sin(tSec * 17.3) * 0.6 + Math.cos(tSec * 31.7) * 0.4) * amp;
+                (Math.sin(tSec * xPrimary) * 0.6 + Math.cos(tSec * xSecondary) * 0.4) * amp;
             targetY +=
-                (Math.cos(tSec * 19.1) * 0.6 + Math.sin(tSec * 27.5) * 0.4) * amp;
-            rotZ += Math.sin(tSec * 14.2) * amp * 0.35;
+                (Math.cos(tSec * yPrimary) * 0.6 + Math.sin(tSec * ySecondary) * 0.4) * amp;
+            rotZ += Math.sin(tSec * rotZFreq) * amp * CAMERA_ROT_X_COMPENSATION;
         }
     }
 

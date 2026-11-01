@@ -1,4 +1,5 @@
 import type { LightAnimationBlock, LightRig, SceneLight, Vec3 } from '../model/types';
+import { lerp } from './math';
 
 export const MAX_SHADOW_CASTERS = 3;
 export const DEFAULT_FILL_INTENSITY = 0.38;
@@ -61,10 +62,6 @@ function worldPosition(position: Vec3 | undefined, defaults: Vec3): Vector3Tuple
     (position?.y ?? defaults.y) * 6,
     (position?.z ?? defaults.z) * 5,
   ];
-}
-
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
 }
 
 function parseHex(hex: string): [number, number, number] {

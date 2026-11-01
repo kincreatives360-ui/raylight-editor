@@ -35,6 +35,7 @@ export function resolveDepthOfFieldFocusZ(
         return Number(dofTargetZ.toFixed(4));
     }
     if (visibleLayers.length > 0) {
+        // Foreground hero = last visible layer (highest order = topmost)
         return Number(visibleLayers[visibleLayers.length - 1].position.z.toFixed(4));
     }
     return 0;
