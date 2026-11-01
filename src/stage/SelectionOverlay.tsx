@@ -743,6 +743,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     return (
         <div
             ref={overlayRootRef}
+            onMouseDown={(e) => e.stopPropagation()}
             className="absolute inset-0 pointer-events-none z-30 overflow-visible select-none"
         >
             <SelectionOverlayVisuals

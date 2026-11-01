@@ -157,6 +157,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
             onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             className="absolute right-3 z-35 flex flex-col items-center gap-1.5 select-none"
             style={{ top: topInset }}
@@ -168,6 +169,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 onPointerUp={handlePointerUp}
                 onPointerCancel={handlePointerUp}
                 onLostPointerCapture={handleLostPointerCapture}
+                onMouseDown={(e) => e.stopPropagation()}
                 title="Drag 3D trackball sphere to orbit camera"
                 className={`relative group flex items-center justify-center w-13 h-13 rounded-full border touch-none cursor-grab active:cursor-grabbing transition-[transform,border-color,box-shadow] duration-150 ${
                     isDragging
@@ -266,6 +268,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 <button
                     type="button"
                     onClick={onResetCamera}
+                    onMouseDown={(e) => e.stopPropagation()}
                     title="Reset Camera Pose to Default"
                     className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface/90 hover:bg-muted border border-subtle hover:border-medium text-muted-foreground hover:text-foreground text-[11px] font-mono cursor-pointer transition shadow-xs"
                 >
@@ -283,6 +286,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
 
                     </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
+                    onMouseDown={(e) => e.stopPropagation()}
                     title="Angle"
                     className={`p-1 rounded-full bg-surface/90 hover:bg-muted border border-subtle text-muted-foreground hover:text-foreground cursor-pointer transition shadow-xs ${
                         menuOpen ? 'bg-white/20 text-white' : ''
@@ -345,6 +349,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                     <button
                         type="button"
                         onClick={() => { onFrameSelection(); setMenuOpen(false); }}
+                        onMouseDown={(e) => e.stopPropagation()}
                         className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer transition"
                     >
                         <span className="flex items-center gap-1.5">

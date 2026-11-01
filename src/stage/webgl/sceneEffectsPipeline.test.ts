@@ -240,7 +240,7 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
   it('configures depthOfField pass with depth texture uniform and focal parameters', () => {
     const effectsState = createDefaultEffects();
     effectsState.depthOfField.enabled = true;
-    effectsState.depthOfField.target.z = 2.5;
+    effectsState.depthOfField.target.z = 0.5;
     effectsState.depthOfField.focusRange = 0.2;
     effectsState.depthOfField.bokehScale = 1.5;
     effectsState.depthOfField.aperture = 1.8;
@@ -260,7 +260,7 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     configureSceneEffectPass(pass, 'depthOfField', evaluated, 1920, 1080);
 
     const params = pass.uniforms.uParams.value as THREE.Vector4;
-    expect(params.x).toBeGreaterThan(0.5); // focal plane
+    expect(params.x).toBeCloseTo(2.15, 2); // focal plane = |DEFAULT_CAMERA_Z(2.65) - target.z(0.5)| = 2.15
     expect(params.y).toBeCloseTo(0.2); // focusRange
     expect(params.z).toBeCloseTo(1.5); // bokehScale
     expect(params.w).toBeCloseTo(1.8); // aperture

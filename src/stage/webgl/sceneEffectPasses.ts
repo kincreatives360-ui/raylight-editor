@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
+import { DEFAULT_CAMERA_Z } from './cameraTypes';
 import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
 
 export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'depthOfField', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
@@ -106,6 +107,9 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           tone=mix(tone,uExtra2.z,smoothstep(uExtra.y,1.0,lum));
           float protect=mix(1.0,smoothstep(0.0,max(.001,uExtra.y),lum),uFringe.z);
           vec3 grainColor=grainRgb*uParams.x*tone*protect*mix(vec3(1.0),uColor,uFringe.w);
+          // uFringe.y (smooth) reduces grain intensity for a softer film look
+          float grainSmoothFactor = 1.0 - uFringe.y * 0.5;
+          grainColor *= grainSmoothFactor;
           if(uExtra.w==1.0) col.rgb+=grainColor*col.a;
           else if(uExtra.w==2.0) col.rgb=mix(col.rgb,col.rgb+grainColor*col.a,clamp(uParams.x,0.0,1.0));
           else if(uExtra.w==3.0) col.rgb*=1.0+grainColor;
@@ -296,7 +300,7 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'glitch': p.set(e.glitch.intensity, e.glitch.bandSize ?? 50, e.glitch.colorShift ?? 0.5, 0); break;
     case 'depthOfField': {
       const dof = e.depthOfField;
-      const camZ = 3.2;
+      const camZ = DEFAULT_CAMERA_Z;
       const targetZ = dof.target?.z ?? 0;
       const focusDist = Math.max(0.1, Math.abs(camZ - targetZ));
       p.set(
