@@ -41,6 +41,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     evaluatedCamera,
     onSelect,
     shotStartMs = 0,
+    currentTimeMs: propCurrentTimeMs = 0,
 }) => {
     const { layer } = evalLayer;
     const { invalidate, gl, size } = useThree();
@@ -113,8 +114,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
     const captureBackdrop = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
         const uniforms = effectUniformsRef.current;
-        const currentTimeMs = props.currentTimeMs ?? 0;
-        uniforms.layerTime.value = Math.max(0, currentTimeMs - shotStartMs) / 1000;
+        const timeMs = propCurrentTimeMs ?? 0;
+        uniforms.layerTime.value = Math.max(0, timeMs - shotStartMs) / 1000;
         if (surfaceMesh.current && uniforms.layerScreen.value.x > 0) {
             viewVectors.normal.set(0, 0, 1).transformDirection(surfaceMesh.current.matrixWorld);
             camera.getWorldDirection(viewVectors.direction);
@@ -479,7 +480,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     const halo = useMemo(() => {
         if (!texture) return null;
-        const result = drawLayerHalo(texture.image as HTMLCanvasElement, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale);
+        const result = drawLayerHalo(texture.image as HTMLCanvasElement, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
         if (!result) return null;
         const haloTexture = new THREE.CanvasTexture(result.canvas);
         configureLayerTexture(haloTexture, gl.capabilities.getMaxAnisotropy());
@@ -555,7 +556,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             applyLayerAlphaEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
             applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale);
             if (halo) {
-                const updated = drawLayerHalo(canvas, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale);
+                const updated = drawLayerHalo(canvas, layer.effects, evalLayer.glowIntensityOffset, evalLayer.glowRadiusOffset, gl.capabilities.maxTextureSize, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
                 const haloCtx = halo.canvas.getContext('2d');
                 if (updated && haloCtx) {
                     haloCtx.clearRect(0, 0, halo.canvas.width, halo.canvas.height);
@@ -627,8 +628,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const turbulenceFrame = useRef<{ time: number; geometry: THREE.PlaneGeometry; haloGeometry?: THREE.PlaneGeometry | null } | null>(null);
     useFrame(() => {
         if (!warp?.enabled || warp.mode !== 'turbulent' || !warpedGeometry) return;
-        const currentTimeMs = props.currentTimeMs ?? 0;
-        const time = Math.max(0, currentTimeMs - shotStartMs) / 1000;
+        const timeMs = propCurrentTimeMs ?? 0;
+        const time = Math.max(0, timeMs - shotStartMs) / 1000;
         if (turbulenceFrame.current?.time === time && turbulenceFrame.current.geometry === warpedGeometry && turbulenceFrame.current.haloGeometry === warpedHaloGeometry) return;
         updateWarpGeometry(warpedGeometry, meshW * widthScale, meshH * heightScale, authoredW * widthScale, authoredH * heightScale, warp, time);
         if (warpedHaloGeometry && halo) updateWarpGeometry(warpedHaloGeometry, meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, time, { width: authoredW * widthScale, height: authoredH * heightScale });
@@ -675,9 +676,9 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                     <planeGeometry args={[meshW * widthScale, meshH * heightScale]} />
                 )}
                 {receivesLight ? (
-                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${JSON.stringify(layer.effects)}-${layer.blendMode}`} map={texture || undefined} color="#ffffff" transparent opacity={renderOpacity} roughness={surfaceRoughness} metalness={surfaceMetalness} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video') && !layer.effects.backdropBlur && !layer.effects.liquidGlass} depthTest />
+                    <meshStandardMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${layer.blendMode}`} color={"#ffffff"} transparent opacity={renderOpacity} metalness={surfaceMetalness} roughness={surfaceRoughness} side={THREE.DoubleSide} />
                 ) : (
-                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${JSON.stringify(layer.effects)}-${layer.blendMode}`} map={texture} color="#ffffff" transparent={!deviceFrameSettings || renderOpacity < 1 || Boolean(layer.effects.backdropBlur) || Boolean(layer.effects.liquidGlass) || layer.blendMode !== 'normal'} toneMapped={false} opacity={renderOpacity} side={deviceFrameSettings ? THREE.FrontSide : THREE.DoubleSide} depthWrite={renderOpacity > 0.99 && (layer.kind === 'image' || layer.kind === 'video') && !layer.effects.backdropBlur && !layer.effects.liquidGlass} depthTest />
+                    <meshBasicMaterial key={layer.id + JSON.stringify(layer.effects) + layer.blendMode} onBeforeCompile={compileEffects} customProgramCacheKey={() => `layer-effects-${layer.id}-${layer.blendMode}`} color={"#ffffff"} transparent opacity={renderOpacity} side={THREE.DoubleSide} />
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (
