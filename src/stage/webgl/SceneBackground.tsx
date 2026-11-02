@@ -192,6 +192,7 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
   const shaderMatRef = useRef<THREE.ShaderMaterial>(null);
   const continuousTimeRef = useRef<number>(0);
   const prevTimeMsRef = useRef<number>(0);
+  const prevUniformsRef = useRef<Record<string, number>>({});
 
   // Preload texture for image background
   const [loadedTextureInfo, setLoadedTextureInfo] = useState<{ url: string; texture: THREE.Texture } | null>(null);
@@ -452,28 +453,43 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
     const activeUniforms = shaderMatRef.current?.uniforms ?? uniforms;
 
     if (bg.kind === 'shader') {
-      if (activeUniforms.uTime) {
+      let dirty = false;
+      if (activeUniforms.uTime && activeUniforms.uTime.value !== continuousTimeRef.current) {
         activeUniforms.uTime.value = continuousTimeRef.current;
+        dirty = true;
       }
-      if (activeUniforms.uAspect) {
+      if (activeUniforms.uAspect && activeUniforms.uAspect.value !== aspect) {
         activeUniforms.uAspect.value = aspect;
+        dirty = true;
       }
       if (activeUniforms.uResolution) {
-        activeUniforms.uResolution.value.set(aspect * 1080, 1080);
+        const newResX = aspect * 1080;
+        const newResY = 1080;
+        if (activeUniforms.uResolution.value.x !== newResX || activeUniforms.uResolution.value.y !== newResY) {
+          activeUniforms.uResolution.value.set(newResX, newResY);
+          dirty = true;
+        }
       }
-      if (activeUniforms.uSpeed) {
+      if (activeUniforms.uSpeed && activeUniforms.uSpeed.value !== speed) {
         activeUniforms.uSpeed.value = speed;
+        dirty = true;
       }
-      if (activeUniforms.uNoiseScale) {
+      if (activeUniforms.uNoiseScale && activeUniforms.uNoiseScale.value !== (bg.noiseScale ?? bg.waves ?? 1)) {
         activeUniforms.uNoiseScale.value = bg.noiseScale ?? bg.waves ?? 1;
+        dirty = true;
       }
-      // Keep R3F render loop animating smoothly at 60fps
-      invalidate();
+      if (dirty) {
+        invalidate();
+      }
     } else if (bg.kind === 'noise') {
-      if (activeUniforms.uTime) {
+      let dirty = false;
+      if (activeUniforms.uTime && activeUniforms.uTime.value !== continuousTimeRef.current) {
         activeUniforms.uTime.value = continuousTimeRef.current;
+        dirty = true;
       }
-      invalidate();
+      if (dirty) {
+        invalidate();
+      }
     } else if (bg.kind === 'image' && imageTexture?.image) {
       const img = imageTexture.image as { width?: number; height?: number };
       const imgAspect = img.width && img.height ? img.width / img.height : 1;
