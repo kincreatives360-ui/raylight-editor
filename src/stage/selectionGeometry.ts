@@ -6,21 +6,43 @@ function pointInRect(point: Point, rect: Rect): boolean {
         && point.y >= rect.top && point.y <= rect.bottom;
 }
 
-function cross(a: Point, b: Point, c: Point): number {
-    return (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+function orientation(a: Point, b: Point, c: Point): number {
+    const abX = b.x - a.x;
+    const abY = b.y - a.y;
+    const acX = c.x - a.x;
+    const acY = c.y - a.y;
+    const determinant = abX * acY - abY * acX;
+    const productMagnitude = Math.abs(abX * acY) + Math.abs(abY * acX);
+    const coordinateMagnitude = Math.max(
+        Math.abs(a.x), Math.abs(a.y),
+        Math.abs(b.x), Math.abs(b.y),
+        Math.abs(c.x), Math.abs(c.y),
+    );
+    const differenceMagnitude = Math.abs(abX) + Math.abs(abY) + Math.abs(acX) + Math.abs(acY);
+    // Scale the roundoff bound to determinant products and coordinate subtraction error.
+    const errorBound = Number.EPSILON * (productMagnitude + 2 * coordinateMagnitude * differenceMagnitude);
+
+    if (Math.abs(determinant) <= errorBound) return 0;
+    return determinant < 0 ? -1 : 1;
+}
+
+function withinSegmentBounds(value: number, start: number, end: number): boolean {
+    const tolerance = Number.EPSILON * 2 * Math.max(Math.abs(value), Math.abs(start), Math.abs(end));
+    return value >= Math.min(start, end) - tolerance
+        && value <= Math.max(start, end) + tolerance;
 }
 
 function pointOnSegment(point: Point, start: Point, end: Point): boolean {
-    return cross(start, end, point) === 0
-        && point.x >= Math.min(start.x, end.x) && point.x <= Math.max(start.x, end.x)
-        && point.y >= Math.min(start.y, end.y) && point.y <= Math.max(start.y, end.y);
+    return orientation(start, end, point) === 0
+        && withinSegmentBounds(point.x, start.x, end.x)
+        && withinSegmentBounds(point.y, start.y, end.y);
 }
 
 function segmentsIntersect(a: Point, b: Point, c: Point, d: Point): boolean {
-    const abC = cross(a, b, c);
-    const abD = cross(a, b, d);
-    const cdA = cross(c, d, a);
-    const cdB = cross(c, d, b);
+    const abC = orientation(a, b, c);
+    const abD = orientation(a, b, d);
+    const cdA = orientation(c, d, a);
+    const cdB = orientation(c, d, b);
 
     if (abC === 0 && pointOnSegment(c, a, b)) return true;
     if (abD === 0 && pointOnSegment(d, a, b)) return true;

@@ -56,6 +56,19 @@ describe('selection geometry', () => {
         ], rect)).toBe(true);
     });
 
+    it('treats a fractional slanted edge touching a rectangle vertex as intersection', () => {
+        expect(polygonsIntersectRect([
+            { x: 0.1, y: 0.1 },
+            { x: 0.2, y: 0.3 },
+            { x: 0.11, y: 0.22 },
+        ], {
+            left: 0.11000000000000001,
+            top: 0.11000000000000001,
+            right: 0.12000000000000002,
+            bottom: 0.12000000000000001,
+        })).toBe(true);
+    });
+
     it('returns false for an empty polygon and null for empty rectangle input', () => {
         expect(polygonsIntersectRect([], rect)).toBe(false);
         expect(unionRects([])).toBeNull();
