@@ -200,6 +200,82 @@ describe('LightingOverlay Component', () => {
         expect(html).toContain('data-testid="light-handle-point-1"');
     });
 
+    it('does not render disabled source badges', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        useProjectStore.getState().updateShot(shot.id, {
+            light: {
+                ...shot.light!,
+                sources: shot.light!.sources!.map(source =>
+                    source.id === 'spot-1' ? { ...source, enabled: false } : source
+                ),
+            },
+        });
+
+        const frame = createDummyFrame();
+        const html = renderToStaticMarkup(
+            <LightingOverlay frame={frame} frameWidth={1920} frameHeight={1080} />
+        );
+
+        expect(html).not.toContain('data-testid="light-handle-spot-1"');
+        expect(html).toContain('data-testid="light-handle-area-1"');
+    });
+
+    it('does not show a selected gizmo for a stale selection of a disabled source', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        useProjectStore.getState().updateShot(shot.id, {
+            light: {
+                ...shot.light!,
+                sources: shot.light!.sources!.map(source =>
+                    source.id === 'spot-1' ? { ...source, enabled: false } : source
+                ),
+            },
+        });
+        useSelectionStore.getState().selectLight('spot-1');
+
+        const frame = createDummyFrame();
+        const html = renderToStaticMarkup(
+            <LightingOverlay frame={frame} frameWidth={1920} frameHeight={1080} />
+        );
+
+        expect(html).not.toContain('data-testid="selected-light-source-handle"');
+        expect(html).not.toContain('data-testid="light-handle-spot-1"');
+    });
+
+    it('hides all light badges when gizmos are disabled and no light is selected', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        useProjectStore.getState().updateShot(shot.id, {
+            light: { ...shot.light!, showGizmos: false },
+        });
+        useSelectionStore.getState().selectLight(null);
+
+        const frame = createDummyFrame();
+        const html = renderToStaticMarkup(
+            <LightingOverlay frame={frame} frameWidth={1920} frameHeight={1080} />
+        );
+
+        expect(html).not.toContain('data-testid="lighting-overlay"');
+        expect(html).not.toContain('data-testid="light-handle-');
+    });
+
+    it('keeps the selected enabled light editable while hiding unselected badges', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        useProjectStore.getState().updateShot(shot.id, {
+            light: { ...shot.light!, showGizmos: false },
+        });
+        useSelectionStore.getState().selectLight('spot-1');
+
+        const frame = createDummyFrame();
+        const html = renderToStaticMarkup(
+            <LightingOverlay frame={frame} frameWidth={1920} frameHeight={1080} />
+        );
+
+        expect(html).toContain('data-testid="selected-light-source-handle"');
+        expect(html).toContain('data-testid="selected-light-target-handle"');
+        expect(html).not.toContain('data-testid="light-handle-sun-key"');
+        expect(html).not.toContain('data-testid="light-handle-area-1"');
+        expect(html).not.toContain('data-testid="light-handle-point-1"');
+    });
+
     it('renders selected sun light source and target handles with dashed line', () => {
         useSelectionStore.getState().selectLight('sun-key');
         const frame = createDummyFrame();

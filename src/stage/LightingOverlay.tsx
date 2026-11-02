@@ -75,7 +75,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             temperature: shotLight?.temperature ?? 6100,
         };
 
-        const sources: UnifiedLight[] = (shotLight?.sources || []).map((s) => ({
+        const sources: UnifiedLight[] = (shotLight?.sources || []).filter((s) => s.enabled).map((s) => ({
             id: s.id,
             name: s.name || s.type,
             type: s.type,
@@ -414,7 +414,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
-    if (!showGizmos && !selectedLightId && !activeLightTool) {
+    if (!showGizmos && !selectedLight && !activeLightTool) {
         return null;
     }
 
@@ -431,7 +431,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             >
                 {activeLightTool && <rect x={0} y={0} width={frameWidth} height={frameHeight} fill="transparent" pointerEvents="all" onPointerDown={placeLight} />}
                 {/* 1. Unselected Light Badges */}
-                {allLights.map((l) => {
+                {showGizmos && allLights.map((l) => {
                     if (l.id === selectedLightId) return null;
                     const posScreen = projectLightToScreen(l.position, cameraPose, frameWidth, frameHeight, aspect);
 
