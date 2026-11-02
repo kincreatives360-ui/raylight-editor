@@ -7,6 +7,7 @@ import { createDefaultImageLayer, createDefaultProject } from '../model/defaults
 import { useProjectStore } from '../store/useProjectStore';
 import { useStageDofFocus } from './useStageDofFocus';
 import { useStageWheelNavigation } from './useStageWheelNavigation';
+import { DepthOfFieldFocusOverlay } from './DepthOfFieldFocusOverlay';
 import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, evaluateCameraPose } from './webgl/cameraMath';
 
 function makeProject(depthOfFieldEnabled = true) {
@@ -110,20 +111,51 @@ describe('Stage depth-of-field focus gestures', () => {
                 dofFocusHeld: focus.isDofFocusHeld,
                 onAdjustDofFocus: focus.adjustDofFocusDepth,
             });
+            const pickLayer = (layerId: string) => (event: React.MouseEvent) => {
+                const focusPick = Reflect.apply(focus.focusLayerIfHeld, focus, [layerId, event.shiftKey]) as boolean;
+                if (!focusPick) selectLayer(layerId, event.shiftKey);
+            };
             return createElement('div', {
                 ref: containerRef,
                 tabIndex: 0,
-                onPointerDown: focus.handlePointerDown,
+                onPointerDownCapture: focus.handlePointerDown,
                 onMouseDown: (event: React.MouseEvent) => {
                     if (focus.isDofFocusHeld()) event.preventDefault();
                 },
-            }, createElement('button', {
+            },
+            createElement('div', { 'data-selection-overlay': '' },
+                createElement('div', {
+                    'data-selection-hit': '',
+                    onPointerDown: () => selectLayer('foreground'),
+                })),
+            createElement('button', {
                 type: 'button',
-                onClick: () => {
-                    if (!focus.focusLayerIfHeld('background')) selectLayer('background');
-                },
-                'data-layer-pick': '',
-            }, 'Pick layer'));
+                onClick: pickLayer('foreground'),
+                'data-layer-pick': 'foreground',
+            }, 'Pick foreground'),
+            createElement('button', {
+                type: 'button',
+                onClick: pickLayer('background'),
+                'data-layer-pick': 'background',
+            }, 'Pick background'),
+            createElement(DepthOfFieldFocusOverlay, {
+                active: false,
+                indicator: null,
+                frame,
+                frameWidth: 960,
+                frameHeight: 540,
+                targetAspect: 16 / 9,
+                cameraPose,
+                defaultCamera: currentProject.defaultCamera!,
+                stageFrameRef,
+                onFocusClick: focus.handleFocusClick,
+                onBeginDrag: beginDragTransaction,
+                onEndDrag: (cancelled: boolean) => cancelled
+                    ? cancelDragTransaction()
+                    : commitDragTransaction(),
+                onAdjustFocusDepth: focus.adjustFocusDepth,
+                onAdjustFocusRange: () => {},
+            }));
         }
 
         root = createRoot(dom.window.document.getElementById('root')!);
@@ -155,6 +187,7 @@ describe('Stage depth-of-field focus gestures', () => {
         root = null;
         dom?.window.close();
         dom = null;
+        vi.restoreAllMocks();
         vi.unstubAllGlobals();
         useProjectStore.setState({
             project: createDefaultProject(),
@@ -222,13 +255,87 @@ describe('Stage depth-of-field focus gestures', () => {
         act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {
             key: 'd', bubbles: true,
         })));
-        act(() => browser.window.document.querySelector('[data-layer-pick]')!.dispatchEvent(
+        act(() => browser.window.document.querySelector('[data-layer-pick="background"]')!.dispatchEvent(
             new browser.window.MouseEvent('click', { bubbles: true })
         ));
 
         expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.8);
         expect(selectLayer).not.toHaveBeenCalled();
         expect(useProjectStore.getState().past).toHaveLength(1);
+    });
+
+    it('does not start a drag transaction for a D-held layer click', () => {
+        const browser = setup();
+        act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {
+            key: 'd', bubbles: true,
+        })));
+        const stage = browser.window.document.querySelector('[tabindex="0"]')!;
+        const capturePointer = vi.spyOn(browser.window.Element.prototype, 'setPointerCapture');
+        act(() => stage.dispatchEvent(pointer('pointerdown', 6, 200, 200)));
+
+        expect(useProjectStore.getState().dragSnapshot).toBeNull();
+        expect(capturePointer).not.toHaveBeenCalled();
+        capturePointer.mockRestore();
+    });
+
+    it('keeps D-drag from also starting a selected-layer transform', () => {
+        const browser = setup();
+        act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {
+            key: 'd', bubbles: true,
+        })));
+        const hit = browser.window.document.querySelector('[data-selection-hit]')!;
+        act(() => hit.dispatchEvent(pointer('pointerdown', 7, 200, 200)));
+        act(() => browser.window.dispatchEvent(pointer('pointermove', 7, 200, 180)));
+        act(() => browser.window.dispatchEvent(pointer('pointerup', 7, 200, 180)));
+
+        expect(selectLayer).not.toHaveBeenCalled();
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.5);
+    });
+
+    it('D-click then D+Shift-click creates one undoable rack-focus segment and draws its path', () => {
+        const project = makeProject();
+        project.shots[0].focusBlocks = [{
+            id: 'existing-focus',
+            startMs: 100,
+            durationMs: 300,
+            fromZ: 0.1,
+            toZ: 0.3,
+            easing: { kind: 'preset', name: 'linear' },
+        }];
+        const browser = setup(project, 1500);
+        act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {
+            key: 'd', bubbles: true,
+        })));
+        const foreground = browser.window.document.querySelector('[data-layer-pick="foreground"]')!;
+        const background = browser.window.document.querySelector('[data-layer-pick="background"]')!;
+        act(() => foreground.dispatchEvent(new browser.window.MouseEvent('click', { bubbles: true })));
+        const historyBeforeRackFocus = useProjectStore.getState().past.length;
+        act(() => background.dispatchEvent(new browser.window.MouseEvent('click', {
+            bubbles: true,
+            shiftKey: true,
+        })));
+
+        const shot = useProjectStore.getState().project.shots[0];
+        expect(shot.focusBlocks).toHaveLength(2);
+        expect(shot.focusBlocks?.[0]).toMatchObject({ id: 'existing-focus', fromZ: 0.1, toZ: 0.3 });
+        expect(shot.focusBlocks?.[1]).toMatchObject({
+            startMs: 1500,
+            durationMs: 800,
+            fromZ: 0.2,
+            toZ: 0.8,
+            easing: { kind: 'preset', name: 'ease-in-out' },
+        });
+        expect(useProjectStore.getState().past).toHaveLength(historyBeforeRackFocus + 1);
+        expect(selectLayer).not.toHaveBeenCalled();
+
+        const path = browser.window.document.querySelector('[data-rack-focus-path][data-to-depth="0.8"]')!;
+        expect(path.getAttribute('data-from-depth')).toBe('0.2');
+        expect(path.getAttribute('data-to-depth')).toBe('0.8');
+        expect(path.getAttribute('d')).toMatch(/^M [\d.]+,.*[\d.]+,[\d.]+$/);
+
+        act(() => useProjectStore.getState().undo());
+        expect(useProjectStore.getState().project.shots[0].focusBlocks).toHaveLength(1);
+        expect(useProjectStore.getState().past).toHaveLength(historyBeforeRackFocus);
     });
 
     it('D+brackets hops focus to the next layer by depth and does not toggle panels', () => {

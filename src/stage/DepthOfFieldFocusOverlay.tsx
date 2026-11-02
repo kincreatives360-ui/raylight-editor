@@ -243,6 +243,7 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
                         maxDepth={depthRange.max}
                         focusDepth={focusDepth}
                         focusRange={focusRange}
+                        focusBlocks={frame.activeShot.focusBlocks ?? []}
                         cameraDepth={cameraDepth}
                         layerTicks={layerTicks}
                         hoveredDepth={hoveredDepth}

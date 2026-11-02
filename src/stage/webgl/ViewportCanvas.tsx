@@ -25,7 +25,7 @@ interface ViewportCanvasProps {
     frameHeight: number;
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     onPointerMissed?: () => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
     effectiveTimeMs?: number;
@@ -410,6 +410,5 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     </div>
 );
 };
-
 
 

@@ -1,4 +1,5 @@
 import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import type { FocusBlock } from '../model/types';
 import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 export interface FocusDepthTick {
@@ -12,6 +13,7 @@ interface FocusDepthRulerProps {
     maxDepth: number;
     focusDepth: number;
     focusRange: number;
+    focusBlocks: FocusBlock[];
     cameraDepth: number;
     layerTicks: FocusDepthTick[];
     hoveredDepth: number | null;
@@ -31,6 +33,7 @@ export function FocusDepthRuler({
     maxDepth,
     focusDepth,
     focusRange,
+    focusBlocks,
     cameraDepth,
     layerTicks,
     hoveredDepth,
@@ -41,7 +44,8 @@ export function FocusDepthRuler({
     onAdjustFocusRange,
 }: FocusDepthRulerProps) {
     const span = Math.max(0.001, maxDepth - minDepth);
-    const position = (depth: number) => `${Math.max(0, Math.min(100, ((depth - minDepth) / span) * 100))}%`;
+    const positionValue = (depth: number) => Math.max(0, Math.min(100, ((depth - minDepth) / span) * 100));
+    const position = (depth: number) => `${positionValue(depth)}%`;
     const nearDepth = focusDepth - focusRange / 2;
     const farDepth = focusDepth + focusRange / 2;
     const activeDragCleanupRef = useRef<(() => void) | null>(null);
@@ -101,6 +105,24 @@ export function FocusDepthRuler({
                 preserveAspectRatio="none"
             >
                 <line x1="0" y1="25" x2="100" y2="25" stroke="rgba(226,232,240,.72)" strokeWidth="1" />
+                {focusBlocks.map(block => {
+                    const fromX = positionValue(block.fromZ);
+                    const toX = positionValue(block.toZ);
+                    const controlX = (fromX + toX) / 2;
+                    return (
+                        <path
+                            key={block.id}
+                            data-rack-focus-path={block.id}
+                            data-from-depth={formatDepth(block.fromZ)}
+                            data-to-depth={formatDepth(block.toZ)}
+                            d={`M ${fromX.toFixed(2)},8 Q ${controlX.toFixed(2)},1 ${toX.toFixed(2)},8`}
+                            fill="none"
+                            stroke="#c4b5fd"
+                            strokeWidth="1.5"
+                            strokeDasharray="3 2"
+                        />
+                    );
+                })}
                 <line
                     x1={((nearDepth - minDepth) / span) * 100}
                     y1="20"

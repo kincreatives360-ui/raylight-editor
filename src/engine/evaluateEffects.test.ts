@@ -94,6 +94,30 @@ describe('evaluateEffects', () => {
       expect(after.state.depthOfField.target.z).toBe(30);
     });
 
+    it('evaluates an 800 ms ease-in-out rack-focus segment at its start, midpoint, and end', () => {
+      const shot = createDefaultShot();
+      shot.effects.depthOfField.enabled = true;
+      shot.focusBlocks = [{
+        id: 'existing-focus-segment',
+        startMs: 500,
+        durationMs: 2000,
+        fromZ: 0.1,
+        toZ: 0.3,
+        easing: { kind: 'preset', name: 'linear' },
+      }, {
+        id: 'focus-segment',
+        startMs: 1500,
+        durationMs: 800,
+        fromZ: 0.2,
+        toZ: 0.8,
+        easing: { kind: 'preset', name: 'ease-in-out' },
+      }];
+
+      expect(evaluateEffectsAtTime(shot, 45, 1500).state.depthOfField.target.z).toBeCloseTo(0.2);
+      expect(evaluateEffectsAtTime(shot, 57, 1900).state.depthOfField.target.z).toBeCloseTo(0.5);
+      expect(evaluateEffectsAtTime(shot, 69, 2300).state.depthOfField.target.z).toBeCloseTo(0.8);
+    });
+
     it('6. Filters and orders active effects passes', () => {
       const shot = createDefaultShot();
       shot.effects.bloom.enabled = true;

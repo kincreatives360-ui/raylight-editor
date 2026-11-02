@@ -19,7 +19,7 @@ interface ThreeLayerObjectProps {
     evalLayer: EvaluatedLayerWithEffects;
     project: Project;
     evaluatedCamera: EvaluatedCamera;
-    onSelect: (layerId: string, multiSelect?: boolean) => void;
+    onSelect: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     shotStartMs?: number;
     currentTimeMs?: number;
 }
@@ -301,7 +301,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
             }}
             onClick={(e) => {
                 e.stopPropagation();
-                onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey);
+                onSelect(layer.id, e.shiftKey || e.metaKey || e.ctrlKey, e.shiftKey);
             }}
         >
             {deviceFrameSettings ? (

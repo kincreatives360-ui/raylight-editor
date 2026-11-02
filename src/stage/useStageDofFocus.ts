@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, type MouseEvent, type PointerEvent, type RefObject } from 'react';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { FocusBlock, Project } from '../model/types';
+import { generateId } from '../model/id';
 import type { EvaluatedCameraPose } from './webgl/cameraMath';
 import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, getLayerProjectedCorners } from './webgl/cameraMath';
 import { createPointerDragLifecycle } from './selectionDragLifecycle';
@@ -64,6 +65,8 @@ export function useStageDofFocus({
     const focusDepthRef = useRef(frame.effects.state.depthOfField.target.z);
     const dHeldRef = useRef(false);
     const activeDragCleanupRef = useRef<(() => void) | null>(null);
+    const pendingPointerCleanupRef = useRef<(() => void) | null>(null);
+    const rackFocusStartRef = useRef<{ layerId: string; depth: number } | null>(null);
     const layers = frame.layers;
 
     useEffect(() => {
@@ -162,15 +165,55 @@ export function useStageDofFocus({
 
     const isDofFocusHeld = useCallback(() => dHeldRef.current, []);
 
-    const focusLayerIfHeld = useCallback((layerId: string): boolean => {
+    const focusLayerIfHeld = useCallback((layerId: string, shiftKey = false): boolean => {
         if (!dHeldRef.current) return false;
         const layer = frame.layers.find((candidate) =>
             candidate.id === layerId && candidate.visible !== false
         );
         if (!layer) return false;
+
+        const rackFocusStart = rackFocusStartRef.current;
+        if (shiftKey && rackFocusStart && rackFocusStart.layerId !== layer.id) {
+            const focusBlock: FocusBlock = {
+                id: generateId('focus-blk'),
+                startMs: frame.shotLocalTimeMs,
+                durationMs: 800,
+                fromZ: rackFocusStart.depth,
+                toZ: layer.position.z,
+                easing: { kind: 'preset', name: 'ease-in-out' },
+            };
+            withFocusTransaction(() => updateShot(frame.activeShot.id, (shot) => {
+                const dof = shot.effects.depthOfField ?? frame.effects.state.depthOfField;
+                return {
+                    ...shot,
+                    focusBlocks: [...(shot.focusBlocks ?? []), focusBlock],
+                    effects: {
+                        ...shot.effects,
+                        depthOfField: {
+                            ...dof,
+                            enabled: true,
+                            target: { ...dof.target, z: rackFocusStart.depth },
+                        },
+                    },
+                };
+            }, { skipHistory: true }));
+            focusDepthRef.current = rackFocusStart.depth;
+            rackFocusStartRef.current = null;
+            return true;
+        }
+
+        rackFocusStartRef.current = { layerId: layer.id, depth: layer.position.z };
         setFocusDepth(layer.position.z);
         return true;
-    }, [frame.layers, setFocusDepth]);
+    }, [
+        frame.activeShot.id,
+        frame.effects.state.depthOfField,
+        frame.layers,
+        frame.shotLocalTimeMs,
+        setFocusDepth,
+        updateShot,
+        withFocusTransaction,
+    ]);
 
     const focusNextLayerDepth = useCallback((direction: -1 | 1) => {
         const currentDepth = focusDepthRef.current;
@@ -205,10 +248,12 @@ export function useStageDofFocus({
         const handleKeyUp = (event: KeyboardEvent) => {
             if (event.key.toLowerCase() === 'd' || event.code === 'KeyD') {
                 dHeldRef.current = false;
+                rackFocusStartRef.current = null;
             }
         };
         const handleBlur = () => {
             dHeldRef.current = false;
+            rackFocusStartRef.current = null;
         };
         window.addEventListener('keydown', handleKeyDown, true);
         window.addEventListener('keyup', handleKeyUp, true);
@@ -226,27 +271,79 @@ export function useStageDofFocus({
         if (target?.closest?.('button, [data-focus-marker], [data-depth-handle], [aria-label="Orbit camera controls"]')) {
             return;
         }
-        event.preventDefault();
+        if (target?.closest?.('[data-selection-overlay]')) event.stopPropagation();
+        pendingPointerCleanupRef.current?.();
         activeDragCleanupRef.current?.();
-        let previousY = event.clientY;
-        activeDragCleanupRef.current = createPointerDragLifecycle({
-            pointerId: event.pointerId,
-            target: containerRef.current,
-            begin: beginDragTransaction,
-            commit: commitDragTransaction,
-            cancel: cancelDragTransaction,
-            onMove: (moveEvent) => {
-                const deltaY = previousY - moveEvent.clientY;
-                previousY = moveEvent.clientY;
-                adjustDofFocusDepth(deltaY * (moveEvent.shiftKey ? 0.0005 : 0.005), true);
-            },
-            onEnd: () => {
-                activeDragCleanupRef.current = null;
-            },
-        });
+        const pointerId = event.pointerId;
+        const startY = event.clientY;
+        let previousY = startY;
+        let started = false;
+        const cleanupPending = () => {
+            window.removeEventListener('pointermove', handleMove);
+            window.removeEventListener('pointerup', handleUp);
+            window.removeEventListener('pointercancel', handleCancel);
+            window.removeEventListener('keydown', handleKeyDown);
+            window.removeEventListener('blur', handleBlur);
+            if (pendingPointerCleanupRef.current === cleanupPending) {
+                pendingPointerCleanupRef.current = null;
+            }
+        };
+        const beginFocusDrag = (moveEvent: globalThis.PointerEvent, deltaY: number) => {
+            started = true;
+            previousY = moveEvent.clientY;
+            cleanupPending();
+            activeDragCleanupRef.current = createPointerDragLifecycle({
+                pointerId,
+                target: containerRef.current!,
+                begin: beginDragTransaction,
+                commit: commitDragTransaction,
+                cancel: cancelDragTransaction,
+                onMove: (nextEvent) => {
+                    const nextDeltaY = previousY - nextEvent.clientY;
+                    previousY = nextEvent.clientY;
+                    adjustDofFocusDepth(nextDeltaY * (nextEvent.shiftKey ? 0.0005 : 0.005), true);
+                },
+                onEnd: () => {
+                    activeDragCleanupRef.current = null;
+                },
+            });
+            adjustDofFocusDepth(deltaY * (moveEvent.shiftKey ? 0.0005 : 0.005), true);
+        };
+        const handleMove = (moveEvent: globalThis.PointerEvent) => {
+            if (moveEvent.pointerId !== pointerId) return;
+            const deltaY = previousY - moveEvent.clientY;
+            if (!started && Math.abs(moveEvent.clientY - startY) < 2) return;
+            if (!started) {
+                beginFocusDrag(moveEvent, deltaY);
+                return;
+            }
+            previousY = moveEvent.clientY;
+            adjustDofFocusDepth(deltaY * (moveEvent.shiftKey ? 0.0005 : 0.005), true);
+        };
+        const handleUp = (upEvent: globalThis.PointerEvent) => {
+            if (upEvent.pointerId === pointerId && !started) cleanupPending();
+        };
+        const handleCancel = (cancelEvent: globalThis.PointerEvent) => {
+            if (cancelEvent.pointerId === pointerId && !started) cleanupPending();
+        };
+        const handleKeyDown = (keyEvent: KeyboardEvent) => {
+            if (keyEvent.key === 'Escape' && !started) cleanupPending();
+        };
+        const handleBlur = () => {
+            if (!started) cleanupPending();
+        };
+        window.addEventListener('pointermove', handleMove);
+        window.addEventListener('pointerup', handleUp);
+        window.addEventListener('pointercancel', handleCancel);
+        window.addEventListener('keydown', handleKeyDown);
+        window.addEventListener('blur', handleBlur);
+        pendingPointerCleanupRef.current = cleanupPending;
     }, [adjustDofFocusDepth, beginDragTransaction, cancelDragTransaction, commitDragTransaction, containerRef]);
 
-    useEffect(() => () => activeDragCleanupRef.current?.(), []);
+    useEffect(() => () => {
+        pendingPointerCleanupRef.current?.();
+        activeDragCleanupRef.current?.();
+    }, []);
 
     const handleFocusClick = useCallback((event: MouseEvent<HTMLDivElement>) => {
         const rect = stageFrameRef.current?.getBoundingClientRect();

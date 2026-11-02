@@ -37,7 +37,7 @@ interface StageProps {
     project: Project;
     frame?: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     showSafeArea?: boolean;
     snapEnabled?: boolean;
     onToggleSafeArea?: () => void;
@@ -323,9 +323,10 @@ const StageComponent: React.FC<StageProps> = ({
     });
     const handleSelectLayerWithDeepSelect = (
         clickedLayerId: string,
-        multiSelect?: boolean
+        multiSelect?: boolean,
+        shiftKey?: boolean
     ) => {
-        if (dofFocus.focusLayerIfHeld(clickedLayerId)) return;
+        if (dofFocus.focusLayerIfHeld(clickedLayerId, shiftKey)) return;
         if (isCreationTool) return;
         onSelectLayer(clickedLayerId, multiSelect);
     };

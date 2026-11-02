@@ -37,7 +37,7 @@ interface StageInteractionOverlayStackProps {
     showSafeArea: boolean;
     activeGuides: SnapGuideLine[];
     setActiveGuides: Dispatch<SetStateAction<SnapGuideLine[]>>;
-    handleSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    handleSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;

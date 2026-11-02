@@ -38,7 +38,7 @@ interface SelectionOverlayVisualsProps {
     onResizeStart: (event: React.PointerEvent | React.MouseEvent, direction: ResizeHandleDir) => void;
     onRotateByKeyboard: (key: string) => void;
     onResizeByKeyboard: (direction: ResizeHandleDir, key: string) => void;
-    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     updateLayer: (
         shotId: string,
         layerId: string,
@@ -76,7 +76,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                 onPointerDown={onMoveStart}
                                 onClick={(e) => {
                                     e.stopPropagation();
-                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
+                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey, e.shiftKey);
                                 }}
                             />
                         </g>

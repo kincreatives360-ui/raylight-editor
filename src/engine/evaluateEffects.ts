@@ -1,5 +1,5 @@
 // src/engine/evaluateEffects.ts
-import type { Shot, Effects, EffectKey } from '../model/types';
+import type { FocusBlock, Shot, Effects, EffectKey } from '../model/types';
 
 import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
 import { evaluateEasing } from './easing';
@@ -75,16 +75,31 @@ export function evaluateEffectsAtTime(
     // Animate depth of field target.z if focusBlocks are configured (Rack Focus)
     if (shot.focusBlocks && shot.focusBlocks.length > 0 && effects.depthOfField.enabled) {
         let activeZ = effects.depthOfField.target.z;
+        let latestBlock: {
+            fromZ: number;
+            toZ: number;
+            easing: FocusBlock['easing'];
+            startMs: number;
+            durationMs: number;
+        } | null = null;
         for (const original of shot.focusBlocks) {
-            const fb = {...original, startMs: original.sourceStartMs ?? original.startMs, durationMs: original.sourceDurationMs ?? original.durationMs};
-            if (shotLocalTimeMs >= fb.startMs && shotLocalTimeMs <= fb.startMs + fb.durationMs) {
-                const raw = (shotLocalTimeMs - fb.startMs) / Math.max(1, fb.durationMs);
-                const progress = evaluateEasing(raw, fb.easing);
-                activeZ = fb.fromZ + (fb.toZ - fb.fromZ) * progress;
-                break;
-            } else if (shotLocalTimeMs > fb.startMs + fb.durationMs) {
-                activeZ = fb.toZ;
-            }
+            const startMs = original.sourceStartMs ?? original.startMs;
+            if (startMs > shotLocalTimeMs || (latestBlock && startMs < latestBlock.startMs)) continue;
+            latestBlock = {
+                fromZ: original.fromZ,
+                toZ: original.toZ,
+                easing: original.easing,
+                startMs,
+                durationMs: original.sourceDurationMs ?? original.durationMs,
+            };
+        }
+        if (latestBlock) {
+            const raw = Math.max(0, Math.min(
+                1,
+                (shotLocalTimeMs - latestBlock.startMs) / Math.max(1, latestBlock.durationMs)
+            ));
+            const progress = evaluateEasing(raw, latestBlock.easing);
+            activeZ = latestBlock.fromZ + (latestBlock.toZ - latestBlock.fromZ) * progress;
         }
         effects = {
             ...effects,

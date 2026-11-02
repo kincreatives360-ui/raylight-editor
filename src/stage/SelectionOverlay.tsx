@@ -31,7 +31,7 @@ interface SelectionOverlayProps {
     frameHeight: number;
     snapEnabled: boolean;
     onUpdateGuides: (guides: SnapGuideLine[]) => void;
-    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
 }
 
 interface GroupTransformAnimationState {
@@ -1134,6 +1134,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     return (
         <div
             ref={overlayRootRef}
+            data-selection-overlay=""
             onMouseDown={(e) => e.stopPropagation()}
             className="absolute inset-0 pointer-events-none z-30 overflow-visible select-none"
         >
