@@ -283,7 +283,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                         key={h.dir}
                         type="button"
                         data-selection-handle={h.dir}
-                        aria-label={`Resize selection ${{
+                        aria-label={`${isCropping ? 'Adjust crop' : 'Resize selection'} ${{
                             nw: 'northwest',
                             n: 'north',
                             ne: 'northeast',

@@ -34,6 +34,22 @@ interface SelectionOverlayProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
 }
 
+interface GroupTransformAnimationState {
+    lastPositionDeltas: Map<string, { x: number; y: number }>;
+    lastScaleX: number;
+    lastScaleY: number;
+    lastRotationDelta: number;
+}
+
+function createGroupTransformAnimationState(): GroupTransformAnimationState {
+    return {
+        lastPositionDeltas: new Map(),
+        lastScaleX: 1,
+        lastScaleY: 1,
+        lastRotationDelta: 0,
+    };
+}
+
 export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     frame,
     selectedLayerIds,
@@ -202,7 +218,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         scaleX: number,
         scaleY: number,
         anchor: { x: number; y: number },
-        rotationDelta = 0
+        rotationDelta = 0,
+        animationState = createGroupTransformAnimationState()
     ) => {
         if (!groupBounds) return;
         const initialLayers = new Map(activeShot.layers.map((item) => [item.id, item]));
@@ -214,87 +231,152 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const { planeW, planeH } = getReferencePlaneDimensions(aspect, refCameraZ, refFocalLength);
         const cos = Math.cos(rotationDelta);
         const sin = Math.sin(rotationDelta);
+        const transformedLayers = new Map<string, (typeof activeShot.layers)[number]>();
+
+        const recordAnimatedTransform = (
+            layerId: string,
+            property: 'size' | 'position' | 'rotation',
+            amount: { x: number; y: number; z: number },
+            label: string
+        ) => {
+            if (Math.abs(amount.x) <= 0.0005 && Math.abs(amount.y) <= 0.0005 && Math.abs(amount.z) <= 0.0005) return;
+            const blockId = recordAnimatedBlockAtPlayhead(
+                activeShot.id,
+                layerId,
+                property,
+                amount,
+                frame.shotLocalTimeMs,
+                label,
+                { skipHistory: true }
+            );
+            if (blockId) {
+                setTimelineLayerExpanded(layerId, true);
+                selectBlock(blockId, layerId);
+            }
+        };
+
+        for (const evaluated of selectedEvalLayers) {
+            const initial = initialLayers.get(evaluated.id);
+            const center = projectedCenters.get(evaluated.id);
+            if (
+                !initial ||
+                !center ||
+                !selectedLayerSet.has(evaluated.id) ||
+                isLayerEffectivelyLocked(initial, activeShot.groups)
+            ) {
+                continue;
+            }
+
+            let targetX = anchor.x + (center.x - anchor.x) * scaleX;
+            let targetY = anchor.y + (center.y - anchor.y) * scaleY;
+            if (rotationDelta !== 0) {
+                const offsetX = center.x - anchor.x;
+                const offsetY = center.y - anchor.y;
+                targetX = anchor.x + offsetX * cos - offsetY * sin;
+                targetY = anchor.y + offsetX * sin + offsetY * cos;
+            }
+
+            const localCenterOffset = new THREE.Vector3(
+                0,
+                0,
+                SCREEN_PLANE_Z * (evaluated.scale.z || 1)
+            ).applyEuler(new THREE.Euler(
+                -evaluated.rotation.x,
+                evaluated.rotation.y,
+                -(evaluated.rotation.z + rotationDelta),
+                'XYZ'
+            ));
+            const worldPosition = unprojectScreenToWorldPlane(
+                targetX,
+                targetY,
+                evaluated.position.z * 0.85 + localCenterOffset.z,
+                virtualCamera,
+                frameWidth,
+                frameHeight
+            );
+            const nextX = (worldPosition.x - localCenterOffset.x) / planeW;
+            const nextY = -(worldPosition.y - localCenterOffset.y) / planeH;
+            const position = {
+                ...initial.position,
+                x: Number((initial.position.x + nextX - evaluated.position.x).toFixed(4)),
+                y: Number((initial.position.y + nextY - evaluated.position.y).toFixed(4)),
+            };
+            const rotation = {
+                ...initial.rotation,
+                z: initial.rotation.z + rotationDelta,
+            };
+
+            if (initial.kind === 'text') {
+                transformedLayers.set(initial.id, {
+                    ...initial,
+                    position,
+                    rotation,
+                    maxWidth: Number(Math.max(0.04, initial.maxWidth * scaleX).toFixed(4)),
+                    font: {
+                        ...initial.font,
+                        size: Number(Math.max(0.012, initial.font.size * scaleY).toFixed(4)),
+                    },
+                });
+            } else {
+                transformedLayers.set(initial.id, {
+                    ...initial,
+                    position,
+                    rotation,
+                    size: {
+                        width: Number(Math.max(0.04, initial.size.width * scaleX).toFixed(4)),
+                        height: Number(Math.max(0.02, initial.size.height * scaleY).toFixed(4)),
+                    },
+                });
+            }
+
+            if (isAnimateMode) {
+                const previousPositionDelta = animationState.lastPositionDeltas.get(initial.id) ?? { x: 0, y: 0 };
+                const positionDelta = {
+                    x: Number((position.x - initial.position.x).toFixed(4)),
+                    y: Number((position.y - initial.position.y).toFixed(4)),
+                };
+                recordAnimatedTransform(
+                    initial.id,
+                    'position',
+                    {
+                        x: Number((positionDelta.x - previousPositionDelta.x).toFixed(4)),
+                        y: Number((positionDelta.y - previousPositionDelta.y).toFixed(4)),
+                        z: 0,
+                    },
+                    'Move'
+                );
+                animationState.lastPositionDeltas.set(initial.id, positionDelta);
+                recordAnimatedTransform(
+                    initial.id,
+                    'size',
+                    {
+                        x: Number((evaluated.size.width * (scaleX - animationState.lastScaleX)).toFixed(4)),
+                        y: Number((evaluated.size.height * (scaleY - animationState.lastScaleY)).toFixed(4)),
+                        z: 0,
+                    },
+                    'Resize'
+                );
+                recordAnimatedTransform(
+                    initial.id,
+                    'rotation',
+                    { x: 0, y: 0, z: Number((rotationDelta - animationState.lastRotationDelta).toFixed(4)) },
+                    'Roll'
+                );
+            }
+        }
+
+        if (isAnimateMode) {
+            animationState.lastScaleX = scaleX;
+            animationState.lastScaleY = scaleY;
+            animationState.lastRotationDelta = rotationDelta;
+            return;
+        }
 
         updateShot(
             activeShot.id,
             (shot) => ({
                 ...shot,
-                layers: shot.layers.map((item) => {
-                    const initial = initialLayers.get(item.id);
-                    const evaluated = selectedEvalLayers.find((candidate) => candidate.id === item.id);
-                    const center = projectedCenters.get(item.id);
-                    if (
-                        !initial ||
-                        !evaluated ||
-                        !center ||
-                        !selectedLayerSet.has(item.id) ||
-                        isLayerEffectivelyLocked(item, shot.groups)
-                    ) {
-                        return item;
-                    }
-
-                    let targetX = anchor.x + (center.x - anchor.x) * scaleX;
-                    let targetY = anchor.y + (center.y - anchor.y) * scaleY;
-                    if (rotationDelta !== 0) {
-                        const offsetX = center.x - anchor.x;
-                        const offsetY = center.y - anchor.y;
-                        targetX = anchor.x + offsetX * cos - offsetY * sin;
-                        targetY = anchor.y + offsetX * sin + offsetY * cos;
-                    }
-
-                    const localCenterOffset = new THREE.Vector3(
-                        0,
-                        0,
-                        SCREEN_PLANE_Z * (evaluated.scale.z || 1)
-                    ).applyEuler(new THREE.Euler(
-                        -evaluated.rotation.x,
-                        evaluated.rotation.y,
-                        -(evaluated.rotation.z + rotationDelta),
-                        'XYZ'
-                    ));
-                    const worldPosition = unprojectScreenToWorldPlane(
-                        targetX,
-                        targetY,
-                        evaluated.position.z * 0.85 + localCenterOffset.z,
-                        virtualCamera,
-                        frameWidth,
-                        frameHeight
-                    );
-                    const nextX = (worldPosition.x - localCenterOffset.x) / planeW;
-                    const nextY = -(worldPosition.y - localCenterOffset.y) / planeH;
-                    const position = {
-                        ...initial.position,
-                        x: Number((initial.position.x + nextX - evaluated.position.x).toFixed(4)),
-                        y: Number((initial.position.y + nextY - evaluated.position.y).toFixed(4)),
-                    };
-                    const rotation = {
-                        ...initial.rotation,
-                        z: initial.rotation.z + rotationDelta,
-                    };
-
-                    if (initial.kind === 'text') {
-                        return {
-                            ...initial,
-                            position,
-                            rotation,
-                            maxWidth: Number(Math.max(0.04, initial.maxWidth * scaleX).toFixed(4)),
-                            font: {
-                                ...initial.font,
-                                size: Number(Math.max(0.012, initial.font.size * scaleY).toFixed(4)),
-                            },
-                        };
-                    }
-
-                    return {
-                        ...initial,
-                        position,
-                        rotation,
-                        size: {
-                            width: Number(Math.max(0.04, initial.size.width * scaleX).toFixed(4)),
-                            height: Number(Math.max(0.02, initial.size.height * scaleY).toFixed(4)),
-                        },
-                    };
-                }),
+                layers: shot.layers.map((item) => transformedLayers.get(item.id) ?? item),
             }),
             { skipHistory: true }
         );
@@ -350,6 +432,47 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             ? key === 'ArrowDown' ? delta : key === 'ArrowUp' ? -delta : 0
             : 0;
         if (deltaX === 0 && deltaY === 0) return;
+        if (isCropping && (layer.kind === 'image' || layer.kind === 'video')) {
+            const initCrop = layer.crop || { x: 0, y: 0, width: 1, height: 1 };
+            const boxW = Math.max(40, primaryEval.size.width * frameWidth * canvasZoom);
+            const boxH = Math.max(40, primaryEval.size.height * frameHeight * canvasZoom);
+            const dx = deltaX / boxW;
+            const dy = deltaY / boxH;
+            let nextX = initCrop.x;
+            let nextY = initCrop.y;
+            let nextW = initCrop.width;
+            let nextH = initCrop.height;
+            if (dir.includes('w')) {
+                nextX = Math.max(0, Math.min(initCrop.x + initCrop.width - 0.1, initCrop.x + dx));
+                nextW = initCrop.width - (nextX - initCrop.x);
+            }
+            if (dir.includes('e')) nextW = Math.max(0.1, Math.min(1 - initCrop.x, initCrop.width + dx));
+            if (dir.includes('n')) {
+                nextY = Math.max(0, Math.min(initCrop.y + initCrop.height - 0.1, initCrop.y + dy));
+                nextH = initCrop.height - (nextY - initCrop.y);
+            }
+            if (dir.includes('s')) nextH = Math.max(0.1, Math.min(1 - initCrop.y, initCrop.height + dy));
+
+            beginDragTransaction();
+            updateLayer(
+                activeShot.id,
+                layer.id,
+                (item) => item.kind === 'image' || item.kind === 'video'
+                    ? {
+                        ...item,
+                        crop: {
+                            x: Number(nextX.toFixed(3)),
+                            y: Number(nextY.toFixed(3)),
+                            width: Number(nextW.toFixed(3)),
+                            height: Number(nextH.toFixed(3)),
+                        },
+                    }
+                    : item,
+                { skipHistory: true }
+            );
+            commitDragTransaction();
+            return;
+        }
         const transform = getGroupResizeTransform(dir, deltaX, deltaY, false, false);
         if (!transform) return;
         beginDragTransaction();
@@ -362,15 +485,31 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const rotationDelta = key === 'ArrowRight' ? Math.PI / 36 : -Math.PI / 36;
         if (!isGroupSelection) {
             beginDragTransaction();
-            updateLayer(
-                activeShot.id,
-                layer.id,
-                (item) => ({
-                    ...item,
-                    rotation: { ...item.rotation, z: item.rotation.z + rotationDelta },
-                }),
-                { skipHistory: true }
-            );
+            if (isAnimateMode) {
+                const blockId = recordAnimatedBlockAtPlayhead(
+                    activeShot.id,
+                    layer.id,
+                    'rotation',
+                    { x: 0, y: 0, z: rotationDelta },
+                    frame.shotLocalTimeMs,
+                    'Roll',
+                    { skipHistory: true }
+                );
+                if (blockId) {
+                    setTimelineLayerExpanded(layer.id, true);
+                    selectBlock(blockId, layer.id);
+                }
+            } else {
+                updateLayer(
+                    activeShot.id,
+                    layer.id,
+                    (item) => ({
+                        ...item,
+                        rotation: { ...item.rotation, z: item.rotation.z + rotationDelta },
+                    }),
+                    { skipHistory: true }
+                );
+            }
             commitDragTransaction();
             return;
         }
@@ -531,6 +670,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const startClientY = e.clientY;
 
         if (isGroupSelection && !isCropping && groupBounds) {
+            const animationState = createGroupTransformAnimationState();
             const onGroupResize = (moveEvent: PointerEvent | MouseEvent) => {
                 const deltaX = (moveEvent.clientX - startClientX) / canvasZoom;
                 const deltaY = (moveEvent.clientY - startClientY) / canvasZoom;
@@ -542,7 +682,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     Boolean(moveEvent.shiftKey)
                 );
                 if (transform) {
-                    applyGroupTransform(transform.scaleX, transform.scaleY, transform.anchor);
+                    applyGroupTransform(transform.scaleX, transform.scaleY, transform.anchor, 0, animationState);
                 }
             };
             bindPointerDrag(e, onGroupResize);
@@ -787,6 +927,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
             let prevAngle = startAngle;
             let accumulatedDelta = 0;
+            const animationState = createGroupTransformAnimationState();
 
             const onGroupRotate = (moveEvent: PointerEvent | MouseEvent) => {
                 const currentAngle = Math.atan2(
@@ -802,7 +943,8 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     1,
                     1,
                     center,
-                    accumulatedDelta
+                    accumulatedDelta,
+                    animationState
                 );
             };
 
@@ -948,7 +1090,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         dir: ResizeHandleDir;
         pos: { x: number; y: number };
         cursor: string;
-    }[] = isGroupSelection && groupBounds ? [
+    }[] = isGroupSelection && !isCropping && groupBounds ? [
             { dir: 'nw', pos: { x: groupBounds.left, y: groupBounds.top }, cursor: 'nwse-resize' },
             { dir: 'n', pos: { x: (groupBounds.left + groupBounds.right) / 2, y: groupBounds.top }, cursor: 'ns-resize' },
             { dir: 'ne', pos: { x: groupBounds.right, y: groupBounds.top }, cursor: 'nesw-resize' },
@@ -999,7 +1141,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 selectedEvalLayers={selectedEvalLayers}
                 projectCorners={projectCorners}
                 primaryProj={primaryProj}
-                groupBounds={isGroupSelection ? groupBounds : null}
+                groupBounds={isGroupSelection && !isCropping ? groupBounds : null}
                 layer={layer}
                 activeShotId={activeShot.id}
                 frameWidth={frameWidth}

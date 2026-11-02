@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { evaluateProjectAtTime } from '../engine/evaluateShot';
-import { createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
+import { createDefaultImageLayer, createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
 import type { Layer, Project } from '../model/types';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -56,7 +56,11 @@ function makeProject(layers: Layer[]): Project {
     return project;
 }
 
-function renderSelectionOverlay(project: Project, selectedLayerIds: string[], canvasZoom = 1) {
+function renderSelectionOverlay(
+    project: Project,
+    selectedLayerIds: string[],
+    options: { canvasZoom?: number; animateMode?: boolean; crop?: boolean } = {}
+) {
     useProjectStore.setState({ project, past: [], future: [], dragSnapshot: null });
     useSelectionStore.setState({
         selectedLayerIds,
@@ -65,9 +69,9 @@ function renderSelectionOverlay(project: Project, selectedLayerIds: string[], ca
         selectedLightBlockId: null,
         selectedLightId: null,
         activeTool: 'select',
-        isAnimateMode: false,
-        isCropping: false,
-        canvasZoom,
+        isAnimateMode: Boolean(options.animateMode),
+        isCropping: Boolean(options.crop),
+        canvasZoom: options.canvasZoom ?? 1,
     });
     const frame = evaluateProjectAtTime(project, 0);
     const container = dom!.window.document.getElementById('root')!;
@@ -242,7 +246,7 @@ describe('selection overlay group transforms', () => {
         ];
         const project = makeProject(layers);
         const canvasZoom = 1.5;
-        renderSelectionOverlay(project, layers.map((layer) => layer.id), canvasZoom);
+        renderSelectionOverlay(project, layers.map((layer) => layer.id), { canvasZoom });
         const initial = layers.map((layer) => ({ ...layer }));
         const initialCenters = getProjectedCenters(project);
         const rotateHandle = testDom.window.document.querySelector('[data-selection-handle="rot-ne"]')!;
@@ -317,5 +321,144 @@ describe('selection overlay group transforms', () => {
             cancelable: true,
         })));
         expect(getLayer('left-layer').rotation.z).toBeGreaterThan(initialRotation);
+    });
+
+    it('records group resize pointer transforms as size and position keyframes without changing base layers', () => {
+        const testDom = installTestDom();
+        const layers = [
+            createDefaultShapeLayer({ id: 'left-layer', position: { x: -0.3, y: 0.05, z: 0.1 } }),
+            createDefaultShapeLayer({ id: 'right-layer', position: { x: 0.3, y: -0.05, z: 0.3 } }),
+        ];
+        renderSelectionOverlay(makeProject(layers), layers.map((layer) => layer.id), { animateMode: true });
+        const initial = layers.map((layer) => structuredClone(layer));
+        const handle = testDom.window.document.querySelector('[data-selection-handle="e"]')!;
+
+        dispatchPointer(handle, 'pointerdown', 3, 1500, 540);
+        dispatchPointer(testDom.window, 'pointermove', 3, 1560, 540);
+
+        for (const [index, layer] of layers.entries()) {
+            const after = getLayer(layer.id);
+            expect(after.position).toEqual(initial[index].position);
+            expect((after as ReturnType<typeof createDefaultShapeLayer>).size).toEqual(initial[index].size);
+            expect(after.blocks.some((block) => block.property === 'size' && typeof block.amount === 'object'
+                && (block.amount.x !== 0 || block.amount.y !== 0))).toBe(true);
+            expect(after.blocks.some((block) => block.property === 'position' && typeof block.amount === 'object'
+                && (block.amount.x !== 0 || block.amount.y !== 0))).toBe(true);
+        }
+        const animatedFrame = evaluateProjectAtTime(useProjectStore.getState().project, 200);
+        for (const layer of layers) {
+            const animatedLayer = animatedFrame.layers.find((item) => item.id === layer.id)!;
+            expect(animatedLayer.size.width).toBeGreaterThan(layer.size.width);
+        }
+
+        dispatchPointer(testDom.window, 'pointerup', 3, 1560, 540);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+    });
+
+    it('records group rotation pointer transforms as rotation and position keyframes without changing base layers', () => {
+        const testDom = installTestDom();
+        const layers = [
+            createDefaultShapeLayer({ id: 'left-layer', position: { x: -0.3, y: 0.05, z: 0.1 } }),
+            createDefaultShapeLayer({ id: 'right-layer', position: { x: 0.3, y: -0.05, z: 0.3 } }),
+        ];
+        renderSelectionOverlay(makeProject(layers), layers.map((layer) => layer.id), { animateMode: true });
+        const initial = layers.map((layer) => structuredClone(layer));
+        const bounds = testDom.window.document.querySelector('[data-selection-group-bounds="true"]') as SVGRectElement;
+        const centerX = Number(bounds.getAttribute('x')) + Number(bounds.getAttribute('width')) / 2;
+        const centerY = Number(bounds.getAttribute('y')) + Number(bounds.getAttribute('height')) / 2;
+        const handle = testDom.window.document.querySelector('[data-selection-handle="rot-ne"]')!;
+
+        dispatchPointer(handle, 'pointerdown', 4, centerX + 100, centerY);
+        dispatchPointer(testDom.window, 'pointermove', 4, centerX, centerY + 100);
+
+        for (const [index, layer] of layers.entries()) {
+            const after = getLayer(layer.id);
+            expect(after.position).toEqual(initial[index].position);
+            expect(after.rotation).toEqual(initial[index].rotation);
+            expect(after.blocks.some((block) => block.property === 'rotation' && typeof block.amount === 'object'
+                && Math.abs(block.amount.z) > 0.1)).toBe(true);
+            expect(after.blocks.some((block) => block.property === 'position' && typeof block.amount === 'object'
+                && Math.abs(block.amount.x) + Math.abs(block.amount.y) > 0.01)).toBe(true);
+        }
+        const animatedFrame = evaluateProjectAtTime(useProjectStore.getState().project, 200);
+        for (const layer of layers) {
+            const animatedLayer = animatedFrame.layers.find((item) => item.id === layer.id)!;
+            expect(animatedLayer.rotation.z).not.toBe(layer.rotation.z);
+            expect(animatedLayer.position.x).not.toBe(layer.position.x);
+        }
+
+        dispatchPointer(testDom.window, 'pointerup', 4, centerX, centerY + 100);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+    });
+
+    it('records keyboard group resize and rotation as keyframes in separate undo transactions', () => {
+        const testDom = installTestDom();
+        const layers = [
+            createDefaultShapeLayer({ id: 'left-layer', position: { x: -0.3, y: 0.05, z: 0.1 } }),
+            createDefaultShapeLayer({ id: 'right-layer', position: { x: 0.3, y: -0.05, z: 0.3 } }),
+        ];
+        renderSelectionOverlay(makeProject(layers), layers.map((layer) => layer.id), { animateMode: true });
+        const initial = layers.map((layer) => structuredClone(layer));
+        const resizeHandle = testDom.window.document.querySelector('[data-selection-handle="e"]')!;
+        const rotateHandle = testDom.window.document.querySelector('[data-selection-handle="rot-ne"]')!;
+
+        act(() => resizeHandle.dispatchEvent(new testDom.window.KeyboardEvent('keydown', {
+            key: 'ArrowRight', bubbles: true, cancelable: true,
+        })));
+        expect(useProjectStore.getState().past).toHaveLength(1);
+        act(() => rotateHandle.dispatchEvent(new testDom.window.KeyboardEvent('keydown', {
+            key: 'ArrowRight', bubbles: true, cancelable: true,
+        })));
+
+        for (const [index, layer] of layers.entries()) {
+            const after = getLayer(layer.id);
+            expect(after.position).toEqual(initial[index].position);
+            expect((after as ReturnType<typeof createDefaultShapeLayer>).size).toEqual(initial[index].size);
+            expect(after.rotation).toEqual(initial[index].rotation);
+            expect(after.blocks.some((block) => block.property === 'size')).toBe(true);
+            expect(after.blocks.some((block) => block.property === 'rotation')).toBe(true);
+            expect(after.blocks.some((block) => block.property === 'position')).toBe(true);
+        }
+        expect(useProjectStore.getState().past).toHaveLength(2);
+    });
+
+    it('uses the primary image bounds and crop operation when cropping alongside a multi-selection', () => {
+        const testDom = installTestDom();
+        const image = createDefaultImageLayer({
+            id: 'primary-image',
+            position: { x: -0.2, y: 0, z: 0.1 },
+            size: { width: 0.3, height: 0.2 },
+        });
+        const other = createDefaultShapeLayer({
+            id: 'other-layer',
+            position: { x: 0.3, y: 0, z: 0.3 },
+        });
+        const project = makeProject([image, other]);
+        const frame = evaluateProjectAtTime(project, 0);
+        const evaluatedImage = frame.layers.find((layer) => layer.id === image.id)!;
+        const projectedImage = getLayerProjectedCorners(evaluatedImage, 1920, 1080, 16 / 9);
+        const expectedRight = Math.max(...projectedImage.corners.map((point) => point.x));
+        renderSelectionOverlay(project, [image.id, other.id], { crop: true });
+        const eastHandle = testDom.window.document.querySelector('[data-selection-handle="e"]') as HTMLElement;
+
+        expect(testDom.window.document.querySelector('[data-selection-group-bounds="true"]')).toBeNull();
+        expect(eastHandle.style.left).toBe(`${expectedRight}px`);
+        expect(eastHandle.getAttribute('aria-label')).toBe('Adjust crop east');
+
+        dispatchPointer(eastHandle, 'pointerdown', 5, 1500, 540);
+        dispatchPointer(testDom.window, 'pointermove', 5, 1440, 540);
+
+        expect((getLayer(image.id) as ReturnType<typeof createDefaultImageLayer>).crop).not.toEqual(image.crop);
+        expect(getLayer(other.id)).toEqual(other);
+        dispatchPointer(testDom.window, 'pointerup', 5, 1440, 540);
+
+        const cropBeforeKeyboard = (getLayer(image.id) as ReturnType<typeof createDefaultImageLayer>).crop!;
+        act(() => eastHandle.dispatchEvent(new testDom.window.KeyboardEvent('keydown', {
+            key: 'ArrowRight', bubbles: true, cancelable: true,
+        })));
+        const cropAfterKeyboard = (getLayer(image.id) as ReturnType<typeof createDefaultImageLayer>).crop!;
+        expect(cropAfterKeyboard.width).toBeGreaterThan(cropBeforeKeyboard.width);
+        expect(getLayer(other.id)).toEqual(other);
+        expect(useProjectStore.getState().past).toHaveLength(2);
     });
 });
