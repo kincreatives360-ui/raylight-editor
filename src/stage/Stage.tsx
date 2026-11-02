@@ -485,9 +485,6 @@ const StageComponent: React.FC<StageProps> = ({
                 rotation={effectiveViewportFrame.camera.rotation}
                 hasSelection={selectedLayerIds.length > 0}
                 onSetOrientation={handleSetOrientation}
-                onDragStart={beginDragTransaction}
-                onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
-                onDragEnd={commitDragTransaction}
                 onReset={handleResetCamera}
                 onFrameSelection={handleFrameSelectedLayers}
                 onPin={handlePinCameraView}
