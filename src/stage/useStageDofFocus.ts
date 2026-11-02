@@ -38,11 +38,14 @@ function isEditableTarget(target: EventTarget | null): boolean {
 }
 
 function findActiveFocusBlock(blocks: FocusBlock[] | undefined, timeMs: number): FocusBlock | undefined {
-    return blocks?.find((block) => {
+    return blocks?.reduce<FocusBlock | undefined>((latest, block) => {
         const startMs = block.sourceStartMs ?? block.startMs;
         const durationMs = block.sourceDurationMs ?? block.durationMs;
-        return timeMs >= startMs && timeMs <= startMs + durationMs;
-    });
+        if (timeMs < startMs || timeMs > startMs + durationMs) return latest;
+        if (!latest) return block;
+        const latestStartMs = latest.sourceStartMs ?? latest.startMs;
+        return startMs >= latestStartMs ? block : latest;
+    }, undefined);
 }
 
 export function useStageDofFocus({

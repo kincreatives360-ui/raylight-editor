@@ -288,15 +288,23 @@ describe('DepthOfFieldFocusOverlay', () => {
         act(() => root!.render(createElement(Harness)));
 
         const focusHandle = dom.window.document.querySelector('[aria-label="Focus depth; use arrow keys to adjust"]')!;
+        const rulerFocusHandle = dom.window.document.querySelector('[data-depth-tick="focus"]')!;
         const nearHandle = dom.window.document.querySelector('[aria-label="Near focus boundary; use arrow keys to adjust range"]')!;
         const farHandle = dom.window.document.querySelector('[aria-label="Far focus boundary; use arrow keys to adjust range"]')!;
         expect(focusHandle.getAttribute('tabindex')).toBe('0');
+        expect(rulerFocusHandle.getAttribute('role')).toBe('spinbutton');
+        expect(rulerFocusHandle.getAttribute('tabindex')).toBe('0');
         expect(nearHandle.getAttribute('tabindex')).toBe('0');
         expect(farHandle.getAttribute('tabindex')).toBe('0');
 
         act(() => focusHandle.dispatchEvent(new dom!.window.KeyboardEvent('keydown', {
             bubbles: true,
             key: 'ArrowUp',
+        })));
+        act(() => rulerFocusHandle.dispatchEvent(new dom!.window.KeyboardEvent('keydown', {
+            bubbles: true,
+            key: 'ArrowDown',
+            shiftKey: true,
         })));
         act(() => nearHandle.dispatchEvent(new dom!.window.KeyboardEvent('keydown', {
             bubbles: true,
@@ -308,7 +316,23 @@ describe('DepthOfFieldFocusOverlay', () => {
         })));
 
         expect(fixture.onAdjustFocusDepth).toHaveBeenCalledWith(0.05);
+        expect(fixture.onAdjustFocusDepth).toHaveBeenNthCalledWith(2, -0.01, undefined);
         expect(fixture.onAdjustFocusRange.mock.calls.map(([delta]) => delta)).toEqual([-0.05, 0.05]);
+    });
+
+    it('drags focus depth from the ruler center tick in one undoable transaction', () => {
+        setupPointerTest();
+        const focusTick = dom!.window.document.querySelector('[data-depth-tick="focus"]')!;
+        act(() => focusTick.dispatchEvent(pointerEvent('pointerdown', 8, 120, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 8, 120, 80)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 8, 120, 100)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointerup', 8, 120, 100)));
+
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.5);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+        expect(useProjectStore.getState().dragSnapshot).toBeNull();
+        act(() => useProjectStore.getState().undo());
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.4);
     });
 
     it('drags focus depth in one undoable transaction', () => {

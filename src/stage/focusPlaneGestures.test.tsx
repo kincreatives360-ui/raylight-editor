@@ -404,6 +404,39 @@ describe('Stage depth-of-field focus gestures', () => {
         expect(shot.effects.depthOfField.target.z).toBeCloseTo(0.4);
     });
 
+    it('edits the latest-starting block when focus blocks overlap', () => {
+        const project = makeProject();
+        project.shots[0].focusBlocks = [
+            {
+                id: 'earlier-rack',
+                startMs: 1000,
+                durationMs: 2000,
+                fromZ: 0.2,
+                toZ: 0.6,
+                easing: { kind: 'preset', name: 'linear' },
+            },
+            {
+                id: 'later-rack',
+                startMs: 1200,
+                durationMs: 1200,
+                fromZ: 0.5,
+                toZ: 0.8,
+                easing: { kind: 'preset', name: 'linear' },
+            },
+        ];
+        const browser = setup(project, 1500);
+        act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {
+            key: 'd', bubbles: true,
+        })));
+        const stage = browser.window.document.querySelector('[tabindex="0"]')!;
+        act(() => stage.dispatchEvent(wheel(-100)));
+
+        const blocks = useProjectStore.getState().project.shots[0].focusBlocks!;
+        expect(blocks[0]).toMatchObject({ fromZ: 0.2, toZ: 0.6 });
+        expect(blocks[1].fromZ).toBeCloseTo(0.52);
+        expect(blocks[1].toZ).toBeCloseTo(0.82);
+    });
+
     it('rolls back a D drag on Escape without leaving an open transaction', () => {
         const browser = setup();
         act(() => browser.window.dispatchEvent(new browser.window.KeyboardEvent('keydown', {

@@ -251,6 +251,10 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
                         onHoverDepth={handleHoverDepth}
                         onBeginDrag={onBeginDrag}
                         onEndDrag={onEndDrag}
+                        onAdjustFocusDepth={(delta, skipHistory) => {
+                            interaction();
+                            onAdjustFocusDepth(delta, skipHistory);
+                        }}
                         onAdjustFocusRange={(delta, skipHistory) => {
                             interaction();
                             onAdjustFocusRange(delta, skipHistory);

@@ -21,6 +21,7 @@ interface FocusDepthRulerProps {
     onHoverDepth: (depth: number | null) => void;
     onBeginDrag: () => void;
     onEndDrag: (cancelled: boolean) => void;
+    onAdjustFocusDepth: (delta: number, skipHistory?: boolean) => void;
     onAdjustFocusRange: (delta: number, skipHistory?: boolean) => void;
 }
 
@@ -41,6 +42,7 @@ export function FocusDepthRuler({
     onHoverDepth,
     onBeginDrag,
     onEndDrag,
+    onAdjustFocusDepth,
     onAdjustFocusRange,
 }: FocusDepthRulerProps) {
     const span = Math.max(0.001, maxDepth - minDepth);
@@ -64,6 +66,39 @@ export function FocusDepthRuler({
         onAdjustFocusRange(direction * (event.shiftKey ? 0.01 : 0.05));
     };
     const stopMouseDown = (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation();
+    const handleFocusKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+        const direction = event.key === 'ArrowUp'
+            ? 1
+            : event.key === 'ArrowDown'
+                ? -1
+                : 0;
+        if (!direction) return;
+        event.preventDefault();
+        event.stopPropagation();
+        onAdjustFocusDepth(direction * (event.shiftKey ? 0.01 : 0.05));
+    };
+    const handleFocusPointerDown = (event: PointerEvent<HTMLButtonElement>) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        activeDragCleanupRef.current?.();
+        let previousY = event.clientY;
+        activeDragCleanupRef.current = createPointerDragLifecycle({
+            pointerId: event.pointerId,
+            target: event.currentTarget,
+            begin: onBeginDrag,
+            commit: () => onEndDrag(false),
+            cancel: () => onEndDrag(true),
+            onMove: moveEvent => {
+                const deltaY = previousY - moveEvent.clientY;
+                previousY = moveEvent.clientY;
+                onAdjustFocusDepth(deltaY * 0.005, true);
+            },
+            onEnd: () => {
+                activeDragCleanupRef.current = null;
+            },
+        });
+    };
     const handleRangePointerDown = (event: PointerEvent<HTMLButtonElement>, edge: 'near' | 'far') => {
         if (event.button !== 0) return;
         event.preventDefault();
@@ -159,15 +194,28 @@ export function FocusDepthRuler({
                 </div>
             ))}
 
-            <div
+            <button
+                type="button"
+                role="spinbutton"
+                aria-label="Focus depth; use arrow keys to adjust"
+                title="Use the up and down arrow keys or drag vertically to adjust focus depth"
+                tabIndex={0}
+                aria-valuenow={focusDepth}
+                aria-valuetext={`Focus depth ${formatDepth(focusDepth)}`}
                 data-depth-tick="focus"
                 data-depth={formatDepth(focusDepth)}
-                className="absolute top-[25px] -translate-x-1/2 -translate-y-1/2 pointer-events-auto"
+                className="absolute top-[25px] z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-0 bg-transparent p-0 pointer-events-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 style={{ left: position(focusDepth) }}
                 onMouseEnter={handleHover(focusDepth)}
+                onFocus={() => onHoverDepth(focusDepth)}
+                onBlur={() => onHoverDepth(null)}
+                onMouseDown={stopMouseDown}
+                onPointerDown={handleFocusPointerDown}
+                onClick={event => event.stopPropagation()}
+                onKeyDown={handleFocusKeyDown}
             >
-                <span className="block h-3 w-3 rounded-full border border-white bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,.8)]" />
-            </div>
+                <span aria-hidden="true" className="block h-3 w-3 rounded-full border border-white bg-sky-400 shadow-[0_0_10px_rgba(56,189,248,.8)]" />
+            </button>
 
             {([
                 ['near', nearDepth],
