@@ -3,7 +3,7 @@ import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import type { Project } from '../model/types';
 import { resolveShotBackground } from '../model/types';
-import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, evaluateCameraPose, getLayerProjectedCorners } from './webgl/cameraMath';
+import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, evaluateCameraPose, getLayerProjectedCorners, getAspectRatio } from './webgl/cameraMath';
 import { ASPECT_RATIO_CONFIG } from './stageUtils';
 
 interface ViewportSize {
@@ -28,8 +28,7 @@ export function useStageViewportModel({
     activeTool,
     isPlaying,
 }: UseStageViewportModelOptions) {
-    const ratio = ASPECT_RATIO_CONFIG[project.aspectRatio];
-    const targetAspect = ratio.widthRatio / ratio.heightRatio;
+    const targetAspect = getAspectRatio(project.aspectRatio);
     const availableAspect = viewportSize.width / viewportSize.height;
     const frameWidth = availableAspect > targetAspect
         ? Math.round(viewportSize.height * targetAspect)

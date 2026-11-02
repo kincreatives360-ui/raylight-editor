@@ -15,7 +15,7 @@ import type {
     ImageLayer,
     VideoLayer,
 } from '../../model/types';
-import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout } from './cameraMath';
+import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout, getAspectRatio } from './cameraMath';
 import { getOrCreateVideoElement, createCanvasFillStyle } from '../../engine/canvasRenderer';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
@@ -46,24 +46,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const { invalidate, gl, size } = useThree();
     const dpr = useThree(state => state.viewport.dpr);
 
-    const aspect =
-        project.aspectRatio === '16:9'
-            ? 16 / 9
-            : project.aspectRatio === '4:3'
-                ? 4 / 3
-                : project.aspectRatio === '3:2'
-                    ? 3 / 2
-                    : project.aspectRatio === '21:9'
-                        ? 21 / 9
-                        : project.aspectRatio === '1:1'
-                            ? 1
-                            : project.aspectRatio === '9:16'
-                                ? 9 / 16
-                                : project.aspectRatio === '3:4'
-                                    ? 3 / 4
-                                    : project.aspectRatio === '2:3'
-                                        ? 2 / 3
-                                        : 4 / 5;
+    const aspect = getAspectRatio(project.aspectRatio);
 
     const cameraZ = project.defaultCamera?.position?.z ?? 2.65;
     const focalLength = project.defaultCamera?.focalLength ?? 50;

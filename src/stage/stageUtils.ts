@@ -66,6 +66,16 @@ export function getArtboardDimensions(
     return { width, height };
 }
 
+/**
+ * Get the aspect ratio value (width/height) for a given aspect ratio string.
+ * @param aspectRatio - The aspect ratio string (e.g., '16:9', '4:3')
+ * @returns The aspect ratio as a number (width/height)
+ */
+export function getAspectRatio(aspectRatio: AspectRatio): number {
+    const spec = ASPECT_RATIO_CONFIG[aspectRatio] ?? ASPECT_RATIO_CONFIG['16:9'];
+    return spec.widthRatio / spec.heightRatio;
+}
+
 
 export interface SnapGuideLine {
     axis: 'x' | 'y'; // 'x' = vertical line at a fractional X, 'y' = horizontal line at a fractional Y
