@@ -32,6 +32,7 @@ interface ThreeLayerObjectProps {
     evaluatedCamera: EvaluatedCamera;
     onSelect: (layerId: string, multiSelect?: boolean) => void;
     shotStartMs?: number;
+    currentTimeMs?: number;
 }
 
 export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
@@ -129,7 +130,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     useEffect(() => () => { sceneCopy.current?.dispose(); }, []);
     const captureBackdrop = (renderer: THREE.WebGLRenderer, _scene: THREE.Scene, camera: THREE.Camera) => {
         const uniforms = effectUniformsRef.current;
-        uniforms.layerTime.value = Math.max(0, usePlayheadStore.getState().currentTimeMs - shotStartMs) / 1000;
+        const currentTimeMs = props.currentTimeMs ?? 0;
+        uniforms.layerTime.value = Math.max(0, currentTimeMs - shotStartMs) / 1000;
         if (surfaceMesh.current && uniforms.layerScreen.value.x > 0) {
             viewVectors.normal.set(0, 0, 1).transformDirection(surfaceMesh.current.matrixWorld);
             camera.getWorldDirection(viewVectors.direction);
@@ -642,7 +644,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const turbulenceFrame = useRef<{ time: number; geometry: THREE.PlaneGeometry; haloGeometry?: THREE.PlaneGeometry | null } | null>(null);
     useFrame(() => {
         if (!warp?.enabled || warp.mode !== 'turbulent' || !warpedGeometry) return;
-        const time = Math.max(0, usePlayheadStore.getState().currentTimeMs - shotStartMs) / 1000;
+        const currentTimeMs = props.currentTimeMs ?? 0;
+        const time = Math.max(0, currentTimeMs - shotStartMs) / 1000;
         if (turbulenceFrame.current?.time === time && turbulenceFrame.current.geometry === warpedGeometry && turbulenceFrame.current.haloGeometry === warpedHaloGeometry) return;
         updateWarpGeometry(warpedGeometry, meshW * widthScale, meshH * heightScale, authoredW * widthScale, authoredH * heightScale, warp, time);
         if (warpedHaloGeometry && halo) updateWarpGeometry(warpedHaloGeometry, meshW * widthScale * halo.widthScale, meshH * heightScale * halo.heightScale, authoredW * widthScale * halo.widthScale, authoredH * heightScale * halo.heightScale, warp, time, { width: authoredW * widthScale, height: authoredH * heightScale });

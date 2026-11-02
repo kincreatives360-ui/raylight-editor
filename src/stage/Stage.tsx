@@ -405,6 +405,7 @@ const StageComponent: React.FC<StageProps> = ({
                                 clearLayerSelection();
                             }}
                             cameraRef={cameraRef}
+                            effectiveTimeMs={effectiveTimeMs}
                         />
                     </div>
 

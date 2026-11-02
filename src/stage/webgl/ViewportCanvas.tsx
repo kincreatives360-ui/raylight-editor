@@ -28,6 +28,7 @@ interface ViewportCanvasProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     onPointerMissed?: () => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
+    effectiveTimeMs?: number;
 }
 
 function useDevicePixelRatio() {
@@ -290,6 +291,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     onSelectLayer,
     onPointerMissed,
     cameraRef,
+    effectiveTimeMs = 0,
 }) => {
     const activeShot = frame.activeShot;
     const transitionState = getShotTransitionCompositeState(frame);
@@ -367,6 +369,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             evaluatedCamera={transitionState.outgoingCamera ?? frame.camera}
                             onSelect={() => {}}
                             shotStartMs={transitionState.outgoingShotStartMs}
+                            currentTimeMs={effectiveTimeMs}
                         />
                     ))}
                     {layers.map((evalLayer) => (
@@ -377,6 +380,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             evaluatedCamera={frame.camera}
                             onSelect={onSelectLayer}
                             shotStartMs={activeShot?.startMs ?? 0}
+                            currentTimeMs={effectiveTimeMs}
                         />
                     ))}
                 </group>
