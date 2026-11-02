@@ -2,8 +2,9 @@
 import { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM } from '../../engine/constants';
 import { focalLengthToFov } from '../../engine/evaluateCamera';
 import { lerpLog } from '../../engine/math';
+import { getAspectRatio } from '../../stage/stageUtils';
 
-export { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM, focalLengthToFov };
+export { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM, focalLengthToFov, getAspectRatio };
 
 /**
  * Smooth logarithmic dolly zoom calculation (Raylight 320ms smoothstep)

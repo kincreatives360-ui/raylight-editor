@@ -338,7 +338,6 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     selectedLayerIds={selectedLayerIds}
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                 />
-                />
                 <WebGLContextGuard />
                 <StageCaptureBridge frame={frame} />
 
