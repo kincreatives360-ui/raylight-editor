@@ -14,10 +14,92 @@ import {
   createMultiShotContractFixture,
 } from '../model/defaults';
 import { validateProject } from '../model/schema';
+import { ShotSchema } from '../model/shotSchemas';
 import { useProjectStore } from '../store/useProjectStore';
 import type { Project, Shot } from '../model/types';
 
 describe('evaluateProjectAtTime', () => {
+  it('evaluates a DOF blur block without changing the saved focus target', () => {
+    const shot = createDefaultShot({
+      durationMs: 2000,
+      effects: {
+        ...DEFAULT_PROJECT.shots[0].effects,
+        depthOfField: {
+          ...DEFAULT_PROJECT.shots[0].effects.depthOfField,
+          enabled: true,
+          target: { x: 0.2, y: -0.1, z: 0.35 },
+          bokehScale: 4,
+        },
+      },
+      effectBlocks: [{
+        id: 'blur-block',
+        label: 'Animate blur',
+        effectKey: 'depthOfField',
+        parameter: 'blur',
+        startMs: 0,
+        durationMs: 1000,
+        fromValue: 0,
+        toValue: 4,
+        easing: { kind: 'preset', name: 'linear' },
+      }],
+    });
+
+    const halfway = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [shot] }, 500);
+
+    expect(halfway.activeShot.effects.depthOfField.target).toEqual({ x: 0.2, y: -0.1, z: 0.35 });
+    expect(halfway.activeShot.effects.depthOfField.bokehScale).toBe(2);
+  });
+
+  it('keeps legacy DOF effect blocks animating focus depth', () => {
+    const shot = createDefaultShot({
+      durationMs: 2000,
+      effects: {
+        ...DEFAULT_PROJECT.shots[0].effects,
+        depthOfField: {
+          ...DEFAULT_PROJECT.shots[0].effects.depthOfField,
+          target: { x: 0.1, y: -0.2, z: 0.25 },
+        },
+      },
+      effectBlocks: [{
+        id: 'legacy-focus-block',
+        label: 'Legacy focus',
+        effectKey: 'depthOfField',
+        startMs: 0,
+        durationMs: 1000,
+        fromValue: 0,
+        toValue: 1,
+        easing: { kind: 'preset', name: 'linear' },
+      }],
+    });
+
+    const halfway = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [shot] }, 500);
+
+    expect(halfway.activeShot.effects.depthOfField.target).toEqual({ x: 0.1, y: -0.2, z: 0.5 });
+  });
+
+  it('parses legacy shots without DOF focus-subject or animation-parameter fields', () => {
+    const shot = createDefaultShot();
+    delete shot.effects.depthOfField.focusTargetId;
+    shot.effectBlocks = [{
+      id: 'legacy-dof',
+      label: 'Legacy focus',
+      effectKey: 'depthOfField',
+      startMs: 0,
+      durationMs: 800,
+      fromValue: 0,
+      toValue: 1,
+      easing: { kind: 'preset', name: 'ease-in-out' },
+    }];
+
+    const parsed = ShotSchema.safeParse(shot);
+
+    expect(parsed.success).toBe(true);
+    if (parsed.success) {
+      expect(parsed.data.effects.depthOfField.focusTargetId).toBeUndefined();
+      expect(parsed.data.effectBlocks?.[0].parameter).toBeUndefined();
+    }
+  });
+
   it('uses an empty render shot when a project has no shots', () => {
     const frame = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [] }, 0);
 
@@ -125,7 +207,7 @@ describe('evaluateProjectAtTime', () => {
     expect(evalL3?.visible).toBe(true);
   });
 
-  it('3. Computes depth of field blur and total blur per layer', () => {
+  it('keeps scene DOF separate from per-layer authored blur', () => {
     const layerSharp = createDefaultShapeLayer({
       id: 'l-sharp',
       position: { x: 0, y: 0, z: 0 },
@@ -163,13 +245,10 @@ describe('evaluateProjectAtTime', () => {
     const evalSharp = frame.layers.find((l) => l.id === 'l-sharp')!;
     const evalBlurred = frame.layers.find((l) => l.id === 'l-blurred')!;
 
-    // Sharp layer at z=0 is inside focus range -> 0 DoF blur, 0 total blur
-    expect(evalSharp.dofBlurPx).toBe(0);
+    expect(evalSharp).not.toHaveProperty('dofBlurPx');
     expect(evalSharp.totalBlurPx).toBe(0);
-
-    // Blurred layer has both DoF blur and manual blur
-    expect(evalBlurred.dofBlurPx).toBeGreaterThan(0);
-    expect(evalBlurred.totalBlurPx).toBeGreaterThanOrEqual(evalBlurred.dofBlurPx + 5);
+    expect(evalBlurred).not.toHaveProperty('dofBlurPx');
+    expect(evalBlurred.totalBlurPx).toBe(5);
   });
 
   it('4. Evaluates animated effect blocks (e.g. bloom, vignette) on the timeline', () => {
@@ -257,7 +336,7 @@ describe('evaluateProjectAtTime', () => {
     expect(Array.isArray(frame.layers)).toBe(true);
   });
 
-  it('7. Animated rack focus dynamically updates layer blur according to evaluated focus distance', () => {
+  it('animates scene focus without adding per-layer blur', () => {
     const layerAt1 = createDefaultImageLayer({
       id: 'l-target',
       position: { x: 0, y: 0, z: 1.0 },
@@ -293,22 +372,21 @@ describe('evaluateProjectAtTime', () => {
 
     const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
 
-    // At t=0: focus is at z=0, layer is at z=1 -> layer is out of focus, has blur
     const frameAt0 = evaluateProjectAtTime(project, 0);
     const layerAt0 = frameAt0.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt0.dofBlurPx).toBeGreaterThan(0);
-    const initialBlur = layerAt0.dofBlurPx;
+    expect(frameAt0.effects.state.depthOfField.target.z).toBe(0);
+    expect(layerAt0).not.toHaveProperty('dofBlurPx');
+    expect(layerAt0.totalBlurPx).toBe(0);
 
-    // At t=500: focus is at z=0.5 -> layer is closer to focus, blur decreases
     const frameAt500 = evaluateProjectAtTime(project, 500);
     const layerAt500 = frameAt500.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt500.dofBlurPx).toBeLessThan(initialBlur);
-    expect(layerAt500.dofBlurPx).toBeGreaterThan(0);
+    expect(frameAt500.effects.state.depthOfField.target.z).toBeCloseTo(0.5);
+    expect(layerAt500.totalBlurPx).toBe(0);
 
-    // At t=1000: focus is at z=1.0 -> layer is exactly in focus, blur is 0
     const frameAt1000 = evaluateProjectAtTime(project, 1000);
     const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt1000.dofBlurPx).toBe(0);
+    expect(frameAt1000.effects.state.depthOfField.target.z).toBe(1);
+    expect(layerAt1000.totalBlurPx).toBe(0);
   });
 
   it('8. Phase 0 Contract Fixture: validates multi-shot timebase, transition outgoingFrame, reused video assets, and future audio cues', () => {

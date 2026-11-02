@@ -64,11 +64,10 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     // Authored layer blur is sampled by the material; retain animation blur here.
     const totalBlurPx = Math.max(
         0,
-        Math.round(((evalLayer.totalBlurPx ?? 0) - (evalLayer.dofBlurPx ?? 0) - (layer.effects.layerBlur ?? 0) * 100) * 2) / 2
+        Math.round(((evalLayer.totalBlurPx ?? 0) - (layer.effects.layerBlur ?? 0) * 100) * 2) / 2
     );
     const authoredW = Math.max(1, evalLayer.size.width * 1920);
     const authoredH = Math.max(1, evalLayer.size.height * 1080);
-    const dofBlurPx = evalLayer.dofBlurPx ?? 0;
     const surface = getLayerSurfaceState(layer, Boolean(deviceFrameSettings), opacity, evalLayer.visible);
 
     const cameraPose = evaluateCameraPose(
@@ -98,7 +97,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         canvasW,
         canvasH,
         totalBlurPx,
-        dofBlurPx,
         evalLayer.motionBlur,
         Boolean(deviceFrameSettings),
         0
@@ -143,7 +141,6 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
         screenPan,
         screenZoom,
         totalBlurPx,
-        dofBlurPx,
         authoredW,
         authoredH,
         canvasW,

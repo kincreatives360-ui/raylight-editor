@@ -1,5 +1,5 @@
 // src/engine/evaluateEffects.ts
-import type { FocusBlock, Shot, Effects, EffectKey } from '../model/types';
+import type { FocusBlock, Shot, EffectKey } from '../model/types';
 
 import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
 import { evaluateEasing } from './easing';
@@ -39,29 +39,6 @@ export function resolveDepthOfFieldFocusZ(
         return Number(visibleLayers[visibleLayers.length - 1].position.z.toFixed(4));
     }
     return 0;
-}
-
-// Pure Function: Calculates exact Depth-of-Field blur in pixels for a layer at layerZ
-export function calculateLayerDofBlurPx(
-    layerZ: number,
-    dof: Effects['depthOfField']
-): number {
-    if (!dof.enabled) return 0;
-
-    const distanceToFocus = Math.abs(layerZ - dof.target.z);
-    const halfFocusZone = dof.focusRange * 0.5;
-
-    // Inside the sharp focus range -> 0 blur
-    if (distanceToFocus <= halfFocusZone) return 0;
-
-    const outOfFocusDist = distanceToFocus - halfFocusZone;
-    // Circle of Confusion scaled by aperture, bokehScale, and focalLength
-    const lensFactor = (dof.focalLength ?? 50) / 50;
-    const rawBlur =
-        outOfFocusDist * (2.8 * 2.8 / Math.max(0.1, dof.aperture)) * dof.bokehScale * lensFactor * 1.6;
-
-    if (!Number.isFinite(rawBlur)) return 0;
-    return Number(Math.min(40, Math.max(0, rawBlur)).toFixed(2));
 }
 
 // Pure Function: Evaluates the 10-effect chain and deterministic frame seed

@@ -83,6 +83,7 @@ export const SceneEffectAnimationBlockSchema = z.object({
   id: z.string(),
   label: z.string(),
   effectKey: EffectKeySchema,
+  parameter: z.enum(['focus', 'blur']).optional(),
   startMs: z.number().min(0),
   durationMs: z.number().min(50),
   fromValue: z.number(),
@@ -190,6 +191,7 @@ export const ShotSchema = z.object({
       highlightIntensity: z.number().optional(),
       sceneSize: z.number().min(1).max(200).optional(),
       focusMode: z.enum(['point', 'subject']).optional(),
+      focusTargetId: z.string().optional(),
     }),
     bloom: z.object({
       enabled: z.boolean(),
@@ -278,4 +280,3 @@ export const ShotSchema = z.object({
     easing: EasingSchema,
   }),
 });
-

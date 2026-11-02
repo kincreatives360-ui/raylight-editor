@@ -14,8 +14,6 @@ interface UseStageWheelNavigationOptions {
     beginDragTransaction: () => void;
     commitDragTransaction: () => void;
     cancelDragTransaction: () => void;
-    dofFocusHeld: () => boolean;
-    onAdjustDofFocus: (delta: number, skipHistory?: boolean) => void;
     updateActiveShotCamera: (patch: { zoom?: number }) => void;
     setCanvasZoom: SetCanvasZoom;
     setCanvasPan: SetCanvasPan;
@@ -29,8 +27,6 @@ export function useStageWheelNavigation({
     beginDragTransaction,
     commitDragTransaction,
     cancelDragTransaction,
-    dofFocusHeld,
-    onAdjustDofFocus,
     updateActiveShotCamera,
     setCanvasZoom,
     setCanvasPan,
@@ -38,35 +34,11 @@ export function useStageWheelNavigation({
     useEffect(() => {
         const element = containerRef.current;
         if (!element) return;
-        let focusWheelRemainder = 0;
-
         const handleWheel = (event: WheelEvent) => {
             const target = event.target as HTMLElement | null;
             if (target?.closest?.('[aria-label="Orbit camera controls"]')) return;
 
             event.preventDefault();
-
-            if (dofFocusHeld()) {
-                const notchSize = event.deltaMode === 1
-                    ? 3
-                    : event.deltaMode === 2
-                        ? 1
-                        : 100;
-                focusWheelRemainder -= event.deltaY / notchSize;
-                const wholeNotches = Math.trunc(focusWheelRemainder);
-                focusWheelRemainder -= wholeNotches;
-                if (wholeNotches === 0) return;
-
-                beginDragTransaction();
-                try {
-                    onAdjustDofFocus(wholeNotches * (event.shiftKey ? 0.002 : 0.02), true);
-                    commitDragTransaction();
-                } catch (error) {
-                    cancelDragTransaction();
-                    throw error;
-                }
-                return;
-            }
 
             if (activeTool === 'camera' || event.altKey) {
                 const zoomFactor = event.deltaY < 0 ? 1.06 : 0.94;
@@ -105,12 +77,10 @@ export function useStageWheelNavigation({
         commitDragTransaction,
         cancelDragTransaction,
         containerRef,
-        dofFocusHeld,
         frame.activeShot,
         frame.camera.zoom,
         frame.shotLocalTimeMs,
         selectedCameraBlockId,
-        onAdjustDofFocus,
         setCanvasPan,
         setCanvasZoom,
         updateActiveShotCamera,

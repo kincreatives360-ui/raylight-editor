@@ -6,7 +6,6 @@ import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
 import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
     evaluateEffectsAtTime,
-    calculateLayerDofBlurPx,
     resolveDepthOfFieldFocusZ,
     type EvaluatedEffects,
 } from './evaluateEffects';
@@ -125,8 +124,6 @@ export function getShotTransitionCompositeState(
 }
 
 export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
-    dofBlurPx: number;
-    dofBokehShape?: SceneEffects['depthOfField']['bokehShape'];
     totalBlurPx: number;
     motionBlur?: {
         x: number;
@@ -365,7 +362,10 @@ export function evaluateProjectAtTime(
                 const val = lerp(eb.fromValue, eb.toValue, eased);
 
                 const handler = Object.hasOwn(EFFECT_BLOCK_HANDLERS, eb.effectKey) ? EFFECT_BLOCK_HANDLERS[eb.effectKey] : undefined;
-                if (handler) {
+                if (eb.effectKey === 'depthOfField' && eb.parameter === 'blur') {
+                    evaluatedEffectsConfig.depthOfField.enabled = true;
+                    evaluatedEffectsConfig.depthOfField.bokehScale = Math.max(0, val);
+                } else if (handler) {
                     handler(evaluatedEffectsConfig, val);
                 }
             }
@@ -437,10 +437,6 @@ export function evaluateProjectAtTime(
             opacity: rawEvalLayer.opacity * groupTransform.opacity,
         };
 
-        const dofBlurPx = calculateLayerDofBlurPx(
-            evalLayer.position.z,
-            effects.state.depthOfField
-        );
         const manualBlurPx =
             (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
 
@@ -455,9 +451,7 @@ export function evaluateProjectAtTime(
                         layer.kind !== 'text'
                             ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                             : rawEvalLayer.layer,
-                    dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
-                    dofBokehShape: effects.state.depthOfField.bokehShape,
-                    totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur).toFixed(2)),
+                    totalBlurPx: Number(manualBlurPx.toFixed(2)),
                 };
             }
             const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
@@ -508,9 +502,7 @@ export function evaluateProjectAtTime(
                 layer.kind !== 'text'
                     ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                     : rawEvalLayer.layer,
-            dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
-            dofBokehShape: effects.state.depthOfField.bokehShape,
-            totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + manualBlurPx).toFixed(2)),
+            totalBlurPx: Number(manualBlurPx.toFixed(2)),
             motionBlur,
         };
     });

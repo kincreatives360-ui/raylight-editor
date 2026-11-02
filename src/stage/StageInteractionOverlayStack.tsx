@@ -1,4 +1,4 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { Project } from '../model/types';
 import type { SnapGuideLine } from './stageUtils';
@@ -41,16 +41,8 @@ interface StageInteractionOverlayStackProps {
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;
-    dofFocusActive: boolean;
-    dofFocusIndicator: { x: number; y: number } | null;
     targetAspect: number;
     cameraPose: EvaluatedCameraPose;
-    stageFrameRef: RefObject<HTMLDivElement | null>;
-    onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
-    onBeginFocusDrag: () => void;
-    onEndFocusDrag: (cancelled: boolean) => void;
-    onAdjustFocusDepth: (delta: number, skipHistory?: boolean) => void;
-    onAdjustFocusRange: (delta: number, skipHistory?: boolean) => void;
 }
 
 export function StageInteractionOverlayStack({
@@ -70,16 +62,8 @@ export function StageInteractionOverlayStack({
     referenceCamera,
     drawBox,
     marqueeBox,
-    dofFocusActive,
-    dofFocusIndicator,
     targetAspect,
     cameraPose,
-    stageFrameRef,
-    onFocusClick,
-    onBeginFocusDrag,
-    onEndFocusDrag,
-    onAdjustFocusDepth,
-    onAdjustFocusRange,
 }: StageInteractionOverlayStackProps) {
     return (
         <>
@@ -146,20 +130,11 @@ export function StageInteractionOverlayStack({
             />
 
             <DepthOfFieldFocusOverlay
-                active={dofFocusActive}
-                indicator={dofFocusIndicator}
                 frame={frame}
                 frameWidth={frameWidth}
                 frameHeight={frameHeight}
                 targetAspect={targetAspect}
                 cameraPose={cameraPose}
-                defaultCamera={referenceCamera}
-                stageFrameRef={stageFrameRef}
-                onFocusClick={onFocusClick}
-                onBeginDrag={onBeginFocusDrag}
-                onEndDrag={onEndFocusDrag}
-                onAdjustFocusDepth={onAdjustFocusDepth}
-                onAdjustFocusRange={onAdjustFocusRange}
             />
 
             <LightingOverlay

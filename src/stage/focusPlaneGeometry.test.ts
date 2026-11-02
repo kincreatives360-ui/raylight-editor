@@ -7,7 +7,7 @@ import {
     type EvaluatedCameraPose,
 } from './webgl/cameraMath';
 import { createVirtualCamera, projectWorldToScreen } from './lightingMath';
-import { getFocusDepthRange, projectFocusPlane } from './focusPlaneGeometry';
+import { projectFocusPlane } from './focusPlaneGeometry';
 
 const frameWidth = 1920;
 const frameHeight = 1080;
@@ -63,40 +63,5 @@ describe('projectFocusPlane', () => {
         const invalidPose = makePose({ x: Number.NaN, y: 0, z: DEFAULT_CAMERA_Z });
 
         expect(projectFocusPlane(0, invalidPose, frameWidth, frameHeight, targetAspect)).toEqual([]);
-    });
-});
-
-describe('getFocusDepthRange', () => {
-    it('returns a finite nonzero range with no layer depths', () => {
-        const range = getFocusDepthRange([], 3, 0);
-
-        expect(Number.isFinite(range.min)).toBe(true);
-        expect(Number.isFinite(range.max)).toBe(true);
-        expect(range.min).toBeLessThan(3);
-        expect(range.max).toBeGreaterThan(3);
-    });
-
-    it('keeps equal-depth layers inside a finite nonzero range', () => {
-        const range = getFocusDepthRange([2, 2, 2], 2, 0);
-
-        expect(range.min).toBeLessThan(2);
-        expect(range.max).toBeGreaterThan(2);
-        expect(range.min).toBeLessThan(range.max);
-    });
-
-    it('encloses all layer depths and focus boundaries at the minimum range', () => {
-        const range = getFocusDepthRange([-1, 0.25, 2], 0.5, 0);
-
-        expect(range.min).toBeLessThanOrEqual(-1);
-        expect(range.max).toBeGreaterThanOrEqual(2);
-        expect(range.min).toBeLessThan(range.max);
-    });
-
-    it('encloses the focus boundaries at the maximum range', () => {
-        const range = getFocusDepthRange([-12, 0, 12], 1, 20);
-
-        expect(range.min).toBeLessThanOrEqual(-9);
-        expect(range.max).toBeGreaterThanOrEqual(11);
-        expect(range.min).toBeLessThan(range.max);
     });
 });

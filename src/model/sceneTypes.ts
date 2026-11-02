@@ -81,6 +81,7 @@ export interface SceneEffectAnimationBlock {
   id: string;
   label: string;
   effectKey: EffectKey;
+  parameter?: 'focus' | 'blur';
   startMs: number;
   durationMs: number;
   fromValue: number;
@@ -237,6 +238,7 @@ export interface SceneEffects {
     highlightIntensity?: number;
     sceneSize?: number;
     focusMode?: 'point' | 'subject';
+    focusTargetId?: string;
   };
   bloom: {
     enabled: boolean;

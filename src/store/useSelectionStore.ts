@@ -68,10 +68,6 @@ interface SelectionStore {
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
     gradientEditorLayerId: string | null;
-    dofFocusActive: boolean;
-    dofFocusIndicator: { x: number; y: number } | null;
-    setDofFocusActive: (active: boolean) => void;
-    setDofFocusIndicator: (position: { x: number; y: number } | null) => void;
     cameraBookmarks: Record<string, CameraViewBookmark>;
 
     leftPanelOpen: boolean;
@@ -172,8 +168,6 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     gradientEditorActive: false,
     gradientEditorAngle: 0,
     gradientEditorLayerId: null,
-    dofFocusActive: false,
-    dofFocusIndicator: null,
     cameraBookmarks: {},
 
     leftPanelOpen: true,
@@ -420,8 +414,6 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         })),
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
-    setDofFocusActive: (dofFocusActive) => set({ dofFocusActive, dofFocusIndicator: null }),
-    setDofFocusIndicator: (dofFocusIndicator) => set({ dofFocusIndicator }),
 
     setCameraBookmark: (shotId, bookmark) => set((state) => {
         const cameraBookmarks = { ...state.cameraBookmarks };

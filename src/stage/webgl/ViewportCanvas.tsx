@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project, Background } from '../../model/types';
@@ -16,6 +16,7 @@ import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { getViewportPixelRatio } from './viewportResolution';
 import { registerStageCapture, type StageCaptureSession } from '../../engine/stageCapture';
 import { useBackground } from '../../stage/BackgroundContext';
+import { resolveVisibleDepthOfFieldSubjectPosition } from './depthOfFieldTarget';
 
 
 interface ViewportCanvasProps {
@@ -311,6 +312,15 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const transitionState = getShotTransitionCompositeState(frame);
     const layers: EvaluatedLayerWithEffects[] = transitionState.incomingLayers;
     const outgoingLayers: EvaluatedLayerWithEffects[] = transitionState.outgoingLayers;
+    const dofSettings = frame.effects.state.depthOfField;
+    const focusSubjectPosition = useMemo(() => {
+        const position = resolveVisibleDepthOfFieldSubjectPosition(
+            dofSettings.focusMode,
+            dofSettings.focusTargetId,
+            frame.layers
+        );
+        return position ? new THREE.Vector3(position.x, position.y, position.z) : undefined;
+    }, [dofSettings.focusMode, dofSettings.focusTargetId, frame.layers]);
     const { effectiveBackground: activeBackground } = useBackground();
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
@@ -404,11 +414,11 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     effects={frame.effects}
                     outgoingEffects={frame.shotTransition.outgoingFrame?.effects}
                     transitionProgress={frame.shotTransition.progress}
+                    focusSubjectPosition={focusSubjectPosition}
                 />
             </Canvas>
         </WebGLErrorBoundary>
     </div>
 );
 };
-
 
