@@ -1,5 +1,4 @@
 import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { PerspectiveCamera } from 'three';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { Project } from '../model/types';
 import type { SnapGuideLine } from './stageUtils';
@@ -38,7 +37,6 @@ interface StageInteractionOverlayStackProps {
     activeGuides: SnapGuideLine[];
     setActiveGuides: Dispatch<SetStateAction<SnapGuideLine[]>>;
     handleSelectLayer: (layerId: string, multiSelect?: boolean) => void;
-    cameraRef: RefObject<PerspectiveCamera | null>;
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;
@@ -62,7 +60,6 @@ export function StageInteractionOverlayStack({
     activeGuides,
     setActiveGuides,
     handleSelectLayer,
-    cameraRef,
     referenceCamera,
     drawBox,
     marqueeBox,
@@ -133,7 +130,6 @@ export function StageInteractionOverlayStack({
                 snapEnabled={snapEnabled}
                 onUpdateGuides={setActiveGuides}
                 onSelectLayer={handleSelectLayer}
-                cameraRef={cameraRef}
             />
 
             <DepthOfFieldFocusOverlay

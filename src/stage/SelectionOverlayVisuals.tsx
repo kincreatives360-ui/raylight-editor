@@ -3,15 +3,18 @@ import { Crop, Lock } from 'lucide-react';
 import type { Layer, TextLayer } from '../model/types';
 import type { EvaluatedLayerWithEffects } from '../engine/evaluateShot';
 import { getLayerProjectedCorners } from './webgl/cameraMath';
+import type { Rect } from './selectionGeometry';
 
 export type ResizeHandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 type ProjectedLayer = ReturnType<typeof getLayerProjectedCorners>;
 type HandleItem = { dir: ResizeHandleDir; pos: { x: number; y: number }; cursor: string };
+type RotationHandleItem = { id: string; pos: { x: number; y: number }; label: string };
 
 interface SelectionOverlayVisualsProps {
     selectedEvalLayers: EvaluatedLayerWithEffects[];
     projectCorners: (layer: EvaluatedLayerWithEffects) => ProjectedLayer;
     primaryProj: ProjectedLayer;
+    groupBounds: Rect | null;
     layer: Layer;
     activeShotId: string;
     frameWidth: number;
@@ -28,10 +31,13 @@ interface SelectionOverlayVisualsProps {
     motionMidControl: { x: number; y: number };
     motionAmount: { x: number; y: number };
     handleItems: HandleItem[];
+    rotationHandleItems: RotationHandleItem[];
     onMoveStart: (event: React.PointerEvent | React.MouseEvent) => void;
     onMotionEndStart: (event: React.PointerEvent) => void;
     onRotateStart: (event: React.PointerEvent | React.MouseEvent) => void;
     onResizeStart: (event: React.PointerEvent | React.MouseEvent, direction: ResizeHandleDir) => void;
+    onRotateByKeyboard: (key: string) => void;
+    onResizeByKeyboard: (direction: ResizeHandleDir, key: string) => void;
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     updateLayer: (
         shotId: string,
@@ -46,11 +52,11 @@ interface SelectionOverlayVisualsProps {
 }
 
 export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = ({
-    selectedEvalLayers, projectCorners, primaryProj, layer, activeShotId, frameWidth,
+    selectedEvalLayers, projectCorners, primaryProj, groupBounds, layer, activeShotId, frameWidth,
     isLocked, isCropping, isAnimateMode, isEditingInlineText, setIsEditingInlineText,
     activeTool, borderColor, isMotionBlock, motionStartPoint, motionEndPoint,
-    motionMidControl, motionAmount, handleItems, onMoveStart, onMotionEndStart,
-    onRotateStart, onResizeStart, onSelectLayer, updateLayer, onPointerDrag,
+    motionMidControl, motionAmount, handleItems, rotationHandleItems, onMoveStart, onMotionEndStart,
+    onRotateStart, onResizeStart, onRotateByKeyboard, onResizeByKeyboard, onSelectLayer, updateLayer, onPointerDrag,
 }) => {
     return (
     <>            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
@@ -111,6 +117,21 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                 }
                             }}
                         />
+
+                        {groupBounds && (
+                            <rect
+                                data-selection-group-bounds="true"
+                                x={groupBounds.left}
+                                y={groupBounds.top}
+                                width={groupBounds.right - groupBounds.left}
+                                height={groupBounds.bottom - groupBounds.top}
+                                fill="none"
+                                stroke={borderColor}
+                                strokeWidth="1.25"
+                                strokeDasharray="4 3"
+                                pointerEvents="none"
+                            />
+                        )}
 
                         {isMotionBlock && (
                             <g className="motion-path-gizmo pointer-events-auto">
@@ -227,25 +248,29 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
 
             {/* CORNER ROTATION ZONES (Figma / Illustrator style) */}
             {!isLocked && !isCropping && !isEditingInlineText && (
-                [
-                    { id: 'rot-nw', pt: primaryProj.pNW, ox: -10, oy: -10 },
-                    { id: 'rot-ne', pt: primaryProj.pNE, ox: 10, oy: -10 },
-                    { id: 'rot-se', pt: primaryProj.pSE, ox: 10, oy: 10 },
-                    { id: 'rot-sw', pt: primaryProj.pSW, ox: -10, oy: 10 },
-                ].map((rot) => (
-                    <div
+                rotationHandleItems.map((rot) => (
+                    <button
                         key={rot.id}
+                        type="button"
                         data-selection-handle={rot.id}
+                        aria-label={rot.label}
+                        aria-keyshortcuts="ArrowLeft ArrowRight"
                         style={{
-                            left: `${rot.pt.x + rot.ox}px`,
-                            top: `${rot.pt.y + rot.oy}px`,
+                            left: `${rot.pos.x}px`,
+                            top: `${rot.pos.y}px`,
                             transform: 'translate(-50%, -50%)',
                             cursor: 'grab',
                             touchAction: 'none',
                         }}
                         onPointerDown={onRotateStart}
+                        onKeyDown={(event) => {
+                            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onRotateByKeyboard(event.key);
+                        }}
                         title="Drag to rotate"
-                        className="w-5 h-5 rounded-full absolute pointer-events-auto z-10 opacity-0 hover:opacity-100 hover:bg-sky-400/20 transition-opacity"
+                        className="w-5 h-5 p-0 border-0 bg-transparent appearance-none rounded-full absolute pointer-events-auto z-10 opacity-0 hover:opacity-100 focus:opacity-100 focus:bg-sky-400/20 transition-opacity"
                     />
                 ))
             )}
@@ -254,23 +279,42 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
             {!isLocked &&
                 !isEditingInlineText &&
                 handleItems.map((h) => (
-                        <div
-                            key={h.dir}
-                            data-selection-handle={h.dir}
-                            onPointerDown={(e) => onResizeStart(e, h.dir)}
-                            style={{
-                                left: `${h.pos.x}px`,
-                                top: `${h.pos.y}px`,
-                                transform: 'translate(-50%, -50%)',
-                                cursor: h.cursor,
-                            }}
-                            className={`w-2.5 h-2.5 rounded-[1px] border-[1.5px] shadow-xs absolute pointer-events-auto select-none ${isCropping
+                    <button
+                        key={h.dir}
+                        type="button"
+                        data-selection-handle={h.dir}
+                        aria-label={`Resize selection ${{
+                            nw: 'northwest',
+                            n: 'north',
+                            ne: 'northeast',
+                            e: 'east',
+                            se: 'southeast',
+                            s: 'south',
+                            sw: 'southwest',
+                            w: 'west',
+                        }[h.dir]}`}
+                        aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight"
+                        onPointerDown={(e) => onResizeStart(e, h.dir)}
+                        onKeyDown={(event) => {
+                            if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(event.key)) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            onResizeByKeyboard(h.dir, event.key);
+                        }}
+                        style={{
+                            left: `${h.pos.x}px`,
+                            top: `${h.pos.y}px`,
+                            transform: 'translate(-50%, -50%)',
+                            cursor: h.cursor,
+                            touchAction: 'none',
+                        }}
+                        className={`w-2.5 h-2.5 p-0 appearance-none rounded-[1px] border-[1.5px] shadow-xs absolute pointer-events-auto select-none ${isCropping
                                     ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
                                     : isAnimateMode
                                         ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
                                         : 'bg-white border-[var(--accent-primary,#0088ff)]'
                                 } hover:scale-125 transition-transform duration-75 ease-out`}
-                        />
+                    />
                 ))}
 
             {/* INLINE TEXT EDITOR OR STATUS BADGES (unobstructed interior) */}

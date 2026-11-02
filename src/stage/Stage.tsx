@@ -466,7 +466,6 @@ const StageComponent: React.FC<StageProps> = ({
                         activeGuides={activeGuides}
                         setActiveGuides={setActiveGuides}
                         handleSelectLayer={handleSelectLayerWithDeepSelect}
-                        cameraRef={cameraRef}
                         referenceCamera={gradientReferenceCamera}
                         drawBox={drawBox}
                         marqueeBox={marqueeBox}
