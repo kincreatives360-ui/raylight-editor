@@ -145,18 +145,6 @@ const StageComponent: React.FC<StageProps> = ({
     // ============================================================================
     const updateActiveShotCamera = useStageCameraUpdate({ frame, selectedCameraBlockId, updateShot });
 
-    useStageWheelNavigation({
-        containerRef,
-        activeTool,
-        frame,
-        selectedCameraBlockId,
-        beginDragTransaction,
-        commitDragTransaction,
-        updateActiveShotCamera,
-        setCanvasZoom,
-        setCanvasPan,
-    });
-
     const isCameraSelected = Boolean(selectedCameraBlockId);
     const {
         targetAspect,
@@ -184,8 +172,9 @@ const StageComponent: React.FC<StageProps> = ({
     const gradientShapeFrameLayer = gradientEditorLayerId
         ? frame.layers.find((layer) => layer.id === gradientEditorLayerId)
         : undefined;
-    const handleDofFocusClick = useStageDofFocus({
+    const dofFocus = useStageDofFocus({
         stageFrameRef,
+        containerRef,
         frame,
         frameWidth,
         frameHeight,
@@ -194,24 +183,14 @@ const StageComponent: React.FC<StageProps> = ({
         cameraPose: gradientCameraPose,
         defaultCamera: gradientReferenceCamera,
         updateShot,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
         setDofFocusIndicator,
         setDofFocusActive,
     });
-    const handleAdjustFocusDepth = useCallback((delta: number, skipHistory = false) => {
-        updateShot(frame.activeShot.id, shot => ({
-            ...shot,
-            effects: {
-                ...shot.effects,
-                depthOfField: {
-                    ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
-                    target: {
-                        ...(shot.effects.depthOfField?.target ?? frame.effects.state.depthOfField.target),
-                        z: frame.effects.state.depthOfField.target.z + delta,
-                    },
-                },
-            },
-        }), skipHistory ? { skipHistory: true } : undefined);
-    }, [frame.activeShot.id, frame.effects.state.depthOfField, updateShot]);
+    const handleDofFocusClick = dofFocus.handleFocusClick;
+    const handleAdjustFocusDepth = dofFocus.adjustFocusDepth;
     const handleAdjustFocusRange = useCallback((delta: number, skipHistory = false) => {
         updateShot(frame.activeShot.id, shot => ({
             ...shot,
@@ -219,9 +198,10 @@ const StageComponent: React.FC<StageProps> = ({
                 ...shot.effects,
                 depthOfField: {
                     ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
+                    enabled: true,
                     focusRange: Math.max(0, Math.min(
                         20,
-                        frame.effects.state.depthOfField.focusRange + delta
+                        (shot.effects.depthOfField ?? frame.effects.state.depthOfField).focusRange + delta
                     )),
                 },
             },
@@ -231,6 +211,20 @@ const StageComponent: React.FC<StageProps> = ({
         if (cancelled) cancelDragTransaction();
         else commitDragTransaction();
     }, [cancelDragTransaction, commitDragTransaction]);
+    useStageWheelNavigation({
+        containerRef,
+        activeTool,
+        frame,
+        selectedCameraBlockId,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
+        dofFocusHeld: dofFocus.isDofFocusHeld,
+        onAdjustDofFocus: dofFocus.adjustDofFocusDepth,
+        updateActiveShotCamera,
+        setCanvasZoom,
+        setCanvasPan,
+    });
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -331,6 +325,7 @@ const StageComponent: React.FC<StageProps> = ({
         clickedLayerId: string,
         multiSelect?: boolean
     ) => {
+        if (dofFocus.focusLayerIfHeld(clickedLayerId)) return;
         if (isCreationTool) return;
         onSelectLayer(clickedLayerId, multiSelect);
     };
@@ -371,7 +366,14 @@ const StageComponent: React.FC<StageProps> = ({
             <BackgroundProvider project={project} frame={frame}>
                 <div
                 ref={containerRef}
-                onMouseDown={handleWorkspaceMouseDown}
+                onPointerDownCapture={dofFocus.handlePointerDown}
+                onMouseDown={(event) => {
+                    if (dofFocus.isDofFocusHeld()) {
+                        event.preventDefault();
+                        return;
+                    }
+                    handleWorkspaceMouseDown(event);
+                }}
                 onContextMenu={handleContextMenu}
                 onDragOver={handleCanvasDragOver}
                 onDragLeave={handleCanvasDragLeave}

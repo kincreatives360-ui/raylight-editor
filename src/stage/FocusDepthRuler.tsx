@@ -65,7 +65,7 @@ export function FocusDepthRuler({
         event.preventDefault();
         event.stopPropagation();
         activeDragCleanupRef.current?.();
-        const startX = event.clientX;
+        let previousX = event.clientX;
         const direction = edge === 'near' ? -1 : 1;
         activeDragCleanupRef.current = createPointerDragLifecycle({
             pointerId: event.pointerId,
@@ -74,7 +74,9 @@ export function FocusDepthRuler({
             commit: () => onEndDrag(false),
             cancel: () => onEndDrag(true),
             onMove: moveEvent => {
-                onAdjustFocusRange((moveEvent.clientX - startX) * direction * 0.005, true);
+                const deltaX = moveEvent.clientX - previousX;
+                previousX = moveEvent.clientX;
+                onAdjustFocusRange(deltaX * direction * 0.005, true);
             },
             onEnd: () => {
                 activeDragCleanupRef.current = null;

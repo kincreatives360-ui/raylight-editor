@@ -115,7 +115,7 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
         event.preventDefault();
         event.stopPropagation();
         activeDragCleanupRef.current?.();
-        const startY = event.clientY;
+        let previousY = event.clientY;
         activeDragCleanupRef.current = createPointerDragLifecycle({
             pointerId: event.pointerId,
             target: event.currentTarget,
@@ -124,7 +124,9 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
             cancel: () => onEndDrag(true),
             onMove: moveEvent => {
                 interaction();
-                onAdjustFocusDepth(-(moveEvent.clientY - startY) * 0.005, true);
+                const deltaY = previousY - moveEvent.clientY;
+                previousY = moveEvent.clientY;
+                onAdjustFocusDepth(deltaY * 0.005, true);
             },
             onEnd: () => {
                 activeDragCleanupRef.current = null;

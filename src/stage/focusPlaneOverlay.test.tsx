@@ -163,7 +163,7 @@ describe('DepthOfFieldFocusOverlay', () => {
                                 ...shot.effects.depthOfField,
                                 target: {
                                     ...shot.effects.depthOfField.target,
-                                    z: 0.4 + delta,
+                                    z: shot.effects.depthOfField.target.z + delta,
                                 },
                             },
                         },
@@ -176,7 +176,7 @@ describe('DepthOfFieldFocusOverlay', () => {
                             ...shot.effects,
                             depthOfField: {
                                 ...shot.effects.depthOfField,
-                                focusRange: 0.6 + delta,
+                                focusRange: shot.effects.depthOfField.focusRange + delta,
                             },
                         },
                     }), skipHistory ? { skipHistory: true } : undefined);
