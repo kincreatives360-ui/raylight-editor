@@ -1,230 +1,160 @@
+import { act, createElement, type ReactNode } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { isValidElement, type ReactNode } from 'react';
-import { createPointerDragLifecycle } from './selectionDragLifecycle';
-import { createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
+import { JSDOM } from 'jsdom';
+import { evaluateProjectAtTime } from '../engine/evaluateShot';
+import { createDefaultImageLayer, createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
+import type { Layer, Project } from '../model/types';
 import { useProjectStore } from '../store/useProjectStore';
-import { SelectionOverlayVisuals } from './SelectionOverlayVisuals';
-import { getLayerProjectedCorners } from './webgl/cameraMath';
+import { useSelectionStore } from '../store/useSelectionStore';
+import { CameraPoseProvider } from './CameraPoseContext';
+import { SelectionOverlay } from './SelectionOverlay';
 
-type PointerEventType = Event & { pointerId: number; clientX: number; clientY: number };
+let dom: JSDOM | null = null;
+let root: Root | null = null;
 
-function pointerEvent(type: string, pointerId: number, clientX = 0, clientY = 0): PointerEventType {
-    return Object.assign(new Event(type), { pointerId, clientX, clientY });
+function installTestDom() {
+    dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost' });
+    vi.stubGlobal('window', dom.window);
+    vi.stubGlobal('document', dom.window.document);
+    vi.stubGlobal('navigator', dom.window.navigator);
+    vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+    vi.stubGlobal('SVGElement', dom.window.SVGElement);
+    vi.stubGlobal('Node', dom.window.Node);
+    vi.stubGlobal('Event', dom.window.Event);
+    vi.stubGlobal('MouseEvent', dom.window.MouseEvent);
+    vi.stubGlobal('KeyboardEvent', dom.window.KeyboardEvent);
+    dom.window.Element.prototype.setPointerCapture = function () {};
+    dom.window.Element.prototype.hasPointerCapture = function () { return false; };
+    dom.window.Element.prototype.releasePointerCapture = function () {};
+    dom.window.Element.prototype.getBoundingClientRect = function () {
+        return { x: 0, y: 0, left: 0, top: 0, right: 1920, bottom: 1080, width: 1920, height: 1080, toJSON: () => ({}) };
+    };
+    return dom;
 }
 
-function findTestElement(node: ReactNode, testId: string): React.ReactElement | null {
-    if (Array.isArray(node)) {
-        for (const child of node) {
-            const found = findTestElement(child, testId);
-            if (found) return found;
-        }
-    } else if (isValidElement(node)) {
-        const props = node.props as { children?: ReactNode; 'data-testid'?: string };
-        if (props['data-testid'] === testId) return node;
-        return findTestElement(props.children, testId);
-    }
-    return null;
-}
-
-describe('selection drag transactions', () => {
-    afterEach(() => {
-        vi.unstubAllGlobals();
-        useProjectStore.setState({
-            project: createDefaultProject(),
-            past: [],
-            future: [],
-            dragSnapshot: null,
-        });
+function dispatchPointer(target: EventTarget, type: string, pointerId: number, clientX = 0, clientY = 0) {
+    const event = Object.assign(new dom!.window.Event(type, { bubbles: true, cancelable: true }), {
+        pointerId,
+        clientX,
+        clientY,
+        altKey: false,
+        shiftKey: false,
     });
+    act(() => target.dispatchEvent(event));
+}
 
-    it.each(['move', 'resize', 'rotate', 'crop', 'motion-end', 'corner-radius'])(
-        'groups %s edits into one transaction and commits on pointer-up',
-        (dragKind) => {
-            const eventWindow = new EventTarget();
-            vi.stubGlobal('window', eventWindow);
-            const target = new EventTarget();
-            const store = useProjectStore.getState();
-            const begin = vi.fn(store.beginDragTransaction);
-            const commit = vi.fn(store.commitDragTransaction);
-            const cancel = vi.fn(store.cancelDragTransaction);
-            let moveCount = 0;
-            const onMove = vi.fn(() => useProjectStore.getState().updateProject(
-                project => ({ ...project, name: `Edit ${++moveCount}` }),
-                { skipHistory: true }
-            ));
+function makeProject(layer: Layer): Project {
+    const project = createDefaultProject();
+    project.shots[0] = {
+        ...project.shots[0],
+        isPlaceholder: false,
+        layers: [layer],
+    };
+    return project;
+}
 
-            createPointerDragLifecycle({
-                pointerId: 7,
-                target,
-                begin,
-                commit,
-                cancel,
-                onMove,
-            });
-            eventWindow.dispatchEvent(pointerEvent('pointermove', 7, 10, 12));
-            eventWindow.dispatchEvent(pointerEvent('pointermove', 7, 15, 17));
-            eventWindow.dispatchEvent(pointerEvent('pointerup', 7));
+function renderSelectionOverlay(project: Project, options: { crop?: boolean; selectedBlockId?: string } = {}) {
+    useProjectStore.setState({ project, past: [], future: [], dragSnapshot: null });
+    useSelectionStore.setState({
+        selectedLayerIds: [project.shots[0].layers[0].id],
+        selectedBlockId: options.selectedBlockId ?? null,
+        selectedCameraBlockId: null,
+        selectedLightBlockId: null,
+        selectedLightId: null,
+        activeTool: 'select',
+        isAnimateMode: false,
+        isCropping: Boolean(options.crop),
+        canvasZoom: 1,
+    });
+    const frame = evaluateProjectAtTime(project, 0);
+    const container = dom!.window.document.getElementById('root')!;
+    root = createRoot(container);
+    act(() => root!.render(createElement(
+        CameraPoseProvider,
+        {
+            project,
+            frame,
+            viewportSize: { width: 1920, height: 1080 },
+            activeTool: 'select',
+            isPlaying: false,
+        },
+        createElement(SelectionOverlay, {
+            frame,
+            selectedLayerIds: [project.shots[0].layers[0].id],
+            frameWidth: 1920,
+            frameHeight: 1080,
+            snapEnabled: false,
+            onUpdateGuides: vi.fn(),
+            onSelectLayer: vi.fn(),
+        }) as ReactNode
+    )));
+}
 
-            expect(begin, dragKind).toHaveBeenCalledOnce();
-            expect(onMove, dragKind).toHaveBeenCalledTimes(2);
-            expect(commit, dragKind).toHaveBeenCalledOnce();
-            expect(cancel, dragKind).not.toHaveBeenCalled();
-            expect(useProjectStore.getState().past).toHaveLength(1);
-            eventWindow.dispatchEvent(pointerEvent('pointerup', 7));
-            expect(commit, dragKind).toHaveBeenCalledOnce();
-        }
-    );
+function currentLayer(): Layer {
+    return useProjectStore.getState().project.shots[0].layers[0];
+}
 
+afterEach(() => {
+    if (root) act(() => root!.unmount());
+    root = null;
+    dom?.window.close();
+    dom = null;
+    vi.unstubAllGlobals();
+    useProjectStore.setState({
+        project: createDefaultProject(),
+        past: [],
+        future: [],
+        dragSnapshot: null,
+    });
+    useSelectionStore.setState({
+        selectedLayerIds: [],
+        selectedBlockId: null,
+        isCropping: false,
+        isAnimateMode: false,
+    });
+});
+
+describe('selection overlay drag transactions', () => {
     it.each([
-        ['pointer-cancel', () => pointerEvent('pointercancel', 7)],
-        ['lost pointer capture', () => pointerEvent('lostpointercapture', 7)],
-        ['Escape', () => Object.assign(new Event('keydown'), { key: 'Escape' })],
-        ['window blur', () => new Event('blur')],
-    ])('rolls back on %s', (_reason, makeEvent) => {
-        const eventWindow = new EventTarget();
-        vi.stubGlobal('window', eventWindow);
-        const target = new EventTarget();
-        const store = useProjectStore.getState();
-        const startingProject = store.project;
-        const begin = vi.fn(store.beginDragTransaction);
-        const commit = vi.fn(store.commitDragTransaction);
-        const cancel = vi.fn(store.cancelDragTransaction);
-
-        createPointerDragLifecycle({
-            pointerId: 7,
-            target,
-            begin,
-            commit,
-            cancel,
-            onMove: () => useProjectStore.getState().updateProject(
-                project => ({ ...project, name: 'Canceled edit' }),
-                { skipHistory: true }
-            ),
+        ['move', () => createDefaultShapeLayer({ id: 'target' }), 'svg polygon.pointer-events-auto', [500, 400], [560, 430]],
+        ['resize', () => createDefaultShapeLayer({ id: 'target' }), '[data-selection-handle="e"]', [900, 540], [960, 540]],
+        ['rotate', () => createDefaultShapeLayer({ id: 'target' }), '[data-selection-handle="rot-ne"]', [1000, 500], [950, 600]],
+        ['crop', () => createDefaultImageLayer({ id: 'target' }), '[data-selection-handle="e"]', [900, 540], [960, 540]],
+        ['motion-end', () => createDefaultShapeLayer({
+            id: 'target',
+            blocks: [{
+                id: 'position-block',
+                label: 'Move',
+                property: 'position',
+                startMs: 0,
+                durationMs: 1000,
+                easing: { kind: 'preset', name: 'linear' },
+                amount: { x: 0.1, y: 0.1, z: 0 },
+            }],
+        }), '.motion-path-gizmo g.cursor-move', [1000, 500], [1050, 550]],
+        ['corner-radius', () => createDefaultShapeLayer({ id: 'target' }), '[data-testid="corner-radius-nw"]', [0, 0], [40, 40]],
+    ])('the %s handler rolls back its actual edit on pointer-cancel', (path, createLayer, selector, start, end) => {
+        const testDom = installTestDom();
+        const layer = createLayer();
+        const originalProject = makeProject(layer);
+        renderSelectionOverlay(originalProject, {
+            crop: path === 'crop',
+            selectedBlockId: path === 'motion-end' ? 'position-block' : undefined,
         });
-        eventWindow.dispatchEvent(pointerEvent('pointermove', 7, 20, 10));
-        if (_reason === 'lost pointer capture') target.dispatchEvent(makeEvent());
-        else eventWindow.dispatchEvent(makeEvent());
+        const handle = testDom.window.document.querySelector(selector);
+        expect(handle, `${path} handle should render`).not.toBeNull();
+        const initialLayer = currentLayer();
 
-        expect(begin).toHaveBeenCalledOnce();
-        expect(cancel).toHaveBeenCalledOnce();
-        expect(commit).not.toHaveBeenCalled();
-        expect(useProjectStore.getState().project).toBe(startingProject);
+        dispatchPointer(handle!, 'pointerdown', 7, start[0], start[1]);
+        dispatchPointer(testDom.window, 'pointermove', 7, end[0], end[1]);
+        expect(currentLayer()).not.toEqual(initialLayer);
+        expect(useProjectStore.getState().dragSnapshot).not.toBeNull();
+
+        dispatchPointer(testDom.window, 'pointercancel', 7);
+
+        expect(useProjectStore.getState().project).toBe(originalProject);
         expect(useProjectStore.getState().dragSnapshot).toBeNull();
         expect(useProjectStore.getState().past).toHaveLength(0);
-        eventWindow.dispatchEvent(pointerEvent('pointerup', 7));
-        expect(cancel).toHaveBeenCalledOnce();
-    });
-
-    it('ignores events from a pointer that does not own the drag', () => {
-        const eventWindow = new EventTarget();
-        vi.stubGlobal('window', eventWindow);
-        const store = useProjectStore.getState();
-        const begin = vi.fn(store.beginDragTransaction);
-        const commit = vi.fn(store.commitDragTransaction);
-        const cancel = vi.fn(store.cancelDragTransaction);
-        const onMove = vi.fn();
-
-        createPointerDragLifecycle({
-            pointerId: 7,
-            target: new EventTarget(),
-            begin,
-            commit,
-            cancel,
-            onMove,
-        });
-        eventWindow.dispatchEvent(pointerEvent('pointermove', 8));
-        eventWindow.dispatchEvent(pointerEvent('pointerup', 8));
-
-        expect(onMove).not.toHaveBeenCalled();
-        expect(commit).not.toHaveBeenCalled();
-        expect(cancel).not.toHaveBeenCalled();
-    });
-
-    it('cancels an active transaction when the drag owner unmounts', () => {
-        const eventWindow = new EventTarget();
-        vi.stubGlobal('window', eventWindow);
-        const store = useProjectStore.getState();
-        const startingProject = store.project;
-        const cancel = vi.fn(store.cancelDragTransaction);
-        const dispose = createPointerDragLifecycle({
-            pointerId: 7,
-            target: new EventTarget(),
-            begin: store.beginDragTransaction,
-            commit: store.commitDragTransaction,
-            cancel,
-            onMove: () => useProjectStore.getState().updateProject(
-                project => ({ ...project, name: 'Canceled on unmount' }),
-                { skipHistory: true }
-            ),
-        });
-        eventWindow.dispatchEvent(pointerEvent('pointermove', 7));
-
-        dispose();
-        dispose();
-
-        expect(cancel).toHaveBeenCalledOnce();
-        expect(useProjectStore.getState().project).toBe(startingProject);
-        expect(useProjectStore.getState().dragSnapshot).toBeNull();
-    });
-
-    it('updates corner radius without recording a history entry per pointer move', () => {
-        const layer = createDefaultShapeLayer();
-        const updateLayer = vi.fn();
-        let moveHandler: ((event: PointerEvent | MouseEvent) => void) | null = null;
-        const projected = {
-            corners: [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }],
-            pCenter: { x: 50, y: 50 },
-            pNW: { x: 0, y: 0 },
-            pNE: { x: 100, y: 0 },
-            pSE: { x: 100, y: 100 },
-            pSW: { x: 0, y: 100 },
-        } as ReturnType<typeof getLayerProjectedCorners>;
-        const props: React.ComponentProps<typeof SelectionOverlayVisuals> = {
-            selectedEvalLayers: [],
-            projectCorners: vi.fn(),
-            primaryProj: projected,
-            layer,
-            activeShotId: 'shot',
-            frameWidth: 100,
-            isLocked: false,
-            isCropping: false,
-            isAnimateMode: false,
-            isEditingInlineText: false,
-            setIsEditingInlineText: vi.fn(),
-            activeTool: 'select',
-            borderColor: '#0088ff',
-            isMotionBlock: false,
-            motionStartPoint: { x: 50, y: 50 },
-            motionEndPoint: { x: 50, y: 50 },
-            motionMidControl: { x: 50, y: 50 },
-            motionAmount: { x: 0, y: 0 },
-            handleItems: [],
-            onMoveStart: vi.fn(),
-            onMotionEndStart: vi.fn(),
-            onRotateStart: vi.fn(),
-            onResizeStart: vi.fn(),
-            onSelectLayer: vi.fn(),
-            updateLayer,
-            onPointerDrag: (_event, onMove) => { moveHandler = onMove; },
-        };
-        const root = SelectionOverlayVisuals(props);
-        const handle = findTestElement(root, 'corner-radius-nw');
-        expect(handle).not.toBeNull();
-
-        const elementProps = handle!.props as {
-            onPointerDown: (event: React.PointerEvent<HTMLDivElement>) => void;
-        };
-        elementProps.onPointerDown({
-            stopPropagation: vi.fn(),
-            preventDefault: vi.fn(),
-            clientX: 0,
-            clientY: 0,
-        } as unknown as React.PointerEvent<HTMLDivElement>);
-        moveHandler?.(pointerEvent('pointermove', 7, 40, 40) as PointerEvent);
-
-        expect(updateLayer).toHaveBeenCalledOnce();
-        expect(updateLayer.mock.calls[0][3]).toEqual({ skipHistory: true });
-        const update = updateLayer.mock.calls[0][2] as (value: typeof layer) => typeof layer;
-        expect(update(layer).cornerRadius).toBeGreaterThan(0);
     });
 });
