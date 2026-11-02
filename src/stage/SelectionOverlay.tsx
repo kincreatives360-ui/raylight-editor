@@ -62,6 +62,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const overlayRootRef = useRef<HTMLDivElement | null>(null);
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
+    const { cameraPose, targetAspect: aspect, evaluateCustomPose } = useCameraPose();
 
     const activeShot: Shot = frame.activeShot;
     const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
@@ -74,8 +75,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const primaryEval = selectedEvalLayers[0];
     const { layer } = primaryEval;
     const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
-
-    const { cameraPose, targetAspect: aspect, evaluateCustomPose } = useCameraPose();
     const refCameraZ = evaluateCustomPose({
         position: { x: 0, y: 0, z: 2.65 },
         rotation: { x: 0, y: 0, z: 0 },
