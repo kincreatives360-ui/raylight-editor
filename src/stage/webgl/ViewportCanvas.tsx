@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project, Background } from '../../model/types';
-import { resolveShotBackground } from '../../model/types';
 import {
     getShotTransitionCompositeState,
     type EvaluatedProjectFrame,
@@ -16,6 +15,7 @@ import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { getViewportPixelRatio } from './viewportResolution';
 import { registerStageCapture, type StageCaptureSession } from '../../engine/stageCapture';
+import { useBackground } from '../../stage/BackgroundContext';
 
 
 interface ViewportCanvasProps {
@@ -51,16 +51,16 @@ function useDevicePixelRatio() {
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    background?: Background;
     frameloop: 'always' | 'demand';
-}> = ({ frame, selectedLayerIds, background, frameloop }) => {
+}> = ({ frame, selectedLayerIds, frameloop }) => {
     const { invalidate } = useThree();
+    const { effectiveBackground } = useBackground();
 
     useEffect(() => {
         if (frameloop === 'demand') {
             invalidate();
         }
-    }, [frame, selectedLayerIds, background, invalidate, frameloop]);
+    }, [frame, selectedLayerIds, effectiveBackground, invalidate, frameloop]);
 
     return null;
 };
@@ -300,7 +300,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     const transitionState = getShotTransitionCompositeState(frame);
     const layers: EvaluatedLayerWithEffects[] = transitionState.incomingLayers;
     const outgoingLayers: EvaluatedLayerWithEffects[] = transitionState.outgoingLayers;
-    const activeBackground = resolveShotBackground(project, activeShot);
+    const { effectiveBackground: activeBackground } = useBackground();
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
     const deviceDpr = useDevicePixelRatio();
@@ -336,7 +336,6 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <ViewportRenderBridge
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
-                    background={activeBackground}
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                 />
                 />

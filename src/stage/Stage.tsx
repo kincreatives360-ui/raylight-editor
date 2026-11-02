@@ -31,6 +31,7 @@ import {
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
 import { CameraPoseProvider } from './CameraPoseContext';
+import { BackgroundProvider } from './BackgroundContext';
 
 interface StageProps {
     project: Project;
@@ -334,7 +335,8 @@ const StageComponent: React.FC<StageProps> = ({
             activeTool={activeTool}
             isPlaying={isPlaying}
         >
-            <div
+            <BackgroundProvider project={project} frame={frame}>
+                <div
                 ref={containerRef}
                 onMouseDown={handleWorkspaceMouseDown}
                 onContextMenu={handleContextMenu}
@@ -524,6 +526,7 @@ const StageComponent: React.FC<StageProps> = ({
                 onFrameSelection={handleFrameSelectedLayers}
             />
         </div>
+        </BackgroundProvider>
         </CameraPoseProvider>
     );
 };

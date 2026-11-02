@@ -4,34 +4,29 @@ import * as THREE from 'three';
 import { BACKGROUND_RENDER_STATE } from './backgroundRenderState';
 import { useThree, useFrame } from '@react-three/fiber';
 import type {
-  Project,
-  Shot,
-  Background,
-  AssetRecord,
-  AspectRatio,
-  LightRig,
+    Project,
+    Shot,
+    Background,
+    AssetRecord,
+    AspectRatio,
+    LightRig,
 } from '../../model/types';
 import { resolveLighting } from '../../engine/lightingSystem';
-import { resolveShotBackground } from '../../model/types';
 import type { EvaluatedProjectFrame } from '../../engine/evaluateShot';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import {
-  BACKGROUND_VERTEX_SHADER,
-  SHADER_PRESET_FRAGMENTS,
-  IMAGE_VERTEX_SHADER,
-  IMAGE_FRAGMENT_SHADER,
+    BACKGROUND_VERTEX_SHADER,
+    SHADER_PRESET_FRAGMENTS,
+    IMAGE_VERTEX_SHADER,
+    IMAGE_FRAGMENT_SHADER,
 } from './shaders/backgroundShaders';
 import {
-  DEFAULT_SHADER_CONFIGS,
-  getShaderColors,
-  type ShaderPreset,
+    DEFAULT_SHADER_CONFIGS,
+    getShaderColors,
+    type ShaderPreset,
 } from '../../model/backgroundPresets';
 import { createCanvasFillStyle } from '../../engine/canvasRenderer';
-import {
-  DEFAULT_CAMERA_Z,
-  DEFAULT_FOCAL_LENGTH,
-  focalLengthToFov,
-} from './cameraMath';
+import { useBackground } from '../../stage/BackgroundContext';
 
 export interface SceneBackgroundProps {
   project?: Project;
@@ -576,41 +571,27 @@ const SingleBackgroundBillboard: React.FC<SingleBackgroundBillboardProps> = ({
 };
 
 export const SceneBackground: React.FC<SceneBackgroundProps> = ({
-  project,
-  activeShot,
-  shot,
-  frame,
-  background,
-  assets,
-  light,
+    project,
+    activeShot,
+    shot,
+    frame,
+    background,
+    assets,
+    light,
 }) => {
-  const { scene, invalidate } = useThree();
-  const targetShot = activeShot ?? shot ?? frame?.activeShot ?? project?.shots[0];
+    const { scene, invalidate } = useThree();
+    const { effectiveBackground: incomingBg, outgoingBackground: outgoingBg, isTransitioning, transitionProgress: ctxTransProgress, transitionType: ctxTransType } = useBackground();
+    const targetShot = activeShot ?? shot ?? frame?.activeShot ?? project?.shots[0];
 
-  const incomingBg: Background = useMemo(() => {
-    if (background) return background;
-    if (project && targetShot) {
-      return resolveShotBackground(project, targetShot);
-    }
-    return project?.background ?? { kind: 'solid', color: '#0c0e17' };
-  }, [background, project, targetShot]);
+    // If a specific background is provided as prop, use it instead of the context
+    const incomingBgOverride = background;
+    const finalIncomingBg = incomingBgOverride ?? incomingBg;
+    const outgoingBgOverride = outgoingBg; // We don't have a prop for this, so use context
 
-  const outgoingBg: Background | null = useMemo(() => {
-    if (!frame?.shotTransition?.isTransitioning || !frame.shotTransition.outgoingFrame || !project) {
-      return null;
-    }
-    return resolveShotBackground(project, frame.shotTransition.outgoingFrame.activeShot);
-  }, [frame, project]);
+    const transProgress = frame?.shotTransition?.progress ?? 0;
+    const transType = frame?.shotTransition?.type ?? 'crossfade';
 
-  const isTransitioning = Boolean(
-    outgoingBg &&
-    frame?.shotTransition?.progress !== undefined &&
-    frame.shotTransition.progress < 1
-  );
-  const transProgress = frame?.shotTransition?.progress ?? 0;
-  const transType = frame?.shotTransition?.type ?? 'crossfade';
-
-  const effectiveAssets = assets ?? project?.assets ?? {};
+    const effectiveAssets = assets ?? project?.assets ?? {};
 
   // Keep scene.background null so all backgrounds render as scene meshes that transform with the camera
   useEffect(() => {
@@ -627,41 +608,41 @@ export const SceneBackground: React.FC<SceneBackgroundProps> = ({
   let outOpacity = 0;
   let outSlideX = 0;
 
-  if (isTransitioning && outgoingBg) {
-    if (transType === 'crossfade') {
-      outOpacity = 1 - transProgress;
-      inOpacity = transProgress;
-    } else if (transType === 'push') {
-      outSlideX = -transProgress;
-      inSlideX = 1 - transProgress;
-      outOpacity = 1;
-      inOpacity = 1;
-    } else if (transType === 'slide') {
-      outSlideX = -transProgress * 0.25;
-      inSlideX = 1 - transProgress;
-      outOpacity = 1;
-      inOpacity = 1;
+if (isTransitioning && outgoingBgOverride) {
+    if (ctxTransType === 'crossfade') {
+        outOpacity = 1 - ctxTransProgress;
+        inOpacity = ctxTransProgress;
+    } else if (ctxTransType === 'push') {
+        outSlideX = -ctxTransProgress;
+        inSlideX = 1 - ctxTransProgress;
+        outOpacity = 1;
+        inOpacity = 1;
+    } else if (ctxTransType === 'slide') {
+        outSlideX = -ctxTransProgress * 0.25;
+        inSlideX = 1 - ctxTransProgress;
+        outOpacity = 1;
+        inOpacity = 1;
     }
   }
 
   return (
     <>
-      {isTransitioning && outgoingBg && outOpacity > 0 && (
+{isTransitioning && outgoingBgOverride && outOpacity > 0 && (
         <SingleBackgroundBillboard
-          bg={outgoingBg}
-          opacity={outOpacity}
-          slideX={outSlideX}
-          assets={effectiveAssets}
-          light={frame?.shotTransition?.outgoingFrame?.activeShot.light ?? light}
+            bg={outgoingBgOverride}
+            opacity={outOpacity}
+            slideX={outSlideX}
+            assets={effectiveAssets}
+            light={frame?.shotTransition?.outgoingFrame?.activeShot.light ?? light}
         />
-      )}
-      <SingleBackgroundBillboard
-        bg={incomingBg}
+    )}
+    <SingleBackgroundBillboard
+        bg={finalIncomingBg}
         opacity={inOpacity}
         slideX={inSlideX}
         assets={effectiveAssets}
         light={light ?? targetShot?.light}
-      />
+    />
     </>
   );
 };
