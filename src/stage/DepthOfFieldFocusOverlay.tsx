@@ -4,6 +4,7 @@ import type { Project } from '../model/types';
 import { getFocusDepthRange, projectFocusPlane } from './focusPlaneGeometry';
 import { FocusDepthRuler } from './FocusDepthRuler';
 import { FocusLayerFeedback } from './FocusLayerFeedback';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 import type { EvaluatedCameraPose } from './webgl/cameraMath';
 
 interface DepthOfFieldFocusOverlayProps {
@@ -17,8 +18,10 @@ interface DepthOfFieldFocusOverlayProps {
     defaultCamera: NonNullable<Project['defaultCamera']>;
     stageFrameRef: React.RefObject<HTMLDivElement | null>;
     onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
-    onAdjustFocusDepth: (delta: number) => void;
-    onAdjustFocusRange: (delta: number) => void;
+    onBeginDrag: () => void;
+    onEndDrag: (cancelled: boolean) => void;
+    onAdjustFocusDepth: (delta: number, skipHistory?: boolean) => void;
+    onAdjustFocusRange: (delta: number, skipHistory?: boolean) => void;
 }
 
 function formatDepth(depth: number): string {
@@ -54,6 +57,8 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
     defaultCamera,
     stageFrameRef,
     onFocusClick,
+    onBeginDrag,
+    onEndDrag,
     onAdjustFocusDepth,
     onAdjustFocusRange,
 }) => {
@@ -76,6 +81,8 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
     const [hoveredDepth, setHoveredDepth] = useState<number | null>(null);
     const [faded, setFaded] = useState(false);
     const fadeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+    const activeDragCleanupRef = useRef<(() => void) | null>(null);
+    useEffect(() => () => activeDragCleanupRef.current?.(), []);
     const interaction = useCallback(() => {
         setFaded(false);
         if (fadeTimeoutRef.current) clearTimeout(fadeTimeoutRef.current);
@@ -101,6 +108,28 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
         event.stopPropagation();
         interaction();
         onAdjustFocusDepth(direction * (event.shiftKey ? 0.01 : 0.05));
+    };
+
+    const handleFocusMarkerPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        activeDragCleanupRef.current?.();
+        const startY = event.clientY;
+        activeDragCleanupRef.current = createPointerDragLifecycle({
+            pointerId: event.pointerId,
+            target: event.currentTarget,
+            begin: onBeginDrag,
+            commit: () => onEndDrag(false),
+            cancel: () => onEndDrag(true),
+            onMove: moveEvent => {
+                interaction();
+                onAdjustFocusDepth(-(moveEvent.clientY - startY) * 0.005, true);
+            },
+            onEnd: () => {
+                activeDragCleanupRef.current = null;
+            },
+        });
     };
 
     const depthPlaneVisible = dof.enabled || active;
@@ -196,6 +225,7 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
                             className={`absolute h-7 w-7 -translate-x-1/2 -translate-y-1/2 rounded-full border border-sky-100 bg-sky-400/20 shadow-[0_0_16px_rgba(56,189,248,.7)] pointer-events-auto transition-opacity ${faded ? 'opacity-55' : 'opacity-100'} focus-visible:outline focus-visible:outline-2 focus-visible:outline-white`}
                             style={{ left: focusPoint.x, top: focusPoint.y }}
                             onMouseDown={event => event.stopPropagation()}
+                            onPointerDown={handleFocusMarkerPointerDown}
                             onPointerEnter={() => handleHoverDepth(focusDepth)}
                             onPointerLeave={() => handleHoverDepth(null)}
                             onKeyDown={handleFocusMarkerKeyDown}
@@ -216,9 +246,11 @@ export const DepthOfFieldFocusOverlay: React.FC<DepthOfFieldFocusOverlayProps> =
                         hoveredDepth={hoveredDepth}
                         faded={faded}
                         onHoverDepth={handleHoverDepth}
-                        onAdjustFocusRange={delta => {
+                        onBeginDrag={onBeginDrag}
+                        onEndDrag={onEndDrag}
+                        onAdjustFocusRange={(delta, skipHistory) => {
                             interaction();
-                            onAdjustFocusRange(delta);
+                            onAdjustFocusRange(delta, skipHistory);
                         }}
                     />
                 </div>

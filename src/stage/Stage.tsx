@@ -68,6 +68,7 @@ const StageComponent: React.FC<StageProps> = ({
         updateLayer,
         beginDragTransaction,
         commitDragTransaction,
+        cancelDragTransaction,
     } = useProjectStore();
     const {
         activeTool,
@@ -196,8 +197,7 @@ const StageComponent: React.FC<StageProps> = ({
         setDofFocusIndicator,
         setDofFocusActive,
     });
-    const handleAdjustFocusDepth = useCallback((delta: number) => {
-        const depth = frame.effects.state.depthOfField.target.z + delta;
+    const handleAdjustFocusDepth = useCallback((delta: number, skipHistory = false) => {
         updateShot(frame.activeShot.id, shot => ({
             ...shot,
             effects: {
@@ -206,28 +206,31 @@ const StageComponent: React.FC<StageProps> = ({
                     ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
                     target: {
                         ...(shot.effects.depthOfField?.target ?? frame.effects.state.depthOfField.target),
-                        z: depth,
+                        z: frame.effects.state.depthOfField.target.z + delta,
                     },
                 },
             },
-        }));
+        }), skipHistory ? { skipHistory: true } : undefined);
     }, [frame.activeShot.id, frame.effects.state.depthOfField, updateShot]);
-    const handleAdjustFocusRange = useCallback((delta: number) => {
-        const focusRange = Math.max(0, Math.min(
-            20,
-            frame.effects.state.depthOfField.focusRange + delta
-        ));
+    const handleAdjustFocusRange = useCallback((delta: number, skipHistory = false) => {
         updateShot(frame.activeShot.id, shot => ({
             ...shot,
             effects: {
                 ...shot.effects,
                 depthOfField: {
                     ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
-                    focusRange,
+                    focusRange: Math.max(0, Math.min(
+                        20,
+                        frame.effects.state.depthOfField.focusRange + delta
+                    )),
                 },
             },
-        }));
+        }), skipHistory ? { skipHistory: true } : undefined);
     }, [frame.activeShot.id, frame.effects.state.depthOfField, updateShot]);
+    const handleFocusDragEnd = useCallback((cancelled: boolean) => {
+        if (cancelled) cancelDragTransaction();
+        else commitDragTransaction();
+    }, [cancelDragTransaction, commitDragTransaction]);
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -505,6 +508,8 @@ const StageComponent: React.FC<StageProps> = ({
                         cameraPose={gradientCameraPose}
                         stageFrameRef={stageFrameRef}
                         onFocusClick={handleDofFocusClick}
+                        onBeginFocusDrag={beginDragTransaction}
+                        onEndFocusDrag={handleFocusDragEnd}
                         onAdjustFocusDepth={handleAdjustFocusDepth}
                         onAdjustFocusRange={handleAdjustFocusRange}
                     />

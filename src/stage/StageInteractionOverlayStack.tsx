@@ -47,8 +47,10 @@ interface StageInteractionOverlayStackProps {
     cameraPose: EvaluatedCameraPose;
     stageFrameRef: RefObject<HTMLDivElement | null>;
     onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
-    onAdjustFocusDepth: (delta: number) => void;
-    onAdjustFocusRange: (delta: number) => void;
+    onBeginFocusDrag: () => void;
+    onEndFocusDrag: (cancelled: boolean) => void;
+    onAdjustFocusDepth: (delta: number, skipHistory?: boolean) => void;
+    onAdjustFocusRange: (delta: number, skipHistory?: boolean) => void;
 }
 
 export function StageInteractionOverlayStack({
@@ -74,6 +76,8 @@ export function StageInteractionOverlayStack({
     cameraPose,
     stageFrameRef,
     onFocusClick,
+    onBeginFocusDrag,
+    onEndFocusDrag,
     onAdjustFocusDepth,
     onAdjustFocusRange,
 }: StageInteractionOverlayStackProps) {
@@ -152,6 +156,8 @@ export function StageInteractionOverlayStack({
                 defaultCamera={referenceCamera}
                 stageFrameRef={stageFrameRef}
                 onFocusClick={onFocusClick}
+                onBeginDrag={onBeginFocusDrag}
+                onEndDrag={onEndFocusDrag}
                 onAdjustFocusDepth={onAdjustFocusDepth}
                 onAdjustFocusRange={onAdjustFocusRange}
             />

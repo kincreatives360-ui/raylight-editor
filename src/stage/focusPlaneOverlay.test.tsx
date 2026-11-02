@@ -36,21 +36,15 @@ function makeFixture() {
             position: { x: 0, y: 0, z: 0.8 },
         }),
     ];
+    project.shots[0].effects.depthOfField = {
+        ...project.shots[0].effects.depthOfField,
+        enabled: true,
+        target: { x: 0.2, y: -0.1, z: 0.4 },
+        focusRange: 0.6,
+    };
     const evaluated = evaluateProjectAtTime(project, 0);
     const frame = {
         ...evaluated,
-        effects: {
-            ...evaluated.effects,
-            state: {
-                ...evaluated.effects.state,
-                depthOfField: {
-                    ...evaluated.effects.state.depthOfField,
-                    enabled: true,
-                    target: { x: 0.2, y: -0.1, z: 0.4 },
-                    focusRange: 0.6,
-                },
-            },
-        },
         layers: evaluated.layers.map((layer, index) => ({
             ...layer,
             position: { ...layer.position, z: index === 0 ? 0.2 : 0.8 },
@@ -62,6 +56,7 @@ function makeFixture() {
     const cameraPose = evaluateCameraPose(frame.camera, defaultCamera, targetAspect);
 
     return {
+        project,
         frame,
         defaultCamera,
         cameraPose,
@@ -104,6 +99,8 @@ describe('DepthOfFieldFocusOverlay', () => {
             defaultCamera: fixture.defaultCamera,
             stageFrameRef: fixture.stageFrameRef,
             onFocusClick: fixture.onFocusClick,
+            onBeginDrag: () => {},
+            onEndDrag: () => {},
             onAdjustFocusDepth: fixture.onAdjustFocusDepth,
             onAdjustFocusRange: fixture.onAdjustFocusRange,
             ...overrides,
@@ -113,6 +110,93 @@ describe('DepthOfFieldFocusOverlay', () => {
         );
         return { ...fixture, html };
     };
+
+    const setupPointerTest = () => {
+        const fixture = makeFixture();
+        dom = new JSDOM('<!doctype html><div id="root"></div>', { url: 'http://localhost' });
+        vi.stubGlobal('window', dom.window);
+        vi.stubGlobal('document', dom.window.document);
+        vi.stubGlobal('navigator', dom.window.navigator);
+        vi.stubGlobal('HTMLElement', dom.window.HTMLElement);
+        vi.stubGlobal('SVGElement', dom.window.SVGElement);
+        vi.stubGlobal('Node', dom.window.Node);
+        vi.stubGlobal('IS_REACT_ACT_ENVIRONMENT', true);
+        dom.window.Element.prototype.setPointerCapture = function () {};
+        dom.window.Element.prototype.hasPointerCapture = function () { return false; };
+        dom.window.Element.prototype.releasePointerCapture = function () {};
+
+        useProjectStore.setState({
+            project: fixture.project,
+            past: [],
+            future: [],
+            dragSnapshot: null,
+        });
+
+        function Harness() {
+            const project = useSyncExternalStore(
+                useProjectStore.subscribe,
+                () => useProjectStore.getState().project
+            );
+            const frame = evaluateProjectAtTime(project, 0);
+            return createElement(DepthOfFieldFocusOverlay, {
+                active: false,
+                indicator: null,
+                frame,
+                frameWidth,
+                frameHeight,
+                targetAspect,
+                cameraPose: evaluateCameraPose(frame.camera, fixture.defaultCamera, targetAspect),
+                defaultCamera: fixture.defaultCamera,
+                stageFrameRef: fixture.stageFrameRef,
+                onFocusClick: fixture.onFocusClick,
+                onBeginDrag: () => useProjectStore.getState().beginDragTransaction(),
+                onEndDrag: (cancelled: boolean) => {
+                    if (cancelled) useProjectStore.getState().cancelDragTransaction();
+                    else useProjectStore.getState().commitDragTransaction();
+                },
+                onAdjustFocusDepth: (delta: number, skipHistory?: boolean) => {
+                    useProjectStore.getState().updateShot('shot-1', shot => ({
+                        ...shot,
+                        effects: {
+                            ...shot.effects,
+                            depthOfField: {
+                                ...shot.effects.depthOfField,
+                                target: {
+                                    ...shot.effects.depthOfField.target,
+                                    z: 0.4 + delta,
+                                },
+                            },
+                        },
+                    }), skipHistory ? { skipHistory: true } : undefined);
+                },
+                onAdjustFocusRange: (delta: number, skipHistory?: boolean) => {
+                    useProjectStore.getState().updateShot('shot-1', shot => ({
+                        ...shot,
+                        effects: {
+                            ...shot.effects,
+                            depthOfField: {
+                                ...shot.effects.depthOfField,
+                                focusRange: 0.6 + delta,
+                            },
+                        },
+                    }), skipHistory ? { skipHistory: true } : undefined);
+                },
+            } as never);
+        }
+
+        root = createRoot(dom.window.document.getElementById('root')!);
+        act(() => root!.render(createElement(Harness)));
+        return fixture;
+    };
+
+    const pointerEvent = (type: string, pointerId: number, clientX: number, clientY: number) =>
+        Object.assign(new dom!.window.Event(type, { bubbles: true, cancelable: true }), {
+            pointerId,
+            clientX,
+            clientY,
+            button: 0,
+            shiftKey: false,
+        });
 
     it('links focus and near/far sheets to the evaluated focus values', () => {
         const { html } = renderOverlay();
@@ -193,6 +277,8 @@ describe('DepthOfFieldFocusOverlay', () => {
                 defaultCamera: fixture.defaultCamera,
                 stageFrameRef: fixture.stageFrameRef,
                 onFocusClick: fixture.onFocusClick,
+                onBeginDrag: () => {},
+                onEndDrag: () => {},
                 onAdjustFocusDepth: fixture.onAdjustFocusDepth,
                 onAdjustFocusRange: fixture.onAdjustFocusRange,
             });
@@ -222,8 +308,55 @@ describe('DepthOfFieldFocusOverlay', () => {
         })));
 
         expect(fixture.onAdjustFocusDepth).toHaveBeenCalledWith(0.05);
-        expect(fixture.onAdjustFocusRange).toHaveBeenNthCalledWith(1, -0.05);
-        expect(fixture.onAdjustFocusRange).toHaveBeenNthCalledWith(2, 0.05);
+        expect(fixture.onAdjustFocusRange.mock.calls.map(([delta]) => delta)).toEqual([-0.05, 0.05]);
+    });
+
+    it('drags focus depth in one undoable transaction', () => {
+        setupPointerTest();
+        const marker = dom!.window.document.querySelector('[data-focus-marker]')!;
+        act(() => marker.dispatchEvent(pointerEvent('pointerdown', 5, 120, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 5, 120, 60)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 5, 120, 80)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointerup', 5, 120, 80)));
+
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.6);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+        expect(useProjectStore.getState().dragSnapshot).toBeNull();
+        act(() => useProjectStore.getState().undo());
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.target.z).toBeCloseTo(0.4);
+    });
+
+    it('drags a range edge in one undoable transaction', () => {
+        setupPointerTest();
+        const handle = dom!.window.document.querySelector('[data-depth-handle="far"]')!;
+        act(() => handle.dispatchEvent(pointerEvent('pointerdown', 6, 300, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 6, 380, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 6, 350, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointerup', 6, 380, 120)));
+
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.focusRange).toBeCloseTo(0.85);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+        expect(useProjectStore.getState().dragSnapshot).toBeNull();
+        act(() => useProjectStore.getState().undo());
+        expect(useProjectStore.getState().project.shots[0].effects.depthOfField.focusRange).toBeCloseTo(0.6);
+    });
+
+    it('rolls back a focus drag on Escape without adding undo history', () => {
+        setupPointerTest();
+        const originalProject = useProjectStore.getState().project;
+        const marker = dom!.window.document.querySelector('[data-focus-marker]')!;
+        act(() => marker.dispatchEvent(pointerEvent('pointerdown', 7, 120, 120)));
+        act(() => dom!.window.dispatchEvent(pointerEvent('pointermove', 7, 120, 80)));
+        expect(useProjectStore.getState().project).not.toBe(originalProject);
+
+        act(() => dom!.window.dispatchEvent(new dom!.window.KeyboardEvent('keydown', {
+            bubbles: true,
+            key: 'Escape',
+        })));
+
+        expect(useProjectStore.getState().project).toBe(originalProject);
+        expect(useProjectStore.getState().past).toHaveLength(0);
+        expect(useProjectStore.getState().dragSnapshot).toBeNull();
     });
 
     it('links ruler hover to the projected focus plane and fades after inactivity', () => {
@@ -250,6 +383,8 @@ describe('DepthOfFieldFocusOverlay', () => {
                 defaultCamera: fixture.defaultCamera,
                 stageFrameRef: fixture.stageFrameRef,
                 onFocusClick: fixture.onFocusClick,
+                onBeginDrag: () => {},
+                onEndDrag: () => {},
                 onAdjustFocusDepth: fixture.onAdjustFocusDepth,
                 onAdjustFocusRange: fixture.onAdjustFocusRange,
             });

@@ -1,4 +1,5 @@
-import type { KeyboardEvent, MouseEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent, type MouseEvent, type PointerEvent } from 'react';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 export interface FocusDepthTick {
     id: string;
@@ -16,7 +17,9 @@ interface FocusDepthRulerProps {
     hoveredDepth: number | null;
     faded: boolean;
     onHoverDepth: (depth: number | null) => void;
-    onAdjustFocusRange: (delta: number) => void;
+    onBeginDrag: () => void;
+    onEndDrag: (cancelled: boolean) => void;
+    onAdjustFocusRange: (delta: number, skipHistory?: boolean) => void;
 }
 
 function formatDepth(depth: number): string {
@@ -33,12 +36,16 @@ export function FocusDepthRuler({
     hoveredDepth,
     faded,
     onHoverDepth,
+    onBeginDrag,
+    onEndDrag,
     onAdjustFocusRange,
 }: FocusDepthRulerProps) {
     const span = Math.max(0.001, maxDepth - minDepth);
     const position = (depth: number) => `${Math.max(0, Math.min(100, ((depth - minDepth) / span) * 100))}%`;
     const nearDepth = focusDepth - focusRange / 2;
     const farDepth = focusDepth + focusRange / 2;
+    const activeDragCleanupRef = useRef<(() => void) | null>(null);
+    useEffect(() => () => activeDragCleanupRef.current?.(), []);
 
     const handleHover = (depth: number) => () => onHoverDepth(depth);
     const handleRangeKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
@@ -53,6 +60,27 @@ export function FocusDepthRuler({
         onAdjustFocusRange(direction * (event.shiftKey ? 0.01 : 0.05));
     };
     const stopMouseDown = (event: MouseEvent<HTMLButtonElement>) => event.stopPropagation();
+    const handleRangePointerDown = (event: PointerEvent<HTMLButtonElement>, edge: 'near' | 'far') => {
+        if (event.button !== 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        activeDragCleanupRef.current?.();
+        const startX = event.clientX;
+        const direction = edge === 'near' ? -1 : 1;
+        activeDragCleanupRef.current = createPointerDragLifecycle({
+            pointerId: event.pointerId,
+            target: event.currentTarget,
+            begin: onBeginDrag,
+            commit: () => onEndDrag(false),
+            cancel: () => onEndDrag(true),
+            onMove: moveEvent => {
+                onAdjustFocusRange((moveEvent.clientX - startX) * direction * 0.005, true);
+            },
+            onEnd: () => {
+                activeDragCleanupRef.current = null;
+            },
+        });
+    };
 
     return (
         <div
@@ -136,6 +164,7 @@ export function FocusDepthRuler({
                         className="absolute top-[20px] h-5 w-5 -translate-x-1/2 -translate-y-1/2 rounded-sm border border-sky-200 bg-sky-500/80 shadow-[0_0_9px_rgba(56,189,248,.55)] pointer-events-auto focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                         style={{ left: position(depth) }}
                         onMouseDown={stopMouseDown}
+                        onPointerDown={event => handleRangePointerDown(event, edge)}
                         onClick={event => event.stopPropagation()}
                         onKeyDown={handleRangeKeyDown}
                         onMouseEnter={handleHover(depth)}
