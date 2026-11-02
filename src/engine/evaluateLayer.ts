@@ -102,6 +102,7 @@ export function evaluateLayerAtTime(
         layer.kind === 'text'
             ? { width: layer.maxWidth, height: layer.font.size * Math.max(2.5, (layer.content.split('\n').length - 1) * (layer.font.lineHeight ?? 1.22) + 1.5) }
             : { ...layer.size };
+    const baseTextHeight = layer.kind === 'text' ? size.height : 0;
 
     let opacity = layer.opacity;
     let cornerRadius = layer.kind !== 'text' ? layer.cornerRadius : 0;
@@ -385,6 +386,16 @@ export function evaluateLayerAtTime(
         }
     }
 
+    const evaluatedLayer = layer.kind === 'text' && size.height !== baseTextHeight
+        ? {
+            ...layer,
+            font: {
+                ...layer.font,
+                size: layer.font.size * (size.height / baseTextHeight),
+            },
+        }
+        : layer;
+
     return {
         id: layer.id,
         name: layer.name,
@@ -405,6 +416,6 @@ export function evaluateLayerAtTime(
         glowIntensityOffset,
         glowRadiusOffset,
         textContentOverride,
-        layer,
+        layer: evaluatedLayer,
     };
 }

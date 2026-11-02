@@ -3,7 +3,7 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { JSDOM } from 'jsdom';
 import { evaluateProjectAtTime } from '../engine/evaluateShot';
-import { createDefaultImageLayer, createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
+import { createDefaultImageLayer, createDefaultProject, createDefaultShapeLayer, createDefaultTextLayer } from '../model/defaults';
 import type { Layer, Project } from '../model/types';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -352,6 +352,34 @@ describe('selection overlay group transforms', () => {
         }
 
         dispatchPointer(testDom.window, 'pointerup', 3, 1560, 540);
+        expect(useProjectStore.getState().past).toHaveLength(1);
+    });
+
+    it('animates rendered text font size during group resize without changing base text properties', () => {
+        const testDom = installTestDom();
+        const text = createDefaultTextLayer({
+            id: 'text-layer',
+            position: { x: -0.3, y: 0.05, z: 0.1 },
+        });
+        const shape = createDefaultShapeLayer({
+            id: 'shape-layer',
+            position: { x: 0.3, y: -0.05, z: 0.3 },
+        });
+        const project = makeProject([text, shape]);
+        renderSelectionOverlay(project, [text.id, shape.id], { animateMode: true });
+        const handle = testDom.window.document.querySelector('[data-selection-handle="s"]')!;
+
+        dispatchPointer(handle, 'pointerdown', 6, 1500, 900);
+        dispatchPointer(testDom.window, 'pointermove', 6, 1500, 960);
+
+        const storedText = getLayer(text.id) as ReturnType<typeof createDefaultTextLayer>;
+        const evaluatedText = evaluateProjectAtTime(useProjectStore.getState().project, 200)
+            .layers.find((layer) => layer.id === text.id)!;
+        expect(storedText.font.size).toBe(text.font.size);
+        expect(storedText.maxWidth).toBe(text.maxWidth);
+        expect(evaluatedText.layer.font.size).toBeGreaterThan(text.font.size);
+
+        dispatchPointer(testDom.window, 'pointerup', 6, 1500, 960);
         expect(useProjectStore.getState().past).toHaveLength(1);
     });
 

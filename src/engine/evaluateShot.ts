@@ -449,17 +449,12 @@ export function evaluateProjectAtTime(
             const rawPrev = prevLayersMap.get(layer.id);
             if (!rawPrev) {
                 // Fallback if not memoized (shouldn't happen)
-                const isHidden = isLayerEffectivelyHidden(layer, groupById);
-                const rawPrevFallback = evaluateLayerAtTime(
-                    isHidden ? { ...layer, hidden: true } : layer,
-                    prevShotLocalTime
-                );
                 return {
                     ...evalLayer,
                     layer:
                         layer.kind !== 'text'
                             ? { ...layer, cornerRadius: evalLayer.cornerRadius }
-                            : layer,
+                            : rawEvalLayer.layer,
                     dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
                     dofBokehShape: effects.state.depthOfField.bokehShape,
                     totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur).toFixed(2)),
@@ -512,7 +507,7 @@ export function evaluateProjectAtTime(
             layer:
                 layer.kind !== 'text'
                     ? { ...layer, cornerRadius: evalLayer.cornerRadius }
-                    : layer,
+                    : rawEvalLayer.layer,
             dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
             dofBokehShape: effects.state.depthOfField.bokehShape,
             totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + manualBlurPx).toFixed(2)),
