@@ -246,9 +246,24 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         }
     }, [effectiveEffects, gl, scene, camera, size.width, size.height, dpr, camera.position.x, camera.position.y]);
 
-    // Deterministic frame render
+    // Deterministic frame render with resilient fallback
     useFrame(() => {
-        renderSceneFrame(gl, scene, camera, composerRef.current);
+        const composer = composerRef.current;
+        if (!composer) {
+            gl.render(scene, camera);
+            return;
+        }
+        try {
+            renderSceneFrame(gl, scene, camera, composer);
+        } catch (err) {
+            console.warn('[Raylight Stage] Post-processing pass failed; rendering safe scene fallback:', err);
+            try {
+                gl.setRenderTarget(null);
+                gl.render(scene, camera);
+            } catch {
+                // Ignore context loss errors
+            }
+        }
     }, 1);
 
     return null;

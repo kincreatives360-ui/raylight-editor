@@ -36,33 +36,29 @@ export function CameraPoseProvider({
 
     const effectiveViewportFrame = frame;
 
-    const defaultCamera = {
-        position: { x: 0, y: 0, z: 2.65 },
-        rotation: { x: 0, y: 0, z: 0 },
-        focalLength: 50,
-    };
+    const defaultCamera = useMemo(() => ({
+        position: project.defaultCamera?.position ?? { x: 0, y: 0, z: 2.65 },
+        rotation: project.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+        focalLength: project.defaultCamera?.focalLength ?? 50,
+    }), [project.defaultCamera?.position, project.defaultCamera?.rotation, project.defaultCamera?.focalLength]);
 
-    const gradientReferenceCamera = {
-        position: { x: 0, y: 0, z: 2.65 },
-        rotation: { x: 0, y: 0, z: 0 },
-        focalLength: 50,
-    };
+    const gradientReferenceCamera = defaultCamera;
 
     const cameraPose = useMemo(() => evaluateCameraPose(
         effectiveViewportFrame.camera,
         defaultCamera,
         targetAspect
-    ), [effectiveViewportFrame.camera, targetAspect]);
+    ), [effectiveViewportFrame.camera, defaultCamera, targetAspect]);
 
     const gradientCameraPose = useMemo(() => evaluateCameraPose(
         effectiveViewportFrame.camera,
         gradientReferenceCamera,
         targetAspect
-    ), [effectiveViewportFrame.camera, targetAspect]);
+    ), [effectiveViewportFrame.camera, gradientReferenceCamera, targetAspect]);
 
     const evaluateCustomPose = useMemo(() => (
-        (camera: any, defaultCamera?: any) => evaluateCameraPose(camera, defaultCamera || defaultCamera, targetAspect)
-    ), [targetAspect]);
+        (camera: any, customDefault?: any) => evaluateCameraPose(camera, customDefault || defaultCamera, targetAspect)
+    ), [defaultCamera, targetAspect]);
 
     const value = useMemo(() => ({
         cameraPose,
@@ -71,7 +67,7 @@ export function CameraPoseProvider({
         defaultCamera,
         gradientReferenceCamera,
         evaluateCustomPose,
-    }), [cameraPose, gradientCameraPose, targetAspect, defaultCamera, gradientReferenceCamera]);
+    }), [cameraPose, gradientCameraPose, targetAspect, defaultCamera, gradientReferenceCamera, evaluateCustomPose]);
 
     return (
         <CameraPoseContext.Provider value={value}>
