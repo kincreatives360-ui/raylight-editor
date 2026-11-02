@@ -6,6 +6,8 @@ import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { usePlayheadStore } from '../../../store/usePlayheadStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import {
   Sun,
@@ -86,7 +88,6 @@ const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
 };
 
 const FIELD_RANGES: Record<string, [number, number, number]> = {
-  aperture: [0.1, 32, 0.1], focalLength: [10, 300, 1], focusRange: [0, 20, 0.01], bokehScale: [0, 20, 0.01],
   intensity: [0, 1, 0.01], threshold: [0, 4, 0.01], radius: [0, 4, 0.01], softness: [0, 1, 0.01],
   shutterAngle: [0, 360, 1], samples: [2, 32, 1], angle: [-180, 180, 1], amount: [-1, 1, 0.01],
   offset: [0, 100, 1], verticalOffset: [-100, 100, 1], edgeStrength: [0, 4, 0.01], size: [0.1, 32, 0.01],
@@ -123,6 +124,11 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const order = useMemo(
     () => [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])],
     [shot.effectsOrder]
+  );
+
+  const appliedKeys = useMemo(
+    () => shot.appliedEffects ?? order.filter((k) => shot.effects?.[k]?.enabled),
+    [shot.appliedEffects, shot.effects, order]
   );
 
   const addEffect = (key: EffectKey) => {
@@ -186,7 +192,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     const max = isPercent ? rawMax * 100 : isLensDistortionStrength ? rawMax * scale : rawMax;
     const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : isLensDistortionStrength ? rawStep * scale : rawStep;
     const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength' ? 'Edges' : label(field);
-    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneSize' ? ' cm' : '';
+    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'sceneSize' ? ' cm' : '';
 
     return (
       <ScrubInput
@@ -380,28 +386,6 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                        {key === 'depthOfField' && (
-                          <>
-                            <ScrubInput
-                              aria-label="Focus range"
-                              label="Focus range"
-                              value={Number(mergedFields['focusRange'])}
-                              min={0}
-                              max={20}
-                              step={0.01}
-                              onChange={(value) => setValue(key, 'focusRange', value)}
-                            />
-                            <ScrubInput
-                              aria-label="Blur amount"
-                              label="Blur amount"
-                              value={Number(mergedFields['bokehScale'])}
-                              min={0}
-                              max={20}
-                              step={0.01}
-                              onChange={(value) => setValue(key, 'bokehScale', value)}
-                            />
-                          </>
-                        )}
                         {key === 'chromaticAberration' && (
                           <>
                             <div className="text-[10px] text-muted-foreground">Edges</div>

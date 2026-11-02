@@ -42,18 +42,18 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
 
   it('renders applied effects list in Figma style with icons, pill labels, eye toggle, and remove (-) buttons', () => {
     const shot = createDefaultShot();
-    shot.appliedEffects = ['depthOfField', 'bloom', 'chromaticAberration'];
-    shot.effects.depthOfField.enabled = true;
+    shot.appliedEffects = ['atmosphere', 'bloom', 'chromaticAberration'];
+    shot.effects.atmosphere.enabled = true;
     shot.effects.bloom.enabled = true;
     shot.effects.chromaticAberration.enabled = true;
 
     const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
 
-    expect(html).toContain('Depth of field');
+    expect(html).toContain('Atmosphere');
     expect(html).toContain('Bloom');
     expect(html).toContain('Color split');
     expect(html).toContain('Mute effect');
-    expect(html).toContain('Remove Depth of field');
+    expect(html).toContain('Remove Atmosphere');
     expect(html).toContain('Remove Bloom');
     expect(html).toContain('Remove Color split');
   });
@@ -69,84 +69,90 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
     expect(html).toContain('Remove Color grade');
   });
 
-  it('safely handles legacy shots with partial or missing depthOfField properties', () => {
+  it('safely handles legacy shots with partial or missing properties', () => {
     const shot = createDefaultShot();
-    // @ts-expect-error Simulating legacy shot with missing target & bokehShape
-    shot.effects.depthOfField = { enabled: true };
-    shot.appliedEffects = ['depthOfField'];
+    // @ts-expect-error Simulating legacy shot with missing properties
+    shot.effects.atmosphere = { enabled: true };
+    shot.appliedEffects = ['atmosphere'];
 
     const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
-    expect(html).toContain('Depth of field');
-    expect(html).toContain('Remove Depth of field');
+    expect(html).toContain('Atmosphere');
+    expect(html).toContain('Remove Atmosphere');
   });
 });
 
-let root: Root | undefined;
-let container: HTMLDivElement | undefined;
-let updateShotSpy: ReturnType<typeof vi.spyOn> | undefined;
-const originalProject = useProjectStore.getState().project;
+describe('SceneEffectsSection interactive tests', () => {
+  let root: Root | undefined;
+  let container: HTMLDivElement | undefined;
+  let updateShotSpy: ReturnType<typeof vi.spyOn> | undefined;
+  const originalProject = useProjectStore.getState().project;
 
-function makeShot(overrides: Partial<Shot> = {}): Shot {
-  const layer = createDefaultTextLayer({
-    id: 'subject-layer',
-    name: 'Subject',
-    position: { x: 0.25, y: -0.5, z: 0.75 },
-  });
-  const shot = createDefaultShot({
-    id: 'dof-shot',
-    startMs: 1000,
-    durationMs: 4000,
-    layers: [layer],
-    appliedEffects: ['depthOfField', 'bloom'],
-    ...overrides,
-  });
-  shot.effects.depthOfField.enabled = true;
-  shot.effects.bloom.intensity = 0.42;
-  return shot;
-}
-
-function mountDofPanel(shot: Shot): void {
-  useProjectStore.setState({ project: createDefaultProject({ shots: [shot] }) });
-  usePlayheadStore.getState().setCurrentTimeMs(1500);
-  container = document.createElement('div');
-  document.body.appendChild(container);
-  root = createRoot(container);
-  act(() => root!.render(<SceneEffectsSection shot={shot} />));
-  const dofButton = Array.from(container.querySelectorAll('button'))
-    .find((button) => button.textContent?.includes('Depth of field'));
-  act(() => dofButton?.click());
-}
-
-function clickButton(label: string): void {
-  const button = Array.from(container!.querySelectorAll('button'))
-    .find((candidate) => candidate.getAttribute('aria-label') === label
-      || candidate.textContent?.trim() === label);
-  expect(button, `button "${label}"`).toBeTruthy();
-  act(() => button!.click());
-}
-
-function captureShotUpdates(shot: Shot): () => Shot {
-  let updatedShot: Shot | undefined;
-  updateShotSpy = vi.spyOn(useProjectStore.getState(), 'updateShot')
-    .mockImplementation((_shotId, updater) => {
-      updatedShot = typeof updater === 'function' ? updater(shot) : { ...shot, ...updater };
+  function makeShot(overrides: Partial<Shot> = {}): Shot {
+    const layer = createDefaultTextLayer({
+      id: 'subject-layer',
+      name: 'Subject',
+      position: { x: 0.25, y: -0.5, z: 0.75 },
     });
-  return () => {
-    expect(updatedShot).toBeDefined();
-    return updatedShot!;
-  };
-}
+    const shot = createDefaultShot({
+      id: 'atmos-shot',
+      startMs: 1000,
+      durationMs: 4000,
+      layers: [layer],
+      appliedEffects: ['atmosphere', 'bloom'],
+      ...overrides,
+    });
+    shot.effects.atmosphere.enabled = true;
+    shot.effects.bloom.intensity = 0.42;
+    return shot;
+  }
 
-afterEach(() => {
-  act(() => root?.unmount());
-  container?.remove();
-  root = undefined;
-  container = undefined;
-  updateShotSpy?.mockRestore();
-  updateShotSpy = undefined;
-  useProjectStore.setState({ project: originalProject });
-  usePlayheadStore.getState().setCurrentTimeMs(0);
-  useSelectionStore.getState().setSelectedLayerIds([]);
-});
+  function mountAtmosPanel(shot: Shot): void {
+    useProjectStore.setState({ project: createDefaultProject({ shots: [shot] }) });
+    usePlayheadStore.getState().setCurrentTimeMs(1500);
+    container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => root!.render(<SceneEffectsSection shot={shot} />));
+    const atmosButton = Array.from(container.querySelectorAll('button'))
+      .find((button) => button.textContent?.includes('Atmosphere'));
+    act(() => atmosButton?.click());
+  }
 
+  function clickButton(label: string): void {
+    const button = Array.from(container!.querySelectorAll('button'))
+      .find((candidate) => candidate.getAttribute('aria-label') === label
+        || candidate.textContent?.trim() === label);
+    expect(button, `button "${label}"`).toBeTruthy();
+    act(() => button!.click());
+  }
+
+  function captureShotUpdates(shot: Shot): () => Shot {
+    let updatedShot: Shot | undefined;
+    updateShotSpy = vi.spyOn(useProjectStore.getState(), 'updateShot')
+      .mockImplementation((_shotId, updater) => {
+        updatedShot = typeof updater === 'function' ? updater(shot) : { ...shot, ...updater };
+      });
+    return () => {
+      expect(updatedShot).toBeDefined();
+      return updatedShot!;
+    };
+  }
+
+  afterEach(() => {
+    act(() => root?.unmount());
+    container?.remove();
+    root = undefined;
+    container = undefined;
+    updateShotSpy?.mockRestore();
+    updateShotSpy = undefined;
+    useProjectStore.setState({ project: originalProject });
+    usePlayheadStore.getState().setCurrentTimeMs(0);
+    useSelectionStore.getState().setSelectedLayerIds([]);
+  });
+
+  it('renders and supports atmosphere configuration', () => {
+    const shot = makeShot();
+    mountAtmosPanel(shot);
+    expect(container?.textContent).toContain('Atmosphere');
+  });
 });

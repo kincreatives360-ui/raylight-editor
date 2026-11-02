@@ -243,10 +243,6 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     composer.dispose();
   });
 
-  it('does not create a custom shader pass for depth-of-field', () => {
-    expect(scenePassKeys).not.toContain('depthOfField');
-  });
-
   it('configures vignette softness and custom color correctly in shader uniforms', () => {
     const effectsState = createDefaultEffects();
     effectsState.vignette.enabled = true;

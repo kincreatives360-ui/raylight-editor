@@ -27,7 +27,7 @@ Raylight Editor is a browser-based motion design workspace. You build scenes fro
 - **Backgrounds:** Use a plain color, image or animated shader background. Set the fit and adjust visual properties such as blur and dimming.
 - **Motion:** Record object changes at the playhead, set animation blocks and easing, and move the camera across a shot.
 - **Camera and lighting:** Set the camera framing and lens, add camera moves, and use the scene lighting controls and presets.
-- **Effects:** Adjust effects on a whole scene or on an individual layer. Scene effects include depth of field, bloom, atmosphere, color split, film grain, ghosting, color grading, gradient maps, vignette, motion blur, edge fade, glitch, fish-eye and lens distortion. Layer effects and device-specific looks have their own inspector controls.
+- **Effects:** Adjust effects on a whole scene or on an individual layer. Scene effects include bloom, atmosphere, color split, film grain, ghosting, color grading, gradient maps, vignette, motion blur, edge fade, glitch, fish-eye and lens distortion. Layer effects and device-specific looks have their own inspector controls.
 - **Sound:** Add a sound clip to the timeline, preview built-in effects, and control playback and mute settings.
 - **Files and recovery:** Save or reload a `.raylight.json` project, and let browser storage keep a local working copy.
 - **Exports:** Create video, animated GIF, a still image or a set of images, using the sizes and frame rates offered in the export window.

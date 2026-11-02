@@ -94,7 +94,8 @@ export const SceneEffectAnimationBlockSchema = z.object({
 export const ShotSchema = z.object({
   id: z.string(),
   name: z.string(),
-  startTimeMs: z.number().min(0),
+  startMs: z.number().min(0).optional(),
+  startTimeMs: z.number().min(0).optional(),
   durationMs: z.number().min(50),
   cameraBlocks: z.array(CameraBlockSchema),
   lightBlocks: z.array(LightAnimationBlockSchema).optional(),

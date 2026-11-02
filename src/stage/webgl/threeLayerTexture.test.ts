@@ -46,7 +46,7 @@ describe('getLayerBlurBleedLayout', () => {
     expect(layout.heightScale).toBe(660 / 600);
   });
 
-  it('does not expand a WebGL layer for depth-of-field blur', () => {
+  it('does not expand a WebGL layer when blur is zero', () => {
     const layout = getLayerBlurBleedLayout(800, 600, 0);
     expect(layout.blurPadding).toBe(0);
     expect(layout.paddedCanvasW).toBe(800);

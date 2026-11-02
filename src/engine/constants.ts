@@ -25,18 +25,6 @@ export const MOTION_BLUR_DEFAULT_SAMPLES = 8;
 export const MOTION_BLUR_MOTION_THRESHOLD = 0.0001;
 export const MOTION_BLUR_SCALE_FACTOR = 0.25;     // Zoom/rotation contribution to motion vector
 
-/** Depth of Field Constants */
-export const DOF_MIN_FOCUS_RANGE = 0.01;
-export const DOF_DEFAULT_FOCUS_RANGE = 0.35;
-export const DOF_MIN_BOKEH_SCALE = 0.0;
-export const DOF_DEFAULT_BOKEH_SCALE = 4.5;
-export const DOF_DEFAULT_APERTURE = 2.8;
-export const DOF_HIGHLIGHT_THRESHOLD_DEFAULT = 0.8;
-export const DOF_Z_NEAR = 0.1;
-export const DOF_Z_FAR = 100.0;
-export const DOF_FOCAL_LENGTH_FACTOR_DIVISOR = 50;
-export const DOF_BOKEH_SHAPE_ANAMORPHIC = 1.0;
-
 /** Layer Blur & Effects Constants */
 export const LAYER_BLUR_SCALE_FACTOR = 100;       // layerBlur * 100 = pixels
 export const EXTRA_LAYER_BLUR_DEFAULT = 0;
@@ -93,11 +81,6 @@ export const EASING_PRECISION = 1e-6;
 export const BEZIER_ITERATIONS = 8;
 export const BEZIER_BISECTION_ITERATIONS = 12;
 
-/** Depth of Field Post-Process */
-export const DOF_MAX_BLUR_PX = 40;
-export const DOF_BLUR_SCALE_FACTOR = 1.6;
-export const DOF_BLUR_PRECISION = 2;
-
 /** Light Animation Presets */
 export const LIGHT_GLEAM_SWEEP_DURATION = 1400;
 export const LIGHT_RIM_REVEAL_DURATION = 1600;
@@ -133,9 +116,6 @@ export const DEFAULT_ARTBOARD_HEIGHT = 1080;
 /** FPS Defaults */
 export const DEFAULT_FPS = 60;
 export const FRAME_MS_PRECISION = 1000;
-
-/** Depth of Field Camera Z for webgl (legacy) */
-export const DOF_CAMERA_Z_LEGACY = 3.2;           // DEPRECATED: Use DEFAULT_CAMERA_Z instead
 
 /** Color Grade */
 export const COLOR_GRADE_EXPOSURE_MIN = 0.2;

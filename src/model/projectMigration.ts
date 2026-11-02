@@ -65,6 +65,12 @@ export function migrateLegacyProject(raw: unknown): unknown {
       if (typeof shot.durationMs === 'number') {
         shot.durationMs = Math.max(200, shot.durationMs);
       }
+      if (shot.startTimeMs == null && shot.startMs != null) {
+        shot.startTimeMs = shot.startMs;
+      }
+      if (shot.startMs == null && shot.startTimeMs != null) {
+        shot.startMs = shot.startTimeMs;
+      }
 
       if (Array.isArray(shot.cameraBlocks)) {
         for (const cb of shot.cameraBlocks) {

@@ -18,86 +18,6 @@ import { useProjectStore } from '../store/useProjectStore';
 import type { Project, Shot } from '../model/types';
 
 describe('evaluateProjectAtTime', () => {
-  it('evaluates a DOF blur block without changing the saved focus target', () => {
-    const shot = createDefaultShot({
-      durationMs: 2000,
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          ...DEFAULT_PROJECT.shots[0].effects.depthOfField,
-          enabled: true,
-          target: { x: 0.2, y: -0.1, z: 0.35 },
-          bokehScale: 4,
-        },
-      },
-      effectBlocks: [{
-        id: 'blur-block',
-        label: 'Animate blur',
-        effectKey: 'depthOfField',
-        parameter: 'blur',
-        startMs: 0,
-        durationMs: 1000,
-        fromValue: 0,
-        toValue: 4,
-        easing: { kind: 'preset', name: 'linear' },
-      }],
-    });
-
-    const halfway = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [shot] }, 500);
-
-    expect(halfway.activeShot.effects.depthOfField.target).toEqual({ x: 0.2, y: -0.1, z: 0.35 });
-    expect(halfway.activeShot.effects.depthOfField.bokehScale).toBe(2);
-  });
-
-  it('keeps legacy DOF effect blocks animating focus depth', () => {
-    const shot = createDefaultShot({
-      durationMs: 2000,
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          ...DEFAULT_PROJECT.shots[0].effects.depthOfField,
-          target: { x: 0.1, y: -0.2, z: 0.25 },
-        },
-      },
-      effectBlocks: [{
-        id: 'legacy-focus-block',
-        label: 'Legacy focus',
-        effectKey: 'depthOfField',
-        startMs: 0,
-        durationMs: 1000,
-        fromValue: 0,
-        toValue: 1,
-        easing: { kind: 'preset', name: 'linear' },
-      }],
-    });
-
-    const halfway = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [shot] }, 500);
-
-    expect(halfway.activeShot.effects.depthOfField.target).toEqual({ x: 0.1, y: -0.2, z: 0.5 });
-  });
-
-  it('parses legacy shots without DOF focus-subject or animation-parameter fields', () => {
-    const shot = createDefaultShot();
-    delete shot.effects.depthOfField.focusTargetId;
-    shot.effectBlocks = [{
-      id: 'legacy-dof',
-      label: 'Legacy focus',
-      effectKey: 'depthOfField',
-      startMs: 0,
-      durationMs: 800,
-      fromValue: 0,
-      toValue: 1,
-      easing: { kind: 'preset', name: 'ease-in-out' },
-    }];
-
-    const parsed = ShotSchema.safeParse(shot);
-
-    expect(parsed.success).toBe(true);
-    if (parsed.success) {
-      expect(parsed.data.effects.depthOfField.focusTargetId).toBeUndefined();
-      expect(parsed.data.effectBlocks?.[0].parameter).toBeUndefined();
-    }
-  });
 
   it('uses an empty render shot when a project has no shots', () => {
     const frame = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [] }, 0);
@@ -204,50 +124,6 @@ describe('evaluateProjectAtTime', () => {
 
     // Ungrouped layer remains visible
     expect(evalL3?.visible).toBe(true);
-  });
-
-  it('keeps scene DOF separate from per-layer authored blur', () => {
-    const layerSharp = createDefaultShapeLayer({
-      id: 'l-sharp',
-      position: { x: 0, y: 0, z: 0 },
-      effects: { layerBlur: 0 },
-      inMs: 0,
-      outMs: 4000,
-    });
-
-    const layerBlurred = createDefaultShapeLayer({
-      id: 'l-blurred',
-      position: { x: 0, y: 0, z: 2.0 }, // Far out of focus
-      effects: { layerBlur: 0.05 }, // 0.05 * 100 = 5px manual blur
-      inMs: 0,
-      outMs: 4000,
-    });
-
-    const shot = createDefaultShot({
-      layers: [layerSharp, layerBlurred],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.2,
-          aperture: 2.8,
-          bokehScale: 1.5,
-          bokehShape: 'spherical',
-        },
-      },
-    });
-
-    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
-    const frame = evaluateProjectAtTime(project, 1000);
-
-    const evalSharp = frame.layers.find((l) => l.id === 'l-sharp')!;
-    const evalBlurred = frame.layers.find((l) => l.id === 'l-blurred')!;
-
-    expect(evalSharp).not.toHaveProperty('dofBlurPx');
-    expect(evalSharp.totalBlurPx).toBe(0);
-    expect(evalBlurred).not.toHaveProperty('dofBlurPx');
-    expect(evalBlurred.totalBlurPx).toBe(5);
   });
 
   it('4. Evaluates animated effect blocks (e.g. bloom, vignette) on the timeline', () => {
@@ -455,7 +331,7 @@ describe('evaluateProjectAtTime', () => {
     }
   });
 
-  it('11. Phase 1 Parity: getShotTransitionCompositeState, resolveDepthOfFieldFocusZ, sequential CameraBlocks, and motionVector', () => {
+  it('11. Phase 1 Parity: getShotTransitionCompositeState, sequential CameraBlocks, and motionVector', () => {
     const project = createMultiShotContractFixture();
     // At t=3300ms (halfway through Shot 2's 600ms crossfade transition)
     const transFrame = evaluateProjectAtTime(project, 3300);
