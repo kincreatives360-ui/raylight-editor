@@ -52,12 +52,15 @@ const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
     background?: Background;
-}> = ({ frame, selectedLayerIds, background }) => {
+    frameloop: 'always' | 'demand';
+}> = ({ frame, selectedLayerIds, background, frameloop }) => {
     const { invalidate } = useThree();
 
     useEffect(() => {
-        invalidate();
-    }, [frame, selectedLayerIds, background, invalidate]);
+        if (frameloop === 'demand') {
+            invalidate();
+        }
+    }, [frame, selectedLayerIds, background, invalidate, frameloop]);
 
     return null;
 };
@@ -334,6 +337,8 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
                     background={activeBackground}
+                    frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
+                />
                 />
                 <WebGLContextGuard />
                 <StageCaptureBridge frame={frame} />
