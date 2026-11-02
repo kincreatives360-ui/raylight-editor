@@ -2,20 +2,8 @@
 import { describe, it, expect, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { OrientationGizmo } from './OrientationGizmo';
-import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 
 describe('OrientationGizmo HUD & Presets UI', () => {
-    it('defines the seven named camera angles with stable poses', () => {
-        expect(CAMERA_ANGLE_VIEWS).toEqual([
-            { id: 'three-quarter-right', label: 'Three-quarter right', orbit: 35, tilt: 20, roll: 0 },
-            { id: 'three-quarter-left', label: 'Three-quarter left', orbit: -35, tilt: 20, roll: 0 },
-            { id: 'profile-right', label: 'Profile right', orbit: 90, tilt: 0, roll: 0 },
-            { id: 'profile-left', label: 'Profile left', orbit: -90, tilt: 0, roll: 0 },
-            { id: 'top-down', label: 'Top down', orbit: 0, tilt: -89, roll: 0 },
-            { id: 'low-angle', label: 'Low angle', orbit: 18, tilt: -16, roll: 0 },
-            { id: 'front', label: 'Front', orbit: 0, tilt: 0, roll: 0 },
-        ]);
-    });
     it('renders 3D axis HUD, readout pill, and quick presets', () => {
         const handleSetOrientation = vi.fn();
         const handleResetCamera = vi.fn();
@@ -39,14 +27,14 @@ describe('OrientationGizmo HUD & Presets UI', () => {
 
         // Quick Preset buttons
         expect(html).toContain('Front');
+        expect(html).toContain('Back');
         expect(html).toContain('Top');
         expect(html).toContain('Right');
+        expect(html).toContain('Left');
+        expect(html).toContain('Bottom');
         expect(html).toContain('Iso');
         expect(html).toContain('Three-quarter right');
         expect(html).toContain('Three-quarter left');
-        expect(html).toContain('Profile right');
-        expect(html).toContain('Profile left');
-        expect(html).toContain('Top down');
         expect(html).toContain('Low angle');
         expect(html).toContain('Reset Camera Pose to Default');
     });

@@ -3,7 +3,7 @@ import { Camera, ChevronDown, Crosshair, Pin, RefreshCw } from 'lucide-react';
 import * as THREE from 'three';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { evaluateCameraPose, type DefaultCameraConfig } from './webgl/cameraMath';
-import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
+import { CAMERA_ANGLE_VIEWS, CANVAS_ZOOM_LEVELS } from './cameraAngleViews';
 
 export function OrbitCameraFrustum({ camera, observer, reference, width, height }: { camera: EvaluatedCamera; observer: EvaluatedCamera; reference: DefaultCameraConfig; width: number; height: number }) {
     const aspect = width / Math.max(1, height);
@@ -58,8 +58,7 @@ export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZo
         <button className={button} aria-pressed={pinned} onClick={onPin}><Pin size={16} fill={pinned ? 'currentColor' : 'none'} />Pin</button>
         <button className={button} onClick={onBack}><Camera size={16} />Back to camera</button>
         <div className="relative"><button className={button} aria-label="Viewport zoom" aria-expanded={menu === 'zoom'} onClick={() => setMenu(menu === 'zoom' ? null : 'zoom')}><RefreshCw size={15} />{Math.round(zoom * 100)}%</button>
-            {menu === 'zoom' && <div className="absolute bottom-full right-0 mb-2 w-28 rounded-xl bg-[#242424] p-2 shadow-xl">{[0.25, 0.5, 0.74, 1, 1.5, 2].map(value => <button key={value} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10" onClick={() => { onZoom(value); setMenu(null); }}>{Math.round(value * 100)}%</button>)}</div>}
+            {menu === 'zoom' && <div className="absolute bottom-full right-0 mb-2 w-28 rounded-xl bg-[#242424] p-2 shadow-xl">{CANVAS_ZOOM_LEVELS.map(value => <button key={value} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10" onClick={() => { onZoom(value); setMenu(null); }}>{Math.round(value * 100)}%</button>)}</div>}
         </div>
     </div>;
 }
-
