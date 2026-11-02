@@ -65,9 +65,5 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
         invalidate,
     ]);
 
-    useEffect(() => {
-        invalidate();
-    }, [pose.position.x, pose.position.y, pose.position.z, pose.fov, invalidate]);
-
     return null;
 };
