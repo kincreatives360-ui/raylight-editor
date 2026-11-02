@@ -352,7 +352,6 @@ const StageComponent: React.FC<StageProps> = ({
                                 : 'cursor-default'
                     }`}
             >
-        >
             {/* PAN & ZOOM WORKSPACE TRANSFORM WRAPPER */}
             <div
                 style={{
