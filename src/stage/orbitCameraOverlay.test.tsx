@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { createRoot } from 'react-dom/client';
 import { OrbitCameraFrustum, OrbitCameraControls } from './OrbitCameraOverlay';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
-import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
+import { CAMERA_ANGLE_VIEWS, CANVAS_ZOOM_LEVELS } from './cameraAngleViews';
 
 Object.defineProperty(globalThis, 'IS_REACT_ACT_ENVIRONMENT', { configurable: true, value: true });
 
@@ -122,6 +122,39 @@ describe('OrbitCameraOverlay', () => {
         for (const view of CAMERA_ANGLE_VIEWS) {
             expect(menu.textContent).toContain(view.label);
         }
+
+        act(() => root.unmount());
+        container.remove();
+    });
+
+    it('uses the shared zoom levels for camera mode', () => {
+        const onZoom = vi.fn();
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const root = createRoot(container);
+
+        act(() => {
+            root.render(
+                <OrbitCameraControls
+                    pinned={false}
+                    zoom={1}
+                    onAngle={() => {}}
+                    onPin={() => {}}
+                    onBack={() => {}}
+                    onZoom={onZoom}
+                />
+            );
+        });
+
+        act(() => container.querySelector<HTMLButtonElement>('button[aria-label="Viewport zoom"]')?.click());
+        for (const level of CANVAS_ZOOM_LEVELS) {
+            expect(container.textContent).toContain(`${Math.round(level * 100)}%`);
+        }
+
+        const zoomLevel = Array.from(container.querySelectorAll('button'))
+            .find((button) => button.textContent?.trim() === '150%');
+        act(() => zoomLevel?.click());
+        expect(onZoom).toHaveBeenCalledWith(1.5);
 
         act(() => root.unmount());
         container.remove();

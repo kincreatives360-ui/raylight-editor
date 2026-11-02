@@ -4,29 +4,28 @@ import { useFloatingPanel } from '../ui/useFloatingPanel';
 import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
 import React, { useState, useRef } from 'react';
-import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus, Feather } from 'lucide-react';
+import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus, Feather, ZoomIn } from 'lucide-react';
 import type { Layer } from '../model/types';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
 import { SHAPE_TOOL_ITEMS } from './canvasToolItems';
-import type { CanvasToolbarPlacement } from './canvasToolbarLayout';
+import { CANVAS_ZOOM_LEVELS } from './cameraAngleViews';
 
 interface CanvasToolbarProps {
     selectedLayer: Layer | undefined;
+    zoom: number;
+    onZoom: (zoom: number) => void;
     defaultOpenMenu?: MenuKey;
-    onOpenSceneEffects?: () => void;
     onToggleLightRig?: () => void;
     showSafeArea?: boolean;
     onToggleSafeArea?: () => void;
-    onOpenShortcuts?: () => void;
     onSelectAudioClick?: () => void;
     onFrameSelection?: () => void;
-    placement?: CanvasToolbarPlacement;
 }
 
-type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | null;
+type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | 'zoom' | null;
 
 const PointerIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
     switch (activeTool) {
@@ -56,15 +55,14 @@ const ShapeIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     selectedLayer,
+    zoom,
+    onZoom,
     defaultOpenMenu,
-    onOpenSceneEffects: _onOpenSceneEffects,
     onToggleLightRig,
     showSafeArea = false,
     onToggleSafeArea,
-    onOpenShortcuts: _onOpenShortcuts,
     onSelectAudioClick,
     onFrameSelection,
-    placement = 'bottom',
 }) => {
     const {
         activeTool,
@@ -340,7 +338,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             data-canvas-toolbar-positioner=""
-            className={`absolute ${placement === 'top' ? 'top-3' : 'bottom-3'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]`}
+            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]"
         >
             {/* Transient Toast Notification */}
             {toastMessage && (
@@ -691,6 +689,35 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     )}
                 </div>
 
+                <div className="relative flex items-center">
+                    <button
+                        type="button"
+                        aria-label="Viewport zoom"
+                        aria-haspopup="menu"
+                        aria-expanded={openMenu === 'zoom'}
+                        title="Viewport zoom"
+                        onClick={() => toggleMenu('zoom')}
+                        className="h-9 min-w-9 rounded-lg px-2 flex items-center justify-center gap-1.5 text-muted-foreground hover:text-foreground hover:bg-white/5 focus-visible:outline focus-visible:outline-2 focus-visible:outline-brand-blue"
+                    >
+                        <ZoomIn className="w-3.5 h-3.5" />
+                        <span className="tabular-nums">{Math.round(zoom * 100)}%</span>
+                    </button>
+                    {openMenu === 'zoom' && (
+                        <DropdownMenu align="right" className="w-28">
+                            {CANVAS_ZOOM_LEVELS.map((level) => (
+                                <MenuItem
+                                    key={level}
+                                    label={`${Math.round(level * 100)}%`}
+                                    active={zoom === level}
+                                    onClick={() => {
+                                        onZoom(level);
+                                        setOpenMenu(null);
+                                    }}
+                                />
+                            ))}
+                        </DropdownMenu>
+                    )}
+                </div>
 
             </div>
         </div>

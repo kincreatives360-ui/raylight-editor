@@ -41,7 +41,6 @@ interface StageProps {
     showSafeArea?: boolean;
     snapEnabled?: boolean;
     onToggleSafeArea?: () => void;
-    onOpenShortcuts?: () => void;
 }
 
 const StageComponent: React.FC<StageProps> = ({
@@ -52,7 +51,6 @@ const StageComponent: React.FC<StageProps> = ({
     showSafeArea = true,
     snapEnabled = true,
     onToggleSafeArea,
-    onOpenShortcuts,
 }) => {
     const storeCurrentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
     const storeHoverTimeMs = usePlayheadStore((s) => s.hoverTimeMs);
@@ -513,11 +511,11 @@ const StageComponent: React.FC<StageProps> = ({
             />
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
             <CanvasToolbar
-                placement="bottom"
                 selectedLayer={selectedLayer}
+                zoom={canvasZoom}
+                onZoom={setCanvasZoom}
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}
-                onOpenShortcuts={onOpenShortcuts}
                 onFrameSelection={handleFrameSelectedLayers}
             />
         </div>
