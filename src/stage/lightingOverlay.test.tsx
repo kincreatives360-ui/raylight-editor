@@ -335,6 +335,54 @@ describe('LightingOverlay Component', () => {
     });
 
     it.each([
+        ['sun-key', 'selected-light-source-handle', 'Move Sun Key light source with arrow keys', 'position', 'group'],
+        ['sun-key', 'selected-light-target-handle', 'Aim Sun Key light target with arrow keys', 'target', 'group'],
+        ['sun-key', 'selected-light-depth-handle', 'Adjust Sun Key light depth', 'depth', 'slider'],
+        ['spot-1', 'spot-cone-handle', 'Adjust Spot 1 cone angle', 'angle', 'slider'],
+        ['area-1', 'area-resize-handle', 'Adjust Area 1 light size with arrow keys', 'width', 'group'],
+        ['point-1', 'point-reach-handle', 'Adjust Point 1 light reach', 'distance', 'spinbutton'],
+    ] as const)(
+        'supports focus, an accessible name, and arrow adjustment for %s %s',
+        (lightId, handleId, accessibleName, property, role) => {
+            setupDragTest(lightId);
+            const handle = dom!.window.document.querySelector(`[data-testid="${handleId}"]`)!;
+            const shotBefore = useProjectStore.getState().project.shots[0];
+            const lightBefore = shotBefore.light!;
+            const sourceBefore = lightBefore.sources?.find(source => source.id === lightId);
+
+            expect(handle.getAttribute('role')).toBe(role);
+            expect(handle.getAttribute('aria-label')).toBe(accessibleName);
+            expect(handle.getAttribute('tabindex')).toBe('0');
+            act(() => (handle as SVGElement).focus());
+            expect(dom!.window.document.activeElement).toBe(handle);
+
+            act(() => handle.dispatchEvent(new dom!.window.KeyboardEvent('keydown', {
+                bubbles: true,
+                key: property === 'depth' ? 'ArrowUp' : 'ArrowRight',
+            })));
+
+            const lightAfter = useProjectStore.getState().project.shots[0].light!;
+            const sourceAfter = lightAfter.sources?.find(source => source.id === lightId);
+            expect(useProjectStore.getState().past).toHaveLength(1);
+            expect(useProjectStore.getState().dragSnapshot).toBeNull();
+            if (property === 'position') {
+                expect(lightAfter.position).not.toEqual(lightBefore.position);
+            } else if (property === 'depth') {
+                expect(lightAfter.position.z).toBeGreaterThan(lightBefore.position.z);
+            } else if (property === 'target') {
+                if (lightId === 'sun-key') expect(lightAfter.target).not.toEqual(lightBefore.target);
+                else expect(sourceBefore?.target).not.toEqual(sourceAfter?.target);
+            } else if (property === 'angle') {
+                expect(sourceAfter?.angle).toBeGreaterThan(sourceBefore?.angle ?? 0);
+            } else if (property === 'width') {
+                expect(sourceAfter?.width).toBeGreaterThan(sourceBefore?.width ?? 0);
+            } else {
+                expect(sourceAfter?.distance).toBeGreaterThan(sourceBefore?.distance ?? 0);
+            }
+        }
+    );
+
+    it.each([
         ['sun-key', 'selected-light-source-handle'],
         ['sun-key', 'selected-light-target-handle'],
         ['sun-key', 'selected-light-depth-handle'],

@@ -192,6 +192,113 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         }
     }, [selectedLightId, activeShot, updateShot]);
 
+    const updateLightFromKeyboard = useCallback((patch: Partial<SceneLight>) => {
+        beginDragTransaction();
+        updateLight(patch);
+        commitDragTransaction();
+    }, [beginDragTransaction, commitDragTransaction, updateLight]);
+
+    const keyboardScreenDelta = useCallback((event: React.KeyboardEvent) => {
+        switch (event.key) {
+            case 'ArrowLeft': return { dx: -10, dy: 0 };
+            case 'ArrowRight': return { dx: 10, dy: 0 };
+            case 'ArrowUp': return { dx: 0, dy: -10 };
+            case 'ArrowDown': return { dx: 0, dy: 10 };
+            default: return null;
+        }
+    }, []);
+
+    const handleSourceKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight) return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const delta = unprojectScreenDeltaToLightDelta(
+            screenDelta.dx / canvasZoom,
+            screenDelta.dy / canvasZoom,
+            selectedLight.position,
+            cameraPose,
+            frameWidth,
+            frameHeight,
+            aspect
+        );
+        updateLightFromKeyboard({
+            position: {
+                x: Number((selectedLight.position.x + delta.dx).toFixed(3)),
+                y: Number((selectedLight.position.y + delta.dy).toFixed(3)),
+                z: selectedLight.position.z,
+            },
+        });
+    }, [selectedLight, keyboardScreenDelta, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, updateLightFromKeyboard]);
+
+    const handleTargetKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight) return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const target = selectedLight.target || { x: 0, y: 0, z: 0 };
+        const delta = unprojectScreenDeltaToLightDelta(
+            screenDelta.dx / canvasZoom,
+            screenDelta.dy / canvasZoom,
+            target,
+            cameraPose,
+            frameWidth,
+            frameHeight,
+            aspect
+        );
+        updateLightFromKeyboard({
+            target: {
+                x: Number((target.x + delta.dx).toFixed(3)),
+                y: Number((target.y + delta.dy).toFixed(3)),
+                z: target.z,
+            },
+        });
+    }, [selectedLight, keyboardScreenDelta, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, updateLightFromKeyboard]);
+
+    const handleDepthKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+        event.preventDefault();
+        const deltaY = event.key === 'ArrowUp' ? -10 : 10;
+        updateLightFromKeyboard({
+            position: {
+                ...selectedLight.position,
+                z: calculateDepthDeltaFromScreen(deltaY, selectedLight.position.z),
+            },
+        });
+    }, [selectedLight, updateLightFromKeyboard]);
+
+    const handleSpotConeKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'spot') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const direction = screenDelta.dx < 0 || screenDelta.dy > 0 ? -1 : 1;
+        const angle = selectedLight.angle ?? Math.PI / 6;
+        updateLightFromKeyboard({ angle: Number(Math.max(0.08, Math.min(Math.PI / 2 - 0.08, angle + direction * 0.02)).toFixed(3)) });
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
+    const handleAreaResizeKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'area') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        if (screenDelta.dx !== 0) {
+            updateLightFromKeyboard({ width: Number(Math.max(0.4, (selectedLight.width ?? 3) + Math.sign(screenDelta.dx) * 0.1).toFixed(2)) });
+        } else {
+            updateLightFromKeyboard({ height: Number(Math.max(0.4, (selectedLight.height ?? 3) - Math.sign(screenDelta.dy) * 0.1).toFixed(2)) });
+        }
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
+    const handlePointReachKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'point') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const direction = screenDelta.dx < 0 || screenDelta.dy > 0 ? -1 : 1;
+        const distance = selectedLight.distance ?? 5;
+        updateLightFromKeyboard({ distance: Number(Math.max(0.5, distance + direction * 0.1).toFixed(2)) });
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
     const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
@@ -484,6 +591,12 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                         onPointReachDragStart={handlePointReachDragStart}
                         onDepthDragStart={handleDepthDragStart}
                         onSourceDragStart={handleSourceDragStart}
+                        onSourceKeyDown={handleSourceKeyDown}
+                        onTargetKeyDown={handleTargetKeyDown}
+                        onDepthKeyDown={handleDepthKeyDown}
+                        onSpotConeKeyDown={handleSpotConeKeyDown}
+                        onAreaResizeKeyDown={handleAreaResizeKeyDown}
+                        onPointReachKeyDown={handlePointReachKeyDown}
                     />
                 )}
             </svg>
