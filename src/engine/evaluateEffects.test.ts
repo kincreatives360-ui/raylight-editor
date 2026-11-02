@@ -1,45 +1,10 @@
 // src/engine/evaluateEffects.test.ts
 import { describe, it, expect } from 'vitest';
-import { calculateLayerDofBlurPx, evaluateEffectsAtTime } from './evaluateEffects';
+import { evaluateEffectsAtTime } from './evaluateEffects';
 import { createDefaultShot } from '../model/defaults';
-import type { Shot, Effects } from '../model/types';
+import type { Shot } from '../model/types';
 
 describe('evaluateEffects', () => {
-  describe('calculateLayerDofBlurPx', () => {
-    const baseDof: Effects['depthOfField'] = {
-      enabled: true,
-      target: { x: 0, y: 0, z: 0 },
-      focusRange: 2.0,
-      aperture: 2.8,
-      bokehScale: 1.0,
-      bokehShape: 'spherical',
-      focalLength: 50,
-    };
-
-    it('1. Returns 0 blur when depthOfField is disabled', () => {
-      const disabledDof = { ...baseDof, enabled: false };
-      expect(calculateLayerDofBlurPx(5.0, disabledDof)).toBe(0);
-    });
-
-    it('2. Returns 0 blur when layer is inside the focus range zone', () => {
-      // Focus range is 2.0 -> half zone is 1.0. Layer at z=0.5 is within distance <= 1.0
-      expect(calculateLayerDofBlurPx(0.5, baseDof)).toBe(0);
-      expect(calculateLayerDofBlurPx(-0.8, baseDof)).toBe(0);
-      expect(calculateLayerDofBlurPx(1.0, baseDof)).toBe(0);
-    });
-
-    it('3. Computes progressive circle-of-confusion blur outside focus zone capped at 40px', () => {
-      // Out of focus: z = 3.0 -> distance = 3.0, outOfFocusDist = 3.0 - 1.0 = 2.0
-      // rawBlur = 2.0 * 2.8 * 1.0 * (50/50) * 1.6 = 8.96
-      const blur = calculateLayerDofBlurPx(3.0, baseDof);
-      expect(blur).toBeCloseTo(8.96, 1);
-
-      // Extreme out of focus should be capped at 40
-      const extremeBlur = calculateLayerDofBlurPx(100.0, baseDof);
-      expect(extremeBlur).toBe(40);
-    });
-  });
-
   describe('evaluateEffectsAtTime', () => {
     it('4. Produces strictly deterministic pseudo-random seeds from frame numbers', () => {
       const shot = createDefaultShot();
@@ -94,6 +59,30 @@ describe('evaluateEffects', () => {
       expect(after.state.depthOfField.target.z).toBe(30);
     });
 
+    it('evaluates an 800 ms ease-in-out rack-focus segment at its start, midpoint, and end', () => {
+      const shot = createDefaultShot();
+      shot.effects.depthOfField.enabled = true;
+      shot.focusBlocks = [{
+        id: 'existing-focus-segment',
+        startMs: 500,
+        durationMs: 2000,
+        fromZ: 0.1,
+        toZ: 0.3,
+        easing: { kind: 'preset', name: 'linear' },
+      }, {
+        id: 'focus-segment',
+        startMs: 1500,
+        durationMs: 800,
+        fromZ: 0.2,
+        toZ: 0.8,
+        easing: { kind: 'preset', name: 'ease-in-out' },
+      }];
+
+      expect(evaluateEffectsAtTime(shot, 45, 1500).state.depthOfField.target.z).toBeCloseTo(0.2);
+      expect(evaluateEffectsAtTime(shot, 57, 1900).state.depthOfField.target.z).toBeCloseTo(0.5);
+      expect(evaluateEffectsAtTime(shot, 69, 2300).state.depthOfField.target.z).toBeCloseTo(0.8);
+    });
+
     it('6. Filters and orders active effects passes', () => {
       const shot = createDefaultShot();
       shot.effects.bloom.enabled = true;
@@ -121,5 +110,3 @@ describe('evaluateEffects', () => {
     });
   });
 });
-
-it('larger f-numbers reduce depth-of-field blur', () => { const d={...createDefaultShot().effects.depthOfField,enabled:true}; expect(calculateLayerDofBlurPx(2,{...d,aperture:2})).toBeGreaterThan(calculateLayerDofBlurPx(2,{...d,aperture:8})); });

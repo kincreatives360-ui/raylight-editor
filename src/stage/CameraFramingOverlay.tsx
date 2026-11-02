@@ -1,7 +1,8 @@
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import type { Shot, CameraKeyframeEndpoint, CameraBlock } from '../model/types';
 import { getArtboardDimensions, computeFramingBox } from './stageUtils';
 import { useProjectStore } from '../store/useProjectStore';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 
 interface CameraFramingOverlayProps {
@@ -20,6 +21,12 @@ const CORNER_HANDLES: { dir: CornerDir; cursor: string; style: React.CSSProperti
     { dir: 'se', cursor: 'nwse-resize', style: { left: '100%', top: '100%', transform: 'translate(-50%, -50%)' } },
     { dir: 'sw', cursor: 'nesw-resize', style: { left: 0, top: '100%', transform: 'translate(-50%, -50%)' } },
 ];
+const CORNER_NAMES: Record<CornerDir, string> = {
+    nw: 'northwest',
+    ne: 'northeast',
+    se: 'southeast',
+    sw: 'southwest',
+};
 
 export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     shot,
@@ -28,7 +35,13 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     frameHeight,
     canvasZoom = 1,
 }) => {
-    const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const {
+        project,
+        updateShot,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
+    } = useProjectStore();
     const { width: artboardWidth, height: artboardHeight } = getArtboardDimensions(project?.aspectRatio);
     const scaleX = frameWidth / artboardWidth;
     const scaleY = frameHeight / artboardHeight;
@@ -58,6 +71,9 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         startCornerX: number;
         startCornerY: number;
     } | null>(null);
+
+    const activeDragCleanupRef = useRef<(() => void) | null>(null);
+    useEffect(() => () => activeDragCleanupRef.current?.(), []);
 
 
 
@@ -139,13 +155,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         e.preventDefault();
         e.stopPropagation();
 
-        try {
-            e.currentTarget.setPointerCapture(e.pointerId);
-        } catch {
-            // ignore
-        }
-
-        beginDragTransaction();
+        activeDragCleanupRef.current?.();
         const ep = which === 'from' ? fromEp : toEp;
         const box = which === 'from' ? fromBox : toBox;
 
@@ -177,9 +187,24 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
             currentZoom: ep.zoom,
         });
         setSnapGuides({ xLines: [], yLines: [] });
+
+        activeDragCleanupRef.current = createPointerDragLifecycle({
+            pointerId: e.pointerId,
+            target: e.currentTarget,
+            begin: beginDragTransaction,
+            commit: commitDragTransaction,
+            cancel: cancelDragTransaction,
+            onMove: handlePointerMove,
+            onEnd: () => {
+                dragSessionRef.current = null;
+                activeDragCleanupRef.current = null;
+                setActiveDrag(null);
+                setSnapGuides({ xLines: [], yLines: [] });
+            },
+        });
     };
 
-    const handlePointerMove = (e: React.PointerEvent) => {
+    const handlePointerMove = (e: PointerEvent | MouseEvent) => {
         if (!dragSessionRef.current) return;
         e.preventDefault();
         e.stopPropagation();
@@ -263,19 +288,28 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         }
     };
 
-    const handlePointerUp = (e: React.PointerEvent) => {
-        if (!dragSessionRef.current) return;
-        try {
-            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-                e.currentTarget.releasePointerCapture(e.pointerId);
-            }
-        } catch {
-            // ignore
-        }
-        dragSessionRef.current = null;
-        setActiveDrag(null);
-        setSnapGuides({ xLines: [], yLines: [] });
-        commitDragTransaction();
+    const handlePanKeyDown = (e: React.KeyboardEvent, which: 'from' | 'to') => {
+        const ep = which === 'from' ? fromEp : toEp;
+        const adjustments: Record<string, Partial<CameraKeyframeEndpoint>> = {
+            ArrowLeft: { anchorX: ep.anchorX - 1 },
+            ArrowRight: { anchorX: ep.anchorX + 1 },
+            ArrowUp: { anchorY: ep.anchorY + 1 },
+            ArrowDown: { anchorY: ep.anchorY - 1 },
+        };
+        const patch = adjustments[e.key];
+        if (!patch) return;
+        e.preventDefault();
+        patchEndpoint(which, patch);
+    };
+
+    const handleResizeKeyDown = (e: React.KeyboardEvent, which: 'from' | 'to') => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const ep = which === 'from' ? fromEp : toEp;
+        const direction = e.key === 'ArrowRight' || e.key === 'ArrowUp' ? 1 : -1;
+        const nextZoom = Math.max(0.2, Math.min(5, Number((ep.zoom + direction * 0.01).toFixed(2))));
+        patchEndpoint(which, { zoom: nextZoom });
     };
 
 
@@ -321,10 +355,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     height: `${fromBox.height}px`,
                 }}
                 onPointerDown={(e) => handleStartDrag(e, 'from', 'pan')}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onLostPointerCapture={handlePointerUp}
+                onKeyDown={(e) => handlePanKeyDown(e, 'from')}
+                role="group"
+                tabIndex={0}
+                aria-label="From camera framing; use arrow keys to pan"
                 className={`absolute border-2 border-dashed border-emerald-400/90 bg-emerald-500/[0.03] rounded-none pointer-events-auto cursor-move transition-shadow ${
                     activeDrag?.which === 'from' ? 'ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/10' : ''
                 }`}
@@ -341,12 +375,12 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         key={`from-${h.dir}`}
                         style={{ ...h.style, cursor: h.cursor }}
                         onPointerDown={(e) => handleStartDrag(e, 'from', 'resize', h.dir)}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerCancel={handlePointerUp}
-                        onLostPointerCapture={handlePointerUp}
+                        onKeyDown={(e) => handleResizeKeyDown(e, 'from')}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Resize From camera framing ${CORNER_NAMES[h.dir]}`}
                         title={`Drag to scale From framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-white border-2 border-emerald-400 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
+                        className="absolute w-3 h-3 rounded-xs bg-white border-2 border-emerald-400 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 
@@ -369,10 +403,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     height: `${toBox.height}px`,
                 }}
                 onPointerDown={(e) => handleStartDrag(e, 'to', 'pan')}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onLostPointerCapture={handlePointerUp}
+                onKeyDown={(e) => handlePanKeyDown(e, 'to')}
+                role="group"
+                tabIndex={0}
+                aria-label="To camera framing; use arrow keys to pan"
                 className={`absolute border-2 border-solid border-emerald-400/90 bg-emerald-500/[0.03] rounded-none pointer-events-auto cursor-move transition-shadow ${
                     activeDrag?.which === 'to' ? 'ring-2 ring-emerald-400/40 shadow-lg shadow-emerald-500/10' : ''
                 }`}
@@ -389,12 +423,12 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         key={`to-${h.dir}`}
                         style={{ ...h.style, cursor: h.cursor }}
                         onPointerDown={(e) => handleStartDrag(e, 'to', 'resize', h.dir)}
-                        onPointerMove={handlePointerMove}
-                        onPointerUp={handlePointerUp}
-                        onPointerCancel={handlePointerUp}
-                        onLostPointerCapture={handlePointerUp}
+                        onKeyDown={(e) => handleResizeKeyDown(e, 'to')}
+                        role="button"
+                        tabIndex={0}
+                        aria-label={`Resize To camera framing ${CORNER_NAMES[h.dir]}`}
                         title={`Drag to scale To framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-white border-2 border-emerald-400 shadow-md hover:scale-130 active:scale-140 hover:bg-white pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
+                        className="absolute w-3 h-3 rounded-xs bg-white border-2 border-emerald-400 shadow-md hover:scale-130 active:scale-140 hover:bg-white pointer-events-auto transition-transform touch-none focus-visible:outline focus-visible:outline-2 focus-visible:outline-emerald-300 after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 

@@ -3,7 +3,7 @@ import { Camera, ChevronDown, Crosshair, Pin, RefreshCw } from 'lucide-react';
 import * as THREE from 'three';
 import type { EvaluatedCamera } from '../engine/evaluateCamera';
 import { evaluateCameraPose, type DefaultCameraConfig } from './webgl/cameraMath';
-import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
+import { CAMERA_ANGLE_VIEWS, CANVAS_ZOOM_LEVELS } from './cameraAngleViews';
 
 export function OrbitCameraFrustum({ camera, observer, reference, width, height }: { camera: EvaluatedCamera; observer: EvaluatedCamera; reference: DefaultCameraConfig; width: number; height: number }) {
     const aspect = width / Math.max(1, height);
@@ -53,13 +53,12 @@ export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZo
     return <div ref={root} aria-label="Orbit camera controls" onMouseDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} className="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-50 flex items-center rounded-2xl bg-[#242424] p-1 text-[#eeeeee] shadow-lg whitespace-nowrap">
         <div className="relative">
             <button className={button} aria-expanded={menu === 'angle'} aria-haspopup="menu" onClick={() => setMenu(menu === 'angle' ? null : 'angle')}><Crosshair size={16} />Angle<ChevronDown size={12} /></button>
-            {menu === 'angle' && <div role="menu" aria-label="Camera angle" className="absolute bottom-full left-0 mb-2 w-44 rounded-2xl bg-[#242424] p-2 shadow-xl">{CAMERA_ANGLE_VIEWS.map(view => <button role="menuitem" key={view.id} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:bg-white/10" onClick={() => { onAngle(view.orbit, view.tilt, view.roll); setMenu(null); }}>{view.label}</button>)}</div>}
+            {menu === 'angle' && <div role="menu" aria-label="Camera angle" className="absolute bottom-full left-0 mb-2 max-h-[min(70vh,24rem)] w-44 overflow-y-auto overscroll-contain rounded-2xl bg-[#242424] p-2 shadow-xl">{CAMERA_ANGLE_VIEWS.map(view => <button role="menuitem" key={view.id} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:bg-white/10" onClick={() => { onAngle(view.orbit, view.tilt, view.roll); setMenu(null); }}>{view.label}</button>)}</div>}
         </div>
         <button className={button} aria-pressed={pinned} onClick={onPin}><Pin size={16} fill={pinned ? 'currentColor' : 'none'} />Pin</button>
         <button className={button} onClick={onBack}><Camera size={16} />Back to camera</button>
         <div className="relative"><button className={button} aria-label="Viewport zoom" aria-expanded={menu === 'zoom'} onClick={() => setMenu(menu === 'zoom' ? null : 'zoom')}><RefreshCw size={15} />{Math.round(zoom * 100)}%</button>
-            {menu === 'zoom' && <div className="absolute bottom-full right-0 mb-2 w-28 rounded-xl bg-[#242424] p-2 shadow-xl">{[0.25, 0.5, 0.74, 1, 1.5, 2].map(value => <button key={value} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10" onClick={() => { onZoom(value); setMenu(null); }}>{Math.round(value * 100)}%</button>)}</div>}
+            {menu === 'zoom' && <div className="absolute bottom-full right-0 mb-2 w-28 rounded-xl bg-[#242424] p-2 shadow-xl">{CANVAS_ZOOM_LEVELS.map(value => <button key={value} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10" onClick={() => { onZoom(value); setMenu(null); }}>{Math.round(value * 100)}%</button>)}</div>}
         </div>
     </div>;
 }
-

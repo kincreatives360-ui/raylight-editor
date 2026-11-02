@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, getBokehOffsets, installLayerEffects, drawLayerHalo, applyMotionBlur, createWarpGeometry } from './layerEffects';
+import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, installLayerEffects, drawLayerHalo, applyMotionBlur, createWarpGeometry } from './layerEffects';
 import { canvasPool } from '../../engine/canvasPool';
 
 describe('layer effect rendering', () => {
@@ -28,15 +28,6 @@ describe('layer effect rendering', () => {
   afterEach(() => {
     canvasPool.clear();
     (globalThis as unknown as { document?: unknown }).document = origDocument;
-  });
-
-  it('uses distinct bokeh kernels, with anamorphic horizontal elongation', () => {
-    const spherical = getBokehOffsets('spherical');
-    const anamorphic = getBokehOffsets('anamorphic');
-    expect(anamorphic[0].x).toBe(spherical[0].x * 2);
-    expect(anamorphic[1].y).toBe(spherical[1].y * .5);
-    expect(getBokehOffsets('vintage')).not.toEqual(spherical);
-    expect(getBokehOffsets('portrait')).not.toEqual(spherical);
   });
 
   it('reserves halo space for both blur and signed shadow offsets', () => {

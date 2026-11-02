@@ -436,7 +436,6 @@ export default function App() {
                 showSafeArea={showSafeArea}
                 snapEnabled={true}
                 onToggleSafeArea={handleToggleSafeArea}
-                onOpenShortcuts={handleOpenShortcuts}
               />
             </Suspense>
           </StageErrorBoundary>

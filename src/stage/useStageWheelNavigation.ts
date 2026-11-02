@@ -13,6 +13,7 @@ interface UseStageWheelNavigationOptions {
     selectedCameraBlockId: string | null;
     beginDragTransaction: () => void;
     commitDragTransaction: () => void;
+    cancelDragTransaction: () => void;
     updateActiveShotCamera: (patch: { zoom?: number }) => void;
     setCanvasZoom: SetCanvasZoom;
     setCanvasPan: SetCanvasPan;
@@ -25,6 +26,7 @@ export function useStageWheelNavigation({
     selectedCameraBlockId,
     beginDragTransaction,
     commitDragTransaction,
+    cancelDragTransaction,
     updateActiveShotCamera,
     setCanvasZoom,
     setCanvasPan,
@@ -32,7 +34,6 @@ export function useStageWheelNavigation({
     useEffect(() => {
         const element = containerRef.current;
         if (!element) return;
-
         const handleWheel = (event: WheelEvent) => {
             const target = event.target as HTMLElement | null;
             if (target?.closest?.('[aria-label="Orbit camera controls"]')) return;
@@ -74,6 +75,7 @@ export function useStageWheelNavigation({
         activeTool,
         beginDragTransaction,
         commitDragTransaction,
+        cancelDragTransaction,
         containerRef,
         frame.activeShot,
         frame.camera.zoom,

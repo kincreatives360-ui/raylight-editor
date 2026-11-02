@@ -1,8 +1,8 @@
-import type { Dispatch, RefObject, SetStateAction } from 'react';
-import type { PerspectiveCamera } from 'three';
+import type { Dispatch, SetStateAction } from 'react';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { Project } from '../model/types';
 import type { SnapGuideLine } from './stageUtils';
+import type { EvaluatedCameraPose } from './webgl/cameraMath';
 import { Guides } from './Guides';
 import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
@@ -37,15 +37,12 @@ interface StageInteractionOverlayStackProps {
     showSafeArea: boolean;
     activeGuides: SnapGuideLine[];
     setActiveGuides: Dispatch<SetStateAction<SnapGuideLine[]>>;
-    handleSelectLayer: (layerId: string, multiSelect?: boolean) => void;
-    cameraRef: RefObject<PerspectiveCamera | null>;
+    handleSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;
-    dofFocusActive: boolean;
-    dofFocusIndicator: { x: number; y: number } | null;
-    stageFrameRef: RefObject<HTMLDivElement | null>;
-    onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
+    targetAspect: number;
+    cameraPose: EvaluatedCameraPose;
 }
 
 export function StageInteractionOverlayStack({
@@ -62,14 +59,11 @@ export function StageInteractionOverlayStack({
     activeGuides,
     setActiveGuides,
     handleSelectLayer,
-    cameraRef,
     referenceCamera,
     drawBox,
     marqueeBox,
-    dofFocusActive,
-    dofFocusIndicator,
-    stageFrameRef,
-    onFocusClick,
+    targetAspect,
+    cameraPose,
 }: StageInteractionOverlayStackProps) {
     return (
         <>
@@ -133,14 +127,14 @@ export function StageInteractionOverlayStack({
                 snapEnabled={snapEnabled}
                 onUpdateGuides={setActiveGuides}
                 onSelectLayer={handleSelectLayer}
-                cameraRef={cameraRef}
             />
 
             <DepthOfFieldFocusOverlay
-                active={dofFocusActive}
-                indicator={dofFocusIndicator}
-                stageFrameRef={stageFrameRef}
-                onFocusClick={onFocusClick}
+                frame={frame}
+                frameWidth={frameWidth}
+                frameHeight={frameHeight}
+                targetAspect={targetAspect}
+                cameraPose={cameraPose}
             />
 
             <LightingOverlay

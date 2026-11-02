@@ -29,6 +29,18 @@ describe('lightingSystem', () => {
     expect(resolved.sources).toHaveLength(5);
   });
 
+  it('excludes disabled sources while preserving enabled sources', () => {
+    const resolved = resolveLighting({
+      ...rig,
+      sources: rig.sources.map(light =>
+        light.id === 'spot' ? { ...light, enabled: false } : light
+      ),
+    });
+
+    expect(resolved.sources.map(({ id }) => id)).not.toContain('spot');
+    expect(resolved.sources.map(({ id }) => id)).toContain('point');
+  });
+
   it('allows both ambient illumination and environment reflections to reach zero', () => {
     const resolved = resolveLighting({ ...rig, ambience: 0 });
     expect(resolved.room.intensity).toBe(0);

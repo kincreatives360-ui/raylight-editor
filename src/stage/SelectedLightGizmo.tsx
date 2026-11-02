@@ -46,6 +46,12 @@ interface SelectedLightGizmoProps {
     onPointReachDragStart: (e: React.PointerEvent) => void;
     onDepthDragStart: (e: React.PointerEvent) => void;
     onSourceDragStart: (e: React.PointerEvent) => void;
+    onSourceKeyDown: (e: React.KeyboardEvent) => void;
+    onTargetKeyDown: (e: React.KeyboardEvent) => void;
+    onDepthKeyDown: (e: React.KeyboardEvent) => void;
+    onSpotConeKeyDown: (e: React.KeyboardEvent) => void;
+    onAreaResizeKeyDown: (e: React.KeyboardEvent) => void;
+    onPointReachKeyDown: (e: React.KeyboardEvent) => void;
 }
 
 
@@ -62,6 +68,12 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
     onPointReachDragStart,
     onDepthDragStart,
     onSourceDragStart,
+    onSourceKeyDown,
+    onTargetKeyDown,
+    onDepthKeyDown,
+    onSpotConeKeyDown,
+    onAreaResizeKeyDown,
+    onPointReachKeyDown,
 }) => {
     const srcScreen = projectLightToScreen(
         selectedLight.position,
@@ -164,8 +176,12 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                     {/* Aim At Target Handle */}
                     <g
                         data-testid="selected-light-target-handle"
-                        className="pointer-events-auto cursor-grab active:cursor-grabbing group"
+                        role="group"
+                        tabIndex={0}
+                        aria-label={`Aim ${selectedLight.name} light target with arrow keys`}
+                        className="pointer-events-auto cursor-grab active:cursor-grabbing group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                         onPointerDown={onTargetDragStart}
+                        onKeyDown={onTargetKeyDown}
                         transform={`translate(${tgtScreen.x}, ${tgtScreen.y})`}
                     >
                         <circle
@@ -219,7 +235,14 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                     {spotCone.rimPoints.length > 0 && (
                         <g
                             data-testid="spot-cone-handle"
-                            className="pointer-events-auto cursor-ew-resize group"
+                            role="slider"
+                            tabIndex={0}
+                            aria-label={`Adjust ${selectedLight.name} cone angle`}
+                            aria-valuemin={Number((0.08 * 180 / Math.PI).toFixed(0))}
+                            aria-valuemax={Number(((Math.PI / 2 - 0.08) * 180 / Math.PI).toFixed(0))}
+                            aria-valuenow={Number(((selectedLight.angle || Math.PI / 6) * 180 / Math.PI).toFixed(0))}
+                            aria-valuetext={`${Number(((selectedLight.angle || Math.PI / 6) * 180 / Math.PI).toFixed(0))} degrees`}
+                            className="pointer-events-auto cursor-ew-resize group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                             onPointerDown={(e) =>
                                 onSpotConeDragStart(
                                     e,
@@ -229,6 +252,7 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                                     spotCone.rimPoints[0].y
                                 )
                             }
+                            onKeyDown={onSpotConeKeyDown}
                             transform={`translate(${spotCone.rimPoints[0].x}, ${spotCone.rimPoints[0].y})`}
                         >
                             <circle
@@ -254,8 +278,12 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                     {/* Area Corner Resize Handle */}
                     <g
                         data-testid="area-resize-handle"
-                        className="pointer-events-auto cursor-nwse-resize group"
+                        role="group"
+                        tabIndex={0}
+                        aria-label={`Adjust ${selectedLight.name} light size with arrow keys`}
+                        className="pointer-events-auto cursor-nwse-resize group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                         onPointerDown={onAreaResizeDragStart}
+                        onKeyDown={onAreaResizeKeyDown}
                         transform={`translate(${areaRect.corners[1].x}, ${areaRect.corners[1].y})`}
                     >
                         <rect
@@ -287,8 +315,15 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
                     {/* Point Reach Perimeter Handle */}
                     <g
                         data-testid="point-reach-handle"
-                        className="pointer-events-auto cursor-ew-resize group"
+                        role="spinbutton"
+                        tabIndex={0}
+                        aria-label={`Adjust ${selectedLight.name} light reach`}
+                        aria-valuemin={0.5}
+                        aria-valuenow={selectedLight.distance || 5}
+                        aria-valuetext={`${selectedLight.distance || 5} meters`}
+                        className="pointer-events-auto cursor-ew-resize group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                         onPointerDown={onPointReachDragStart}
+                        onKeyDown={onPointReachKeyDown}
                         transform={`translate(${pointReach.edgeScreen.x}, ${pointReach.edgeScreen.y})`}
                     >
                         <circle
@@ -303,8 +338,16 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
             {/* Dedicated Depth (Z) Handle */}
             <g
                 data-testid="selected-light-depth-handle"
-                className="pointer-events-auto cursor-ns-resize group"
+                role="slider"
+                tabIndex={0}
+                aria-label={`Adjust ${selectedLight.name} light depth`}
+                aria-valuemin={0.1}
+                aria-valuemax={5}
+                aria-valuenow={selectedLight.position.z}
+                aria-valuetext={`${selectedLight.position.z.toFixed(2)} meters`}
+                className="pointer-events-auto cursor-ns-resize group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 onPointerDown={onDepthDragStart}
+                onKeyDown={onDepthKeyDown}
                 transform={`translate(${srcScreen.x}, ${srcScreen.y - 32})`}
             >
                 <line
@@ -358,8 +401,12 @@ export const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
             {/* Prominent Selected Light Source Handle */}
             <g
                 data-testid="selected-light-source-handle"
-                className="pointer-events-auto cursor-grab active:cursor-grabbing group"
+                role="group"
+                tabIndex={0}
+                aria-label={`Move ${selectedLight.name} light source with arrow keys`}
+                className="pointer-events-auto cursor-grab active:cursor-grabbing group focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
                 onPointerDown={onSourceDragStart}
+                onKeyDown={onSourceKeyDown}
                 transform={`translate(${srcScreen.x}, ${srcScreen.y})`}
             >
                 <circle

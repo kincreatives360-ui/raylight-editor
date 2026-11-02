@@ -6,19 +6,28 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
+import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
+import { DepthOfFieldEffect, EffectPass } from 'postprocessing';
 import { renderSceneFrame } from './sceneRenderLoop';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
+import { resolveDepthOfFieldWorldTarget } from './depthOfFieldTarget';
 import {
     createSceneEffectPass,
     configureSceneEffectPass,
     createOutputEncodingPass,
 } from './sceneEffectPasses';
+import {
+    configureDepthOfFieldEffect,
+    createDepthOfFieldPass,
+    ThreeComposerEffectPass,
+} from './depthOfFieldPass';
 
 interface SceneEffectsPipelineProps {
     effects: EvaluatedEffects;
     outgoingEffects?: EvaluatedEffects;
     transitionProgress?: number;
+    focusSubjectPosition?: THREE.Vector3;
 }
 
 function blendEvaluatedEffects(
@@ -123,7 +132,7 @@ export function shouldRebuildPassList(activePassKey: string | null, currentPassK
     return passCount === 0 || activePassKey !== currentPassKey;
 }
 
-export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress }) => {
+export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress, focusSubjectPosition }) => {
     const effectiveEffects = (outgoingEffects && transitionProgress !== undefined && transitionProgress < 1)
         ? blendEvaluatedEffects(outgoingEffects, effects, transitionProgress)
         : effects;
@@ -131,7 +140,12 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     const dpr = useThree((state) => state.viewport.dpr);
     const composerRef = useRef<EffectComposer | null>(null);
     const renderPassRef = useRef<RenderPass | null>(null);
-    const passMapRef = useRef<Map<EffectKey, ShaderPass>>(new Map());
+    const passMapRef = useRef<Map<EffectKey, Pass>>(new Map());
+    const depthOfFieldPassRef = useRef<{
+        pass: EffectPass;
+        effect: DepthOfFieldEffect;
+        adapter: ThreeComposerEffectPass;
+    } | null>(null);
     const encodingPassRef = useRef<ShaderPass | null>(null);
     const fxaaPassRef = useRef<FXAAPass | null>(null);
 
@@ -167,11 +181,15 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         const passMap = passMapRef.current;
         return () => {
-            depthTexture.dispose();
             fxaaPass.material.dispose();
             encodingPass.material.dispose();
-            passMap.forEach((p) => p.material.dispose());
+            passMap.forEach((pass) => {
+                if (pass instanceof ShaderPass) pass.material.dispose();
+                else pass.dispose();
+            });
             passMap.clear();
+            depthOfFieldPassRef.current = null;
+            depthTexture.dispose();
             composer.dispose();
             composerRef.current = null;
             renderPassRef.current = null;
@@ -214,14 +232,42 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             for (const { key } of effectiveEffects.orderedEnabledPasses) {
                 let pass = passMapRef.current.get(key);
                 if (!pass) {
-                    pass = createSceneEffectPass(key);
+                    if (key === 'depthOfField') {
+                        const { pass: effectPass, effect } = createDepthOfFieldPass(
+                            camera,
+                            composer.renderTarget1.depthTexture as THREE.DepthTexture
+                        );
+                        effectPass.initialize(
+                            gl,
+                            gl.getContextAttributes()?.alpha ?? true,
+                            composer.renderTarget1.texture.type
+                        );
+                        const adapter = new ThreeComposerEffectPass(effectPass);
+                        pass = adapter;
+                        depthOfFieldPassRef.current = { pass: effectPass, effect, adapter };
+                    } else {
+                        pass = createSceneEffectPass(key);
+                    }
                     passMapRef.current.set(key, pass);
                 }
                 pass.renderToScreen = false;
-                if (pass.uniforms.tDepth) {
-                    pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
+                if (pass instanceof ShaderPass) {
+                    if (pass.uniforms.tDepth) {
+                        pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
+                    }
+                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                } else {
+                    const dofBundle = depthOfFieldPassRef.current;
+                    if (dofBundle) {
+                        dofBundle.pass.mainCamera = camera;
+                        const focusTarget = resolveDepthOfFieldWorldTarget(
+                            camera,
+                            effectiveEffects.state.depthOfField.target,
+                            focusSubjectPosition
+                        );
+                        configureDepthOfFieldEffect(dofBundle.effect, effectiveEffects.state.depthOfField, focusTarget);
+                    }
                 }
-                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
                 composer.addPass(pass);
             }
 
@@ -236,15 +282,43 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             // Uniform-only fast path: update in place without rebuilding passes graph
             for (const { key } of effectiveEffects.orderedEnabledPasses) {
                 const pass = passMapRef.current.get(key);
-                if (pass) {
+                if (pass instanceof ShaderPass) {
                     if (pass.uniforms.tDepth) {
                         pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
                     }
-                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
+                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                } else if (pass) {
+                    const dofBundle = depthOfFieldPassRef.current;
+                    if (dofBundle) {
+                        dofBundle.pass.mainCamera = camera;
+                        const focusTarget = resolveDepthOfFieldWorldTarget(
+                            camera,
+                            effectiveEffects.state.depthOfField.target,
+                            focusSubjectPosition
+                        );
+                        configureDepthOfFieldEffect(dofBundle.effect, effectiveEffects.state.depthOfField, focusTarget);
+                    }
                 }
             }
         }
-    }, [effectiveEffects, gl, scene, camera, size.width, size.height, dpr, camera.position.x, camera.position.y]);
+    }, [
+        effectiveEffects,
+        gl,
+        scene,
+        camera,
+        size.width,
+        size.height,
+        dpr,
+        camera.near,
+        camera.far,
+        camera.position.x,
+        camera.position.y,
+        camera.position.z,
+        camera.rotation.x,
+        camera.rotation.y,
+        camera.rotation.z,
+        focusSubjectPosition,
+    ]);
 
     // Deterministic frame render with resilient fallback
     useFrame(() => {

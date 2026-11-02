@@ -1,5 +1,5 @@
 // src/engine/evaluateEffects.ts
-import type { Shot, Effects, EffectKey } from '../model/types';
+import type { FocusBlock, Shot, EffectKey } from '../model/types';
 
 import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
 import { evaluateEasing } from './easing';
@@ -41,29 +41,6 @@ export function resolveDepthOfFieldFocusZ(
     return 0;
 }
 
-// Pure Function: Calculates exact Depth-of-Field blur in pixels for a layer at layerZ
-export function calculateLayerDofBlurPx(
-    layerZ: number,
-    dof: Effects['depthOfField']
-): number {
-    if (!dof.enabled) return 0;
-
-    const distanceToFocus = Math.abs(layerZ - dof.target.z);
-    const halfFocusZone = dof.focusRange * 0.5;
-
-    // Inside the sharp focus range -> 0 blur
-    if (distanceToFocus <= halfFocusZone) return 0;
-
-    const outOfFocusDist = distanceToFocus - halfFocusZone;
-    // Circle of Confusion scaled by aperture, bokehScale, and focalLength
-    const lensFactor = (dof.focalLength ?? 50) / 50;
-    const rawBlur =
-        outOfFocusDist * (2.8 * 2.8 / Math.max(0.1, dof.aperture)) * dof.bokehScale * lensFactor * 1.6;
-
-    if (!Number.isFinite(rawBlur)) return 0;
-    return Number(Math.min(40, Math.max(0, rawBlur)).toFixed(2));
-}
-
 // Pure Function: Evaluates the 10-effect chain and deterministic frame seed
 export function evaluateEffectsAtTime(
     shot: Shot,
@@ -75,16 +52,31 @@ export function evaluateEffectsAtTime(
     // Animate depth of field target.z if focusBlocks are configured (Rack Focus)
     if (shot.focusBlocks && shot.focusBlocks.length > 0 && effects.depthOfField.enabled) {
         let activeZ = effects.depthOfField.target.z;
+        let latestBlock: {
+            fromZ: number;
+            toZ: number;
+            easing: FocusBlock['easing'];
+            startMs: number;
+            durationMs: number;
+        } | null = null;
         for (const original of shot.focusBlocks) {
-            const fb = {...original, startMs: original.sourceStartMs ?? original.startMs, durationMs: original.sourceDurationMs ?? original.durationMs};
-            if (shotLocalTimeMs >= fb.startMs && shotLocalTimeMs <= fb.startMs + fb.durationMs) {
-                const raw = (shotLocalTimeMs - fb.startMs) / Math.max(1, fb.durationMs);
-                const progress = evaluateEasing(raw, fb.easing);
-                activeZ = fb.fromZ + (fb.toZ - fb.fromZ) * progress;
-                break;
-            } else if (shotLocalTimeMs > fb.startMs + fb.durationMs) {
-                activeZ = fb.toZ;
-            }
+            const startMs = original.sourceStartMs ?? original.startMs;
+            if (startMs > shotLocalTimeMs || (latestBlock && startMs < latestBlock.startMs)) continue;
+            latestBlock = {
+                fromZ: original.fromZ,
+                toZ: original.toZ,
+                easing: original.easing,
+                startMs,
+                durationMs: original.sourceDurationMs ?? original.durationMs,
+            };
+        }
+        if (latestBlock) {
+            const raw = Math.max(0, Math.min(
+                1,
+                (shotLocalTimeMs - latestBlock.startMs) / Math.max(1, latestBlock.durationMs)
+            ));
+            const progress = evaluateEasing(raw, latestBlock.easing);
+            activeZ = latestBlock.fromZ + (latestBlock.toZ - latestBlock.fromZ) * progress;
         }
         effects = {
             ...effects,

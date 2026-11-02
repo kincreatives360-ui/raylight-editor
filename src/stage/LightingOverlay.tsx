@@ -21,6 +21,7 @@ import {
     type Vec3Like,
 } from './lightingMath';
 import { createVirtualCamera } from './lightingMath';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 interface LightingOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -33,7 +34,13 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     frameWidth,
     frameHeight,
 }) => {
-    const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const {
+        project,
+        updateShot,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
+    } = useProjectStore();
     const { selectedLightId, selectLight, canvasZoom, activeLightTool, setActiveLightTool } = useSelectionStore();
 
     const activeShot = frame.activeShot;
@@ -68,7 +75,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             temperature: shotLight?.temperature ?? 6100,
         };
 
-        const sources: UnifiedLight[] = (shotLight?.sources || []).map((s) => ({
+        const sources: UnifiedLight[] = (shotLight?.sources || []).filter((s) => s.enabled).map((s) => ({
             id: s.id,
             name: s.name || s.type,
             type: s.type,
@@ -185,6 +192,113 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         }
     }, [selectedLightId, activeShot, updateShot]);
 
+    const updateLightFromKeyboard = useCallback((patch: Partial<SceneLight>) => {
+        beginDragTransaction();
+        updateLight(patch);
+        commitDragTransaction();
+    }, [beginDragTransaction, commitDragTransaction, updateLight]);
+
+    const keyboardScreenDelta = useCallback((event: React.KeyboardEvent) => {
+        switch (event.key) {
+            case 'ArrowLeft': return { dx: -10, dy: 0 };
+            case 'ArrowRight': return { dx: 10, dy: 0 };
+            case 'ArrowUp': return { dx: 0, dy: -10 };
+            case 'ArrowDown': return { dx: 0, dy: 10 };
+            default: return null;
+        }
+    }, []);
+
+    const handleSourceKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight) return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const delta = unprojectScreenDeltaToLightDelta(
+            screenDelta.dx / canvasZoom,
+            screenDelta.dy / canvasZoom,
+            selectedLight.position,
+            cameraPose,
+            frameWidth,
+            frameHeight,
+            aspect
+        );
+        updateLightFromKeyboard({
+            position: {
+                x: Number((selectedLight.position.x + delta.dx).toFixed(3)),
+                y: Number((selectedLight.position.y + delta.dy).toFixed(3)),
+                z: selectedLight.position.z,
+            },
+        });
+    }, [selectedLight, keyboardScreenDelta, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, updateLightFromKeyboard]);
+
+    const handleTargetKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight) return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const target = selectedLight.target || { x: 0, y: 0, z: 0 };
+        const delta = unprojectScreenDeltaToLightDelta(
+            screenDelta.dx / canvasZoom,
+            screenDelta.dy / canvasZoom,
+            target,
+            cameraPose,
+            frameWidth,
+            frameHeight,
+            aspect
+        );
+        updateLightFromKeyboard({
+            target: {
+                x: Number((target.x + delta.dx).toFixed(3)),
+                y: Number((target.y + delta.dy).toFixed(3)),
+                z: target.z,
+            },
+        });
+    }, [selectedLight, keyboardScreenDelta, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, updateLightFromKeyboard]);
+
+    const handleDepthKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')) return;
+        event.preventDefault();
+        const deltaY = event.key === 'ArrowUp' ? -10 : 10;
+        updateLightFromKeyboard({
+            position: {
+                ...selectedLight.position,
+                z: calculateDepthDeltaFromScreen(deltaY, selectedLight.position.z),
+            },
+        });
+    }, [selectedLight, updateLightFromKeyboard]);
+
+    const handleSpotConeKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'spot') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const direction = screenDelta.dx < 0 || screenDelta.dy > 0 ? -1 : 1;
+        const angle = selectedLight.angle ?? Math.PI / 6;
+        updateLightFromKeyboard({ angle: Number(Math.max(0.08, Math.min(Math.PI / 2 - 0.08, angle + direction * 0.02)).toFixed(3)) });
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
+    const handleAreaResizeKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'area') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        if (screenDelta.dx !== 0) {
+            updateLightFromKeyboard({ width: Number(Math.max(0.4, (selectedLight.width ?? 3) + Math.sign(screenDelta.dx) * 0.1).toFixed(2)) });
+        } else {
+            updateLightFromKeyboard({ height: Number(Math.max(0.4, (selectedLight.height ?? 3) - Math.sign(screenDelta.dy) * 0.1).toFixed(2)) });
+        }
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
+    const handlePointReachKeyDown = useCallback((event: React.KeyboardEvent) => {
+        if (!selectedLight || selectedLight.type !== 'point') return;
+        const screenDelta = keyboardScreenDelta(event);
+        if (!screenDelta) return;
+        event.preventDefault();
+        const direction = screenDelta.dx < 0 || screenDelta.dy > 0 ? -1 : 1;
+        const distance = selectedLight.distance ?? 5;
+        updateLightFromKeyboard({ distance: Number(Math.max(0.5, distance + direction * 0.1).toFixed(2)) });
+    }, [selectedLight, keyboardScreenDelta, updateLightFromKeyboard]);
+
     const activeDragCleanupRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
@@ -196,32 +310,22 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     }, []);
 
     const startDrag = useCallback(
-        (onMove: (moveEv: PointerEvent) => void) => {
-            if (activeDragCleanupRef.current) {
-                activeDragCleanupRef.current();
-            }
-
-            beginDragTransaction();
-
-            const cleanup = () => {
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', handleEnd);
-                window.removeEventListener('pointercancel', handleEnd);
-                activeDragCleanupRef.current = null;
-                setActiveDepthDrag(null);
-                commitDragTransaction();
-            };
-
-            const handleEnd = () => {
-                cleanup();
-            };
-
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', handleEnd);
-            window.addEventListener('pointercancel', handleEnd);
-            activeDragCleanupRef.current = cleanup;
+        (event: React.PointerEvent, onMove: (moveEv: PointerEvent | MouseEvent) => void) => {
+            activeDragCleanupRef.current?.();
+            activeDragCleanupRef.current = createPointerDragLifecycle({
+                pointerId: event.pointerId,
+                target: event.currentTarget,
+                begin: beginDragTransaction,
+                commit: commitDragTransaction,
+                cancel: cancelDragTransaction,
+                onMove,
+                onEnd: () => {
+                    activeDragCleanupRef.current = null;
+                    setActiveDepthDrag(null);
+                },
+            });
         },
-        [beginDragTransaction, commitDragTransaction]
+        [beginDragTransaction, commitDragTransaction, cancelDragTransaction]
     );
 
     // Depth (Z) Drag Handler
@@ -234,7 +338,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startZ = selectedLight.position.z ?? 1.0;
         setActiveDepthDrag(startZ);
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
             const nextZ = calculateDepthDeltaFromScreen(deltaPxY, startZ);
             setActiveDepthDrag(nextZ);
@@ -246,7 +350,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
     // Drag handlers
@@ -265,7 +369,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             return;
         }
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaScreenX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaScreenY = (moveEv.clientY - startClientY) / canvasZoom;
 
@@ -288,7 +392,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, handleDepthDragStart, startDrag, updateLight]);
 
     const handleTargetDragStart = useCallback((e: React.PointerEvent) => {
@@ -300,7 +404,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startClientY = e.clientY;
         const startTargetPos = { ...(selectedLight.target || { x: 0, y: 0, z: 0 }) };
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaScreenX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaScreenY = (moveEv.clientY - startClientY) / canvasZoom;
 
@@ -323,7 +427,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, startDrag, updateLight]);
 
     // Spot Cone Angle Drag
@@ -355,7 +459,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             const ux = dx / rScreen0;
             const uy = dy / rScreen0;
 
-            const onPointerMove = (moveEv: PointerEvent) => {
+            const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
                 const deltaPxX = (moveEv.clientX - startClientX) / canvasZoom;
                 const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
                 const signedDeltaR = deltaPxX * ux + deltaPxY * uy;
@@ -368,7 +472,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                 updateLight({ angle: Number(newAngle.toFixed(3)) });
             };
 
-            startDrag(onPointerMove);
+            startDrag(e, onPointerMove);
         },
         [selectedLight, canvasZoom, frameWidth, startDrag, updateLight]
     );
@@ -384,7 +488,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startW = selectedLight.width || 3;
         const startH = selectedLight.height || 3;
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPxX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
             const scaleFactor = 0.01;
@@ -395,7 +499,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             updateLight({ width: nextW, height: nextH });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
     // Point Reach Drag
@@ -407,17 +511,17 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startClientX = e.clientX;
         const startDist = selectedLight.distance || 5;
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPx = (moveEv.clientX - startClientX) / canvasZoom;
             const scaleFactor = 0.02;
             const nextDist = Math.max(0.5, Number((startDist + deltaPx * scaleFactor).toFixed(2)));
             updateLight({ distance: nextDist });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
-    if (!showGizmos && !selectedLightId && !activeLightTool) {
+    if (!showGizmos && !selectedLight && !activeLightTool) {
         return null;
     }
 
@@ -434,7 +538,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             >
                 {activeLightTool && <rect x={0} y={0} width={frameWidth} height={frameHeight} fill="transparent" pointerEvents="all" onPointerDown={placeLight} />}
                 {/* 1. Unselected Light Badges */}
-                {allLights.map((l) => {
+                {showGizmos && allLights.map((l) => {
                     if (l.id === selectedLightId) return null;
                     const posScreen = projectLightToScreen(l.position, cameraPose, frameWidth, frameHeight, aspect);
 
@@ -487,6 +591,12 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                         onPointReachDragStart={handlePointReachDragStart}
                         onDepthDragStart={handleDepthDragStart}
                         onSourceDragStart={handleSourceDragStart}
+                        onSourceKeyDown={handleSourceKeyDown}
+                        onTargetKeyDown={handleTargetKeyDown}
+                        onDepthKeyDown={handleDepthKeyDown}
+                        onSpotConeKeyDown={handleSpotConeKeyDown}
+                        onAreaResizeKeyDown={handleAreaResizeKeyDown}
+                        onPointReachKeyDown={handlePointReachKeyDown}
                     />
                 )}
             </svg>

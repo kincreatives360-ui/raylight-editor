@@ -8,7 +8,6 @@ import { useStageAssetDrop } from './useStageAssetDrop';
 import { useStagePointerInteractions } from './useStagePointerInteractions';
 import { useStageWheelNavigation } from './useStageWheelNavigation';
 import { useStageViewportModel } from './useStageViewportModel';
-import { useStageDofFocus } from './useStageDofFocus';
 import { useStageCameraUpdate } from './useStageCameraUpdate';
 import { useStageGlobalInteractions } from './useStageGlobalInteractions';
 
@@ -37,11 +36,10 @@ interface StageProps {
     project: Project;
     frame?: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean, shiftKey?: boolean) => void;
     showSafeArea?: boolean;
     snapEnabled?: boolean;
     onToggleSafeArea?: () => void;
-    onOpenShortcuts?: () => void;
 }
 
 const StageComponent: React.FC<StageProps> = ({
@@ -52,7 +50,6 @@ const StageComponent: React.FC<StageProps> = ({
     showSafeArea = true,
     snapEnabled = true,
     onToggleSafeArea,
-    onOpenShortcuts,
 }) => {
     const storeCurrentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
     const storeHoverTimeMs = usePlayheadStore((s) => s.hoverTimeMs);
@@ -70,6 +67,7 @@ const StageComponent: React.FC<StageProps> = ({
         updateLayer,
         beginDragTransaction,
         commitDragTransaction,
+        cancelDragTransaction,
     } = useProjectStore();
     const {
         activeTool,
@@ -89,10 +87,6 @@ const StageComponent: React.FC<StageProps> = ({
         setCameraBookmark,
         setGradientEditorAngle,
         selectedCameraBlockId,
-        dofFocusActive,
-        dofFocusIndicator,
-        setDofFocusActive,
-        setDofFocusIndicator,
     } = useSelectionStore();
 
     const isPlaying = usePlayheadStore((s) => s.isPlaying);
@@ -146,18 +140,6 @@ const StageComponent: React.FC<StageProps> = ({
     // ============================================================================
     const updateActiveShotCamera = useStageCameraUpdate({ frame, selectedCameraBlockId, updateShot });
 
-    useStageWheelNavigation({
-        containerRef,
-        activeTool,
-        frame,
-        selectedCameraBlockId,
-        beginDragTransaction,
-        commitDragTransaction,
-        updateActiveShotCamera,
-        setCanvasZoom,
-        setCanvasPan,
-    });
-
     const isCameraSelected = Boolean(selectedCameraBlockId);
     const {
         targetAspect,
@@ -185,18 +167,17 @@ const StageComponent: React.FC<StageProps> = ({
     const gradientShapeFrameLayer = gradientEditorLayerId
         ? frame.layers.find((layer) => layer.id === gradientEditorLayerId)
         : undefined;
-    const handleDofFocusClick = useStageDofFocus({
-        stageFrameRef,
+    useStageWheelNavigation({
+        containerRef,
+        activeTool,
         frame,
-        frameWidth,
-        frameHeight,
-        canvasZoom,
-        targetAspect,
-        cameraPose: gradientCameraPose,
-        defaultCamera: gradientReferenceCamera,
-        updateShot,
-        setDofFocusIndicator,
-        setDofFocusActive,
+        selectedCameraBlockId,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
+        updateActiveShotCamera,
+        setCanvasZoom,
+        setCanvasPan,
     });
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
@@ -296,10 +277,11 @@ const StageComponent: React.FC<StageProps> = ({
     });
     const handleSelectLayerWithDeepSelect = (
         clickedLayerId: string,
-        multiSelect?: boolean
+        multiSelect?: boolean,
+        shiftKey?: boolean
     ) => {
         if (isCreationTool) return;
-        onSelectLayer(clickedLayerId, multiSelect);
+        onSelectLayer(clickedLayerId, multiSelect, shiftKey);
     };
 
     const selectedLayer = useMemo(
@@ -466,14 +448,11 @@ const StageComponent: React.FC<StageProps> = ({
                         activeGuides={activeGuides}
                         setActiveGuides={setActiveGuides}
                         handleSelectLayer={handleSelectLayerWithDeepSelect}
-                        cameraRef={cameraRef}
                         referenceCamera={gradientReferenceCamera}
                         drawBox={drawBox}
                         marqueeBox={marqueeBox}
-                        dofFocusActive={dofFocusActive}
-                        dofFocusIndicator={dofFocusIndicator}
-                        stageFrameRef={stageFrameRef}
-                        onFocusClick={handleDofFocusClick}
+                        targetAspect={targetAspect}
+                        cameraPose={gradientCameraPose}
                     />
                 </div>
             </div>
@@ -486,9 +465,6 @@ const StageComponent: React.FC<StageProps> = ({
                 rotation={effectiveViewportFrame.camera.rotation}
                 hasSelection={selectedLayerIds.length > 0}
                 onSetOrientation={handleSetOrientation}
-                onDragStart={beginDragTransaction}
-                onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
-                onDragEnd={commitDragTransaction}
                 onReset={handleResetCamera}
                 onFrameSelection={handleFrameSelectedLayers}
                 onPin={handlePinCameraView}
@@ -517,11 +493,11 @@ const StageComponent: React.FC<StageProps> = ({
             />
             {/* FLOATING BOTTOM CANVAS TOOLBAR */}
             <CanvasToolbar
-                placement="bottom"
                 selectedLayer={selectedLayer}
+                zoom={canvasZoom}
+                onZoom={setCanvasZoom}
                 showSafeArea={showSafeArea}
                 onToggleSafeArea={onToggleSafeArea}
-                onOpenShortcuts={onOpenShortcuts}
                 onFrameSelection={handleFrameSelectedLayers}
             />
         </div>

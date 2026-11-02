@@ -4,7 +4,7 @@ import { validateProject } from '../model/schema';
 import { MAX_HISTORY_STEPS, appendHistoryState } from './projectStoreConstants';
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
 
-export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransaction' | 'commitDragTransaction' | 'undo' | 'redo' | 'resetProject' | 'loadProjectJson'> = (set) => ({
+export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransaction' | 'commitDragTransaction' | 'cancelDragTransaction' | 'undo' | 'redo' | 'resetProject' | 'loadProjectJson'> = (set) => ({
     beginDragTransaction: () =>
         set((state) => {
             if (state.dragSnapshot !== null) return state;
@@ -22,6 +22,15 @@ export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransacti
                 future: [],
                 dragSnapshot: null,
                 validation: validateProject(state.project),
+            };
+        }),
+
+    cancelDragTransaction: () =>
+        set((state) => {
+            if (state.dragSnapshot === null) return state;
+            return {
+                project: state.dragSnapshot,
+                dragSnapshot: null,
             };
         }),
 

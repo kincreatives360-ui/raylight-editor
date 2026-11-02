@@ -7,7 +7,7 @@ import { drawStudioPlaceholder } from './threeLayerObjectHelpers';
 import { configureLayerTexture } from './threeLayerTexture';
 import { drawMediaFrame } from './mediaSurface';
 import { applyTextureMask, drawMediaShimmer } from './mediaDecorations';
-import { applyBokehBlur, applyMotionBlur, applyLayerReveal, applyLayerSurfaceEffects, drawLayerHalo } from './layerEffects';
+import { applyMotionBlur, applyLayerReveal, applyLayerSurfaceEffects, drawLayerHalo } from './layerEffects';
 import { applyLayerAlphaEffects } from '../../engine/layerAlphaEffects';
 import { releaseCanvas } from '../../engine/canvasPool';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
@@ -22,7 +22,6 @@ export interface UseLayerTextureParams {
     screenPan?: { x: number; y: number };
     screenZoom?: number;
     totalBlurPx: number;
-    dofBlurPx: number;
     authoredW: number;
     authoredH: number;
     canvasW: number;
@@ -50,7 +49,6 @@ export function useLayerTexture({
     screenPan,
     screenZoom,
     totalBlurPx,
-    dofBlurPx,
     authoredW,
     authoredH,
     canvasW,
@@ -346,7 +344,6 @@ export function useLayerTexture({
         }
 
         drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
-        applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
         if (evalLayer.motionBlur) {
             applyMotionBlur(canvas, {
                 motionX: evalLayer.motionBlur.x * canvasW * texturePixelRatio,
@@ -403,8 +400,6 @@ export function useLayerTexture({
         evalLayer.textContentOverride,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
-        dofBlurPx,
-        evalLayer.dofBokehShape,
         evalLayer.motionBlur,
         evalLayer.size.height,
         screenFit,
@@ -492,7 +487,6 @@ export function useLayerTexture({
                 options
             );
             drawMediaShimmer(ctx, canvasW, canvasH, evalLayer.shimmerProgress, evalLayer.shimmerSettings);
-            applyBokehBlur(canvas, dofBlurPx * texturePixelRatio * 1.5, evalLayer.dofBokehShape);
             if (evalLayer.motionBlur) {
                 applyMotionBlur(canvas, {
                     motionX: evalLayer.motionBlur.x * canvasW * texturePixelRatio,
@@ -560,8 +554,6 @@ export function useLayerTexture({
         evalLayer.shimmerSettings,
         evalLayer.maskSweepProgress,
         evalLayer.pathRevealProgress,
-        dofBlurPx,
-        evalLayer.dofBokehShape,
         evalLayer.motionBlur,
         evalLayer.glowIntensityOffset,
         evalLayer.glowRadiusOffset,

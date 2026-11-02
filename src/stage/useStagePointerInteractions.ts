@@ -6,6 +6,7 @@ import { useSelectionStore } from '../store/useSelectionStore';
 import { useProjectStore } from '../store/useProjectStore';
 import { DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, evaluateCameraPose, getLayerProjectedCorners } from './webgl/cameraMath';
 import { radToDeg } from '../model/defaults';
+import { polygonsIntersectRect } from './selectionGeometry';
 
 type ProjectState = ReturnType<typeof useProjectStore.getState>;
 type SelectionState = ReturnType<typeof useSelectionStore.getState>;
@@ -402,10 +403,7 @@ export const useStagePointerInteractions = ({ activeTool, isSpaceHeld, frame, pr
                             refCameraZ,
                             refFocalLength
                         );
-                        const inBox =
-                            (proj.pCenter.x >= left && proj.pCenter.x <= right && proj.pCenter.y >= top && proj.pCenter.y <= bottom) ||
-                            proj.corners.some((c) => c.x >= left && c.x <= right && c.y >= top && c.y <= bottom);
-                        if (inBox) {
+                        if (polygonsIntersectRect(proj.corners, { left, top, right, bottom })) {
                             hitLayerIds.push(l.id);
                         }
                     }

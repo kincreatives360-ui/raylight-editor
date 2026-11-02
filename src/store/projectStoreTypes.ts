@@ -125,6 +125,7 @@ export interface ProjectStore {
 
     beginDragTransaction: () => void;
     commitDragTransaction: () => void;
+    cancelDragTransaction: () => void;
     undo: () => void;
     redo: () => void;
     resetProject: () => void;

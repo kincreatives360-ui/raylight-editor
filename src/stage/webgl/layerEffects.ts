@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import type { BlendMode, LayerEffects, SceneEffects } from '../../model/types';
+import type { BlendMode, LayerEffects } from '../../model/types';
 import { acquireCanvas, releaseCanvas } from '../../engine/canvasPool';
 import { getBlurSettings, warpPoint } from '../../model/layerEffects';
 import { getLayerStyleUniforms, LAYER_STYLE_GLSL } from './layerStyleShader';
@@ -100,37 +100,6 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
             }
         }
     } finally { releaseCanvas(original); releaseCanvas(mask); releaseCanvas(result); }
-}
-
-export function getBokehOffsets(shape: SceneEffects['depthOfField']['bokehShape'] = 'spherical') {
-    return Array.from({ length: 32 }, (_, i) => {
-        const angle = i * 2.39996323;
-        let radius = Math.sqrt((i + .5) / 32);
-        if (shape === 'vintage') radius *= Math.cos(Math.PI / 6) / Math.cos((angle % (Math.PI / 3)) - Math.PI / 6);
-        if (shape === 'portrait') radius *= radius;
-        return { x: Math.cos(angle) * radius * (shape === 'anamorphic' ? 2 : 1), y: Math.sin(angle) * radius * (shape === 'anamorphic' ? .5 : 1) };
-    });
-}
-
-export function applyBokehBlur(canvas: HTMLCanvasElement, radius: number, shape?: SceneEffects['depthOfField']['bokehShape']) {
-    if (radius <= .1) return;
-    const source = acquireCanvas(canvas.width, canvas.height);
-    const sourceCtx = source.getContext('2d');
-    const ctx = canvas.getContext('2d');
-    if (!sourceCtx || !ctx) {
-        releaseCanvas(source);
-        return;
-    }
-    sourceCtx.drawImage(canvas, 0, 0);
-    ctx.save();
-    ctx.resetTransform();
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    ctx.globalCompositeOperation = 'lighter';
-    const samples = getBokehOffsets(shape);
-    ctx.globalAlpha = 1 / samples.length;
-    for (const offset of samples) ctx.drawImage(source, offset.x * radius, offset.y * radius);
-    ctx.restore();
-    releaseCanvas(source);
 }
 
 export interface MotionBlurParams {
