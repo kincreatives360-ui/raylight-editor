@@ -91,15 +91,34 @@ export const SceneEffectAnimationBlockSchema = z.object({
   easing: EasingSchema,
 });
 
+export const CameraOpticsSchema = z.object({
+  enabled: z.boolean(),
+  focusMode: z.enum(['manual', 'click', 'target']),
+  focusDistance: z.number().min(0.01),
+  targetObjectId: z.string().optional(),
+  targetAnchor: Vec3Schema.optional(),
+  focalLength: z.number().min(1).max(1000),
+  aperture: z.number().min(0.1).max(64),
+  sensorFormat: z.enum(['full-frame', 'super-35', 'micro-four-thirds']),
+  focusRange: z.number().min(0).optional(),
+  bokehQuality: z.enum(['low', 'medium', 'high']),
+  bokehShape: z.enum(['circular', 'bladed', 'anamorphic']),
+  showFocusPlane: z.boolean(),
+});
+
 export const ShotSchema = z.object({
   id: z.string(),
   name: z.string(),
   startMs: z.number().min(0).optional(),
   startTimeMs: z.number().min(0).optional(),
   durationMs: z.number().min(50),
+  layers: z.array(LayerSchema).default([]),
+  groups: z.array(GroupSchema).default([]),
+  framings: z.array(FramingSchema).default([]),
   cameraBlocks: z.array(CameraBlockSchema),
   lightBlocks: z.array(LightAnimationBlockSchema).optional(),
   effectBlocks: z.array(SceneEffectAnimationBlockSchema).optional(),
+  cameraOptics: CameraOpticsSchema.optional(),
   light: z.object({
     position: Vec3Schema,
     target: Vec3Schema.optional(),

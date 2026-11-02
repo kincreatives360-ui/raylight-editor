@@ -23,10 +23,9 @@ import {
 
 export { sampleStops, sampleLayerGradient } from './canvasGradientRaster';
 
-export { hexToRgba } from './canvasColorUtils';
 import { hexToRgba } from './canvasColorUtils';
-export { createCanvasFillStyle } from './canvasFillStyle';
 import { createCanvasFillStyle } from './canvasFillStyle';
+export { hexToRgba, createCanvasFillStyle };
 
 export interface CoverCropCoordinates {
   sx: number;

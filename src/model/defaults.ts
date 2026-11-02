@@ -14,6 +14,7 @@ import type {
 } from './types';
 import { generateId } from './id';
 import { DEFAULT_EFFECTS_ORDER } from './enums';
+import { DEFAULT_CAMERA_OPTICS } from './cameraOpticsTypes';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -402,6 +403,7 @@ export function createDefaultShot(overrides: Partial<Shot> = {}): Shot {
     cameraBlocks: [],
     lightBlocks: [],
     effectBlocks: [],
+    cameraOptics: structuredClone(DEFAULT_CAMERA_OPTICS),
     light: { ...DEFAULT_LIGHT_RIG },
     effects: structuredClone(DEFAULT_SCENE_EFFECTS),
     effectsOrder: [...DEFAULT_EFFECTS_ORDER],

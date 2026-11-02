@@ -12,6 +12,8 @@ import { SceneLighting } from './SceneLighting';
 import { ViewportCamera } from './ViewportCamera';
 import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
+import { CameraFocusPlaneOverlay } from '../CameraFocusPlaneOverlay';
+import { CameraFocusController } from '../CameraFocusController';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { getViewportPixelRatio } from './viewportResolution';
 import { registerStageCapture, type StageCaptureSession } from '../../engine/stageCapture';
@@ -399,11 +401,24 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     ))}
                 </group>
 
-                {/* 5. Realtime Cinematic Scene Effects (Bloom, Vignette, Chromatic Aberration, Grain, Glitch) */}
+                {/* 5. Interactive Focus Plane Guide & Click-to-Focus Surface Raycaster */}
+                {activeShot && frame.cameraOptics && (
+                    <>
+                        <CameraFocusPlaneOverlay
+                            optics={frame.cameraOptics}
+                            camera={frame.camera}
+                            shotId={activeShot.id}
+                        />
+                        <CameraFocusController shotId={activeShot.id} />
+                    </>
+                )}
+
+                {/* 6. Realtime Cinematic Scene Effects */}
                 <SceneEffectsPipeline
                     effects={frame.effects}
                     outgoingEffects={frame.shotTransition.outgoingFrame?.effects}
                     transitionProgress={frame.shotTransition.progress}
+                    cameraOptics={frame.cameraOptics}
                 />
             </Canvas>
         </WebGLErrorBoundary>

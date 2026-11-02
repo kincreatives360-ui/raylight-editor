@@ -8,6 +8,7 @@ import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { SelectionOverlay } from './SelectionOverlay';
 import { LightingOverlay } from './LightingOverlay';
+import { CameraFocusHUD } from './CameraFocusHUD';
 
 interface OverlayBox {
     x: number;
@@ -132,6 +133,11 @@ export function StageInteractionOverlayStack({
                 frame={effectiveViewportFrame}
                 frameWidth={frameWidth}
                 frameHeight={frameHeight}
+            />
+
+            <CameraFocusHUD
+                optics={effectiveViewportFrame.cameraOptics}
+                shotId={effectiveViewportFrame.activeShot?.id}
             />
         </>
     );

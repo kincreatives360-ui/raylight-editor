@@ -454,6 +454,35 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     className={toolBtn(isAnimateMode)}
                 />
 
+                {/* 2b ─ Click-to-Focus Tool (F) */}
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Click-to-Focus Tool (F)"
+                    icon={<Focus className="w-3.5 h-3.5" />}
+                    onClick={() => {
+                        setActiveTool(activeTool === 'focus' ? 'select' : 'focus');
+                        if (activeShot) {
+                            updateShot(activeShot.id, (s) => ({
+                                ...s,
+                                cameraOptics: {
+                                    enabled: true,
+                                    focusMode: 'click',
+                                    focusDistance: s.cameraOptics?.focusDistance ?? 2.65,
+                                    focalLength: s.cameraOptics?.focalLength ?? 50,
+                                    aperture: s.cameraOptics?.aperture ?? 2.8,
+                                    sensorFormat: s.cameraOptics?.sensorFormat ?? 'full-frame',
+                                    bokehQuality: s.cameraOptics?.bokehQuality ?? 'medium',
+                                    bokehShape: s.cameraOptics?.bokehShape ?? 'circular',
+                                    showFocusPlane: true,
+                                },
+                            }));
+                        }
+                    }}
+                    title="Click-to-Focus (F)"
+                    className={toolBtn(activeTool === 'focus')}
+                />
+
                 {/* 3 ─ Shape ▼ */}
                 <div className="relative flex items-center">
                     <IconButton

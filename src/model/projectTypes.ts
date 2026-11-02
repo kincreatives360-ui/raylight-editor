@@ -3,6 +3,8 @@ import type { Easing } from './animationTypes';
 import type { Layer, Group } from './layerTypes';
 import type { Framing, CameraBlock, LightAnimationBlock, SceneEffectAnimationBlock, LightRig, SceneEffects, EffectKey } from './sceneTypes';
 
+import type { CameraOptics } from './cameraOpticsTypes';
+
 export interface ShotTransition {
   type: 'cut' | 'crossfade' | 'push' | 'slide';
   durationMs: number;
@@ -30,6 +32,7 @@ export interface Shot {
   cameraBlocks: CameraBlock[];
   lightBlocks?: LightAnimationBlock[];
   effectBlocks?: SceneEffectAnimationBlock[];
+  cameraOptics?: CameraOptics;
   light: LightRig;
   effects: SceneEffects;
   effectsOrder: EffectKey[];

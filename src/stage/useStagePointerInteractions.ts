@@ -155,6 +155,81 @@ export const useStagePointerInteractions = ({ activeTool, isSpaceHeld, frame, pr
             return;
         }
 
+        // 1.5. Camera Focus Tool (F): Click anywhere in viewport to focus on hit object/surface
+        if (activeTool === 'focus' && stageFrameRef.current) {
+            e.preventDefault();
+            e.stopPropagation();
+            const rect = stageFrameRef.current.getBoundingClientRect();
+            const clickX = (e.clientX - rect.left) / canvasZoom;
+            const clickY = (e.clientY - rect.top) / canvasZoom;
+
+            const aspect = frameWidth / Math.max(frameHeight, 1);
+            const defaultCam = project.defaultCamera || {
+                position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+                rotation: { x: 0, y: 0, z: 0 },
+                focalLength: DEFAULT_FOCAL_LENGTH,
+            };
+            const cameraPose = evaluateCameraPose(frame.camera, defaultCam, aspect);
+            const refCameraZ = defaultCam.position?.z ?? DEFAULT_CAMERA_Z;
+            const refFocalLength = defaultCam.focalLength ?? DEFAULT_FOCAL_LENGTH;
+
+            let hitLayer = null;
+            let closestDist = Infinity;
+
+            for (const l of frame.layers) {
+                if (!l.visible) continue;
+                const proj = getLayerProjectedCorners(
+                    l,
+                    frameWidth,
+                    frameHeight,
+                    aspect,
+                    cameraPose,
+                    refCameraZ,
+                    refFocalLength
+                );
+                if (polygonsIntersectRect(proj.corners, { left: clickX - 12, top: clickY - 12, right: clickX + 12, bottom: clickY + 12 })) {
+                    const dist = Math.hypot(
+                        l.position.x - cameraPose.position.x,
+                        l.position.y - cameraPose.position.y,
+                        l.position.z - cameraPose.position.z
+                    );
+                    if (dist < closestDist) {
+                        closestDist = dist;
+                        hitLayer = l;
+                    }
+                }
+            }
+
+            const activeShot = frame.activeShot;
+            const finalDist = hitLayer ? Math.max(0.1, Number(closestDist.toFixed(2))) : 2.65;
+
+            useProjectStore.getState().updateShot(activeShot.id, (s) => ({
+                ...s,
+                cameraOptics: {
+                    ...(s.cameraOptics ?? {
+                        enabled: true,
+                        focusMode: 'manual',
+                        focusDistance: 2.65,
+                        focalLength: 50,
+                        aperture: 2.8,
+                        sensorFormat: 'full-frame',
+                        bokehQuality: 'medium',
+                        bokehShape: 'circular',
+                        showFocusPlane: true,
+                    }),
+                    enabled: true,
+                    focusMode: e.shiftKey && hitLayer ? 'target' : 'manual',
+                    targetObjectId: e.shiftKey && hitLayer ? hitLayer.id : s.cameraOptics?.targetObjectId,
+                    focusDistance: finalDist,
+                },
+            }));
+
+            if (hitLayer) {
+                onSelectLayer(hitLayer.id);
+            }
+            return;
+        }
+
         // 2. Creation Tools (T, I, R, O, L): Click or Drag to Draw on Stage
         if (isCreationTool && stageFrameRef.current) {
             e.preventDefault();

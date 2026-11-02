@@ -25,7 +25,8 @@ export type CanvasTool =
     | 'line'
     | 'arrow'
     | 'polygon'
-    | 'pen';
+    | 'pen'
+    | 'focus';
 
 export interface CameraViewBookmark {
     orbit: number;

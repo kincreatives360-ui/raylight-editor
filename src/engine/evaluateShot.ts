@@ -8,6 +8,7 @@ import {
     evaluateEffectsAtTime,
     type EvaluatedEffects,
 } from './evaluateEffects';
+import { evaluateCameraOptics, type EvaluatedCameraOptics } from './evaluateCameraOptics';
 import { lerp } from './math';
 
 /** Structured clone of SceneEffects to avoid JSON serialization GC thrashing. */
@@ -214,6 +215,7 @@ export interface EvaluatedProjectFrame {
     shotLocalTimeMs: number;
     shotProgress: number;
     camera: EvaluatedCamera;
+    cameraOptics: EvaluatedCameraOptics;
     layers: EvaluatedLayerWithEffects[];
     effects: EvaluatedEffects;
     shotTransition: {
@@ -633,6 +635,8 @@ export function evaluateProjectAtTime(
         }
     }
 
+    const cameraOptics = evaluateCameraOptics(activeShot, camera, layers);
+
     return {
         globalTimeMs: clampedGlobalMs,
         frameNumber,
@@ -641,6 +645,7 @@ export function evaluateProjectAtTime(
         shotLocalTimeMs,
         shotProgress,
         camera,
+        cameraOptics,
         layers,
         effects,
         shotTransition: {

@@ -5,6 +5,7 @@ import { InspectorRow, InspectorModeTabs, Switch } from '../../ui/primitives';
 import { CameraBlockSection } from './sections/CameraBlockSection';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
+import { CameraOpticsSection } from './sections/CameraOpticsSection';
 interface ShotSettingsPanelProps {
     activeShot: Shot;
     onOpenExportModal?: () => void;
@@ -92,6 +93,12 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                                 />
                             )}
                         </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-subtle" />
+
+                        {/* Camera Optics (DOF) */}
+                        <CameraOpticsSection shot={activeShot} />
 
                         {/* Divider */}
                         <div className="border-t border-subtle" />

@@ -10,6 +10,8 @@ import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
 import { renderSceneFrame } from './sceneRenderLoop';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
+import type { EvaluatedCameraOptics } from '../../engine/evaluateCameraOptics';
+import { CameraDepthOfFieldPass } from './CameraDepthOfFieldPass';
 import {
     createSceneEffectPass,
     configureSceneEffectPass,
@@ -20,6 +22,7 @@ interface SceneEffectsPipelineProps {
     effects: EvaluatedEffects;
     outgoingEffects?: EvaluatedEffects;
     transitionProgress?: number;
+    cameraOptics?: EvaluatedCameraOptics;
 }
 
 export function blendEvaluatedEffects(
@@ -186,7 +189,12 @@ export function shouldRebuildPassList(activePassKey: string | null, currentPassK
     return passCount === 0 || activePassKey !== currentPassKey;
 }
 
-export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress }) => {
+export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({
+    effects,
+    outgoingEffects,
+    transitionProgress,
+    cameraOptics,
+}) => {
     const effectiveEffects = (outgoingEffects && transitionProgress !== undefined && transitionProgress < 1)
         ? blendEvaluatedEffects(outgoingEffects, effects, transitionProgress)
         : effects;
@@ -194,6 +202,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     const dpr = useThree((state) => state.viewport.dpr);
     const composerRef = useRef<EffectComposer | null>(null);
     const renderPassRef = useRef<RenderPass | null>(null);
+    const dofPassRef = useRef<CameraDepthOfFieldPass | null>(null);
     const passMapRef = useRef<Map<EffectKey, Pass>>(new Map());
     const encodingPassRef = useRef<ShaderPass | null>(null);
     const fxaaPassRef = useRef<FXAAPass | null>(null);
@@ -204,12 +213,28 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         composer.setPixelRatio(dpr);
         const pixelW = Math.round(size.width * dpr);
         const pixelH = Math.round(size.height * dpr);
-        // Beauty targets are single-sampled (samples = 0) so gl.copyTexSubImage2D works for backdrop blur.
-        // Anti-aliasing is provided by the downstream FXAAPass.
+
+        composer.renderTarget1.depthBuffer = true;
+        composer.renderTarget2.depthBuffer = true;
+
+        if (!composer.renderTarget1.depthTexture) {
+            const dt1 = new THREE.DepthTexture(pixelW, pixelH);
+            dt1.format = THREE.DepthFormat;
+            dt1.type = THREE.UnsignedShortType;
+            composer.renderTarget1.depthTexture = dt1;
+        }
+        if (!composer.renderTarget2.depthTexture) {
+            const dt2 = new THREE.DepthTexture(pixelW, pixelH);
+            dt2.format = THREE.DepthFormat;
+            dt2.type = THREE.UnsignedShortType;
+            composer.renderTarget2.depthTexture = dt2;
+        }
+
         composer.renderTarget1.samples = composer.renderTarget2.samples = 0;
         composer.setSize(size.width, size.height);
 
         const renderPass = new RenderPass(scene, camera);
+        const dofPass = new CameraDepthOfFieldPass();
         const encodingPass = createOutputEncodingPass();
         const fxaaPass = new FXAAPass();
         fxaaPass.setSize(pixelW, pixelH);
@@ -217,6 +242,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         composerRef.current = composer;
         renderPassRef.current = renderPass;
+        dofPassRef.current = dofPass;
         encodingPassRef.current = encodingPass;
         fxaaPassRef.current = fxaaPass;
 
@@ -224,6 +250,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         return () => {
             fxaaPass.material.dispose();
             encodingPass.material.dispose();
+            dofPass.material.dispose();
             passMap.forEach((pass) => {
                 if (pass instanceof ShaderPass) pass.material.dispose();
                 else pass.dispose();
@@ -232,6 +259,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             composer.dispose();
             composerRef.current = null;
             renderPassRef.current = null;
+            dofPassRef.current = null;
             encodingPassRef.current = null;
             fxaaPassRef.current = null;
         };
@@ -257,9 +285,11 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         prevCameraPosRef.current = { x: camera.position.x, y: camera.position.y };
         const cameraMotion = { x: deltaX * 0.15, y: deltaY * 0.15 };
 
-        const currentPassKey = effectiveEffects.orderedEnabledPasses
-            .map((p) => p.key)
-            .join(',');
+        const isDofEnabled = Boolean(cameraOptics?.enabled);
+        const currentPassKey = [
+            isDofEnabled ? 'dof:1' : 'dof:0',
+            ...effectiveEffects.orderedEnabledPasses.map((p) => p.key),
+        ].join(',');
         const passListChanged = shouldRebuildPassList(activePassKeyRef.current, currentPassKey, composer.passes.length);
 
         if (passListChanged) {
@@ -267,6 +297,11 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             // Reconstruct active passes in evaluated order
             composer.passes = [renderPass];
             renderPass.renderToScreen = false;
+
+            if (dofPassRef.current && isDofEnabled) {
+                dofPassRef.current.renderToScreen = false;
+                composer.addPass(dofPassRef.current);
+            }
 
             for (const { key } of effectiveEffects.orderedEnabledPasses) {
                 let pass = passMapRef.current.get(key);
@@ -297,8 +332,19 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 }
             }
         }
+
+        if (dofPassRef.current && cameraOptics) {
+            dofPassRef.current.updateOptics(
+                cameraOptics,
+                composer.renderTarget1.depthTexture,
+                camera,
+                pixelW,
+                pixelH
+            );
+        }
     }, [
         effectiveEffects,
+        cameraOptics,
         gl,
         scene,
         camera,
