@@ -75,20 +75,20 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                             </button>
                         );
                     })}
-                    <button
-                        type="button"
-                        tabIndex={0}
-                        aria-label="Perspective view"
-                        title="Perspective view"
-                        onClick={() => {
-                            const view = CAMERA_ANGLE_VIEWS.find(({ id }) => id === 'isometric')!;
-                            onSetOrientation(view.orbit, view.tilt, view.roll);
-                        }}
-                        className="absolute left-1/2 top-1/2 z-10 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-sky-300/70 bg-sky-600 text-[8px] font-bold text-white shadow-md transition-colors hover:bg-sky-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
-                    >
-                        P
-                    </button>
                 </div>
+                <button
+                    type="button"
+                    tabIndex={0}
+                    aria-label="Perspective view"
+                    title="Perspective view"
+                    onClick={() => {
+                        const view = CAMERA_ANGLE_VIEWS.find(({ id }) => id === 'isometric')!;
+                        onSetOrientation(view.orbit, view.tilt, view.roll);
+                    }}
+                    className="absolute left-1/2 top-1/2 z-20 flex h-5 w-5 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border border-sky-300/70 bg-sky-600 text-[8px] font-bold text-white shadow-md transition-colors hover:bg-sky-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-white"
+                >
+                    P
+                </button>
             </div>
 
             {/* Reset and quick-view controls */}

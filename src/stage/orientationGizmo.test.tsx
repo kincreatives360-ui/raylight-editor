@@ -62,31 +62,48 @@ describe('OrientationGizmo HUD & Presets UI', () => {
 
             expect(document.activeElement).toBe(button);
             expect(handleSetOrientation).toHaveBeenLastCalledWith(view.orbit, view.tilt, view.roll);
+            if (id === 'isometric') {
+                const orientationGroup = button.closest('[aria-label="Camera orientation"]')!;
+                expect(button.parentElement).toBe(orientationGroup);
+                expect(button.className).toContain('z-20');
+            }
         }
 
         act(() => root.unmount());
         container.remove();
     });
 
-    it('keeps every shared quick view and frame action in a scrollable menu', () => {
-        const html = renderToStaticMarkup(
-            <OrientationGizmo
-                cameraRotation={{ x: 0, y: 0, z: 0 }}
-                onSetOrientation={() => {}}
-                onResetCamera={() => {}}
-                onFrameSelection={() => {}}
-            />
-        );
+    it('keeps every shared quick view and frame action reachable in a small viewport', () => {
+        Object.defineProperty(window, 'innerHeight', { configurable: true, value: 320 });
+        const container = document.createElement('div');
+        document.body.appendChild(container);
+        const root = createRoot(container);
 
+        act(() => {
+            root.render(
+                <OrientationGizmo
+                    cameraRotation={{ x: 0, y: 0, z: 0 }}
+                    onSetOrientation={() => {}}
+                    onResetCamera={() => {}}
+                    onFrameSelection={() => {}}
+                />
+            );
+        });
+
+        act(() => {
+            container.querySelector<HTMLButtonElement>('[aria-label="Angle menu"]')!.click();
+        });
+
+        const menu = container.querySelector<HTMLElement>('[aria-label="Quick views"]')!;
+        expect(menu.className).toContain('overflow-y-auto');
+        expect(menu.className).toContain('max-h-[min(70vh,24rem)]');
         for (const view of CAMERA_ANGLE_VIEWS) {
-            expect(html).toContain(view.label);
+            expect(menu.textContent).toContain(view.label);
         }
-        expect(html).toContain('Frame Scene');
-        expect(html).toContain('overflow-y-auto');
-        expect(html).toContain('max-h-[min(70vh,24rem)]');
+        expect(menu.textContent).toContain('Frame Scene');
 
-        // Readout pill (yaw / pitch / zoom)
-        expect(html).toContain('0° / 0° • 1x');
+        act(() => root.unmount());
+        container.remove();
     });
 
     it('renders with custom rotation and displays calculated yaw/pitch', () => {
