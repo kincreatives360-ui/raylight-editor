@@ -116,45 +116,44 @@ function resolveProperty<T extends number | string>(
   t: number,
   baseValue: T
 ): T {
-  // Filter to blocks defining this property
-  const defining = targetBlocks
-    .map(({ block, index }) => ({
-      block,
-      index,
-      endpoints: getPropertyEndpoints(block, prop, baseValue) as ResolvedValue<T> | null,
-    }))
-    .filter(
-      (
-        item
-      ): item is {
-        block: LightAnimationBlock;
-        index: number;
-        endpoints: ResolvedValue<T>;
-      } => item.endpoints !== null
-    );
+  let latestStartedBlock: {
+    block: LightAnimationBlock;
+    index: number;
+    endpoints: ResolvedValue<T>;
+  } | null = null;
 
-  if (defining.length === 0) {
-    return baseValue;
-  }
+  let earliestUnstartedBlock: {
+    block: LightAnimationBlock;
+    index: number;
+    endpoints: ResolvedValue<T>;
+  } | null = null;
 
-  // Check started blocks: startMs <= t
-  const started = defining.filter((item) => item.block.startMs <= t);
+  for (let i = 0; i < targetBlocks.length; i++) {
+    const { block, index } = targetBlocks[i];
+    const endpoints = getPropertyEndpoints(block, prop, baseValue) as ResolvedValue<T> | null;
+    if (!endpoints) continue;
 
-  if (started.length > 0) {
-    // Latest startMs wins; if tie, later index wins
-    let winner = started[0];
-    for (let i = 1; i < started.length; i++) {
-      const candidate = started[i];
+    if (block.startMs <= t) {
       if (
-        candidate.block.startMs > winner.block.startMs ||
-        (candidate.block.startMs === winner.block.startMs &&
-          candidate.index > winner.index)
+        !latestStartedBlock ||
+        block.startMs > latestStartedBlock.block.startMs ||
+        (block.startMs === latestStartedBlock.block.startMs && index > latestStartedBlock.index)
       ) {
-        winner = candidate;
+        latestStartedBlock = { block, index, endpoints };
+      }
+    } else {
+      if (
+        !earliestUnstartedBlock ||
+        block.startMs < earliestUnstartedBlock.block.startMs ||
+        (block.startMs === earliestUnstartedBlock.block.startMs && index < earliestUnstartedBlock.index)
+      ) {
+        earliestUnstartedBlock = { block, index, endpoints };
       }
     }
+  }
 
-    const { block, endpoints } = winner;
+  if (latestStartedBlock) {
+    const { block, endpoints } = latestStartedBlock;
     const rawProgress =
       block.durationMs > 0
         ? Math.max(0, Math.min(1, (t - block.startMs) / block.durationMs))
@@ -170,23 +169,11 @@ function resolveProperty<T extends number | string>(
     return endpoints.to;
   }
 
-  // No block has started yet (t < earliest startMs)
-  // Find earliest block defining prop
-  let earliest = defining[0];
-  for (let i = 1; i < defining.length; i++) {
-    const candidate = defining[i];
-    if (
-      candidate.block.startMs < earliest.block.startMs ||
-      (candidate.block.startMs === earliest.block.startMs &&
-        candidate.index < earliest.index)
-    ) {
-      earliest = candidate;
+  if (earliestUnstartedBlock) {
+    const shouldHoldBefore = earliestUnstartedBlock.block.holdBefore !== false;
+    if (shouldHoldBefore) {
+      return earliestUnstartedBlock.endpoints.from;
     }
-  }
-
-  const shouldHoldBefore = earliest.block.holdBefore !== false;
-  if (shouldHoldBefore) {
-    return earliest.endpoints.from;
   }
 
   return baseValue;

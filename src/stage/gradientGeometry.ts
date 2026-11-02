@@ -1,4 +1,5 @@
 import { sampleStops } from '../engine/canvasRenderer';
+import { clamp } from '../engine/math';
 import type { Fill, GradientStop } from '../model/types';
 export type Point = {
     x: number;
@@ -8,7 +9,7 @@ export type Gradient = Extract<Fill, {
     kind: 'gradient';
 }>;
 export type Handles = NonNullable<Gradient['handles']>;
-export const clampStop = (at: number) => Math.max(0, Math.min(1, at));
+export const clampStop = (at: number) => clamp(at, 0, 1);
 export const gradientAngle = (a: Point, b: Point) => (Math.atan2(b.x - a.x, a.y - b.y) * 180 / Math.PI + 360) % 360;
 export const interpolatePoint = (a: Point, b: Point, at: number): Point => ({ x: a.x + (b.x - a.x) * at, y: a.y + (b.y - a.y) * at });
 export function rotateHandles(handles: Handles, center: Point, radians: number): Handles {

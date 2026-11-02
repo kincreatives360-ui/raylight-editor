@@ -6,37 +6,107 @@ import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
 import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
     evaluateEffectsAtTime,
-    resolveDepthOfFieldFocusZ,
     type EvaluatedEffects,
 } from './evaluateEffects';
 import { lerp } from './math';
-export { resolveDepthOfFieldFocusZ };
 
-/** Deep clone SceneEffects to prevent mutation of original shot object. */
-function deepCloneEffects(effects: SceneEffects): SceneEffects {
-    return JSON.parse(JSON.stringify(effects));
+/** Structured clone of SceneEffects to avoid JSON serialization GC thrashing. */
+function cloneSceneEffects(effects: SceneEffects): SceneEffects {
+    return {
+        atmosphere: { ...effects.atmosphere },
+        gradientMap: {
+            ...effects.gradientMap,
+            stops: effects.gradientMap.stops ? [...effects.gradientMap.stops] : [],
+        },
+        fishEye: { ...effects.fishEye },
+        lensDistortion: { ...effects.lensDistortion },
+        bloom: { ...effects.bloom },
+        vignette: { ...effects.vignette },
+        motionBlur: { ...effects.motionBlur },
+        chromaticAberration: { ...effects.chromaticAberration },
+        filmGrain: { ...effects.filmGrain },
+        ghost: { ...effects.ghost },
+        colorGrade: { ...effects.colorGrade },
+        edgeFade: { ...effects.edgeFade },
+        glitch: { ...effects.glitch },
+    };
 }
 
-/** Effect block handler type: receives the config object and the animated value, mutates config. */
-type EffectBlockHandler = (config: SceneEffects, val: number) => void;
-
-/** Map of effectKey to handler function. Replaces long if-else chain for extensibility. */
-const EFFECT_BLOCK_HANDLERS: Record<string, EffectBlockHandler> = {
-    depthOfField: (config, val) => { config.depthOfField.enabled = true; config.depthOfField.target.z = val; },
-    bloom: (config, val) => { config.bloom.enabled = true; config.bloom.intensity = Math.max(0, val); },
-    vignette: (config, val) => { config.vignette.enabled = true; config.vignette.intensity = Math.max(0, Math.min(1, val)); },
-    filmGrain: (config, val) => { config.filmGrain.enabled = true; config.filmGrain.intensity = Math.max(0, val); },
-    chromaticAberration: (config, val) => { config.chromaticAberration.enabled = true; config.chromaticAberration.offset = Math.max(0, val); },
-    glitch: (config, val) => { config.glitch.enabled = true; config.glitch.intensity = Math.max(0, val); },
-    colorGrade: (config, val) => { config.colorGrade.enabled = true; config.colorGrade.exposure = Math.max(0.2, val); },
-    motionBlur: (config, val) => { config.motionBlur.enabled = true; config.motionBlur.shutterAngle = Math.max(0, val); },
-    ghost: (config, val) => { config.ghost.enabled = true; config.ghost.opacity = Math.max(0, Math.min(1, val)); },
-    edgeFade: (config, val) => { config.edgeFade.enabled = true; config.edgeFade.top = Math.max(0, Math.min(1, val)); config.edgeFade.bottom = Math.max(0, Math.min(1, val)); },
-    atmosphere: (config, val) => { config.atmosphere.enabled = true; config.atmosphere.fog = Math.max(0, Math.min(1, val)); },
-    gradientMap: (config, val) => { config.gradientMap.enabled = true; config.gradientMap.blend = Math.max(0, Math.min(1, val)); },
-    fishEye: (config, val) => { config.fishEye.enabled = true; config.fishEye.amount = Math.max(-1, Math.min(1, val)); },
-    lensDistortion: (config, val) => { config.lensDistortion.enabled = true; config.lensDistortion.strength = Math.max(-1, Math.min(1, val)); },
-};
+/** Helper to apply animated effect block values to SceneEffects config in a parameter-aware manner. */
+function applyEffectBlockValue(config: SceneEffects, key: string, parameter: string | undefined, val: number): void {
+    switch (key) {
+        case 'bloom':
+            config.bloom.enabled = true;
+            if (parameter === 'threshold') config.bloom.threshold = Math.max(0, Math.min(1, val));
+            else if (parameter === 'radius') config.bloom.radius = Math.max(0, val);
+            else config.bloom.intensity = Math.max(0, val);
+            break;
+        case 'vignette':
+            config.vignette.enabled = true;
+            if (parameter === 'roundness') config.vignette.roundness = Math.max(0, Math.min(1, val));
+            else if (parameter === 'smoothness') config.vignette.smoothness = Math.max(0, Math.min(1, val));
+            else config.vignette.intensity = Math.max(0, Math.min(1, val));
+            break;
+        case 'filmGrain':
+            config.filmGrain.enabled = true;
+            config.filmGrain.intensity = Math.max(0, val);
+            break;
+        case 'chromaticAberration':
+            config.chromaticAberration.enabled = true;
+            config.chromaticAberration.offset = Math.max(0, val);
+            break;
+        case 'glitch':
+            config.glitch.enabled = true;
+            config.glitch.intensity = Math.max(0, val);
+            break;
+        case 'colorGrade':
+            config.colorGrade.enabled = true;
+            if (parameter === 'contrast') config.colorGrade.contrast = Math.max(-1, Math.min(1, val));
+            else if (parameter === 'saturation') config.colorGrade.saturation = Math.max(-1, Math.min(1, val));
+            else if (parameter === 'temperature') config.colorGrade.temperature = Math.max(1000, Math.min(15000, val));
+            else if (parameter === 'tint') config.colorGrade.tint = Math.max(-1, Math.min(1, val));
+            else config.colorGrade.exposure = Math.max(-4, Math.min(4, val));
+            break;
+        case 'motionBlur':
+            config.motionBlur.enabled = true;
+            if (parameter === 'samples') config.motionBlur.samples = Math.max(2, Math.min(32, Math.round(val)));
+            else config.motionBlur.shutterAngle = Math.max(0, val);
+            break;
+        case 'ghost':
+            config.ghost.enabled = true;
+            if (parameter === 'blur') config.ghost.blur = Math.max(0, val);
+            else config.ghost.opacity = Math.max(0, Math.min(1, val));
+            break;
+        case 'edgeFade':
+            config.edgeFade.enabled = true;
+            if (parameter === 'top') config.edgeFade.top = Math.max(0, Math.min(1, val));
+            else if (parameter === 'bottom') config.edgeFade.bottom = Math.max(0, Math.min(1, val));
+            else if (parameter === 'left') config.edgeFade.left = Math.max(0, Math.min(1, val));
+            else if (parameter === 'right') config.edgeFade.right = Math.max(0, Math.min(1, val));
+            else {
+                config.edgeFade.top = Math.max(0, Math.min(1, val));
+                config.edgeFade.bottom = Math.max(0, Math.min(1, val));
+            }
+            break;
+        case 'atmosphere':
+            config.atmosphere.enabled = true;
+            if (parameter === 'mist') config.atmosphere.mist = Math.max(0, Math.min(1, val));
+            else config.atmosphere.fog = Math.max(0, Math.min(1, val));
+            break;
+        case 'gradientMap':
+            config.gradientMap.enabled = true;
+            config.gradientMap.blend = Math.max(0, Math.min(1, val));
+            break;
+        case 'fishEye':
+            config.fishEye.enabled = true;
+            config.fishEye.amount = Math.max(-1, Math.min(1, val));
+            break;
+        case 'lensDistortion':
+            config.lensDistortion.enabled = true;
+            config.lensDistortion.strength = Math.max(-1, Math.min(1, val));
+            break;
+    }
+}
 
 export interface ShotTransitionCompositeState {
     isActive: boolean;
@@ -196,18 +266,19 @@ export function isLayerEffectivelyLocked(
     return false;
 }
 
-
-
-export function computeGroupTransform(
-    groupId: string | undefined,
-    groups: Group[] | Map<string, Group> | undefined,
-    shotLocalTimeMs: number
-): {
+export type GroupTransform = {
     position: Vec3;
     rotation: Vec3;
     scale: Vec3;
     opacity: number;
-} {
+};
+
+export function computeGroupTransform(
+    groupId: string | undefined,
+    groups: Group[] | Map<string, Group> | undefined,
+    shotLocalTimeMs: number,
+    cache?: Map<string, GroupTransform>
+): GroupTransform {
     if (!groupId || !groups) {
         return {
             position: { x: 0, y: 0, z: 0 },
@@ -215,6 +286,9 @@ export function computeGroupTransform(
             scale: { x: 1, y: 1, z: 1 },
             opacity: 1,
         };
+    }
+    if (cache && cache.has(groupId)) {
+        return cache.get(groupId)!;
     }
     const groupById = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
     let currentId: string | undefined = groupId;
@@ -266,12 +340,18 @@ export function computeGroupTransform(
         currentId = group.parentGroupId;
     }
 
-    return {
+    const transform: GroupTransform = {
         position: { x: posX, y: posY, z: posZ },
         rotation: { x: rotX, y: rotY, z: rotZ },
         scale: { x: scaleX, y: scaleY, z: scaleZ },
         opacity,
     };
+
+    if (cache) {
+        cache.set(groupId, transform);
+    }
+
+    return transform;
 }
 
 export function evaluateProjectAtTime(
@@ -350,8 +430,8 @@ export function evaluateProjectAtTime(
             }
         }
         if (hasActiveBlock) {
-            // Deep clone ALL effects to prevent mutation of original shot object
-            evaluatedEffectsConfig = deepCloneEffects(baseShot.effects);
+            // Structured clone of effects to avoid JSON serialization
+            evaluatedEffectsConfig = cloneSceneEffects(baseShot.effects);
             for (const eb of effectBlocks) {
                 if (shotLocalTimeMs < eb.startMs) continue;
                 const rawP =
@@ -361,13 +441,7 @@ export function evaluateProjectAtTime(
                 const eased = evaluateEasing(rawP, eb.easing);
                 const val = lerp(eb.fromValue, eb.toValue, eased);
 
-                const handler = Object.hasOwn(EFFECT_BLOCK_HANDLERS, eb.effectKey) ? EFFECT_BLOCK_HANDLERS[eb.effectKey] : undefined;
-                if (eb.effectKey === 'depthOfField' && eb.parameter === 'blur') {
-                    evaluatedEffectsConfig.depthOfField.enabled = true;
-                    evaluatedEffectsConfig.depthOfField.bokehScale = Math.max(0, val);
-                } else if (handler) {
-                    handler(evaluatedEffectsConfig, val);
-                }
+                applyEffectBlockValue(evaluatedEffectsConfig, eb.effectKey, eb.parameter, val);
             }
         }
     }
@@ -409,6 +483,10 @@ export function evaluateProjectAtTime(
         }
     }
 
+    // Timestamps-scoped group transform caches to prevent repeated parent tree walks
+    const currentGroupCache = new Map<string, GroupTransform>();
+    const prevGroupCache = new Map<string, GroupTransform>();
+
     // 7. Evaluate All Layers (Ignoring hidden groups and ancestor groups)
     const layers: EvaluatedLayerWithEffects[] = sortedLayers.map((layer) => {
         const isHidden = isLayerEffectivelyHidden(layer, groupById);
@@ -416,7 +494,7 @@ export function evaluateProjectAtTime(
             isHidden ? { ...layer, hidden: true } : layer,
             shotLocalTimeMs
         );
-        const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs);
+        const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs, currentGroupCache);
         const evalLayer = {
             ...rawEvalLayer,
             position: {
@@ -454,7 +532,7 @@ export function evaluateProjectAtTime(
                     totalBlurPx: Number(manualBlurPx.toFixed(2)),
                 };
             }
-            const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
+            const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime, prevGroupCache);
             const prevX = rawPrev.position.x * prevGroupTransform.scale.x + prevGroupTransform.position.x;
             const prevY = rawPrev.position.y * prevGroupTransform.scale.y + prevGroupTransform.position.y;
             const prevZ = rawPrev.position.z + prevGroupTransform.position.z;

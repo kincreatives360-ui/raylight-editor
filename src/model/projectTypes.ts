@@ -35,24 +35,10 @@ export interface Shot {
   effectsOrder: EffectKey[];
   appliedEffects?: EffectKey[];
   transition: ShotTransition;
-  focusBlocks?: FocusBlock[];
 }
 
 
 export type Effects = SceneEffects;
-
-export interface FocusBlock {
-  /** Original curve bounds retained when a shot is split. */
-  sourceStartMs?: number;
-  sourceDurationMs?: number;
-  id: string;
-  label?: string;
-  startMs: number;
-  durationMs: number;
-  fromZ: number;
-  toZ: number;
-  easing: Easing;
-}
 
 export interface AudioClip {
   id: string;
@@ -114,7 +100,6 @@ export function isBlankProjectState(project: Project): boolean {
     shot.cameraBlocks.length === 0 &&
     (shot.lightBlocks?.length ?? 0) === 0 &&
     (shot.effectBlocks?.length ?? 0) === 0 &&
-    (shot.focusBlocks?.length ?? 0) === 0 &&
     (project.audio?.clips.length ?? 0) === 0
   );
 }

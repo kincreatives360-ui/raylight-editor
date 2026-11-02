@@ -111,19 +111,6 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
   },
   fishEye: { enabled: false, amount: 0.52, centerX: 0, centerY: 0, scale: 1, edgeMode: 'balanced' },
   lensDistortion: { enabled: false, mode: 'pinch', strength: 0.25, centerX: 0, centerY: 0, edgeMode: 'fill', measure: 'width' },
-  depthOfField: {
-    enabled: false,
-    target: { x: 0, y: 0, z: 0 },
-    focusRange: 0.35,
-    aperture: 2.8,
-    bokehScale: 4.5,
-    bokehShape: 'anamorphic',
-    focalLength: 50,
-    highlightThreshold: 0.7,
-    highlightIntensity: 0,
-    sceneSize: 31.8,
-    focusMode: 'point',
-  },
   bloom: {
     enabled: false,
     intensity: 0.35,
@@ -564,14 +551,6 @@ export function createMultiShotContractFixture(): Project {
     effects: {
       ...createDefaultEffects(),
       bloom: { enabled: true, intensity: 0.6, threshold: 0.7 },
-      depthOfField: {
-        enabled: true,
-        target: { x: 0, y: 0, z: 0.3 },
-        focusRange: 0.25,
-        aperture: 2.8,
-        bokehScale: 3.0,
-        bokehShape: 'spherical',
-      },
       motionBlur: { enabled: true, shutterAngle: 180, samples: 8 },
     },
   });

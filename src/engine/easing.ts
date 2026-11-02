@@ -1,14 +1,10 @@
-// src/engine/easing.ts
 import type {
     Easing,
     PresetEasingName,
     SpringEasingName,
     SpringConfig,
 } from '../model/types';
-
-function clamp(val: number, min: number, max: number): number {
-    return Math.max(min, Math.min(max, val));
-}
+import { clamp } from './math';
 
 // 1. Custom 4-Point Cubic Bezier Solver (x1, y1, x2, y2)
 // Uses Newton-Raphson iteration with bisection fallback for steep curves
@@ -44,7 +40,7 @@ export function solveCubicBezier(
         }
         const deriv = sampleDerivX(u);
         if (Math.abs(deriv) < 1e-6) break;
-        u -= xError / deriv;
+        u = clamp(u - xError / deriv, 0, 1);
     }
 
     // Fallback to safe binary subdivision if curve is extremely steep

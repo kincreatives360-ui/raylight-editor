@@ -91,33 +91,12 @@ export const SceneEffectAnimationBlockSchema = z.object({
   easing: EasingSchema,
 });
 
-export const FocusBlockSchema = z.object({
-  sourceStartMs: z.number().optional(),
-  sourceDurationMs: z.number().min(0).optional(),
-  id: z.string(),
-  label: z.string().optional(),
-  startMs: z.number().min(0),
-  durationMs: z.number().min(10),
-  fromZ: z.number(),
-  toZ: z.number(),
-  easing: EasingSchema,
-});
-
 export const ShotSchema = z.object({
   id: z.string(),
-  isPlaceholder: z.boolean().optional(),
   name: z.string(),
-  startMs: z.number().min(0),
-  durationMs: z.number().min(200),
-  lane: z.number().int().min(0).max(7),
-  /** When true (default), inherit project.background. When false, use shot.background. */
-  useProjectBackground: z.boolean().optional(),
-  background: BackgroundSchema.optional(),
-  layers: z.array(LayerSchema),
-  groups: z.array(GroupSchema),
-  framings: z.array(FramingSchema),
+  startTimeMs: z.number().min(0),
+  durationMs: z.number().min(50),
   cameraBlocks: z.array(CameraBlockSchema),
-  focusBlocks: z.array(FocusBlockSchema).optional(),
   lightBlocks: z.array(LightAnimationBlockSchema).optional(),
   effectBlocks: z.array(SceneEffectAnimationBlockSchema).optional(),
   light: z.object({
@@ -179,20 +158,6 @@ export const ShotSchema = z.object({
       enabled: z.boolean(), mode: z.enum(['pinch', 'barrel']), strength: z.number().min(-1).max(1), centerX: z.number().min(-1).max(1), centerY: z.number().min(-1).max(1),
       edgeMode: z.enum(['fill', 'balanced', 'none']), measure: z.enum(['width', 'height', 'diagonal']),
     }).default({ enabled: false, mode: 'pinch', strength: 0.25, centerX: 0, centerY: 0, edgeMode: 'fill', measure: 'width' }),
-    depthOfField: z.object({
-      enabled: z.boolean(),
-      target: Vec3Schema,
-      focusRange: z.number().min(0).max(20),
-      aperture: z.number().min(0.1).max(32),
-      bokehScale: z.number().min(0).max(20),
-      bokehShape: z.enum(['anamorphic', 'spherical', 'vintage', 'portrait']),
-      focalLength: z.number().optional(),
-      highlightThreshold: z.number().optional(),
-      highlightIntensity: z.number().optional(),
-      sceneSize: z.number().min(1).max(200).optional(),
-      focusMode: z.enum(['point', 'subject']).optional(),
-      focusTargetId: z.string().optional(),
-    }),
     bloom: z.object({
       enabled: z.boolean(),
       intensity: z.number().min(0).max(4),

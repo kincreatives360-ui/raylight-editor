@@ -148,6 +148,45 @@ function escapeSvgAttr(val: string): string {
         .replace(/>/g, '&gt;');
 }
 
+export function computePathBBox(
+    d: string,
+    fallbackW: number,
+    fallbackH: number
+): { x: number; y: number; width: number; height: number } {
+    const numbers = d.match(/[-+]?(?:\d*\.\d+|\d+)(?:[eE][-+]?\d+)?/g)?.map(Number);
+    if (!numbers || numbers.length < 2) {
+        return { x: 0, y: 0, width: fallbackW, height: fallbackH };
+    }
+
+    let minX = Infinity;
+    let maxX = -Infinity;
+    let minY = Infinity;
+    let maxY = -Infinity;
+
+    for (let i = 0; i < numbers.length - 1; i += 2) {
+        const px = numbers[i];
+        const py = numbers[i + 1];
+        if (Number.isFinite(px) && Number.isFinite(py)) {
+            if (px >= 0 && px <= fallbackW * 2) {
+                if (px < minX) minX = px;
+                if (px > maxX) maxX = px;
+            }
+            if (py >= 0 && py <= fallbackH * 2) {
+                if (py < minY) minY = py;
+                if (py > maxY) maxY = py;
+            }
+        }
+    }
+
+    if (!Number.isFinite(minX) || !Number.isFinite(minY) || maxX <= minX || maxY <= minY) {
+        return { x: 0, y: 0, width: fallbackW, height: fallbackH };
+    }
+
+    const width = Math.max(2, maxX - minX);
+    const height = Math.max(2, maxY - minY);
+    return { x: minX, y: minY, width, height };
+}
+
 // Parses a Figma "Copy as SVG" string into separate editable Text, Shape, and Image layers
 export function parseFigmaSvgToLayers(
     svgText: string,
@@ -504,10 +543,12 @@ export function parseFigmaSvgToLayers(
             const pathStrokeWidth = parseNumericAttr(el, 'stroke-width', 0);
             const pathOpacity = parseNumericAttr(el, 'opacity', 1);
 
+            const bbox = computePathBBox(d, boardW, boardH);
+
             const escapedD = escapeSvgAttr(d);
             const escapedFill = escapeSvgAttr(pathFill);
             const strokeAttr = pathStroke ? ` stroke="${escapeSvgAttr(pathStroke)}" stroke-width="${pathStrokeWidth}"` : '';
-            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${boardW} ${boardH}"><path d="${escapedD}" fill="${escapedFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
+            const pathSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${bbox.x} ${bbox.y} ${bbox.width} ${bbox.height}"><path d="${escapedD}" fill="${escapedFill}"${strokeAttr} opacity="${pathOpacity}"/></svg>`;
             const encoded = `data:image/svg+xml;utf8,${encodeURIComponent(pathSvg)}`;
             const assetId = `asset-figma-path-${Date.now()}-${orderCounter}`;
 
@@ -517,18 +558,30 @@ export function parseFigmaSvgToLayers(
                 mimeType: 'image/svg+xml',
                 dataUrl: encoded,
                 thumbUrl: encoded,
-                width: boardW,
-                height: boardH,
+                width: bbox.width,
+                height: bbox.height,
             };
+
+            const centerXFrac = (bbox.x + bbox.width / 2) / boardW - 0.5;
+            const centerYFrac = (bbox.y + bbox.height / 2) / boardH - 0.5;
+            const widthFrac = Math.min(1, bbox.width / boardW);
+            const heightFrac = Math.min(1, bbox.height / boardH);
 
             const pathLayer: ImageLayer = createDefaultImageLayer({
                 name: rawName || 'Figma Vector Path',
                 assetId,
                 order: orderCounter++,
                 outMs: shotDurationMs,
-                position: { x: 0, y: 0, z: Number(zDepthCursor.toFixed(3)) },
+                position: {
+                    x: Number(centerXFrac.toFixed(4)),
+                    y: Number(centerYFrac.toFixed(4)),
+                    z: Number(zDepthCursor.toFixed(3)),
+                },
                 rotation: { x: 0, y: 0, z: 0 },
-                size: { width: 1, height: 1 },
+                size: {
+                    width: Number(widthFrac.toFixed(4)),
+                    height: Number(heightFrac.toFixed(4)),
+                },
             });
 
             layers.push(pathLayer);

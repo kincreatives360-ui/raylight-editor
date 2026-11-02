@@ -4,7 +4,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
-import { getSafeMsaaSampleCount, shouldRebuildPassList } from './SceneEffectsPipeline';
+import { getSafeMsaaSampleCount, shouldRebuildPassList, blendEvaluatedEffects } from './SceneEffectsPipeline';
 
 describe('SceneEffectsPipeline pass initialization', () => {
   it('rebuilds a recreated composer even when the enabled effects have not changed', () => {
@@ -91,6 +91,29 @@ describe('SceneEffectsPipeline anti-aliasing setup', () => {
     // Respects low GPU capability limits
     expect(getSafeMsaaSampleCount(800, 600, 2)).toBe(2);
     expect(getSafeMsaaSampleCount(800, 600, 0)).toBe(0);
+  });
+
+  it('attaches depthTexture to both ping-pong targets so depth passes stay stable across buffer swaps', () => {
+    const mockGl = {
+      capabilities: { isWebGL2: true, maxSamples: 4 },
+      getPixelRatio: () => 1,
+      getSize: (target: THREE.Vector2) => target.set(1920, 1080),
+      setSize: () => {},
+      setRenderTarget: () => {},
+      clear: () => {},
+      render: () => {},
+    } as unknown as THREE.WebGLRenderer;
+
+    const composer = new EffectComposer(mockGl);
+    const depthTexture = new THREE.DepthTexture(1920, 1080);
+    composer.renderTarget1.depthTexture = depthTexture;
+    composer.renderTarget2.depthTexture = depthTexture;
+
+    expect(composer.renderTarget1.depthTexture).toBe(depthTexture);
+    expect(composer.renderTarget2.depthTexture).toBe(depthTexture);
+
+    depthTexture.dispose();
+    composer.dispose();
   });
 });
 
@@ -222,5 +245,132 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
 
   it('does not create a custom shader pass for depth-of-field', () => {
     expect(scenePassKeys).not.toContain('depthOfField');
+  });
+
+  it('configures vignette softness and custom color correctly in shader uniforms', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.vignette.enabled = true;
+    effectsState.vignette.intensity = 0.8;
+    effectsState.vignette.midpoint = 0.4;
+    effectsState.vignette.roundness = 1.2;
+    effectsState.vignette.softness = 0.6;
+    effectsState.vignette.color = '#ff8800';
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'vignette', orderIndex: 1, summary: 'Vignette' },
+      ],
+      deterministicSeed: 0.5,
+    };
+
+    const pass = createSceneEffectPass('vignette');
+    configureSceneEffectPass(pass, 'vignette', evaluated, 1920, 1080);
+
+    const params = pass.uniforms.uParams.value as THREE.Vector4;
+    expect(params.x).toBeCloseTo(0.8); // intensity
+    expect(params.y).toBeCloseTo(0.4); // midpoint
+    expect(params.z).toBeCloseTo(1.2); // roundness
+    expect(params.w).toBeCloseTo(0.6); // softness
+
+    const color = pass.uniforms.uColor.value as THREE.Color;
+    expect(color.getHexString()).toBe('ff8800');
+    expect(pass.material.fragmentShader).toContain('mix(col.rgb,uColor*col.a,edge)');
+    pass.material.dispose();
+  });
+
+  it('smoothly blends colorGrade, ghost, and edgeFade across shot transition progress', () => {
+    const outState = createDefaultEffects();
+    outState.colorGrade.enabled = true;
+    outState.colorGrade.exposure = 1.0;
+    outState.colorGrade.contrast = 2.0;
+    outState.colorGrade.saturation = 0.5;
+    outState.colorGrade.temperature = -0.5;
+    outState.ghost.enabled = true;
+    outState.ghost.opacity = 0.8;
+    outState.ghost.offset = 0.4;
+    outState.edgeFade.enabled = true;
+    outState.edgeFade.top = 0.2;
+    outState.edgeFade.bottom = 0.4;
+
+    const inState = createDefaultEffects();
+    inState.colorGrade.enabled = true;
+    inState.colorGrade.exposure = 0.0;
+    inState.colorGrade.contrast = 1.0;
+    inState.colorGrade.saturation = 1.5;
+    inState.colorGrade.temperature = 0.5;
+    inState.ghost.enabled = true;
+    inState.ghost.opacity = 0.2;
+    inState.ghost.offset = 0.1;
+    inState.edgeFade.enabled = true;
+    inState.edgeFade.top = 0.0;
+    inState.edgeFade.bottom = 0.0;
+
+    const outgoing: EvaluatedEffects = {
+      state: outState,
+      orderedEnabledPasses: [
+        { key: 'colorGrade', orderIndex: 0, summary: 'CG' },
+        { key: 'ghost', orderIndex: 1, summary: 'Ghost' },
+        { key: 'edgeFade', orderIndex: 2, summary: 'EF' },
+      ],
+      deterministicSeed: 0,
+    };
+    const incoming: EvaluatedEffects = {
+      state: inState,
+      orderedEnabledPasses: [
+        { key: 'colorGrade', orderIndex: 0, summary: 'CG' },
+        { key: 'ghost', orderIndex: 1, summary: 'Ghost' },
+        { key: 'edgeFade', orderIndex: 2, summary: 'EF' },
+      ],
+      deterministicSeed: 0,
+    };
+
+    const blendedHalf = blendEvaluatedEffects(outgoing, incoming, 0.5);
+    expect(blendedHalf.state.colorGrade.exposure).toBeCloseTo(0.5);
+    expect(blendedHalf.state.colorGrade.contrast).toBeCloseTo(1.5);
+    expect(blendedHalf.state.colorGrade.saturation).toBeCloseTo(1.0);
+    expect(blendedHalf.state.colorGrade.temperature).toBeCloseTo(0.0);
+    expect(blendedHalf.state.ghost.opacity).toBeCloseTo(0.5);
+    expect(blendedHalf.state.ghost.offset).toBeCloseTo(0.25);
+    expect(blendedHalf.state.edgeFade.top).toBeCloseTo(0.1);
+    expect(blendedHalf.state.edgeFade.bottom).toBeCloseTo(0.2);
+  });
+
+
+
+  it('configures fishEye and lensDistortion modes accurately', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.fishEye.enabled = true;
+    effectsState.fishEye.amount = 0.35;
+    effectsState.fishEye.edgeMode = 'balanced';
+
+    effectsState.lensDistortion.enabled = true;
+    effectsState.lensDistortion.strength = -0.4;
+    effectsState.lensDistortion.mode = 'barrel';
+    effectsState.lensDistortion.edgeMode = 'none';
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'fishEye', orderIndex: 1, summary: 'FishEye' },
+        { key: 'lensDistortion', orderIndex: 2, summary: 'Lens' },
+      ],
+      deterministicSeed: 0.1,
+    };
+
+    const fishPass = createSceneEffectPass('fishEye');
+    configureSceneEffectPass(fishPass, 'fishEye', evaluated, 1920, 1080);
+    expect((fishPass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(0.35);
+    expect((fishPass.uniforms.uExtra.value as THREE.Vector4).x).toBe(1); // balanced edge mode
+    expect(fishPass.material.fragmentShader).toContain('#define EFFECT 11');
+    fishPass.material.dispose();
+
+    const lensPass = createSceneEffectPass('lensDistortion');
+    configureSceneEffectPass(lensPass, 'lensDistortion', evaluated, 1920, 1080);
+    expect((lensPass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(-0.4);
+    expect((lensPass.uniforms.uExtra.value as THREE.Vector4).x).toBe(2); // none edge mode
+    expect((lensPass.uniforms.uExtra.value as THREE.Vector4).z).toBe(1); // barrel mode
+    expect(lensPass.material.fragmentShader).toContain('#define EFFECT 12');
+    lensPass.material.dispose();
   });
 });

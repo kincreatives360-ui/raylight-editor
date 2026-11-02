@@ -36,7 +36,6 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
 
   const e = evaluated.state;
   for (const { key } of evaluated.orderedEnabledPasses) {
-    if (key === 'depthOfField') continue; // Applied at layer evaluation.
     dst.set(src);
     const sample = (x: number, y: number, c: number) => src[(Math.max(0, Math.min(height - 1, Math.round(y))) * width + Math.max(0, Math.min(width - 1, Math.round(x)))) * 4 + c];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
@@ -104,10 +103,11 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
           dst[i+c]=mode==='add'?src[i+c]+bloom:mode==='softLight'?blendChannel(src[i+c],clamp(bloom),mode):1-(1-src[i+c])*(1-clamp(bloom));
         }
       } else if (key === 'vignette') {
-        const roundness=e.vignette.roundness??1, midpoint=e.vignette.midpoint??0.5;
+        const roundness=e.vignette.roundness??1, midpoint=e.vignette.midpoint??0.5, soft=Math.max(.05,e.vignette.softness??0.5);
         const distance=Math.hypot((u-0.5),(v-0.5)*Math.max(0.1,roundness));
-        const amount=clamp((distance-midpoint)*2+0.5)*e.vignette.intensity;
-        for(let c=0;c<3;c++) dst[i+c]*=1-amount;
+        const amount=clamp((distance-midpoint)/soft+0.5)*e.vignette.intensity;
+        const color=hexLinear(e.vignette.color??'#000000');
+        for(let c=0;c<3;c++) dst[i+c]=src[i+c]*(1-amount)+color[c]*amount;
       } else if (key === 'filmGrain') {
         const size=Math.max(1,e.filmGrain.size);
         const noiseAt=(cellX:number,cellY:number)=>fract(Math.sin(cellX*12.9898+cellY*78.233+evaluated.deterministicSeed*437.1)*43758.5453)-0.5;

@@ -7,30 +7,22 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { Pass } from 'three/examples/jsm/postprocessing/Pass.js';
-import { DepthOfFieldEffect, EffectPass } from 'postprocessing';
 import { renderSceneFrame } from './sceneRenderLoop';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
-import { resolveDepthOfFieldWorldTarget } from './depthOfFieldTarget';
 import {
     createSceneEffectPass,
     configureSceneEffectPass,
     createOutputEncodingPass,
 } from './sceneEffectPasses';
-import {
-    configureDepthOfFieldEffect,
-    createDepthOfFieldPass,
-    ThreeComposerEffectPass,
-} from './depthOfFieldPass';
 
 interface SceneEffectsPipelineProps {
     effects: EvaluatedEffects;
     outgoingEffects?: EvaluatedEffects;
     transitionProgress?: number;
-    focusSubjectPosition?: THREE.Vector3;
 }
 
-function blendEvaluatedEffects(
+export function blendEvaluatedEffects(
     outgoing: EvaluatedEffects,
     incoming: EvaluatedEffects,
     progress: number
@@ -76,6 +68,70 @@ function blendEvaluatedEffects(
         blendedState.glitch.enabled = true;
         blendedState.glitch.intensity = outGl * (1 - t) + inGl * t;
     }
+    if (activeKeys.has('ghost')) {
+        const outGh = outState.ghost;
+        const inGh = inState.ghost;
+        const outOp = outGh.enabled ? outGh.opacity : 0;
+        const inOp = inGh.enabled ? inGh.opacity : 0;
+        blendedState.ghost.enabled = true;
+        blendedState.ghost.opacity = outOp * (1 - t) + inOp * t;
+        blendedState.ghost.offset = (outGh.offset ?? 0) * (1 - t) + (inGh.offset ?? 0) * t;
+        blendedState.ghost.blur = (outGh.blur ?? 0) * (1 - t) + (inGh.blur ?? 0) * t;
+    }
+    if (activeKeys.has('edgeFade')) {
+        const outEF = outState.edgeFade;
+        const inEF = inState.edgeFade;
+        blendedState.edgeFade.enabled = true;
+        blendedState.edgeFade.top = (outEF.enabled ? outEF.top : 0) * (1 - t) + (inEF.enabled ? inEF.top : 0) * t;
+        blendedState.edgeFade.bottom = (outEF.enabled ? outEF.bottom : 0) * (1 - t) + (inEF.enabled ? inEF.bottom : 0) * t;
+        blendedState.edgeFade.left = (outEF.enabled ? (outEF.left ?? 0) : 0) * (1 - t) + (inEF.enabled ? (inEF.left ?? 0) : 0) * t;
+        blendedState.edgeFade.right = (outEF.enabled ? (outEF.right ?? 0) : 0) * (1 - t) + (inEF.enabled ? (inEF.right ?? 0) : 0) * t;
+    }
+    if (activeKeys.has('colorGrade')) {
+        const outCG = outState.colorGrade;
+        const inCG = inState.colorGrade;
+        const outExp = outCG.enabled ? outCG.exposure : 0;
+        const inExp = inCG.enabled ? inCG.exposure : 0;
+        const outCon = outCG.enabled ? outCG.contrast : 1;
+        const inCon = inCG.enabled ? inCG.contrast : 1;
+        const outSat = outCG.enabled ? outCG.saturation : 1;
+        const inSat = inCG.enabled ? inCG.saturation : 1;
+        const outTemp = outCG.enabled ? (outCG.temperature ?? 0) : 0;
+        const inTemp = inCG.enabled ? (inCG.temperature ?? 0) : 0;
+        const outTint = outCG.enabled ? (outCG.tint ?? 0) : 0;
+        const inTint = inCG.enabled ? (inCG.tint ?? 0) : 0;
+        const outHi = outCG.enabled ? (outCG.highlights ?? 0) : 0;
+        const inHi = inCG.enabled ? (inCG.highlights ?? 0) : 0;
+        const outSh = outCG.enabled ? (outCG.shadows ?? 0) : 0;
+        const inSh = inCG.enabled ? (inCG.shadows ?? 0) : 0;
+        const outLift = outCG.enabled ? (outCG.lift ?? 0) : 0;
+        const inLift = inCG.enabled ? (inCG.lift ?? 0) : 0;
+        const outGamma = outCG.enabled ? (outCG.gamma ?? 1) : 1;
+        const inGamma = inCG.enabled ? (inCG.gamma ?? 1) : 1;
+        const outVib = outCG.enabled ? (outCG.vibrance ?? 0) : 0;
+        const inVib = inCG.enabled ? (inCG.vibrance ?? 0) : 0;
+        const outBlack = outCG.enabled ? (outCG.blackPoint ?? 0) : 0;
+        const inBlack = inCG.enabled ? (inCG.blackPoint ?? 0) : 0;
+        const outWhite = outCG.enabled ? (outCG.whitePoint ?? 1) : 1;
+        const inWhite = inCG.enabled ? (inCG.whitePoint ?? 1) : 1;
+
+        blendedState.colorGrade = {
+            ...inCG,
+            enabled: true,
+            exposure: outExp * (1 - t) + inExp * t,
+            contrast: outCon * (1 - t) + inCon * t,
+            saturation: outSat * (1 - t) + inSat * t,
+            temperature: outTemp * (1 - t) + inTemp * t,
+            tint: outTint * (1 - t) + inTint * t,
+            highlights: outHi * (1 - t) + inHi * t,
+            shadows: outSh * (1 - t) + inSh * t,
+            lift: outLift * (1 - t) + inLift * t,
+            gamma: outGamma * (1 - t) + inGamma * t,
+            vibrance: outVib * (1 - t) + inVib * t,
+            blackPoint: outBlack * (1 - t) + inBlack * t,
+            whitePoint: outWhite * (1 - t) + inWhite * t,
+        };
+    }
 
     const transitionAmount = (state: typeof outState, key: 'atmosphere' | 'gradientMap' | 'fishEye' | 'lensDistortion') => {
         if (key === 'atmosphere') return state.atmosphere.fog + state.atmosphere.mist + state.atmosphere.haze;
@@ -115,7 +171,6 @@ function blendEvaluatedEffects(
  * Reduces or disables samples for oversized buffers (e.g. 4K / high-DPI displays)
  * to respect GPU memory budgets, while relying on the downstream FXAA pass for anti-aliasing.
  */
-// eslint-disable-next-line react-refresh/only-export-components
 export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, maxSamples = 4): number {
     const hwCap = Math.max(0, Math.min(4, Number.isFinite(maxSamples) ? maxSamples : 4));
     if (hwCap === 0) return 0;
@@ -127,12 +182,11 @@ export function getSafeMsaaSampleCount(pixelWidth: number, pixelHeight: number, 
     return hwCap;
 }
 
-// eslint-disable-next-line react-refresh/only-export-components
 export function shouldRebuildPassList(activePassKey: string | null, currentPassKey: string, passCount = 1): boolean {
     return passCount === 0 || activePassKey !== currentPassKey;
 }
 
-export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress, focusSubjectPosition }) => {
+export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effects, outgoingEffects, transitionProgress }) => {
     const effectiveEffects = (outgoingEffects && transitionProgress !== undefined && transitionProgress < 1)
         ? blendEvaluatedEffects(outgoingEffects, effects, transitionProgress)
         : effects;
@@ -141,11 +195,6 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     const composerRef = useRef<EffectComposer | null>(null);
     const renderPassRef = useRef<RenderPass | null>(null);
     const passMapRef = useRef<Map<EffectKey, Pass>>(new Map());
-    const depthOfFieldPassRef = useRef<{
-        pass: EffectPass;
-        effect: DepthOfFieldEffect;
-        adapter: ThreeComposerEffectPass;
-    } | null>(null);
     const encodingPassRef = useRef<ShaderPass | null>(null);
     const fxaaPassRef = useRef<FXAAPass | null>(null);
 
@@ -156,16 +205,8 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const pixelW = Math.round(size.width * dpr);
         const pixelH = Math.round(size.height * dpr);
         // Beauty targets are single-sampled (samples = 0) so gl.copyTexSubImage2D works for backdrop blur.
-        // Anti-aliasing is provided by the downstream FXAAPass. Setting beauty samples to 0
-        // allows WebGL2 gl.copyTexSubImage2D to capture the framebuffer for backdrop blur & glass.
+        // Anti-aliasing is provided by the downstream FXAAPass.
         composer.renderTarget1.samples = composer.renderTarget2.samples = 0;
-        
-        // Depth-buffer texture attachment for screen-space depth-of-field
-        const depthTexture = new THREE.DepthTexture(pixelW, pixelH);
-        depthTexture.format = THREE.DepthFormat;
-        depthTexture.type = THREE.UnsignedShortType;
-        composer.renderTarget1.depthTexture = depthTexture;
-
         composer.setSize(size.width, size.height);
 
         const renderPass = new RenderPass(scene, camera);
@@ -188,8 +229,6 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 else pass.dispose();
             });
             passMap.clear();
-            depthOfFieldPassRef.current = null;
-            depthTexture.dispose();
             composer.dispose();
             composerRef.current = null;
             renderPassRef.current = null;
@@ -232,41 +271,12 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             for (const { key } of effectiveEffects.orderedEnabledPasses) {
                 let pass = passMapRef.current.get(key);
                 if (!pass) {
-                    if (key === 'depthOfField') {
-                        const { pass: effectPass, effect } = createDepthOfFieldPass(
-                            camera,
-                            composer.renderTarget1.depthTexture as THREE.DepthTexture
-                        );
-                        effectPass.initialize(
-                            gl,
-                            gl.getContextAttributes()?.alpha ?? true,
-                            composer.renderTarget1.texture.type
-                        );
-                        const adapter = new ThreeComposerEffectPass(effectPass);
-                        pass = adapter;
-                        depthOfFieldPassRef.current = { pass: effectPass, effect, adapter };
-                    } else {
-                        pass = createSceneEffectPass(key);
-                    }
+                    pass = createSceneEffectPass(key);
                     passMapRef.current.set(key, pass);
                 }
                 pass.renderToScreen = false;
                 if (pass instanceof ShaderPass) {
-                    if (pass.uniforms.tDepth) {
-                        pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
-                    }
                     configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
-                } else {
-                    const dofBundle = depthOfFieldPassRef.current;
-                    if (dofBundle) {
-                        dofBundle.pass.mainCamera = camera;
-                        const focusTarget = resolveDepthOfFieldWorldTarget(
-                            camera,
-                            effectiveEffects.state.depthOfField.target,
-                            focusSubjectPosition
-                        );
-                        configureDepthOfFieldEffect(dofBundle.effect, effectiveEffects.state.depthOfField, focusTarget);
-                    }
                 }
                 composer.addPass(pass);
             }
@@ -283,21 +293,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             for (const { key } of effectiveEffects.orderedEnabledPasses) {
                 const pass = passMapRef.current.get(key);
                 if (pass instanceof ShaderPass) {
-                    if (pass.uniforms.tDepth) {
-                        pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
-                    }
                     configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
-                } else if (pass) {
-                    const dofBundle = depthOfFieldPassRef.current;
-                    if (dofBundle) {
-                        dofBundle.pass.mainCamera = camera;
-                        const focusTarget = resolveDepthOfFieldWorldTarget(
-                            camera,
-                            effectiveEffects.state.depthOfField.target,
-                            focusSubjectPosition
-                        );
-                        configureDepthOfFieldEffect(dofBundle.effect, effectiveEffects.state.depthOfField, focusTarget);
-                    }
                 }
             }
         }
@@ -317,7 +313,6 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         camera.rotation.x,
         camera.rotation.y,
         camera.rotation.z,
-        focusSubjectPosition,
     ]);
 
     // Deterministic frame render with resilient fallback

@@ -1,8 +1,7 @@
 // src/engine/evaluateEffects.ts
-import type { FocusBlock, Shot, EffectKey } from '../model/types';
+import type { Shot, EffectKey, SceneEffects } from '../model/types';
 
 import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
-import { evaluateEasing } from './easing';
 
 export interface ActiveEffectPass {
     key: EffectKey;
@@ -11,84 +10,19 @@ export interface ActiveEffectPass {
 }
 
 export interface EvaluatedEffects {
-    state: Effects;
+    state: SceneEffects;
     orderedEnabledPasses: ActiveEffectPass[];
     deterministicSeed: number; // Driven by frameNumber so two exports always match
     motionVector?: { x: number; y: number };
 }
 
-/**
- * Resolves the Depth-of-Field focus plane Z coordinate.
- * When auto-resolving from visible layers without an explicit selected layer,
- * prioritizes the foreground hero layer (topmost in layer order) over the background.
- */
-export function resolveDepthOfFieldFocusZ(
-    dofTargetZ: number | undefined,
-    visibleLayers: ReadonlyArray<{ id?: string; position: { z: number } }>,
-    selectedLayerId?: string
-): number {
-    if (selectedLayerId) {
-        const matched = visibleLayers.find((l) => l.id === selectedLayerId);
-        if (matched) return Number(matched.position.z.toFixed(4));
-    }
-    if (dofTargetZ !== undefined && Number.isFinite(dofTargetZ)) {
-        return Number(dofTargetZ.toFixed(4));
-    }
-    if (visibleLayers.length > 0) {
-        // Foreground hero = last visible layer (highest order = topmost)
-        return Number(visibleLayers[visibleLayers.length - 1].position.z.toFixed(4));
-    }
-    return 0;
-}
-
-// Pure Function: Evaluates the 10-effect chain and deterministic frame seed
+// Pure Function: Evaluates the scene effects chain and deterministic frame seed
 export function evaluateEffectsAtTime(
     shot: Shot,
     frameNumber: number,
-    shotLocalTimeMs = 0
+    _shotLocalTimeMs = 0
 ): EvaluatedEffects {
-    let effects = shot.effects;
-
-    // Animate depth of field target.z if focusBlocks are configured (Rack Focus)
-    if (shot.focusBlocks && shot.focusBlocks.length > 0 && effects.depthOfField.enabled) {
-        let activeZ = effects.depthOfField.target.z;
-        let latestBlock: {
-            fromZ: number;
-            toZ: number;
-            easing: FocusBlock['easing'];
-            startMs: number;
-            durationMs: number;
-        } | null = null;
-        for (const original of shot.focusBlocks) {
-            const startMs = original.sourceStartMs ?? original.startMs;
-            if (startMs > shotLocalTimeMs || (latestBlock && startMs < latestBlock.startMs)) continue;
-            latestBlock = {
-                fromZ: original.fromZ,
-                toZ: original.toZ,
-                easing: original.easing,
-                startMs,
-                durationMs: original.sourceDurationMs ?? original.durationMs,
-            };
-        }
-        if (latestBlock) {
-            const raw = Math.max(0, Math.min(
-                1,
-                (shotLocalTimeMs - latestBlock.startMs) / Math.max(1, latestBlock.durationMs)
-            ));
-            const progress = evaluateEasing(raw, latestBlock.easing);
-            activeZ = latestBlock.fromZ + (latestBlock.toZ - latestBlock.fromZ) * progress;
-        }
-        effects = {
-            ...effects,
-            depthOfField: {
-                ...effects.depthOfField,
-                target: {
-                    ...effects.depthOfField.target,
-                    z: Number(activeZ.toFixed(4)),
-                },
-            },
-        };
-    }
+    const effects = shot.effects;
 
     // Deterministic pseudo-random seed from frameNumber (never uses Math.random())
     const frame = Math.max(0, Math.floor(Number.isFinite(frameNumber) ? frameNumber : 0));
@@ -120,9 +54,6 @@ export function evaluateEffectsAtTime(
                 break;
             case 'lensDistortion':
                 summary = `${effects.lensDistortion.mode} | Strength: ${Math.round(effects.lensDistortion.strength * 100)}%`;
-                break;
-            case 'depthOfField':
-                summary = `Target Z:${effects.depthOfField.target.z.toFixed(2)} | f/${effects.depthOfField.aperture} | ${effects.depthOfField.bokehShape}`;
                 break;
             case 'bloom':
                 summary = `Intensity: ${effects.bloom.intensity} | Threshold: ${effects.bloom.threshold}`;

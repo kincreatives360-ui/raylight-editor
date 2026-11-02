@@ -4,11 +4,11 @@ import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
 
-export const scenePassKeys: Exclude<EffectKey, 'depthOfField'>[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
+export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 
 // Each pass reads the result of the preceding pass. All intermediate RGB is linear and premultiplied.
-export function createSceneEffectPass(key: Exclude<EffectKey, 'depthOfField'>): ShaderPass {
+export function createSceneEffectPass(key: EffectKey): ShaderPass {
   return new ShaderPass({
     uniforms: {
       tDiffuse: { value: null }, tDepth: { value: null }, uResolution: { value: new THREE.Vector2(1, 1) },
@@ -70,8 +70,9 @@ export function createSceneEffectPass(key: Exclude<EffectKey, 'depthOfField'>): 
           else col.rgb = 1.0 - (1.0 - col.rgb) * (1.0 - clamp(bloom, 0.0, 1.0));
         #elif EFFECT == 1
           vec2 centered=(vUv-.5)*vec2(1.0,max(.1,uParams.z));
-          float edge=clamp((length(centered)-uParams.y)*2.0+0.5,0.0,1.0);
-          col.rgb*=1.0-edge*uParams.x;
+          float soft=max(.05,uParams.w);
+          float edge=clamp((length(centered)-uParams.y)/soft+0.5,0.0,1.0)*uParams.x;
+          col.rgb=mix(col.rgb,uColor*col.a,edge);
         #elif EFFECT == 2
           vec4 accum=vec4(0.0); float count=clamp(uParams.y,2.0,32.0);
           for(int i=0;i<32;i++){ if(float(i)>=count) break;
@@ -196,7 +197,7 @@ export function createSceneEffectPass(key: Exclude<EffectKey, 'depthOfField'>): 
           float radius=length(p);
           float strength=uParams.x;
           float factor;
-          if(EFFECT==12){
+          if(EFFECT==11){
             float theta=atan(radius);
             factor=radius>.0001?tan(theta*(1.0+strength))/radius:1.0;
           }else{
@@ -217,7 +218,7 @@ export function createSceneEffectPass(key: Exclude<EffectKey, 'depthOfField'>): 
 
 export function configureSceneEffectPass(
   pass: ShaderPass,
-  key: Exclude<EffectKey, 'depthOfField'>,
+  key: EffectKey,
   effects: EvaluatedEffects,
   width: number,
   height: number,
@@ -237,7 +238,10 @@ export function configureSceneEffectPass(
       p.set(e.bloom.intensity, e.bloom.threshold, e.bloom.radius ?? 1, e.bloom.softness ?? 0.5);
       pass.uniforms.uExtra.value.x = ({ screen: 0, add: 1, softLight: 2 } as const)[(e.bloom.blendMode ?? 'screen') as 'screen' | 'add' | 'softLight'];
       break;
-    case 'vignette': p.set(e.vignette.intensity, e.vignette.midpoint ?? 0.5, e.vignette.roundness ?? 1, 0); break;
+    case 'vignette':
+      p.set(e.vignette.intensity, e.vignette.midpoint ?? 0.5, e.vignette.roundness ?? 1, e.vignette.softness ?? 0.5);
+      (pass.uniforms.uColor.value as THREE.Color).set(e.vignette.color ?? '#000000');
+      break;
     case 'motionBlur': {
       const blur = e.motionBlur;
       p.set(blur.shutterAngle, Math.max(2, Math.min(32, Math.round(blur.samples ?? 8))), blur.angle ?? 0, blur.amount ?? 0.02);

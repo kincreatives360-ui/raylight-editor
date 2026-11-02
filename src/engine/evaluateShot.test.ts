@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
   evaluateProjectAtTime,
   getShotTransitionCompositeState,
-  resolveDepthOfFieldFocusZ,
 } from './evaluateShot';
 import {
   DEFAULT_PROJECT,
@@ -336,58 +335,7 @@ describe('evaluateProjectAtTime', () => {
     expect(Array.isArray(frame.layers)).toBe(true);
   });
 
-  it('animates scene focus without adding per-layer blur', () => {
-    const layerAt1 = createDefaultImageLayer({
-      id: 'l-target',
-      position: { x: 0, y: 0, z: 1.0 },
-      inMs: 0,
-      outMs: 2000,
-    });
 
-    const shot = createDefaultShot({
-      durationMs: 2000,
-      layers: [layerAt1],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.1,
-          aperture: 2.8,
-          bokehScale: 1.0,
-          bokehShape: 'spherical',
-        },
-      },
-      focusBlocks: [
-        {
-          id: 'focus-rack',
-          startMs: 0,
-          durationMs: 1000,
-          fromZ: 0,
-          toZ: 1.0,
-          easing: { kind: 'preset', name: 'linear' },
-        },
-      ],
-    });
-
-    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
-
-    const frameAt0 = evaluateProjectAtTime(project, 0);
-    const layerAt0 = frameAt0.layers.find((l) => l.id === 'l-target')!;
-    expect(frameAt0.effects.state.depthOfField.target.z).toBe(0);
-    expect(layerAt0).not.toHaveProperty('dofBlurPx');
-    expect(layerAt0.totalBlurPx).toBe(0);
-
-    const frameAt500 = evaluateProjectAtTime(project, 500);
-    const layerAt500 = frameAt500.layers.find((l) => l.id === 'l-target')!;
-    expect(frameAt500.effects.state.depthOfField.target.z).toBeCloseTo(0.5);
-    expect(layerAt500.totalBlurPx).toBe(0);
-
-    const frameAt1000 = evaluateProjectAtTime(project, 1000);
-    const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
-    expect(frameAt1000.effects.state.depthOfField.target.z).toBe(1);
-    expect(layerAt1000.totalBlurPx).toBe(0);
-  });
 
   it('8. Phase 0 Contract Fixture: validates multi-shot timebase, transition outgoingFrame, reused video assets, and future audio cues', () => {
     const fixture = createMultiShotContractFixture();
@@ -517,13 +465,6 @@ describe('evaluateProjectAtTime', () => {
     expect(comp.incomingLayers.length).toBeGreaterThan(0);
     expect(comp.outgoingOpacity + comp.incomingOpacity).toBeCloseTo(1, 2);
     expect(comp.outgoingShotStartMs).toBe(0);
-
-    // Foreground hero layer fallback for Depth-of-Field auto-focus
-    const focusZ = resolveDepthOfFieldFocusZ(undefined, [
-      { id: 'bg', position: { z: -0.8 } },
-      { id: 'hero', position: { z: 0.35 } },
-    ]);
-    expect(focusZ).toBeCloseTo(0.35, 3);
 
     // Scene motionBlur populates effects.motionVector when camera/layers move
     project.shots[0].effects.motionBlur.enabled = true;

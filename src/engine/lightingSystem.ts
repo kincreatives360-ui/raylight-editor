@@ -1,8 +1,13 @@
 import type { LightAnimationBlock, LightRig, SceneLight, Vec3 } from '../model/types';
-import { lerp } from './math';
+import { parseHex, lerpHex } from './canvasColorUtils';
+export { parseHex, lerpHex };
 
 export const MAX_SHADOW_CASTERS = 3;
 export const DEFAULT_FILL_INTENSITY = 0.38;
+
+export const LIGHT_SCALE_X = 6;
+export const LIGHT_SCALE_Y = 6;
+export const LIGHT_SCALE_Z = 5;
 
 type Vector3Tuple = [number, number, number];
 
@@ -56,20 +61,12 @@ const ENVIRONMENT_TINTS: Record<NonNullable<LightRig['environment']>, string> = 
   'night-city': '#b8c9ff', warehouse: '#e9dfc8', custom: '#f8fafc',
 };
 
-function worldPosition(position: Vec3 | undefined, defaults: Vec3): Vector3Tuple {
+export function worldPosition(position: Vec3 | undefined, defaults: Vec3): Vector3Tuple {
   return [
-    (position?.x ?? defaults.x) * 6,
-    (position?.y ?? defaults.y) * 6,
-    (position?.z ?? defaults.z) * 5,
+    (position?.x ?? defaults.x) * LIGHT_SCALE_X,
+    (position?.y ?? defaults.y) * LIGHT_SCALE_Y,
+    (position?.z ?? defaults.z) * LIGHT_SCALE_Z,
   ];
-}
-
-function parseHex(hex: string): [number, number, number] {
-  const normalized = hex.trim().replace(/^#/, '');
-  const expanded = normalized.length === 3 ? normalized.replace(/./g, (char) => char + char) : normalized;
-  if (!/^[\da-f]{6}$/i.test(expanded)) return [255, 255, 255];
-  const value = Number.parseInt(expanded, 16);
-  return [(value >> 16) & 255, (value >> 8) & 255, value & 255];
 }
 
 function kelvinRgb(kelvin: number): [number, number, number] {
@@ -94,14 +91,6 @@ export function resolveKelvinColor(kelvin: number, color = '#ffffff'): string {
   const tint = kelvinRgb(kelvin);
   const bytes = [red, green, blue].map((channel, index) => Math.round(channel * tint[index] / 255));
   return `#${bytes.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
-}
-
-export function lerpHex(a: string, b: string, t: number): string {
-  const amount = Math.max(0, Math.min(1, t));
-  const left = parseHex(a);
-  const right = parseHex(b);
-  const mixed = left.map((channel, index) => Math.round(lerp(channel, right[index], amount)));
-return `#${mixed.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
 function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet<string>): ResolvedSceneLight {

@@ -48,3 +48,14 @@ it('applies the ghost offset in the same direction as the scene shader', () => {
 
   expect(pixels[4]).toBe(255);
 });
+
+it('applies vignette with custom tint color and softness to canvas pixels', () => {
+  const shot = createDefaultProject().shots[0];
+  for (const key of shot.effectsOrder) shot.effects[key].enabled = false;
+  shot.effects.vignette = { enabled: true, intensity: 1, midpoint: 0, softness: 0.5, color: '#ff0000' };
+  const pixels = new Uint8ClampedArray([0, 0, 0, 255]); // center pixel
+  applyCanvasSceneEffects(pixels, 1, 1, evaluateEffectsAtTime(shot, 0));
+  // In center (radius 0, midpoint 0), amount is clamp(0.5)*1 = 0.5, blended with red
+  expect(pixels[0]).toBeGreaterThan(0);
+});
+

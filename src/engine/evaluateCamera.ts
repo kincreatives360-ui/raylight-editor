@@ -141,7 +141,7 @@ export function evaluateShotCameraAtTime(
                         10,
                         Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
                     );
-                    focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+                    focalLength = (SENSOR_HEIGHT_MM / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
                 } else {
                     focalLength = baseFocal;
                     fovDegrees = focalLengthToFov(focalLength);
@@ -191,7 +191,7 @@ export function evaluateShotCameraAtTime(
                 10,
                 Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
             );
-            focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+            focalLength = (SENSOR_HEIGHT_MM / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
             if (Math.abs(toZ - fromZ) < 1e-6) {
                 // Compensate Z distance when no explicit Z shift was authored so subject width stays locked
                 targetZ = fromZ + (1 - fromBaseZoom / zoom) * CAMERA_Z_COMPENSATION;

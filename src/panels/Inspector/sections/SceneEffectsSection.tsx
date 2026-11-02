@@ -1,19 +1,13 @@
 import { MenuSurface, MenuItem } from '../../../ui/Menu';
 import { IconButton } from '../../../ui/primitives';
-import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { useState, useMemo } from 'react';
 import type { Shot, EffectKey } from '../../../model/types';
 import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { usePlayheadStore } from '../../../store/usePlayheadStore';
-import { useSelectionStore } from '../../../store/useSelectionStore';
-import { evaluateProjectAtTime } from '../../../engine/evaluateShot';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import { createDofBlurBlock, createDofFocusBlock } from './dofAnimationActions';
 import {
-  Aperture,
   Sun,
   Triangle,
   Circle,
@@ -39,7 +33,6 @@ import {
 import { ColorPicker } from '../ColorPicker';
 
 const EFFECT_NAMES: Record<EffectKey, string> = {
-  depthOfField: 'Depth of field',
   bloom: 'Bloom',
   chromaticAberration: 'Color split',
   vignette: 'Vignette',
@@ -57,8 +50,6 @@ const EFFECT_NAMES: Record<EffectKey, string> = {
 
 function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: EffectKey; className?: string }) {
   switch (effectKey) {
-    case 'depthOfField':
-      return <Aperture className={className} />;
     case 'bloom':
       return <Sun className={className} />;
     case 'chromaticAberration':
@@ -87,19 +78,8 @@ function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: Effec
 }
 
 const label = (key: string) => key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
-const getDofSettings = (shot: Pick<Shot, 'effects'>) => {
-  const settings = shot.effects?.depthOfField;
-  return {
-    ...DEFAULT_SCENE_EFFECTS.depthOfField,
-    ...settings,
-    target: {
-      ...DEFAULT_SCENE_EFFECTS.depthOfField.target,
-      ...settings?.target,
-    },
-  };
-};
+
 const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
-  depthOfField: ['sceneSize', 'highlightThreshold', 'highlightIntensity'],
   chromaticAberration: ['edgeStrength', 'centerX', 'centerY', 'channelRed', 'channelGreen', 'channelBlue', 'fringeColorAngle'],
   filmGrain: ['softness', 'colorAmount', 'aspect', 'seed', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'blendMode', 'motion'],
   lensDistortion: ['centerX', 'centerY', 'edgeMode', 'measure'],
@@ -140,131 +120,10 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const [expandedKey, setExpandedKey] = useState<EffectKey | null>(null);
   const [settingsKey, setSettingsKey] = useState<EffectKey | null>(null);
 
-  const dofLayers = useMemo(() => {
-    const timeMs = Math.max(shot.startMs, Math.min(shot.startMs + shot.durationMs, currentTimeMs));
-    const evaluatedShot: Shot = {
-      ...shot,
-      effects: {
-        ...DEFAULT_SCENE_EFFECTS,
-        ...shot.effects,
-        depthOfField: {
-          ...DEFAULT_SCENE_EFFECTS.depthOfField,
-          ...shot.effects?.depthOfField,
-          target: {
-            ...DEFAULT_SCENE_EFFECTS.depthOfField.target,
-            ...shot.effects?.depthOfField?.target,
-          },
-        },
-      },
-    };
-    return evaluateProjectAtTime({ ...project, shots: [evaluatedShot] }, timeMs).layers
-      .filter((layer) => layer.visible);
-  }, [currentTimeMs, project, shot]);
-  const dofSettings = getDofSettings(shot);
-  const availableFocusSubject = dofSettings.focusTargetId
-    ? dofLayers.find((layer) => layer.id === dofSettings.focusTargetId)
-    : undefined;
-  const snapSubject = availableFocusSubject ?? selectedLayerIds
-    .map((id) => dofLayers.find((layer) => layer.id === id))
-    .find((layer) => layer !== undefined);
-  const focusOnValue = dofSettings.focusMode === 'subject' && availableFocusSubject
-    ? availableFocusSubject.id
-    : 'point';
-
   const order = useMemo(
     () => [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])],
     [shot.effectsOrder]
   );
-
-  // Applied effects list (Figma style)
-  const appliedKeys = useMemo<EffectKey[]>(() => {
-    if (shot.appliedEffects && shot.appliedEffects.length > 0) {
-      return shot.appliedEffects;
-    }
-    // Fall back to any enabled effects in shot
-    const enabled = order.filter((k) => Boolean(shot.effects?.[k]?.enabled));
-    return enabled;
-  }, [shot.appliedEffects, shot.effects, order]);
-
-  const setValue = (key: EffectKey, field: string, value: number | string | boolean | GradientStop[]) => {
-    updateShot(shot.id, (s) => ({
-      ...s,
-      effects: {
-        ...s.effects,
-        [key]: {
-          ...(s.effects?.[key] || {}),
-          [field]: value,
-        },
-      },
-    }));
-  };
-
-  const setDofTarget = (field: 'x' | 'y' | 'z', value: number) => {
-    updateShot(shot.id, (current) => ({
-      ...current,
-      effects: {
-        ...current.effects,
-        depthOfField: {
-          ...getDofSettings(current),
-          target: { ...getDofSettings(current).target, [field]: value },
-        },
-      },
-    }));
-  };
-
-  const setDofFocusSubject = (subjectId: string) => {
-    updateShot(shot.id, (current) => ({
-      ...current,
-      effects: {
-        ...current.effects,
-        depthOfField: {
-          ...getDofSettings(current),
-          focusMode: subjectId === 'point' ? 'point' : 'subject',
-          focusTargetId: subjectId === 'point' ? undefined : subjectId,
-        },
-      },
-    }));
-  };
-
-  const snapFocusToSubject = () => {
-    if (!snapSubject) return;
-    updateShot(shot.id, (current) => ({
-      ...current,
-      effects: {
-        ...current.effects,
-        depthOfField: {
-          ...getDofSettings(current),
-          focusMode: 'subject',
-          focusTargetId: snapSubject.id,
-          target: { ...snapSubject.position },
-        },
-      },
-    }));
-  };
-
-  const addDofFocusBlock = () => {
-    updateShot(shot.id, (current) => ({
-      ...current,
-      focusBlocks: [
-        ...(current.focusBlocks ?? []),
-        createDofFocusBlock(
-          { ...current, effects: { ...current.effects, depthOfField: getDofSettings(current) } },
-          currentTimeMs,
-          getDofSettings(current).target.z
-        ),
-      ],
-    }));
-  };
-
-  const addDofBlurBlock = () => {
-    updateShot(shot.id, (current) => ({
-      ...current,
-      effectBlocks: [
-        ...(current.effectBlocks ?? []),
-        createDofBlurBlock(current, currentTimeMs, getDofSettings(current).bokehScale),
-      ],
-    }));
-  };
 
   const addEffect = (key: EffectKey) => {
     const current = shot.appliedEffects ?? order.filter((k) => shot.effects?.[k]?.enabled);
@@ -486,89 +345,13 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                   <div className="relative p-2.5 rounded-xl bg-surface-elevated border border-border/60 space-y-2 mt-1">
                     {['chromaticAberration'].includes(key) && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','lens')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='lens'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Lens</button><button type="button" onClick={()=>setValue(key,'mode','split')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='split'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Split</button></div>}
                     {key === 'lensDistortion' && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','pinch')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='pinch'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Pinch</button><button type="button" onClick={()=>setValue(key,'mode','barrel')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='barrel'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Barrel</button></div>}
-                    {['depthOfField','chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='depthOfField'?'Blur':key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
+                    {['chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(mergedFields)
-                        .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key]??[]).includes(field) && !(key==='atmosphere'&&['start','reach','mistHeight'].includes(field)) && !(key === 'depthOfField' && ['focusRange', 'bokehScale', 'focalLength', 'sceneSize', 'highlightThreshold', 'highlightIntensity'].includes(field)))
-                        .map(([field, rawVal]) => renderNumber(key,field,Number(rawVal)))}
+                        .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key] ?? []).includes(field) && !(key === 'atmosphere' && ['start', 'reach', 'mistHeight'].includes(field)))
+                        .map(([field, rawVal]) => renderNumber(key, field, Number(rawVal)))}
                       {Object.entries(mergedFields).filter(([field,value])=>typeof value==='string'&&SELECT_OPTIONS[key]?.[field]&&!(SETTINGS_FIELDS[key]??[]).includes(field)&&!((key==='lensDistortion')&&field==='mode')).map(([field,value])=>renderSelect(key,field,String(value)))}
 
-                      {key === 'depthOfField' && (
-                        <>
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] text-muted-foreground font-medium">Focus on</label>
-                            <FigmaSelect
-                              aria-label="Focus on"
-                              className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer"
-                              value={focusOnValue}
-                              onChange={(event) => setDofFocusSubject(event.target.value)}
-                            >
-                              <option value="point">Point</option>
-                              {dofLayers.map((layer) => (
-                                <option key={layer.id} value={layer.id}>{layer.name}</option>
-                              ))}
-                            </FigmaSelect>
-                          </div>
-                          <ScrubInput
-                            aria-label="Focus X"
-                            label="Focus X"
-                            value={dofSettings?.target?.x ?? 0}
-                            min={-1}
-                            max={1}
-                            step={0.01}
-                            onChange={(value) => setDofTarget('x', value)}
-                          />
-                          <ScrubInput
-                            aria-label="Focus Y"
-                            label="Focus Y"
-                            value={dofSettings?.target?.y ?? 0}
-                            min={-1}
-                            max={1}
-                            step={0.01}
-                            onChange={(value) => setDofTarget('y', value)}
-                          />
-                          <ScrubInput
-                            aria-label="Depth"
-                            label="Depth"
-                            value={dofSettings?.target?.z ?? 0}
-                            min={-20}
-                            max={20}
-                            step={0.01}
-                            onChange={(value) => setDofTarget('z', value)}
-                          />
-                          <div className="flex flex-col gap-1">
-                            <span className="text-[10px] text-muted-foreground font-medium">Bokeh</span>
-                            <span className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white flex items-center">Spherical</span>
-                          </div>
-                          <div className="col-span-2 grid grid-cols-2 gap-2">
-                            <button
-                              type="button"
-                              aria-label="Snap to subject"
-                              disabled={!snapSubject}
-                              onClick={snapFocusToSubject}
-                              className="col-span-2 h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/10"
-                            >
-                              Snap to subject
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Animate focus"
-                              onClick={addDofFocusBlock}
-                              className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white hover:bg-white/10"
-                            >
-                              Animate focus
-                            </button>
-                            <button
-                              type="button"
-                              aria-label="Animate blur"
-                              onClick={addDofBlurBlock}
-                              className="h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white hover:bg-white/10"
-                            >
-                              Animate blur
-                            </button>
-                          </div>
-                        </>
-                      )}
                       {key==='atmosphere'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
                       {key==='edgeFade'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
                     </div>
@@ -582,9 +365,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                       >
                         <div className="flex items-center justify-between pb-1">
                           <h4 className="text-[11px] font-medium text-white/90">
-                            {key === 'depthOfField'
-                              ? 'Blur settings'
-                              : key === 'chromaticAberration'
+                            {key === 'chromaticAberration'
                               ? 'Fringe settings'
                               : key === 'filmGrain'
                               ? 'Grain settings'

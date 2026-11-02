@@ -44,6 +44,8 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
                 // eslint-disable-next-line react-hooks/immutability
                 camera.fov = pose.fov;
             }
+            camera.near = 0.1;
+            camera.far = 100;
             camera.updateMatrixWorld(true);
             camera.updateProjectionMatrix();
 

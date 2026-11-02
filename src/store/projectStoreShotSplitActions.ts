@@ -66,7 +66,6 @@ export const createShotSplitActions: ProjectStoreActionCreator<'splitShotAtPlayh
         });
         secondShot.lightBlocks = restoreFutureBlockIds(secondShot.lightBlocks, target.lightBlocks);
         secondShot.effectBlocks = restoreFutureBlockIds(secondShot.effectBlocks, target.effectBlocks);
-        secondShot.focusBlocks = restoreFutureBlockIds(secondShot.focusBlocks, target.focusBlocks);
         // An interval which ends at the split is absent from the second shot.
         // In particular, never revive it using an arbitrary 100ms minimum.
         secondShot.layers = secondShot.layers
@@ -87,7 +86,6 @@ export const createShotSplitActions: ProjectStoreActionCreator<'splitShotAtPlayh
         secondShot.cameraBlocks = shiftBlocksForSecondHalf(secondShot.cameraBlocks, firstDuration, 'cam-blk');
         secondShot.lightBlocks = sliceSceneBlocks(secondShot.lightBlocks, firstDuration, secondDuration);
         secondShot.effectBlocks = sliceSceneBlocks(secondShot.effectBlocks, firstDuration, secondDuration);
-        secondShot.focusBlocks = sliceSceneBlocks(secondShot.focusBlocks, firstDuration, secondDuration, 'focus-blk');
 
         get().updateProject((proj) => {
             const idx = proj.shots.findIndex((s) => s.id === shotId);
@@ -109,7 +107,6 @@ export const createShotSplitActions: ProjectStoreActionCreator<'splitShotAtPlayh
                 cameraBlocks: trimBlocksForFirstHalf(target.cameraBlocks, firstDuration),
                 lightBlocks: sliceSceneBlocks(target.lightBlocks, 0, firstDuration),
                 effectBlocks: sliceSceneBlocks(target.effectBlocks, 0, firstDuration),
-                focusBlocks: sliceSceneBlocks(target.focusBlocks, 0, firstDuration),
             };
             updatedFirst.groups = pruneEmptyGroups(updatedFirst.groups, updatedFirst.layers);
             const nextShots = [...proj.shots];

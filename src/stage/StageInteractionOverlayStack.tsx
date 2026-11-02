@@ -7,7 +7,6 @@ import { Guides } from './Guides';
 import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { SelectionOverlay } from './SelectionOverlay';
-import { DepthOfFieldFocusOverlay } from './DepthOfFieldFocusOverlay';
 import { LightingOverlay } from './LightingOverlay';
 
 interface OverlayBox {
@@ -127,14 +126,6 @@ export function StageInteractionOverlayStack({
                 snapEnabled={snapEnabled}
                 onUpdateGuides={setActiveGuides}
                 onSelectLayer={handleSelectLayer}
-            />
-
-            <DepthOfFieldFocusOverlay
-                frame={frame}
-                frameWidth={frameWidth}
-                frameHeight={frameHeight}
-                targetAspect={targetAspect}
-                cameraPose={cameraPose}
             />
 
             <LightingOverlay

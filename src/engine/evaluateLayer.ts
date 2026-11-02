@@ -2,6 +2,8 @@
 import type { Layer, Vec3, Size2D, AnimationBlockSettings, Transitionish } from '../model/types';
 import { evaluateEasing } from './easing';
 
+import { getTextLayerSize } from './textBounds';
+
 export interface EvaluatedLayer {
     id: string;
     name: string;
@@ -100,7 +102,7 @@ export function evaluateLayerAtTime(
     const scale: Vec3 = { ...layer.scale };
     const size: Size2D =
         layer.kind === 'text'
-            ? { width: layer.maxWidth, height: layer.font.size * Math.max(2.5, (layer.content.split('\n').length - 1) * (layer.font.lineHeight ?? 1.22) + 1.5) }
+            ? getTextLayerSize(layer)
             : { ...layer.size };
     const baseTextHeight = layer.kind === 'text' ? size.height : 0;
 
@@ -334,9 +336,11 @@ export function evaluateLayerAtTime(
             if (typeof blk.amount === 'number') {
                 scale.x += blk.amount * eased;
                 scale.y += blk.amount * eased;
+                scale.z += blk.amount * eased;
             } else {
                 scale.x += blk.amount.x * eased;
                 scale.y += blk.amount.y * eased;
+                scale.z += (blk.amount.z ?? 0) * eased;
             }
         } else if (blk.property === 'size' && typeof blk.amount === 'object') {
             size.width = Math.max(0.02, size.width + blk.amount.x * eased);

@@ -153,38 +153,6 @@ export interface LightRig {
   /** Show 3D light helper gizmos on stage */
   showGizmos?: boolean;
   /** Multiple independently editable light sources */
-  sources: SceneLight[];
-}
-
-export interface SceneLight {
-  id: string;
-  name: string;
-  type: LightSourceType;
-  enabled: boolean;
-  position: Vec3;
-  /** Aim target for spot lights or orientation */
-  target?: Vec3;
-  /** Optional rotation in radians */
-  rotation?: Vec3;
-  intensity: number;
-  color: string;
-  temperature?: number;
-  /** Distance / radius falloff for point and spot lights */
-  distance?: number;
-  /** Falloff decay factor (physically accurate inverse-square default = 2) */
-  decay?: number;
-  /** Cone angle for spot lights (radians) */
-  angle?: number;
-  /** Edge softness for spot lights (0 = hard edge, 1 = maximum penumbra) */
-  penumbra?: number;
-  /** Width for area lights */
-  width?: number;
-  /** Height for area lights */
-  height?: number;
-  /** Whether this light casts shadows */
-  castShadow?: boolean;
-  shadowStrength?: number;
-  shadowSoftness?: number;
 }
 
 export { type EffectKey } from './enums';
@@ -225,20 +193,6 @@ export interface SceneEffects {
     centerY: number;
     edgeMode: 'fill' | 'balanced' | 'none';
     measure: 'width' | 'height' | 'diagonal';
-  };
-  depthOfField: {
-    enabled: boolean;
-    target: Vec3;
-    focusRange: number;
-    aperture: number;
-    bokehScale: number;
-    bokehShape: 'anamorphic' | 'spherical' | 'vintage' | 'portrait';
-    focalLength?: number;
-    highlightThreshold?: number;
-    highlightIntensity?: number;
-    sceneSize?: number;
-    focusMode?: 'point' | 'subject';
-    focusTargetId?: string;
   };
   bloom: {
     enabled: boolean;
