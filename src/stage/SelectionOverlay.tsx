@@ -1,5 +1,5 @@
 // src/stage/SelectionOverlay.tsx
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { SelectionOverlayVisuals, type ResizeHandleDir } from './SelectionOverlayVisuals';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
@@ -19,6 +19,7 @@ import {
 } from './webgl/cameraMath';
 import { useCameraPose } from './CameraPoseContext';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDeviceFromHandle } from '../model/deviceFrame';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 interface SelectionOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -48,6 +49,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         recordAnimatedBlockAtPlayhead,
         beginDragTransaction,
         commitDragTransaction,
+        cancelDragTransaction,
     } = useProjectStore();
 
     const {
@@ -61,8 +63,10 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     } = useSelectionStore();
 
     const overlayRootRef = useRef<HTMLDivElement | null>(null);
+    const cancelActiveDragRef = useRef<(() => void) | null>(null);
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
     const { cameraPose, targetAspect: aspect, evaluateCustomPose } = useCameraPose();
+    useEffect(() => () => cancelActiveDragRef.current?.(), []);
 
     const activeShot: Shot = frame.activeShot;
     const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
@@ -156,9 +160,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                     }),
                     { skipHistory: true }
                 );
-            },
-            () => {
-                updateShot(activeShot.id, (s) => ({ ...s }));
             }
         );
     };
@@ -168,42 +169,21 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         onMove: (moveEvent: PointerEvent | MouseEvent) => void,
         onEnd?: () => void
     ) => {
-        const target = e.currentTarget as Element | null;
-        const pointerId = 'pointerId' in e ? e.pointerId : undefined;
-        if (pointerId !== undefined && target && 'setPointerCapture' in target) {
-            try {
-                target.setPointerCapture(pointerId);
-            } catch {
-                // Ignore synthetic or non-capturable pointer events
-            }
-        }
-
-        const handleUp = () => {
-            if (pointerId !== undefined && target && 'releasePointerCapture' in target) {
-                try {
-                    if (target.hasPointerCapture(pointerId)) {
-                        target.releasePointerCapture(pointerId);
-                    }
-                } catch {
-                    // Ignore release errors
-                }
-            }
-            onEnd?.();
-            window.removeEventListener('pointermove', onMove);
-            window.removeEventListener('pointerup', handleUp);
-            window.removeEventListener('pointercancel', handleUp);
-            window.removeEventListener('mousemove', onMove);
-            window.removeEventListener('mouseup', handleUp);
-        };
-
-        if (pointerId !== undefined) {
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', handleUp);
-            window.addEventListener('pointercancel', handleUp);
-        } else {
-            window.addEventListener('mousemove', onMove);
-            window.addEventListener('mouseup', handleUp);
-        }
+        cancelActiveDragRef.current?.();
+        const target = e.currentTarget as Element;
+        const pointerId = 'pointerId' in e ? e.pointerId : null;
+        cancelActiveDragRef.current = createPointerDragLifecycle({
+            pointerId,
+            target,
+            begin: beginDragTransaction,
+            commit: commitDragTransaction,
+            cancel: cancelDragTransaction,
+            onMove,
+            onEnd: () => {
+                if (cancelActiveDragRef.current) cancelActiveDragRef.current = null;
+                onEnd?.();
+            },
+        });
     };
 
     // ============================================================================
@@ -218,7 +198,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         e.stopPropagation();
         if (isLocked) return;
 
-        beginDragTransaction();
         const startClientX = e.clientX;
         const startClientY = e.clientY;
 
@@ -351,7 +330,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         e.stopPropagation();
         if (isLocked) return;
 
-        beginDragTransaction();
         const startClientX = e.clientX;
         const startClientY = e.clientY;
 
@@ -410,7 +388,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 );
             };
 
-            bindPointerDrag(e, onCropMove, commitDragTransaction);
+            bindPointerDrag(e, onCropMove);
             return;
         }
 
@@ -568,7 +546,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        bindPointerDrag(e, onMouseMove, commitDragTransaction);
+        bindPointerDrag(e, onMouseMove);
     };
 
     // ============================================================================
@@ -581,7 +559,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         const rect = overlayRootRef.current?.getBoundingClientRect();
         if (!rect) return;
 
-        beginDragTransaction();
         // Convert projected center from stage-local pixels to screen client pixels
         const centerClientX = rect.left + primaryProj.pCenter.x * canvasZoom;
         const centerClientY = rect.top + primaryProj.pCenter.y * canvasZoom;
@@ -638,7 +615,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        bindPointerDrag(e, onMouseMove, commitDragTransaction);
+        bindPointerDrag(e, onMouseMove);
     };
 
     // ============================================================================
@@ -648,7 +625,6 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         e.stopPropagation();
         if (isLocked) return;
 
-        beginDragTransaction();
         const startClientX = e.clientX;
         const startClientY = e.clientY;
         const initialXDeg = radToDeg(layer.rotation.x);
@@ -711,7 +687,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        bindPointerDrag(e, onMouseMove, commitDragTransaction);
+        bindPointerDrag(e, onMouseMove);
     };
 
     const handleItems: {
@@ -769,6 +745,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 onResizeStart={handleStartResize}
                 onSelectLayer={onSelectLayer}
                 updateLayer={updateLayer}
+                onPointerDrag={bindPointerDrag}
             />
         </div>
     );

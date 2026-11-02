@@ -33,7 +33,16 @@ interface SelectionOverlayVisualsProps {
     onRotateStart: (event: React.PointerEvent | React.MouseEvent) => void;
     onResizeStart: (event: React.PointerEvent | React.MouseEvent, direction: ResizeHandleDir) => void;
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
-    updateLayer: (shotId: string, layerId: string, updater: (layer: Layer) => Layer) => void;
+    updateLayer: (
+        shotId: string,
+        layerId: string,
+        updater: (layer: Layer) => Layer,
+        options?: { skipHistory?: boolean }
+    ) => void;
+    onPointerDrag: (
+        event: React.PointerEvent | React.MouseEvent,
+        onMove: (moveEvent: PointerEvent | MouseEvent) => void
+    ) => void;
 }
 
 export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = ({
@@ -41,7 +50,7 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
     isLocked, isCropping, isAnimateMode, isEditingInlineText, setIsEditingInlineText,
     activeTool, borderColor, isMotionBlock, motionStartPoint, motionEndPoint,
     motionMidControl, motionAmount, handleItems, onMoveStart, onMotionEndStart,
-    onRotateStart, onResizeStart, onSelectLayer, updateLayer,
+    onRotateStart, onResizeStart, onSelectLayer, updateLayer, onPointerDrag,
 }) => {
     return (
     <>            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
@@ -194,33 +203,21 @@ export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = (
                                 onPointerDown={(e) => {
                                     e.stopPropagation();
                                     e.preventDefault();
-                                    const pointerId = e.pointerId;
                                     const startX = e.clientX;
                                     const startY = e.clientY;
                                     const initialRadius = itemL?.cornerRadius ?? 0;
 
-                                    const onMove = (moveEv: PointerEvent) => {
-                                        if (moveEv.pointerId !== pointerId) return;
+                                    onPointerDrag(e, (moveEv) => {
                                         const dx = moveEv.clientX - startX;
                                         const dy = moveEv.clientY - startY;
                                         const dot = dx * nx + dy * ny;
                                         const deltaRadius = dot / 120;
                                         const nextRadius = Math.max(0, Math.min(0.5, Number((initialRadius + deltaRadius).toFixed(3))));
                                         updateLayer(activeShotId, layer.id, (l) =>
-                                            l.kind !== 'text' ? { ...l, cornerRadius: nextRadius } : l
+                                            l.kind !== 'text' ? { ...l, cornerRadius: nextRadius } : l,
+                                            { skipHistory: true }
                                         );
-                                    };
-
-                                    const onUp = (upEv: PointerEvent) => {
-                                        if (upEv.pointerId !== pointerId) return;
-                                        window.removeEventListener('pointermove', onMove);
-                                        window.removeEventListener('pointerup', onUp);
-                                        window.removeEventListener('pointercancel', onUp);
-                                    };
-
-                                    window.addEventListener('pointermove', onMove);
-                                    window.addEventListener('pointerup', onUp);
-                                    window.addEventListener('pointercancel', onUp);
+                                    });
                                 }}
                             />
                         );

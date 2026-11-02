@@ -1,7 +1,9 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { ColorPicker } from '../panels/Inspector/ColorPicker';
 import { ScrubInput } from '../ui/ScrubInput';
 import { clampStop, defaultHandles, gradientAngle, interpolatePoint, rotateHandles, sampleStop, stopPosition, type Gradient, type Handles, type Point } from './gradientGeometry';
+import { useProjectStore } from '../store/useProjectStore';
+import { registerGradientDragCancellation } from './gradientDragCancellation';
 type Mode = 'move' | 'rotate' | 'start' | 'end' | 'radius' | 'stop';
 type Drag = {
     pointer: number;
@@ -13,6 +15,7 @@ type Drag = {
     handles: Handles;
     moved: boolean;
     remove: boolean;
+    target: SVGSVGElement;
 };
 export function GradientEditor({ fill, corners, width, height, onChange, begin, commit }: {
     fill: Gradient;
@@ -25,8 +28,7 @@ export function GradientEditor({ fill, corners, width, height, onChange, begin, 
 }) {
     const [selected, setSelected] = useState<number | null>(null);
     const drag = useRef<Drag | null>(null);
-    const latest = useRef({ fill, onChange, commit });
-    useEffect(() => { latest.current = { fill, onChange, commit }; }, [fill, onChange, commit]);
+    const cancelDragTransaction = useProjectStore(state => state.cancelDragTransaction);
     const handles = defaultHandles(fill);
     const origin = corners[0], u = { x: corners[1].x - origin.x, y: corners[1].y - origin.y }, v = { x: corners[3].x - origin.x, y: corners[3].y - origin.y };
     const project = (p: Point) => ({ x: origin.x + u.x * p.x + v.x * p.y, y: origin.y + u.y * p.x + v.y * p.y });
@@ -47,24 +49,34 @@ export function GradientEditor({ fill, corners, width, height, onChange, begin, 
         return; onChange({ ...fill, stops: fill.stops.filter((_, i) => i !== index) }); setSelected(null);  };
     const stopAt = (p: Point) => angular ? ((Math.atan2(local(p).y - handles.start.y, local(p).x - handles.start.x) * 180 / Math.PI - fill.angle + 90 + 720) % 360) / 360 : stopPosition(p, start, end);
     const addStop = (at: number) => { const stops = [...fill.stops, sampleStop(fill.stops, at)]; onChange({ ...fill, handles, stops }); setSelected(stops.length - 1); };
+    const cancelActiveDrag = useCallback(() => {
+        const state = drag.current;
+        if (!state) return;
+        drag.current = null;
+        if (state.target.hasPointerCapture(state.pointer)) {
+            state.target.releasePointerCapture(state.pointer);
+        }
+        cancelDragTransaction();
+    }, [cancelDragTransaction]);
     useEffect(() => {
-        const endDrag = () => { if (drag.current) {
-            drag.current = null;
-            latest.current.commit();
-        } };
-        window.addEventListener('blur', endDrag);
-        return () => { window.removeEventListener('blur', endDrag); endDrag(); };
-    }, []);
+        const unregister = registerGradientDragCancellation(window, cancelActiveDrag);
+        return () => {
+            unregister();
+            cancelActiveDrag();
+        };
+    }, [cancelActiveDrag]);
     const finish = (e: React.PointerEvent<SVGSVGElement>, cancelled = false) => {
         const state = drag.current;
         if (!state || state.pointer !== e.pointerId)
             return;
+        if (cancelled) {
+            cancelActiveDrag();
+            return;
+        }
         drag.current = null;
         if (e.currentTarget.hasPointerCapture(e.pointerId))
             e.currentTarget.releasePointerCapture(e.pointerId);
-        if (cancelled)
-            onChange(state.fill);
-        else if (state.remove)
+        if (state.remove)
             removeStop(state.index);
         else if (!state.moved && state.mode === 'stop')
             setSelected(state.index);
@@ -74,6 +86,7 @@ export function GradientEditor({ fill, corners, width, height, onChange, begin, 
     };
     const keyboard = (e: React.KeyboardEvent<SVGElement>, mode: Mode, index = -1) => {
         if (e.key === 'Escape') {
+            cancelActiveDrag();
             setSelected(null);
             e.stopPropagation();
 
@@ -114,7 +127,7 @@ export function GradientEditor({ fill, corners, width, height, onChange, begin, 
     const rotatePoint = { x: end.x + (end.x - start.x) * .18, y: end.y + (end.y - start.y) * .18 };
     return <svg data-gradient-editor="true" aria-label="Gradient editor" viewBox={`0 0 ${width} ${height}`} className="absolute inset-0 z-40 h-full w-full overflow-visible touch-none pointer-events-none" onPointerDown={e => { const target = e.target as SVGElement; const mode = target.getAttribute('data-mode') as Mode | null; if (!mode || drag.current)
         return; e.preventDefault(); e.stopPropagation();  const index = Number(target.getAttribute('data-stop')); if (mode === 'stop')
-        setSelected(index); drag.current = { pointer: e.pointerId, mode, index, origin: pointer(e), client: { x: e.clientX, y: e.clientY }, fill, handles, moved: false, remove: false }; begin(); e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={e => {
+    setSelected(index); drag.current = { pointer: e.pointerId, mode, index, origin: pointer(e), client: { x: e.clientX, y: e.clientY }, fill, handles, moved: false, remove: false, target: e.currentTarget }; begin(); e.currentTarget.setPointerCapture(e.pointerId); }} onPointerMove={e => {
             const state = drag.current;
             if (!state || state.pointer !== e.pointerId)
                 return;
