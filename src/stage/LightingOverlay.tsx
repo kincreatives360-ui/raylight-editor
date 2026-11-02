@@ -21,6 +21,7 @@ import {
     type Vec3Like,
 } from './lightingMath';
 import { createVirtualCamera } from './lightingMath';
+import { createPointerDragLifecycle } from './selectionDragLifecycle';
 
 interface LightingOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -33,7 +34,13 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     frameWidth,
     frameHeight,
 }) => {
-    const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
+    const {
+        project,
+        updateShot,
+        beginDragTransaction,
+        commitDragTransaction,
+        cancelDragTransaction,
+    } = useProjectStore();
     const { selectedLightId, selectLight, canvasZoom, activeLightTool, setActiveLightTool } = useSelectionStore();
 
     const activeShot = frame.activeShot;
@@ -196,32 +203,22 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     }, []);
 
     const startDrag = useCallback(
-        (onMove: (moveEv: PointerEvent) => void) => {
-            if (activeDragCleanupRef.current) {
-                activeDragCleanupRef.current();
-            }
-
-            beginDragTransaction();
-
-            const cleanup = () => {
-                window.removeEventListener('pointermove', onMove);
-                window.removeEventListener('pointerup', handleEnd);
-                window.removeEventListener('pointercancel', handleEnd);
-                activeDragCleanupRef.current = null;
-                setActiveDepthDrag(null);
-                commitDragTransaction();
-            };
-
-            const handleEnd = () => {
-                cleanup();
-            };
-
-            window.addEventListener('pointermove', onMove);
-            window.addEventListener('pointerup', handleEnd);
-            window.addEventListener('pointercancel', handleEnd);
-            activeDragCleanupRef.current = cleanup;
+        (event: React.PointerEvent, onMove: (moveEv: PointerEvent | MouseEvent) => void) => {
+            activeDragCleanupRef.current?.();
+            activeDragCleanupRef.current = createPointerDragLifecycle({
+                pointerId: event.pointerId,
+                target: event.currentTarget,
+                begin: beginDragTransaction,
+                commit: commitDragTransaction,
+                cancel: cancelDragTransaction,
+                onMove,
+                onEnd: () => {
+                    activeDragCleanupRef.current = null;
+                    setActiveDepthDrag(null);
+                },
+            });
         },
-        [beginDragTransaction, commitDragTransaction]
+        [beginDragTransaction, commitDragTransaction, cancelDragTransaction]
     );
 
     // Depth (Z) Drag Handler
@@ -234,7 +231,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startZ = selectedLight.position.z ?? 1.0;
         setActiveDepthDrag(startZ);
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
             const nextZ = calculateDepthDeltaFromScreen(deltaPxY, startZ);
             setActiveDepthDrag(nextZ);
@@ -246,7 +243,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
     // Drag handlers
@@ -265,7 +262,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             return;
         }
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaScreenX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaScreenY = (moveEv.clientY - startClientY) / canvasZoom;
 
@@ -288,7 +285,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, handleDepthDragStart, startDrag, updateLight]);
 
     const handleTargetDragStart = useCallback((e: React.PointerEvent) => {
@@ -300,7 +297,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startClientY = e.clientY;
         const startTargetPos = { ...(selectedLight.target || { x: 0, y: 0, z: 0 }) };
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaScreenX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaScreenY = (moveEv.clientY - startClientY) / canvasZoom;
 
@@ -323,7 +320,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, cameraPose, frameWidth, frameHeight, aspect, startDrag, updateLight]);
 
     // Spot Cone Angle Drag
@@ -355,7 +352,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             const ux = dx / rScreen0;
             const uy = dy / rScreen0;
 
-            const onPointerMove = (moveEv: PointerEvent) => {
+            const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
                 const deltaPxX = (moveEv.clientX - startClientX) / canvasZoom;
                 const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
                 const signedDeltaR = deltaPxX * ux + deltaPxY * uy;
@@ -368,7 +365,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                 updateLight({ angle: Number(newAngle.toFixed(3)) });
             };
 
-            startDrag(onPointerMove);
+            startDrag(e, onPointerMove);
         },
         [selectedLight, canvasZoom, frameWidth, startDrag, updateLight]
     );
@@ -384,7 +381,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startW = selectedLight.width || 3;
         const startH = selectedLight.height || 3;
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPxX = (moveEv.clientX - startClientX) / canvasZoom;
             const deltaPxY = (moveEv.clientY - startClientY) / canvasZoom;
             const scaleFactor = 0.01;
@@ -395,7 +392,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             updateLight({ width: nextW, height: nextH });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
     // Point Reach Drag
@@ -407,14 +404,14 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const startClientX = e.clientX;
         const startDist = selectedLight.distance || 5;
 
-        const onPointerMove = (moveEv: PointerEvent) => {
+        const onPointerMove = (moveEv: PointerEvent | MouseEvent) => {
             const deltaPx = (moveEv.clientX - startClientX) / canvasZoom;
             const scaleFactor = 0.02;
             const nextDist = Math.max(0.5, Number((startDist + deltaPx * scaleFactor).toFixed(2)));
             updateLight({ distance: nextDist });
         };
 
-        startDrag(onPointerMove);
+        startDrag(e, onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
     if (!showGizmos && !selectedLightId && !activeLightTool) {
