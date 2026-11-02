@@ -2,6 +2,7 @@ import type { Dispatch, RefObject, SetStateAction } from 'react';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { Project } from '../model/types';
 import type { SnapGuideLine } from './stageUtils';
+import type { EvaluatedCameraPose } from './webgl/cameraMath';
 import { Guides } from './Guides';
 import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
@@ -42,8 +43,12 @@ interface StageInteractionOverlayStackProps {
     marqueeBox: MarqueeBox | null;
     dofFocusActive: boolean;
     dofFocusIndicator: { x: number; y: number } | null;
+    targetAspect: number;
+    cameraPose: EvaluatedCameraPose;
     stageFrameRef: RefObject<HTMLDivElement | null>;
     onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
+    onAdjustFocusDepth: (delta: number) => void;
+    onAdjustFocusRange: (delta: number) => void;
 }
 
 export function StageInteractionOverlayStack({
@@ -65,8 +70,12 @@ export function StageInteractionOverlayStack({
     marqueeBox,
     dofFocusActive,
     dofFocusIndicator,
+    targetAspect,
+    cameraPose,
     stageFrameRef,
     onFocusClick,
+    onAdjustFocusDepth,
+    onAdjustFocusRange,
 }: StageInteractionOverlayStackProps) {
     return (
         <>
@@ -135,8 +144,16 @@ export function StageInteractionOverlayStack({
             <DepthOfFieldFocusOverlay
                 active={dofFocusActive}
                 indicator={dofFocusIndicator}
+                frame={frame}
+                frameWidth={frameWidth}
+                frameHeight={frameHeight}
+                targetAspect={targetAspect}
+                cameraPose={cameraPose}
+                defaultCamera={referenceCamera}
                 stageFrameRef={stageFrameRef}
                 onFocusClick={onFocusClick}
+                onAdjustFocusDepth={onAdjustFocusDepth}
+                onAdjustFocusRange={onAdjustFocusRange}
             />
 
             <LightingOverlay

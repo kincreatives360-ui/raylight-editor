@@ -196,6 +196,38 @@ const StageComponent: React.FC<StageProps> = ({
         setDofFocusIndicator,
         setDofFocusActive,
     });
+    const handleAdjustFocusDepth = useCallback((delta: number) => {
+        const depth = frame.effects.state.depthOfField.target.z + delta;
+        updateShot(frame.activeShot.id, shot => ({
+            ...shot,
+            effects: {
+                ...shot.effects,
+                depthOfField: {
+                    ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
+                    target: {
+                        ...(shot.effects.depthOfField?.target ?? frame.effects.state.depthOfField.target),
+                        z: depth,
+                    },
+                },
+            },
+        }));
+    }, [frame.activeShot.id, frame.effects.state.depthOfField, updateShot]);
+    const handleAdjustFocusRange = useCallback((delta: number) => {
+        const focusRange = Math.max(0, Math.min(
+            20,
+            frame.effects.state.depthOfField.focusRange + delta
+        ));
+        updateShot(frame.activeShot.id, shot => ({
+            ...shot,
+            effects: {
+                ...shot.effects,
+                depthOfField: {
+                    ...(shot.effects.depthOfField ?? frame.effects.state.depthOfField),
+                    focusRange,
+                },
+            },
+        }));
+    }, [frame.activeShot.id, frame.effects.state.depthOfField, updateShot]);
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -469,8 +501,12 @@ const StageComponent: React.FC<StageProps> = ({
                         marqueeBox={marqueeBox}
                         dofFocusActive={dofFocusActive}
                         dofFocusIndicator={dofFocusIndicator}
+                        targetAspect={targetAspect}
+                        cameraPose={gradientCameraPose}
                         stageFrameRef={stageFrameRef}
                         onFocusClick={handleDofFocusClick}
+                        onAdjustFocusDepth={handleAdjustFocusDepth}
+                        onAdjustFocusRange={handleAdjustFocusRange}
                     />
                 </div>
             </div>
