@@ -6,7 +6,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
-import { renderSceneFrame } from './sceneRenderLoop';
+import { renderSceneFrameWithFallback } from './sceneRenderLoop';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 import {
@@ -253,17 +253,14 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
             gl.render(scene, camera);
             return;
         }
-        try {
-            renderSceneFrame(gl, scene, camera, composer);
-        } catch (err) {
-            console.warn('[Raylight Stage] Post-processing pass failed; rendering safe scene fallback:', err);
-            try {
-                gl.setRenderTarget(null);
-                gl.render(scene, camera);
-            } catch {
-                // Ignore context loss errors
-            }
-        }
+        renderSceneFrameWithFallback(
+            gl,
+            scene,
+            camera,
+            composer,
+            (error) => console.warn('[Raylight Stage] Post-processing pass failed; rendering safe scene fallback:', error),
+            (error) => console.warn('[Raylight Stage] Safe scene fallback failed:', error),
+        );
     }, 1);
 
     return null;

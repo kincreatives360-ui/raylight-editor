@@ -37,6 +37,12 @@ npm run dev
 # Run unit test suite (90+ test suites, 500+ unit & integration tests)
 npm test
 
+# Install Playwright's Chromium browser once
+npx playwright install chromium
+
+# Run the WebGL stage browser smoke test
+npm run test:e2e
+
 # Type-check and build production bundle
 npm run build
 
