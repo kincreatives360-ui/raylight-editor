@@ -15,9 +15,9 @@ import { computeSmartSnap, type SnapGuideLine } from './stageUtils';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
-    evaluateCameraPose,
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
+import { useCameraPose } from './CameraPoseContext';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDeviceFromHandle } from '../model/deviceFrame';
 
 interface SelectionOverlayProps {
@@ -75,15 +75,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const { layer } = primaryEval;
     const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
 
-    const aspect = frameWidth / Math.max(frameHeight, 1);
-    const defaultCamera = project.defaultCamera || {
-        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+    const { cameraPose, targetAspect: aspect, evaluateCustomPose } = useCameraPose();
+    const refCameraZ = evaluateCustomPose({
+        position: { x: 0, y: 0, z: 2.65 },
         rotation: { x: 0, y: 0, z: 0 },
-        focalLength: DEFAULT_FOCAL_LENGTH,
-    };
-    const cameraPose = evaluateCameraPose(frame.camera, defaultCamera, aspect);
-    const refCameraZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
-    const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
+        focalLength: 50,
+    }).position?.z ?? 2.65;
+    const refFocalLength = 50;
     const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
     // The shared layout projects the resolved body; crop handles use the display aperture.

@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { SelectionOverlay } from './SelectionOverlay';
 import { createDefaultProject, createDefaultShapeLayer } from '../model/defaults';
 import { evaluateProjectAtTime } from '../engine/evaluateShot';
+import { CameraPoseProvider } from './CameraPoseContext';
 
 describe('SelectionOverlay Onscreen Gradient Handles', () => {
     it('does not render a second gradient editor merely because a gradient shape is selected', () => {
@@ -26,15 +27,23 @@ describe('SelectionOverlay Onscreen Gradient Handles', () => {
         const evaluatedFrame = evaluateProjectAtTime(project, 0);
 
         const html = renderToStaticMarkup(
-            <SelectionOverlay
+            <CameraPoseProvider
+                project={project}
                 frame={evaluatedFrame}
-                selectedLayerIds={['shape-grad-1']}
-                frameWidth={1920}
-                frameHeight={1080}
-                snapEnabled={true}
-                onUpdateGuides={vi.fn()}
-                onSelectLayer={vi.fn()}
-            />
+                viewportSize={{ width: 1920, height: 1080 }}
+                activeTool="select"
+                isPlaying={false}
+            >
+                <SelectionOverlay
+                    frame={evaluatedFrame}
+                    selectedLayerIds={['shape-grad-1']}
+                    frameWidth={1920}
+                    frameHeight={1080}
+                    snapEnabled={true}
+                    onUpdateGuides={vi.fn()}
+                    onSelectLayer={vi.fn()}
+                />
+            </CameraPoseProvider>
         );
 
         expect(html).not.toContain('data-gradient-handles="true"');
