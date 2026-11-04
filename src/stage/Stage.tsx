@@ -452,7 +452,6 @@ const StageComponent: React.FC<StageProps> = ({
                         referenceCamera={gradientReferenceCamera}
                         drawBox={drawBox}
                         marqueeBox={marqueeBox}
-                        stageFrameRef={stageFrameRef}
                     />
                 </div>
             </div>

@@ -41,7 +41,6 @@ interface StageInteractionOverlayStackProps {
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;
-    stageFrameRef: RefObject<HTMLDivElement | null>;
 }
 
 export function StageInteractionOverlayStack({
@@ -62,7 +61,6 @@ export function StageInteractionOverlayStack({
     referenceCamera,
     drawBox,
     marqueeBox,
-    stageFrameRef,
 }: StageInteractionOverlayStackProps) {
     return (
         <>

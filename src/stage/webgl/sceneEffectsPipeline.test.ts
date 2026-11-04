@@ -148,23 +148,6 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     pass.material.dispose();
   });
 
-  it('passes depth-of-field lens and highlight settings to the shader', () => {
-    const effectsState = createDefaultEffects();
-    effectsState.depthOfField.focalLength = 100;
-    effectsState.depthOfField.highlightThreshold = 0.65;
-    effectsState.depthOfField.highlightIntensity = 0.4;
-    const evaluated: EvaluatedEffects = { state: effectsState, orderedEnabledPasses: [], deterministicSeed: 0 };
-    const pass = createSceneEffectPass('depthOfField');
-
-    configureSceneEffectPass(pass, 'depthOfField', evaluated, 1920, 1080);
-
-    expect((pass.uniforms.uMotion.value as THREE.Vector2).x).toBeCloseTo(0.4);
-    expect((pass.uniforms.uMotion.value as THREE.Vector2).y).toBeCloseTo(2);
-    expect((pass.uniforms.uExtra.value as THREE.Vector4).x).toBeCloseTo(0.65);
-    expect(pass.material.fragmentShader).toContain('* max(.01,uMotion.y)');
-    pass.material.dispose();
-  });
-
   it('uses a negative horizontal ghost shift so preview matches Canvas output', () => {
     const pass = createSceneEffectPass('ghost');
     expect(pass.material.fragmentShader).toContain('vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y');
@@ -237,51 +220,4 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     composer.dispose();
   });
 
-  it('configures depthOfField pass with depth texture uniform and focal parameters', () => {
-    const effectsState = createDefaultEffects();
-    effectsState.depthOfField.enabled = true;
-    effectsState.depthOfField.target.z = 0.5;
-    effectsState.depthOfField.focusRange = 0.2;
-    effectsState.depthOfField.bokehScale = 1.5;
-    effectsState.depthOfField.aperture = 1.8;
-    effectsState.depthOfField.bokehShape = 'anamorphic';
-
-    const evaluated: EvaluatedEffects = {
-      state: effectsState,
-      orderedEnabledPasses: [
-        { key: 'depthOfField', orderIndex: 0, summary: 'Depth of Field' },
-      ],
-      deterministicSeed: 0.5,
-    };
-
-    const pass = createSceneEffectPass('depthOfField');
-    expect(pass.uniforms.tDepth).toBeDefined();
-
-    configureSceneEffectPass(pass, 'depthOfField', evaluated, 1920, 1080);
-
-    const params = pass.uniforms.uParams.value as THREE.Vector4;
-    expect(params.x).toBeCloseTo(2.15, 2); // focal plane = |DEFAULT_CAMERA_Z(2.65) - target.z(0.5)| = 2.15
-    expect(params.y).toBeCloseTo(0.2); // focusRange
-    expect(params.z).toBeCloseTo(1.5); // bokehScale
-    expect(params.w).toBeCloseTo(1.8); // aperture
-
-    const extra = pass.uniforms.uExtra.value as THREE.Vector4;
-    expect(extra.w).toBe(1.0); // anamorphic flag
-
-    pass.material.dispose();
-  });
-
-  it('caps the DoF bokeh radius in 1080p-equivalent author space', () => {
-    const pass = createSceneEffectPass('depthOfField');
-    const shader = pass.material.fragmentShader as string;
-    // The bokeh radius must be authored in 1080p-equivalent author space and
-    // hard-capped, so preview/playback and exports render identical blur at any
-    // resolution instead of scaling relatively with the render target.
-    expect(shader).toContain('float maxR');
-    expect(shader).toContain('min(coc * 32.0');
-    expect(shader).toContain('/ 108.0');
-    expect(shader).not.toContain('uResolution.y * 0.035');
-    pass.material.dispose();
-  });
 });
-

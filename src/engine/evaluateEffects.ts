@@ -16,7 +16,7 @@ export interface EvaluatedEffects {
     motionVector?: { x: number; y: number };
 }
 
-// Pure Function: Evaluates the 10-effect chain and deterministic frame seed
+// Pure Function: Evaluates ordered scene effects and deterministic frame seed
 export function evaluateEffectsAtTime(
     shot: Shot,
     frameNumber: number
