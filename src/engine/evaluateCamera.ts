@@ -14,6 +14,13 @@ import {
     CAMERA_ROT_X_COMPENSATION,
 } from './constants';
 
+export {
+    BASE_FOV_DEGREES,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    DEFAULT_CAMERA_Z,
+};
+
 export interface EvaluatedCamera {
     target: { x: number; y: number; z: number };
     rotation: { x: number; y: number; z: number };

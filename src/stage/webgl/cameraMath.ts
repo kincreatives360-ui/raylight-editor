@@ -1,10 +1,17 @@
-// Camera math compatibility entry point.
-import { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM } from '../../engine/constants';
+import { BASE_FOV_DEGREES, DEFAULT_CAMERA_Z, DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM } from '../../engine/constants';
 import { focalLengthToFov } from '../../engine/evaluateCamera';
 import { lerpLog } from '../../engine/math';
 import { getAspectRatio } from '../../stage/stageUtils';
 
-export { DEFAULT_FOCAL_LENGTH, SENSOR_HEIGHT_MM, focalLengthToFov, getAspectRatio };
+export {
+    BASE_FOV_DEGREES,
+    DEFAULT_CAMERA_Z,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    focalLengthToFov,
+    getAspectRatio,
+    lerpLog,
+};
 
 /**
  * Smooth logarithmic dolly zoom calculation (Raylight 320ms smoothstep)

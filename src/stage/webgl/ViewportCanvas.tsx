@@ -98,93 +98,104 @@ const StageCaptureBridge: React.FC<{ frame: EvaluatedProjectFrame }> = ({ frame 
                 });
         };
 
-        // Single-shot capture (PNG stills): resize, render, copy, restore.
-        const singleCapture = async (
+        let captureQueue: Promise<unknown> = Promise.resolve();
+        function runSerialized<T>(fn: () => Promise<T>): Promise<T> {
+            const run = captureQueue.then(fn, fn);
+            captureQueue = run.catch(() => {});
+            return run;
+        }
+
+        // Single-shot capture (PNG stills): resize, render, copy, restore under exclusive lock.
+        const singleCapture = (
             timeMs: number,
             width: number,
             height: number
         ): Promise<HTMLCanvasElement | null> => {
-            if (!(await waitForTime(timeMs))) return null;
-            if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
+            return runSerialized(async () => {
+                if (!(await waitForTime(timeMs))) return null;
+                if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
 
-            const size = gl.getSize(new THREE.Vector2());
-            const pixelRatio = gl.getPixelRatio();
-            const renderTarget = gl.getRenderTarget();
-            const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
-            try {
-                if (needsResize) {
-                    gl.setRenderTarget(null);
-                    gl.setPixelRatio(1);
-                    gl.setSize(width, height, false);
+                const size = gl.getSize(new THREE.Vector2());
+                const pixelRatio = gl.getPixelRatio();
+                const renderTarget = gl.getRenderTarget();
+                const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
+                try {
+                    if (needsResize) {
+                        gl.setRenderTarget(null);
+                        gl.setPixelRatio(1);
+                        gl.setSize(width, height, false);
+                    }
+                    const captured = document.createElement('canvas');
+                    captured.width = width;
+                    captured.height = height;
+                    const context = captured.getContext('2d');
+                    if (!context) return null;
+                    await renderAndCopy(context, width, height);
+                    return captured;
+                } finally {
+                    if (needsResize) {
+                        gl.setRenderTarget(null);
+                        gl.setPixelRatio(pixelRatio);
+                        gl.setSize(size.x, size.y, false);
+                        gl.setRenderTarget(renderTarget);
+                        invalidate();
+                    }
                 }
-                const captured = document.createElement('canvas');
-                captured.width = width;
-                captured.height = height;
-                const context = captured.getContext('2d');
-                if (!context) return null;
-                await renderAndCopy(context, width, height);
-                return captured;
-            } finally {
-                if (needsResize) {
-                    gl.setRenderTarget(null);
-                    gl.setPixelRatio(pixelRatio);
-                    gl.setSize(size.x, size.y, false);
-                    gl.setRenderTarget(renderTarget);
-                    invalidate();
-                }
-            }
+            });
         };
 
-        // Multi-frame session: resize once, reuse one capture canvas.
+        // Multi-frame session: resize once, reuse one capture canvas under exclusive lifecycle.
         const createSession = async (
             width: number,
             height: number
         ): Promise<StageCaptureSession | null> => {
             if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
 
-            const size = gl.getSize(new THREE.Vector2());
-            const pixelRatio = gl.getPixelRatio();
-            const renderTarget = gl.getRenderTarget();
-            const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
-            const restore = (): void => {
-                if (!needsResize) return;
-                gl.setRenderTarget(null);
-                gl.setPixelRatio(pixelRatio);
-                gl.setSize(size.x, size.y, false);
-                gl.setRenderTarget(renderTarget);
-                invalidate();
-            };
+            return runSerialized(async () => {
+                const size = gl.getSize(new THREE.Vector2());
+                const pixelRatio = gl.getPixelRatio();
+                const renderTarget = gl.getRenderTarget();
+                const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
+                const restore = (): void => {
+                    if (!needsResize) return;
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(pixelRatio);
+                    gl.setSize(size.x, size.y, false);
+                    gl.setRenderTarget(renderTarget);
+                    invalidate();
+                };
 
-            const canvas = document.createElement('canvas');
-            canvas.width = width;
-            canvas.height = height;
-            const ctx = canvas.getContext('2d');
-            if (!ctx) {
-                restore();
-                return null;
-            }
-            if (needsResize) {
-                gl.setRenderTarget(null);
-                gl.setPixelRatio(1);
-                gl.setSize(width, height, false);
-            }
-
-            let ended = false;
-            return {
-                async captureFrame(timeMs: number): Promise<HTMLCanvasElement | null> {
-                    if (ended) return null;
-                    if (!(await waitForTime(timeMs))) return null;
-                    await renderAndCopy(ctx, width, height);
-                    return canvas;
-                },
-                async end(): Promise<void> {
-                    if (ended) return;
-                    ended = true;
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
                     restore();
-                    canvas.width = 0;
-                    canvas.height = 0;
-                },
-            };
+                    return null;
+                }
+                if (needsResize) {
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(1);
+                    gl.setSize(width, height, false);
+                }
+
+                let ended = false;
+                return {
+                    async captureFrame(timeMs: number): Promise<HTMLCanvasElement | null> {
+                        if (ended) return null;
+                        if (!(await waitForTime(timeMs))) return null;
+                        await renderAndCopy(ctx, width, height);
+                        return canvas;
+                    },
+                    async end(): Promise<void> {
+                        if (ended) return;
+                        ended = true;
+                        restore();
+                        canvas.width = 0;
+                        canvas.height = 0;
+                    },
+                };
+            });
         };
 
         const unregister = registerStageCapture(singleCapture, createSession);
