@@ -113,13 +113,12 @@ export function getLayerBlurBleedLayout(
     canvasW: number,
     canvasH: number,
     totalBlurPx: number,
-    dofBlurPx: number,
     motionBlur?: { x: number; y: number },
     deviceFramed = false,
     effectPaddingPx = 0
 ) {
     const motionDistPx = motionBlur ? Math.hypot(motionBlur.x * canvasW, motionBlur.y * canvasH) : 0;
-    const effectiveBlurPx = totalBlurPx + dofBlurPx * 1.5 + motionDistPx + effectPaddingPx;
+    const effectiveBlurPx = totalBlurPx + motionDistPx + effectPaddingPx;
     const paddingLimit = Math.max(256, Math.ceil(effectPaddingPx));
     const blurPadding = (!deviceFramed && effectiveBlurPx > 0.1)
         ? Math.min(paddingLimit, Math.ceil(effectiveBlurPx * 3))

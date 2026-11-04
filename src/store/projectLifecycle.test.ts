@@ -71,7 +71,6 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
         cameraBlocks: [],
         lightBlocks: [],
         effectBlocks: [],
-        focusBlocks: [],
       })],
     }));
 

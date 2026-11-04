@@ -7,7 +7,6 @@ import { Guides } from './Guides';
 import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { SelectionOverlay } from './SelectionOverlay';
-import { DepthOfFieldFocusOverlay } from './DepthOfFieldFocusOverlay';
 import { LightingOverlay } from './LightingOverlay';
 
 interface OverlayBox {
@@ -42,10 +41,7 @@ interface StageInteractionOverlayStackProps {
     referenceCamera: NonNullable<Project['defaultCamera']>;
     drawBox: OverlayBox | null;
     marqueeBox: MarqueeBox | null;
-    dofFocusActive: boolean;
-    dofFocusIndicator: { x: number; y: number } | null;
     stageFrameRef: RefObject<HTMLDivElement | null>;
-    onFocusClick: (event: React.MouseEvent<HTMLDivElement>) => void;
 }
 
 export function StageInteractionOverlayStack({
@@ -66,10 +62,7 @@ export function StageInteractionOverlayStack({
     referenceCamera,
     drawBox,
     marqueeBox,
-    dofFocusActive,
-    dofFocusIndicator,
     stageFrameRef,
-    onFocusClick,
 }: StageInteractionOverlayStackProps) {
     return (
         <>
@@ -134,13 +127,6 @@ export function StageInteractionOverlayStack({
                 onUpdateGuides={setActiveGuides}
                 onSelectLayer={handleSelectLayer}
                 cameraRef={cameraRef}
-            />
-
-            <DepthOfFieldFocusOverlay
-                active={dofFocusActive}
-                indicator={dofFocusIndicator}
-                stageFrameRef={stageFrameRef}
-                onFocusClick={onFocusClick}
             />
 
             <LightingOverlay

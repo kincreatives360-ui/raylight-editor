@@ -8,7 +8,6 @@ import { useStageAssetDrop } from './useStageAssetDrop';
 import { useStagePointerInteractions } from './useStagePointerInteractions';
 import { useStageWheelNavigation } from './useStageWheelNavigation';
 import { useStageViewportModel } from './useStageViewportModel';
-import { useStageDofFocus } from './useStageDofFocus';
 import { useStageCameraUpdate } from './useStageCameraUpdate';
 import { useStageGlobalInteractions } from './useStageGlobalInteractions';
 
@@ -89,10 +88,6 @@ const StageComponent: React.FC<StageProps> = ({
         setCameraBookmark,
         setGradientEditorAngle,
         selectedCameraBlockId,
-        dofFocusActive,
-        dofFocusIndicator,
-        setDofFocusActive,
-        setDofFocusIndicator,
     } = useSelectionStore();
 
     const isPlaying = usePlayheadStore((s) => s.isPlaying);
@@ -185,19 +180,6 @@ const StageComponent: React.FC<StageProps> = ({
     const gradientShapeFrameLayer = gradientEditorLayerId
         ? frame.layers.find((layer) => layer.id === gradientEditorLayerId)
         : undefined;
-    const handleDofFocusClick = useStageDofFocus({
-        stageFrameRef,
-        frame,
-        frameWidth,
-        frameHeight,
-        canvasZoom,
-        targetAspect,
-        cameraPose: gradientCameraPose,
-        defaultCamera: gradientReferenceCamera,
-        updateShot,
-        setDofFocusIndicator,
-        setDofFocusActive,
-    });
     const isCreationTool = ['text', 'image', 'rectangle', 'ellipse', 'line', 'arrow', 'polygon', 'pen'].includes(
         activeTool
     );
@@ -470,10 +452,7 @@ const StageComponent: React.FC<StageProps> = ({
                         referenceCamera={gradientReferenceCamera}
                         drawBox={drawBox}
                         marqueeBox={marqueeBox}
-                        dofFocusActive={dofFocusActive}
-                        dofFocusIndicator={dofFocusIndicator}
                         stageFrameRef={stageFrameRef}
-                        onFocusClick={handleDofFocusClick}
                     />
                 </div>
             </div>

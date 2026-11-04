@@ -1,4 +1,4 @@
-import type { Project, Shot, SceneEffects, Group, Vec3 } from '../model/types';
+import type { Project, Shot, Group, Vec3 } from '../model/types';
 import { createDefaultShot } from '../model/defaults';
 import { evaluateEasing } from './easing';
 import { evaluateLightBlocks } from './evaluateLight';
@@ -6,12 +6,9 @@ import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
 import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
     evaluateEffectsAtTime,
-    calculateLayerDofBlurPx,
-    resolveDepthOfFieldFocusZ,
     type EvaluatedEffects,
 } from './evaluateEffects';
 import { lerp } from './math';
-export { resolveDepthOfFieldFocusZ };
 
 /** Deep clone SceneEffects to prevent mutation of original shot object. */
 function deepCloneEffects(effects: SceneEffects): SceneEffects {
@@ -19,11 +16,10 @@ function deepCloneEffects(effects: SceneEffects): SceneEffects {
 }
 
 /** Effect block handler type: receives the config object and the animated value, mutates config. */
-type EffectBlockHandler = (config: SceneEffects, val: number) => void;
+type EffectBlockHandler = (config: Shot['effects'], val: number) => void;
 
 /** Map of effectKey to handler function. Replaces long if-else chain for extensibility. */
 const EFFECT_BLOCK_HANDLERS: Record<string, EffectBlockHandler> = {
-    depthOfField: (config, val) => { config.depthOfField.enabled = true; config.depthOfField.target.z = val; },
     bloom: (config, val) => { config.bloom.enabled = true; config.bloom.intensity = Math.max(0, val); },
     vignette: (config, val) => { config.vignette.enabled = true; config.vignette.intensity = Math.max(0, Math.min(1, val)); },
     filmGrain: (config, val) => { config.filmGrain.enabled = true; config.filmGrain.intensity = Math.max(0, val); },
@@ -125,8 +121,6 @@ export function getShotTransitionCompositeState(
 }
 
 export interface EvaluatedLayerWithEffects extends EvaluatedLayer {
-    dofBlurPx: number;
-    dofBokehShape?: SceneEffects['depthOfField']['bokehShape'];
     totalBlurPx: number;
     motionBlur?: {
         x: number;
@@ -382,7 +376,7 @@ export function evaluateProjectAtTime(
     const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs, frameNumber);
 
     // 4. Evaluate Scene Effects Rack
-    const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
+    const effects = evaluateEffectsAtTime(activeShot, frameNumber);
 
     // Populate scene-level motionVector when motionBlur is enabled so Canvas 2D fallback matches WebGL
     const fps = project.fps && project.fps > 0 ? project.fps : 60;
@@ -437,10 +431,6 @@ export function evaluateProjectAtTime(
             opacity: rawEvalLayer.opacity * groupTransform.opacity,
         };
 
-        const dofBlurPx = calculateLayerDofBlurPx(
-            evalLayer.position.z,
-            effects.state.depthOfField
-        );
         const manualBlurPx =
             (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur;
 
@@ -460,9 +450,7 @@ export function evaluateProjectAtTime(
                         layer.kind !== 'text'
                             ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                             : layer,
-                    dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
-                    dofBokehShape: effects.state.depthOfField.bokehShape,
-                    totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + (layer.effects.layerBlur ?? 0) * 100 + evalLayer.extraLayerBlur).toFixed(2)),
+                    totalBlurPx: Number(manualBlurPx.toFixed(2)),
                 };
             }
             const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
@@ -513,9 +501,7 @@ export function evaluateProjectAtTime(
                 layer.kind !== 'text'
                     ? { ...layer, cornerRadius: evalLayer.cornerRadius }
                     : layer,
-            dofBlurPx: calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField),
-            dofBokehShape: effects.state.depthOfField.bokehShape,
-            totalBlurPx: Number((calculateLayerDofBlurPx(evalLayer.position.z, effects.state.depthOfField) + manualBlurPx).toFixed(2)),
+            totalBlurPx: Number(manualBlurPx.toFixed(2)),
             motionBlur,
         };
     });
@@ -563,7 +549,7 @@ export function evaluateProjectAtTime(
                 frameNumber,
                 shotIndex: shotIndex - 1,
                 activeShot: { ...previous.activeShot, startMs: prevShot.startMs },
-                effects: evaluateEffectsAtTime(previous.activeShot, frameNumber, prevLocalTime),
+                effects: evaluateEffectsAtTime(previous.activeShot, frameNumber),
             };
         }
     }

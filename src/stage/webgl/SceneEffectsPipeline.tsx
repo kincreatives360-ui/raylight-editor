@@ -146,7 +146,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         // allows WebGL2 gl.copyTexSubImage2D to capture the framebuffer for backdrop blur & glass.
         composer.renderTarget1.samples = composer.renderTarget2.samples = 0;
         
-        // Depth-buffer texture attachment for screen-space depth-of-field
+        // Atmosphere uses the scene depth buffer to blend fog by depth.
         const depthTexture = new THREE.DepthTexture(pixelW, pixelH);
         depthTexture.format = THREE.DepthFormat;
         depthTexture.type = THREE.UnsignedShortType;
@@ -221,7 +221,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 if (pass.uniforms.tDepth) {
                     pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
                 }
-                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
+                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
                 composer.addPass(pass);
             }
 
@@ -240,7 +240,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                     if (pass.uniforms.tDepth) {
                         pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
                     }
-                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, camera.near, camera.far);
+                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
                 }
             }
         }

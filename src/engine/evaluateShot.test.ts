@@ -3,7 +3,6 @@ import { describe, it, expect } from 'vitest';
 import {
   evaluateProjectAtTime,
   getShotTransitionCompositeState,
-  resolveDepthOfFieldFocusZ,
 } from './evaluateShot';
 import {
   DEFAULT_PROJECT,
@@ -125,7 +124,7 @@ describe('evaluateProjectAtTime', () => {
     expect(evalL3?.visible).toBe(true);
   });
 
-  it('3. Computes depth of field blur and total blur per layer', () => {
+  it('3. Computes authored layer blur per layer', () => {
     const layerSharp = createDefaultShapeLayer({
       id: 'l-sharp',
       position: { x: 0, y: 0, z: 0 },
@@ -144,17 +143,6 @@ describe('evaluateProjectAtTime', () => {
 
     const shot = createDefaultShot({
       layers: [layerSharp, layerBlurred],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.2,
-          aperture: 2.8,
-          bokehScale: 1.5,
-          bokehShape: 'spherical',
-        },
-      },
     });
 
     const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
@@ -163,13 +151,10 @@ describe('evaluateProjectAtTime', () => {
     const evalSharp = frame.layers.find((l) => l.id === 'l-sharp')!;
     const evalBlurred = frame.layers.find((l) => l.id === 'l-blurred')!;
 
-    // Sharp layer at z=0 is inside focus range -> 0 DoF blur, 0 total blur
-    expect(evalSharp.dofBlurPx).toBe(0);
+    // The sharp layer has no authored blur.
     expect(evalSharp.totalBlurPx).toBe(0);
 
-    // Blurred layer has both DoF blur and manual blur
-    expect(evalBlurred.dofBlurPx).toBeGreaterThan(0);
-    expect(evalBlurred.totalBlurPx).toBeGreaterThanOrEqual(evalBlurred.dofBlurPx + 5);
+    expect(evalBlurred.totalBlurPx).toBe(5);
   });
 
   it('4. Evaluates animated effect blocks (e.g. bloom, vignette) on the timeline', () => {
@@ -255,60 +240,6 @@ describe('evaluateProjectAtTime', () => {
     expect(frame.shotLocalTimeMs).toBe(0);
     expect(frame.activeShot).toBeDefined();
     expect(Array.isArray(frame.layers)).toBe(true);
-  });
-
-  it('7. Animated rack focus dynamically updates layer blur according to evaluated focus distance', () => {
-    const layerAt1 = createDefaultImageLayer({
-      id: 'l-target',
-      position: { x: 0, y: 0, z: 1.0 },
-      inMs: 0,
-      outMs: 2000,
-    });
-
-    const shot = createDefaultShot({
-      durationMs: 2000,
-      layers: [layerAt1],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.1,
-          aperture: 2.8,
-          bokehScale: 1.0,
-          bokehShape: 'spherical',
-        },
-      },
-      focusBlocks: [
-        {
-          id: 'focus-rack',
-          startMs: 0,
-          durationMs: 1000,
-          fromZ: 0,
-          toZ: 1.0,
-          easing: { kind: 'preset', name: 'linear' },
-        },
-      ],
-    });
-
-    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
-
-    // At t=0: focus is at z=0, layer is at z=1 -> layer is out of focus, has blur
-    const frameAt0 = evaluateProjectAtTime(project, 0);
-    const layerAt0 = frameAt0.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt0.dofBlurPx).toBeGreaterThan(0);
-    const initialBlur = layerAt0.dofBlurPx;
-
-    // At t=500: focus is at z=0.5 -> layer is closer to focus, blur decreases
-    const frameAt500 = evaluateProjectAtTime(project, 500);
-    const layerAt500 = frameAt500.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt500.dofBlurPx).toBeLessThan(initialBlur);
-    expect(layerAt500.dofBlurPx).toBeGreaterThan(0);
-
-    // At t=1000: focus is at z=1.0 -> layer is exactly in focus, blur is 0
-    const frameAt1000 = evaluateProjectAtTime(project, 1000);
-    const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt1000.dofBlurPx).toBe(0);
   });
 
   it('8. Phase 0 Contract Fixture: validates multi-shot timebase, transition outgoingFrame, reused video assets, and future audio cues', () => {
@@ -429,7 +360,7 @@ describe('evaluateProjectAtTime', () => {
     }
   });
 
-  it('11. Phase 1 Parity: getShotTransitionCompositeState, resolveDepthOfFieldFocusZ, sequential CameraBlocks, and motionVector', () => {
+  it('11. Phase 1 Parity: shot transition composition and motionVector', () => {
     const project = createMultiShotContractFixture();
     // At t=3300ms (halfway through Shot 2's 600ms crossfade transition)
     const transFrame = evaluateProjectAtTime(project, 3300);
@@ -439,13 +370,6 @@ describe('evaluateProjectAtTime', () => {
     expect(comp.incomingLayers.length).toBeGreaterThan(0);
     expect(comp.outgoingOpacity + comp.incomingOpacity).toBeCloseTo(1, 2);
     expect(comp.outgoingShotStartMs).toBe(0);
-
-    // Foreground hero layer fallback for Depth-of-Field auto-focus
-    const focusZ = resolveDepthOfFieldFocusZ(undefined, [
-      { id: 'bg', position: { z: -0.8 } },
-      { id: 'hero', position: { z: 0.35 } },
-    ]);
-    expect(focusZ).toBeCloseTo(0.35, 3);
 
     // Scene motionBlur populates effects.motionVector when camera/layers move
     project.shots[0].effects.motionBlur.enabled = true;

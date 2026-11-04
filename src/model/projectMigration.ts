@@ -74,14 +74,6 @@ export function migrateLegacyProject(raw: unknown): unknown {
         }
       }
 
-      if (Array.isArray(shot.focusBlocks)) {
-        for (const fb of shot.focusBlocks) {
-          if (typeof fb.durationMs === 'number') {
-            fb.durationMs = Math.max(10, fb.durationMs);
-          }
-        }
-      }
-
       if (Array.isArray(shot.effectBlocks)) {
         for (const eb of shot.effectBlocks) {
           if (typeof eb.durationMs === 'number') {
@@ -151,4 +143,3 @@ export function migrateLegacyProject(raw: unknown): unknown {
   project.version = 2;
   return project;
 }
-

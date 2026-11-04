@@ -139,13 +139,11 @@ export function evaluateLayerAtTime(
                         ent.type === 'scramble'
                     );
                 }
-                if (ent.type === 'blur' || ent.type === 'focus' || ent.type === 'rack-focus') {
+                if (ent.type === 'blur') {
                     const blur = Math.max(0, ent.blur ?? 40);
                     const unfocused = Math.max(0, Math.min(1, inv));
-                    extraLayerBlur += blur * (ent.type === 'focus' ? unfocused * unfocused : ent.type === 'rack-focus' ? Math.sqrt(unfocused) : unfocused);
+                    extraLayerBlur += blur * unfocused;
                     if (ent.fade !== false) opacity *= p;
-                    if (ent.type === 'focus') { scale.x *= 1 + .06 * inv; scale.y *= 1 + .06 * inv; }
-                    if (ent.type === 'rack-focus') position.z -= dist * inv;
                 } else if (ent.type === 'fade') opacity *= p;
                 else if (ent.type === 'slide-up') {
                     if (ent.fade !== false) opacity *= p;
@@ -219,13 +217,11 @@ export function evaluateLayerAtTime(
                         ext.type === 'scramble'
                     );
                 }
-                if (ext.type === 'blur' || ext.type === 'focus' || ext.type === 'rack-focus') {
+                if (ext.type === 'blur') {
                     const blur = Math.max(0, ext.blur ?? 40);
                     const unfocused = Math.max(0, Math.min(1, p));
-                    extraLayerBlur += blur * (ext.type === 'focus' ? unfocused * unfocused : ext.type === 'rack-focus' ? Math.sqrt(unfocused) : unfocused);
+                    extraLayerBlur += blur * unfocused;
                     if (ext.fade !== false) opacity *= 1 - p;
-                    if (ext.type === 'focus') { scale.x *= 1 + .06 * p; scale.y *= 1 + .06 * p; }
-                    if (ext.type === 'rack-focus') position.z += dist * p;
                 } else if (ext.type === 'fade') opacity *= 1 - p;
                 else if (ext.type === 'slide-up') {
                     if (ext.fade !== false) opacity *= 1 - p;

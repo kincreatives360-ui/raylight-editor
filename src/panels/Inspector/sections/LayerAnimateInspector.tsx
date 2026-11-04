@@ -20,7 +20,7 @@ import './layerAnimate.css';
 function AnimationIcon({ property }: {
     property: string;
 }) {
-    const Icon = property === 'position' || property.startsWith('slide') ? Move : property === 'rotation' ? RotateCw : property === 'tilt' ? Compass : property === 'size' || property === 'scale' || property === 'emphasis' ? Maximize2 : property === 'opacity' || property === 'fade' ? CircleDashed : property === 'shimmer' ? Star : property === 'followPath' ? Spline : property === 'wiggle' ? Waves : property === 'typewriter' || property === 'counter' || property === 'changeText' ? Type : property === 'blur' || property === 'focus' || property === 'rack-focus' || property === 'layerBlur' ? Focus : property === 'mask-sweep' || property === 'maskSweep' || property === 'pathReveal' ? Scan : property === 'cornerRadius' ? Square : Sparkles;
+    const Icon = property === 'position' || property.startsWith('slide') ? Move : property === 'rotation' ? RotateCw : property === 'tilt' ? Compass : property === 'size' || property === 'scale' || property === 'emphasis' ? Maximize2 : property === 'opacity' || property === 'fade' ? CircleDashed : property === 'shimmer' ? Star : property === 'followPath' ? Spline : property === 'wiggle' ? Waves : property === 'typewriter' || property === 'counter' || property === 'changeText' ? Type : property === 'blur' || property === 'layerBlur' ? Focus : property === 'mask-sweep' || property === 'maskSweep' || property === 'pathReveal' ? Scan : property === 'cornerRadius' ? Square : Sparkles;
     return <Icon aria-hidden="true"/>;
 }
 function Field({ label, children }: {
@@ -59,7 +59,7 @@ function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
     maxDuration: number;
     onChange: (patch: Partial<Transitionish>) => void;
 }) {
-    const blur = ['blur', 'focus', 'rack-focus'].includes(preset.type);
+    const blur = preset.type === 'blur';
     const move = preset.type.startsWith('slide') || preset.type === 'float-out';
     return <div className="animate-settings-fields">
         <Field label="Type"><FigmaSelect aria-label="Preset type" value={preset.type} onChange={event => onChange({ type: event.target.value as TransitionType })}>{availablePresets(layers).map(p => <option key={p.type} value={p.type}>{p.label}</option>)}</FigmaSelect></Field>

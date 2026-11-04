@@ -315,7 +315,7 @@ export async function renderProjectFrameToCanvas(
       for (const outLayer of outgoing.layers) {
         await drawLayerOnCanvas(outgoingCtx, outLayer, project, outgoing, canvasW, canvasH);
       }
-      if (outgoing.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+      if (outgoing.effects.orderedEnabledPasses.length > 0) {
         const outImg = outgoingCtx.getImageData(0, 0, canvasW, canvasH);
         applyCanvasSceneEffects(outImg.data, canvasW, canvasH, outgoing.effects);
         outgoingCtx.putImageData(outImg, 0, 0);
@@ -330,7 +330,7 @@ export async function renderProjectFrameToCanvas(
       for (const evalLayer of frame.layers) {
         await drawLayerOnCanvas(incomingCtx, evalLayer, project, frame, canvasW, canvasH);
       }
-      if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+      if (frame.effects.orderedEnabledPasses.length > 0) {
         const inImg = incomingCtx.getImageData(0, 0, canvasW, canvasH);
         applyCanvasSceneEffects(inImg.data, canvasW, canvasH, frame.effects);
         incomingCtx.putImageData(inImg, 0, 0);
@@ -369,7 +369,7 @@ export async function renderProjectFrameToCanvas(
     }
     ctx.restore();
 
-    if (frame.effects.orderedEnabledPasses.some(pass => pass.key !== 'depthOfField')) {
+    if (frame.effects.orderedEnabledPasses.length > 0) {
       const image = ctx.getImageData(0, 0, canvasW, canvasH);
       applyCanvasSceneEffects(image.data, canvasW, canvasH, frame.effects);
       ctx.putImageData(image, 0, 0);
@@ -378,7 +378,6 @@ export async function renderProjectFrameToCanvas(
 
   ctx.restore();
 }
-
 
 
 

@@ -225,19 +225,6 @@ export interface SceneEffects {
     edgeMode: 'fill' | 'balanced' | 'none';
     measure: 'width' | 'height' | 'diagonal';
   };
-  depthOfField: {
-    enabled: boolean;
-    target: Vec3;
-    focusRange: number;
-    aperture: number;
-    bokehScale: number;
-    bokehShape: 'anamorphic' | 'spherical' | 'vintage' | 'portrait';
-    focalLength?: number;
-    highlightThreshold?: number;
-    highlightIntensity?: number;
-    sceneSize?: number;
-    focusMode?: 'point' | 'subject';
-  };
   bloom: {
     enabled: boolean;
     intensity: number;

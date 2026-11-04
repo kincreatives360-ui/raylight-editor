@@ -11,7 +11,7 @@ export const PRESETS: {
     textOnly?: boolean;
 }[] = [
     { type: 'fade', label: 'Fade' }, { type: 'blur', label: 'Blur' }, { type: 'slide-up', label: 'Slide' },
-    { type: 'focus', label: 'Focus' }, { type: 'rack-focus', label: 'Rack Focus' }, { type: 'mask-sweep', label: 'Wipe' },
+    { type: 'mask-sweep', label: 'Wipe' },
     { type: 'typewriter', label: 'Typewriter', textOnly: true }, { type: 'scramble', label: 'Scramble', textOnly: true },
     { type: 'slide-down', label: 'Slide down' }, { type: 'slide-left', label: 'Slide left' }, { type: 'slide-right', label: 'Slide right' },
     { type: 'float-out', label: 'Float' }, { type: 'scale-out', label: 'Scale' },
@@ -130,16 +130,6 @@ export const PRESET_PROPERTY_MAPPINGS: Record<TransitionType, PresetPropertyMapp
         preset: 'blur',
         primaryProperty: 'layerBlur',
         defaultAmount: () => 0.4,
-    },
-    focus: {
-        preset: 'focus',
-        primaryProperty: 'layerBlur',
-        defaultAmount: () => 0.3,
-    },
-    'rack-focus': {
-        preset: 'rack-focus',
-        primaryProperty: 'layerBlur',
-        defaultAmount: () => 0.5,
     },
     typewriter: {
         preset: 'typewriter',

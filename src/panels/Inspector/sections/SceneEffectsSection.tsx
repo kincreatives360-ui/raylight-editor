@@ -7,10 +7,8 @@ import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
-import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import {
-  Aperture,
   Sun,
   Triangle,
   Circle,
@@ -36,7 +34,6 @@ import {
 import { ColorPicker } from '../ColorPicker';
 
 const EFFECT_NAMES: Record<EffectKey, string> = {
-  depthOfField: 'Depth of field',
   bloom: 'Bloom',
   chromaticAberration: 'Color split',
   vignette: 'Vignette',
@@ -54,8 +51,6 @@ const EFFECT_NAMES: Record<EffectKey, string> = {
 
 function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: EffectKey; className?: string }) {
   switch (effectKey) {
-    case 'depthOfField':
-      return <Aperture className={className} />;
     case 'bloom':
       return <Sun className={className} />;
     case 'chromaticAberration':
@@ -85,14 +80,12 @@ function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: Effec
 
 const label = (key: string) => key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
 const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
-  depthOfField: ['sceneSize', 'highlightThreshold', 'highlightIntensity'],
   chromaticAberration: ['edgeStrength', 'centerX', 'centerY', 'channelRed', 'channelGreen', 'channelBlue', 'fringeColorAngle'],
   filmGrain: ['softness', 'colorAmount', 'aspect', 'seed', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'blendMode', 'motion'],
   lensDistortion: ['centerX', 'centerY', 'edgeMode', 'measure'],
 };
 
 const FIELD_RANGES: Record<string, [number, number, number]> = {
-  aperture: [0.1, 32, 0.1], focalLength: [10, 300, 1], focusRange: [0, 20, 0.01], bokehScale: [0, 20, 0.01],
   intensity: [0, 1, 0.01], threshold: [0, 4, 0.01], radius: [0, 4, 0.01], softness: [0, 1, 0.01],
   shutterAngle: [0, 360, 1], samples: [2, 32, 1], angle: [-180, 180, 1], amount: [-1, 1, 0.01],
   offset: [0, 100, 1], verticalOffset: [-100, 100, 1], edgeStrength: [0, 4, 0.01], size: [0.1, 32, 0.01],
@@ -103,12 +96,11 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   fog: [0, 1, 0.01], mist: [0, 1, 0.01], haze: [0, 1, 0.01], start: [0, 1, 0.01], reach: [0.01, 1, 0.01], mistHeight: [0, 1, 0.01],
   blend: [0, 1, 0.01], shift: [-1, 1, 0.01], scale: [0.1, 2, 0.01], strength: [-1, 1, 0.01], centerX: [-1, 1, 0.01], centerY: [-1, 1, 0.01],
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
-  colorAmount: [0, 1, 0.01], sceneSize: [1, 200, 0.1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 2, 0.01],
+  colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
-  depthOfField: { focusMode: ['point', 'subject'], bokehShape: ['spherical', 'anamorphic', 'vintage', 'portrait'] },
   bloom: { blendMode: ['screen', 'add', 'softLight'] },
   motionBlur: { direction: ['camera', 'angle'] },
   filmGrain: { stock: ['Tungsten 500', 'Kodak 5219', 'Fuji 400', 'Custom'], blendMode: ['film', 'overlay', 'softLight', 'multiply'], motion: ['frame', '12fps', 'static'] },
@@ -120,8 +112,6 @@ const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
 
 export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const updateShot = useProjectStore((s) => s.updateShot);
-  const focusModeActive = useSelectionStore((s) => s.dofFocusActive);
-  const setDofFocusActive = useSelectionStore((s) => s.setDofFocusActive);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState<EffectKey | null>(null);
   const [settingsKey, setSettingsKey] = useState<EffectKey | null>(null);
@@ -374,42 +364,16 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                   <div className="relative p-2.5 rounded-xl bg-surface-elevated border border-border/60 space-y-2 mt-1">
                     {['chromaticAberration'].includes(key) && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','lens')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='lens'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Lens</button><button type="button" onClick={()=>setValue(key,'mode','split')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='split'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Split</button></div>}
                     {key === 'lensDistortion' && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','pinch')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='pinch'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Pinch</button><button type="button" onClick={()=>setValue(key,'mode','barrel')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='barrel'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Barrel</button></div>}
-                    {['depthOfField','chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='depthOfField'?'Blur':key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
+                    {['chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(mergedFields)
                         .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key]??[]).includes(field) && !(key==='atmosphere'&&['start','reach','mistHeight'].includes(field)))
                         .map(([field, rawVal]) => renderNumber(key,field,Number(rawVal)))}
                       {Object.entries(mergedFields).filter(([field,value])=>typeof value==='string'&&SELECT_OPTIONS[key]?.[field]&&!(SETTINGS_FIELDS[key]??[]).includes(field)&&!((key==='lensDistortion')&&field==='mode')).map(([field,value])=>renderSelect(key,field,String(value)))}
 
-                      {key === 'depthOfField' && (
-                        <>
-                          {renderNumber(key,'x',shot.effects.depthOfField.target.x)}
-                          {renderNumber(key,'y',shot.effects.depthOfField.target.y)}
-                          <ScrubInput
-                            label="Focus Z"
-                            value={shot.effects?.depthOfField?.target?.z ?? 0}
-                            min={-20}
-                            max={20}
-                            step={0.01}
-                            onChange={(z) =>
-                              updateShot(shot.id, (s) => ({
-                                ...s,
-                                effects: {
-                                  ...s.effects,
-                                  depthOfField: {
-                                    ...s.effects?.depthOfField,
-                                    target: { ...(s.effects?.depthOfField?.target || { x: 0, y: 0, z: 0 }), z },
-                                  },
-                                },
-                              }))
-                            }
-                          />
-                        </>
-                      )}
                       {key==='atmosphere'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
                       {key==='edgeFade'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
                     </div>
-                    {key==='depthOfField'&&<div className="flex gap-2"><button type="button" onClick={()=>setDofFocusActive(!focusModeActive)} className={`flex-1 h-8 rounded-lg text-[11px] font-medium ${focusModeActive?'bg-sky-500 text-white':'bg-surface text-foreground hover:bg-surface-active text-foreground hover:bg-[#303035]'}`}>{focusModeActive?'Click the canvas to focus…':'Click the canvas to focus'}</button><button type="button" onClick={()=>{const selected=useSelectionStore.getState().selectedLayerIds[0];const layer=shot.layers.find(item=>item.id===selected);if(layer){setValue(key,'focusMode','subject');updateShot(shot.id,s=>({...s,effects:{...s.effects,depthOfField:{...s.effects.depthOfField,target:{...s.effects.depthOfField.target,z:layer.position.z}}}}));}}} className="h-8 px-3 rounded-lg bg-sky-500/15 text-sky-300 text-[11px] hover:bg-sky-500/25">Snap to subject</button></div>}
                     {key==='atmosphere'&&<details className="rounded-lg border border-border/60 px-2 py-1.5"><summary className="text-[11px] text-foreground/90 cursor-pointer">Depth</summary><div className="grid grid-cols-2 gap-2 pt-2">{['start','reach','mistHeight'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}<label className="flex items-center gap-2 text-[10px] text-foreground/90"><input type="checkbox" checked={Boolean(mergedFields['depthEnabled'])} onChange={e=>setValue(key,'depthEnabled',e.target.checked)}/>Use scene depth</label></div></details>}
                     {key==='gradientMap'&&<div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground">Stops</span><button type="button" aria-label="Add gradient stop" onClick={()=>{const stops=mergedFields['stops'] as GradientStop[];setValue(key,'stops',[...stops,{at:.5,color:'#ffffff',opacity:1}].sort((a,b)=>a.at-b.at).slice(0,8));}} className="w-6 h-6 rounded text-foreground/90 hover:bg-white/10"><Plus className="w-3.5 h-3.5"/></button></div>{(mergedFields['stops'] as GradientStop[]).map((stop,index)=><div key={`${stop.at}-${index}`} className="grid grid-cols-[.8fr_1fr_1fr_24px] gap-1.5 items-center"><ScrubInput label="%" value={stop.at*100} min={0} max={100} step={1} onChange={at=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,at:at/100}:item))}/><ColorPicker label={`Stop ${index+1}`} color={stop.color} onChange={color=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,color}:item))} compact/><ScrubInput label="Opacity" value={(stop.opacity??1)*100} min={0} max={100} step={1} onChange={opacity=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,opacity:opacity/100}:item))}/><button type="button" disabled={(mergedFields['stops'] as GradientStop[]).length<=2} aria-label={`Remove gradient stop ${index+1}`} onClick={()=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).filter((_,i)=>i!==index))} className="text-zinc-500 hover:text-rose-400 disabled:opacity-30"><Minus className="w-3 h-3"/></button></div>)}</div>}
                     {settingsKey === key && (
@@ -420,9 +384,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                       >
                         <div className="flex items-center justify-between pb-1">
                           <h4 className="text-[11px] font-medium text-white/90">
-                            {key === 'depthOfField'
-                              ? 'Blur settings'
-                              : key === 'chromaticAberration'
+                            {key === 'chromaticAberration'
                               ? 'Fringe settings'
                               : key === 'filmGrain'
                               ? 'Grain settings'
@@ -437,17 +399,6 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                             <X className="w-3 h-3" />
                           </button>
                         </div>
-                        {key === 'depthOfField' && (
-                          <>
-                            <div className="text-[10px] text-muted-foreground">Scene size</div>
-                            {renderNumber(key, 'sceneSize', Number(mergedFields['sceneSize']))}
-                            <div className="text-[10px] text-muted-foreground">Highlights</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              {renderNumber(key, 'highlightIntensity', Number(mergedFields['highlightIntensity']))}
-                              {renderNumber(key, 'highlightThreshold', Number(mergedFields['highlightThreshold']))}
-                            </div>
-                          </>
-                        )}
                         {key === 'chromaticAberration' && (
                           <>
                             <div className="text-[10px] text-muted-foreground">Edges</div>

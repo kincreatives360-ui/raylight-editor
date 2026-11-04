@@ -2,10 +2,9 @@ import * as THREE from 'three';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
-import { DEFAULT_CAMERA_Z } from './cameraTypes';
 import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
 
-export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'depthOfField', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
+export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
 
 // Each pass reads the result of the preceding pass. All intermediate RGB is linear and premultiplied.
@@ -155,40 +154,6 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           col.r=sampleAt(vUv+vec2(shift+uParams.x*uParams.z/uResolution.x,0.0)).r;
           col.b=sampleAt(vUv+vec2(shift-uParams.x*uParams.z/uResolution.x,0.0)).b;
         #elif EFFECT == 9
-          // Studio Depth-Buffer Depth of Field
-          float depthVal = texture2D(tDepth, vUv).r;
-          float zNear = uExtra.y > 0.0 ? uExtra.y : 0.1;
-          float zFar = uExtra.z > 0.0 ? uExtra.z : 100.0;
-          float viewZ = (zNear * zFar) / max(0.0001, zFar - depthVal * (zFar - zNear));
-          
-          float focalPlane = uParams.x;
-          float focusRange = max(0.01, uParams.y);
-          float bokehScale = max(0.0, uParams.z);
-          float deltaZ = abs(viewZ - focalPlane);
-          float coc = clamp((deltaZ / max(0.1, viewZ)) * (bokehScale * 2.0 / max(0.1, uParams.w)) / focusRange * max(.01,uMotion.y), 0.0, 1.0);
-          
-          if (coc > 0.003) {
-            vec4 accum = vec4(0.0);
-            float total = 0.0;
-            // Bokeh radius is authored in 1080p-equivalent author space and hard-capped,
-            // so the same focus geometry renders identical blur at 720p, 1080p, or any
-            // export resolution — never relatively finer at higher resolutions.
-            float maxR = min(coc * 32.0, 32.0) * max(1.0, uResolution.y) / 108.0;
-            for (int i = 0; i < 24; i++) {
-              float fi = float(i);
-              float angle = fi * 2.39996323;
-              float r = sqrt((fi + 0.5) / 24.0) * maxR;
-              vec2 offset = vec2(cos(angle), sin(angle)) * r / uResolution;
-              if (uExtra.w == 1.0) offset.x *= 2.0; // Anamorphic
-              vec4 s = sampleAt(vUv + offset);
-              float highlight=max(0.0,dot(s.rgb,vec3(.2126,.7152,.0722))-uExtra.x);
-              s.rgb+=vec3(highlight*uMotion.x);
-              accum += s;
-              total += 1.0;
-            }
-            col = accum / total;
-          }
-        #elif EFFECT == 10
           float zNear=.1, zFar=100.0;
           float depthVal=texture2D(tDepth,vUv).r;
           float linearDepth=(2.0*zNear)/(zFar+zNear-depthVal*(zFar-zNear));
@@ -196,7 +161,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float heightMask=smoothstep(1.0-uExtra.y,1.0,1.0-vUv.y);
           float amount=clamp(uParams.x*depthMix+uParams.y*heightMask+uParams.z,0.0,1.0);
           col.rgb=mix(col.rgb,uColor*col.a,amount);
-        #elif EFFECT == 11
+        #elif EFFECT == 10
           float lum=dot(col.rgb,vec3(.2126,.7152,.0722));
           float position=clamp((lum-uParams.y)*uParams.z,0.0,1.0);
           vec4 lower=uStops[0], upper=uStops[1];
@@ -223,7 +188,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           else if(uExtra.x==10.0) blended=min(vec3(1.0),col.rgb/max(vec3(.001),1.0-mapped));
           else if(uExtra.x==11.0) blended=1.0-min(vec3(1.0),(1.0-col.rgb)/max(vec3(.001),mapped));
           col.rgb=mix(col.rgb,blended,clamp(uParams.x*stopOpacity,0.0,1.0)*col.a);
-        #elif EFFECT == 12 || EFFECT == 13
+        #elif EFFECT == 11 || EFFECT == 12
           vec2 center=vec2(.5+uParams.y*.5,.5-uParams.z*.5);
           vec2 p=vUv-center;
           float aspect=uResolution.x/uResolution.y*uParams.w;
@@ -231,7 +196,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float radius=length(p);
           float strength=uParams.x;
           float factor;
-          if(EFFECT==12){
+          if(EFFECT==11){
             float theta=atan(radius);
             factor=radius>.0001?tan(theta*(1.0+strength))/radius:1.0;
           }else{
@@ -250,7 +215,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
   });
 }
 
-export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }, cameraNear = 0.1, cameraFar = 2000) {
+export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }) {
   const e = effects.state, p = pass.uniforms.uParams.value as THREE.Vector4;
   p.set(0, 0, 0, 0);
   pass.uniforms.uExtra.value.set(0, 0, 0, 0);
@@ -298,27 +263,6 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
     case 'colorGrade': p.set(e.colorGrade.exposure, e.colorGrade.contrast, e.colorGrade.saturation, e.colorGrade.temperature ?? 0); pass.uniforms.uExtra.value.set(e.colorGrade.tint ?? 0, e.colorGrade.highlights ?? 0, e.colorGrade.shadows ?? 0, e.colorGrade.lift ?? 0); pass.uniforms.uExtra2.value.set(e.colorGrade.gamma ?? 1, e.colorGrade.vibrance ?? 0, e.colorGrade.blackPoint ?? 0, e.colorGrade.whitePoint ?? 1); break;
     case 'edgeFade': p.set(e.edgeFade.top, e.edgeFade.bottom, e.edgeFade.left ?? 0, e.edgeFade.right ?? 0); pass.uniforms.uExtra.value.x = e.edgeFade.softness ?? 1; (pass.uniforms.uColor.value as THREE.Color).set(e.edgeFade.color ?? '#0a0a0c'); break;
     case 'glitch': p.set(e.glitch.intensity, e.glitch.bandSize ?? 50, e.glitch.colorShift ?? 0.5, 0); break;
-    case 'depthOfField': {
-      const dof = e.depthOfField;
-      const camZ = DEFAULT_CAMERA_Z;
-      const targetZ = dof.target?.z ?? 0;
-      const focusDist = Math.max(0.1, Math.abs(camZ - targetZ));
-      p.set(
-        focusDist,
-        Math.max(0.01, dof.focusRange ?? 0.35),
-        Math.max(0.0, dof.bokehScale ?? 4.5),
-        dof.aperture ?? 2.8
-      );
-      pass.uniforms.uExtra.value.set(
-        dof.highlightThreshold ?? 0.8,
-        cameraNear,
-        cameraFar,
-        dof.bokehShape === 'anamorphic' ? 1.0 : 0.0
-      );
-      pass.uniforms.uMotion.value.x = dof.highlightIntensity ?? 0;
-      pass.uniforms.uMotion.value.y = (dof.focalLength ?? 50) / 50;
-      break;
-    }
     case 'atmosphere': {
       const atmosphere=e.atmosphere;
       p.set(atmosphere.fog, atmosphere.mist, atmosphere.haze, atmosphere.start);

@@ -1,5 +1,4 @@
 export type EffectKey =
-  | 'depthOfField'
   | 'bloom'
   | 'vignette'
   | 'motionBlur'
@@ -15,7 +14,6 @@ export type EffectKey =
   | 'lensDistortion';
 
 export const EFFECT_KEYS: EffectKey[] = [
-  'depthOfField',
   'bloom',
   'vignette',
   'motionBlur',
@@ -32,7 +30,6 @@ export const EFFECT_KEYS: EffectKey[] = [
 ];
 
 export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
-  'depthOfField',
   'bloom',
   'motionBlur',
   'chromaticAberration',
@@ -152,8 +149,6 @@ export type TransitionType =
   | 'mask-sweep'
   | 'wipe'
   | 'blur'
-  | 'focus'
-  | 'rack-focus'
   | 'pop'
   | 'spin'
   | 'flip-x'
@@ -174,8 +169,6 @@ export const TRANSITION_TYPES: TransitionType[] = [
   'mask-sweep',
   'wipe',
   'blur',
-  'focus',
-  'rack-focus',
   'pop',
   'spin',
   'flip-x',

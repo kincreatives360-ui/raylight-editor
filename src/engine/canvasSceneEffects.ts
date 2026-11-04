@@ -36,7 +36,6 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
 
   const e = evaluated.state;
   for (const { key } of evaluated.orderedEnabledPasses) {
-    if (key === 'depthOfField') continue; // Applied at layer evaluation.
     dst.set(src);
     const sample = (x: number, y: number, c: number) => src[(Math.max(0, Math.min(height - 1, Math.round(y))) * width + Math.max(0, Math.min(width - 1, Math.round(x)))) * 4 + c];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
