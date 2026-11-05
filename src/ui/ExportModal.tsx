@@ -1,5 +1,5 @@
 // src/ui/ExportModal.tsx
-import React from 'react';
+import React, { useRef } from 'react';
 import {
   Sparkles,
   X,
@@ -17,6 +17,7 @@ import type {
   ExportSettings,
 } from '../engine/exporter';
 import { isMediaRecorderMp4Supported } from '../engine/exportCapabilities';
+import { useModalFocus } from './useModalFocus';
 
 export interface ExportModalProps {
   isOpen: boolean;
@@ -54,18 +55,29 @@ export const ExportModal: React.FC<ExportModalProps> = ({
   onStartExport,
   onCancelExport,
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const closeButtonRef = useRef<HTMLButtonElement>(null);
+  useModalFocus(isOpen, dialogRef, closeButtonRef);
+
   if (!isOpen) return null;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="w-full max-w-md rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs">
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="export-dialog-title"
+        tabIndex={-1}
+        className="w-full max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-2xl bg-[#121216] border border-white/15 p-6 space-y-5 shadow-2xl text-xs"
+      >
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-xl bg-[#0088ff]/20 border border-[#0088ff]/40 flex items-center justify-center text-[#0088ff]">
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h3 className="text-sm font-bold text-white">
+              <h3 id="export-dialog-title" className="text-sm font-bold text-white">
                 Export &amp; Share Video
               </h3>
               <p className="text-xs text-[#a1a1aa]">
@@ -74,8 +86,11 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
           </div>
           <button
+            ref={closeButtonRef}
+            type="button"
             disabled={exporting}
             onClick={onClose}
+            aria-label="Close export dialog"
             className="p-1.5 rounded-lg hover:bg-white/10 text-[#a1a1aa] hover:text-white cursor-pointer"
           >
             <X className="w-4 h-4" />
@@ -247,7 +262,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
         </div>
 
         {exporting && (
-          <div className="space-y-2 p-3 rounded-xl bg-[#18181c] border border-[#0088ff]/30 shadow-lg animate-fade-in">
+          <div role="status" aria-live="polite" aria-atomic="true" className="space-y-2 p-3 rounded-xl bg-[#18181c] border border-[#0088ff]/30 shadow-lg animate-fade-in">
             <div className="flex justify-between items-center text-[11px] font-mono tabular-nums tracking-tight">
               <span className="flex items-center gap-2 text-[#38bdf8] font-medium truncate">
                 <Loader2 className="w-3.5 h-3.5 animate-spin text-[#0070e0] shrink-0" />
@@ -255,7 +270,15 @@ export const ExportModal: React.FC<ExportModalProps> = ({
               </span>
               <span className="font-semibold text-white shrink-0 ml-2">{exportPercent}%</span>
             </div>
-            <div className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative">
+            <div
+              role="progressbar"
+              aria-label="Export progress"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={exportPercent}
+              aria-valuetext={`${exportPercent}%`}
+              className="h-2 w-full rounded-full bg-white/10 overflow-hidden relative"
+            >
               <div
                 className="h-full bg-gradient-to-r from-[#0070e0] via-[#38bdf8] to-[#0070e0] shadow-sm transition-[width] duration-150 ease-out"
                 style={{ width: `${exportPercent}%` }}
@@ -280,12 +303,14 @@ export const ExportModal: React.FC<ExportModalProps> = ({
 
         <div className="flex items-center justify-end gap-2 pt-2">
           <button
+            type="button"
             onClick={exporting ? onCancelExport : onClose}
             className="px-4 py-2 rounded-lg bg-[#1c1c1f] hover:bg-[#27272c] text-[#d4d4d8] cursor-pointer"
           >
             {exporting ? 'Cancel' : 'Close'}
           </button>
           <button
+            type="button"
             disabled={exporting}
             onClick={onStartExport}
             className="flex items-center gap-2 px-5 py-2 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-semibold cursor-pointer"

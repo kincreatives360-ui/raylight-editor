@@ -566,6 +566,7 @@ export const ShotSchema = z.object({
   effectBlocks: z.array(SceneEffectAnimationBlockSchema).optional(),
   light: z.object({
     position: Vec3Schema,
+    target: Vec3Schema.optional(),
     intensity: z.number().min(0),
     temperature: z.number().min(1000).max(15000),
     ambience: z.number().min(0).max(1),
@@ -886,3 +887,7 @@ export function validateProject(raw: unknown): ValidationResult {
   );
   return { success: false, errors };
 }
+
+
+
+

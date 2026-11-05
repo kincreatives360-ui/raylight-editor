@@ -1,7 +1,7 @@
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import React, { useCallback, useState } from 'react';
 import { X, Sun, Thermometer, Sparkles, Plus, ChevronDown } from 'lucide-react';
-import type { Shot, SceneLight, LightSourceType, Vec3, LightAnimationBlock, LightRig } from '../../../model/types';
+import type { Shot, SceneLight, LightSourceType, LightAnimationBlock, LightRig } from '../../../model/types';
 import { radToDeg, degToRad } from '../../../model/defaults';
 import { generateId } from '../../../model/id';
 import { ScrubInput } from '../../../ui/ScrubInput';
@@ -48,7 +48,7 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
             type: 'directional',
             enabled: shotLight?.keyLightEnabled !== false,
             position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
-            target: (shotLight as unknown as { target?: Vec3 })?.target || { x: 0, y: 0, z: 0 },
+            target: shotLight?.target || { x: 0, y: 0, z: 0 },
             intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
             color: '#ffffff',
             temperature: shotLight?.temperature ?? 6500,
@@ -443,3 +443,5 @@ export const LightInspector: React.FC<LightInspectorProps> = ({
         </div>
     );
 };
+
+

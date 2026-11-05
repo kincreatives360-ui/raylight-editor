@@ -258,10 +258,19 @@ select:focus-visible {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
+    /* Keep opacity/color feedback while shortening keyframes and removing transform transitions. */
+    animation-duration: 80ms !important;
     animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
+    transition-property: opacity, color, background-color, border-color, fill, stroke, box-shadow !important;
+    transition-duration: 120ms !important;
     scroll-behavior: auto !important;
+  }
+
+  /* Decorative status loops do not add information for reduced-motion users. */
+  .animate-pulse,
+  .animate-bounce,
+  .animate-spin {
+    animation: none !important;
   }
 }
 
@@ -337,3 +346,11 @@ textarea,
 .shot-settings-tabs button[aria-selected="true"] { background: #222; }
 .shot-settings-panel [role="switch"] { width: 36px; height: 20px; }
 .shot-settings-panel [data-testid="shot-background-editor"] { padding-bottom: 8px; }
+
+.framing-handle { transition: transform 120ms cubic-bezier(.23, 1, .32, 1), background-color 120ms ease-out; }
+.framing-handle:active { transform: scale(.97); }
+@media (hover: hover) and (pointer: fine) {
+  .framing-handle:hover { transform: scale(1.12); }
+  .framing-handle--from:hover { background-color: #6ee7b7; }
+  .framing-handle--to:hover { background-color: #7dd3fc; }
+}

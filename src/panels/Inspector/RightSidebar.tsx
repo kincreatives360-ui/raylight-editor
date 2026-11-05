@@ -1310,7 +1310,6 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     } = useSelectionStore();
 
     const [mainTab, setMainTab] = useState<'design' | 'animate'>('design');
-    const [shareToast, setShareToast] = useState(false);
     const [customFonts, setCustomFonts] = useState<string[]>([]);
     const fontInputRef = useRef<HTMLInputElement>(null);
 
@@ -1396,7 +1395,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
                 <div className="flex items-center gap-3">
                     {/* User Profile Avatar with Teal Ring */}
-                    <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm cursor-pointer hover:opacity-90 transition">
+                    <div className="w-7 h-7 rounded-full ring-2 ring-[#00e5ff] overflow-hidden bg-[#1f2937] flex items-center justify-center shrink-0 shadow-sm">
                         <img
                             src={DEFAULT_AVATAR_PLACEHOLDER}
                             alt="User Profile"
@@ -1405,7 +1404,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     </div>
 
                     <button
+                        type="button"
                         onClick={() => clearLayerSelection()}
+                        aria-label="Project Settings"
                         title="Project Settings"
                         className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
@@ -1413,7 +1414,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     </button>
 
                     <button
+                        type="button"
                         onClick={onOpenExportModal}
+                        aria-label="Export MP4 Video or GIF"
                         title="Export MP4 Video or GIF"
                         className="p-1 text-[#a1a1aa] hover:text-white cursor-pointer transition"
                     >
@@ -1421,14 +1424,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     </button>
 
                     <button
-                        onClick={() => {
-                            setShareToast(true);
-                            setTimeout(() => setShareToast(false), 2000);
-                            onOpenExportModal();
-                        }}
+                        type="button"
+                        onClick={onOpenExportModal}
+                        aria-label="Share or export video"
                         className="px-3.5 py-1.5 rounded-lg bg-[#0070e0] hover:bg-[#005bb5] text-white font-medium text-[11px] cursor-pointer transition shadow-sm"
                     >
-                        {shareToast ? 'Copied!' : 'Share'}
+                        Share
                     </button>
                 </div>
             </div>

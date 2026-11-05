@@ -392,10 +392,24 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
 
-    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen })),
-    toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
-    setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
-    setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
+    toggleLeftPanel: () => set((state) => {
+        const leftPanelOpen = !state.leftPanelOpen;
+        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
+        return { leftPanelOpen, ...(leftPanelOpen && compact ? { rightSidebarOpen: false } : {}) };
+    }),
+    toggleRightSidebar: () => set((state) => {
+        const rightSidebarOpen = !state.rightSidebarOpen;
+        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
+        return { rightSidebarOpen, ...(rightSidebarOpen && compact ? { leftPanelOpen: false } : {}) };
+    }),
+    setLeftPanelOpen: (leftPanelOpen) => set(() => {
+        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
+        return { leftPanelOpen, ...(leftPanelOpen && compact ? { rightSidebarOpen: false } : {}) };
+    }),
+    setRightSidebarOpen: (rightSidebarOpen) => set(() => {
+        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
+        return { rightSidebarOpen, ...(rightSidebarOpen && compact ? { leftPanelOpen: false } : {}) };
+    }),
 
     setLeftPanelWidth: (width) => {
         const clamped = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(MAX_LEFT_PANEL_WIDTH, Math.round(width)));

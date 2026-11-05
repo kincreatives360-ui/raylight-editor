@@ -213,6 +213,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
             <WebGLErrorBoundary>
                 <Canvas
                     id="raylight-stage-webgl-canvas"
+                    aria-label="Interactive 3D scene preview"
                     shadows="soft"
                     flat
                     frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}

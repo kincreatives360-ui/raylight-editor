@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search } from 'lucide-react';
 import { formatShortcut } from '../utils/shortcuts';
+import { useModalFocus } from './useModalFocus';
 
 export interface CommandItem {
   id: string;
@@ -27,6 +28,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
+  const dialogRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Filter commands by query
@@ -53,15 +55,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   // Derive clamped active index without setState effect
   const activeIndex = Math.min(selectedIndex, Math.max(0, filteredCommands.length - 1));
-
-  // Focus input when opened
-  useEffect(() => {
-    if (isOpen) {
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-      });
-    }
-  }, [isOpen]);
+  useModalFocus(isOpen, dialogRef, inputRef);
 
   // Scroll active item into view
   useEffect(() => {
@@ -97,13 +91,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-label="Command Menu"
       className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
       onClick={onClose}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Command Menu"
+        tabIndex={-1}
         className="w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white"
         onClick={(e) => e.stopPropagation()}
         onKeyDown={handleKeyDown}
@@ -120,9 +116,13 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               setSelectedIndex(0);
             }}
             placeholder="Type a command or search actions..."
+            role="combobox"
+            aria-expanded="true"
+            aria-haspopup="listbox"
             className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
             aria-autocomplete="list"
             aria-controls="command-list"
+            aria-activedescendant={filteredCommands[activeIndex] ? `command-option-${filteredCommands[activeIndex].id}` : undefined}
           />
           <kbd className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
             Esc
@@ -147,6 +147,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               return (
                 <div
                   key={cmd.id}
+                  id={`command-option-${cmd.id}`}
                   role="option"
                   aria-selected={isSelected}
                   data-active={isSelected}

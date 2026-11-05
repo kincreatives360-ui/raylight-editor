@@ -52,6 +52,22 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
     const scaleY = frameHeight / artboardHeight;
     const [popoverEndpoint, setPopoverEndpoint] = useState<'from' | 'to' | null>(null);
     const [movementMenuOpen, setMovementMenuOpen] = useState(false);
+    const fromPopoverTriggerRef = useRef<HTMLButtonElement>(null);
+    const toPopoverTriggerRef = useRef<HTMLButtonElement>(null);
+    const movementMenuTriggerRef = useRef<HTMLButtonElement>(null);
+
+    const closeCameraFlyout = useCallback((which: 'from' | 'to' | 'movement') => {
+        setMovementMenuOpen(false);
+        setPopoverEndpoint(null);
+        requestAnimationFrame(() => {
+            const trigger = which === 'from'
+                ? fromPopoverTriggerRef.current
+                : which === 'to'
+                    ? toPopoverTriggerRef.current
+                    : movementMenuTriggerRef.current;
+            trigger?.focus();
+        });
+    }, []);
 
     const handleApplyMovement = useCallback(
         (moveId: CameraMovementId) => {
@@ -99,13 +115,12 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
         if (!movementMenuOpen && !popoverEndpoint) return;
         const handleKeyDown = (e: KeyboardEvent) => {
             if (e.key === 'Escape') {
-                setMovementMenuOpen(false);
-                setPopoverEndpoint(null);
+                closeCameraFlyout(popoverEndpoint ?? 'movement');
             }
         };
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [movementMenuOpen, popoverEndpoint]);
+    }, [closeCameraFlyout, movementMenuOpen, popoverEndpoint]);
 
     if (!selectedCameraBlockId) return null;
 
@@ -385,7 +400,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     </div>
                     <button
                         type="button"
-                        onClick={() => setPopoverEndpoint(null)}
+                        onClick={() => closeCameraFlyout(which)}
                         className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
                         title="Close"
                         aria-label="Close"
@@ -399,6 +414,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                     <div className="flex items-center justify-between text-[11px] text-zinc-400">
                         <span>Camera Presets</span>
                         <button
+                            ref={fromPopoverTriggerRef}
                             type="button"
                             onClick={() => handleFrameContent(which)}
                             className={`flex items-center gap-1 ${accentClass} hover:underline cursor-pointer`}
@@ -713,6 +729,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
 
                     <div className="flex items-center gap-0.5 border-l border-emerald-400/30 pl-1 ml-0.5">
                         <button
+                            ref={toPopoverTriggerRef}
                             type="button"
                             onPointerDown={(e) => e.stopPropagation()}
                             onClick={(e) => {
@@ -757,7 +774,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerCancel={handlePointerUp}
                         onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale From framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-emerald-400 border-2 border-emerald-950 shadow-md hover:scale-130 active:scale-140 hover:bg-emerald-300 pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
+                        className="framing-handle framing-handle--from absolute w-3 h-3 rounded-xs bg-emerald-400 border-2 border-emerald-950 shadow-md pointer-events-auto touch-none after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 
@@ -855,7 +872,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                         onPointerCancel={handlePointerUp}
                         onLostPointerCapture={handlePointerUp}
                         title={`Drag to scale To framing (${h.dir.toUpperCase()})`}
-                        className="absolute w-3 h-3 rounded-xs bg-sky-400 border-2 border-sky-950 shadow-md hover:scale-130 active:scale-140 hover:bg-sky-300 pointer-events-auto transition-transform touch-none after:absolute after:-inset-4 after:content-['']"
+                        className="framing-handle framing-handle--to absolute w-3 h-3 rounded-xs bg-sky-400 border-2 border-sky-950 shadow-md pointer-events-auto touch-none after:absolute after:-inset-4 after:content-['']"
                     />
                 ))}
 
@@ -877,7 +894,10 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                 className="absolute z-35 pointer-events-auto"
             >
                 <button
+                    ref={movementMenuTriggerRef}
                     type="button"
+                    aria-expanded={movementMenuOpen}
+                    aria-label="Camera movement preset settings"
                     onPointerDown={(e) => e.stopPropagation()}
                     onClick={(e) => {
                         e.stopPropagation();
@@ -919,7 +939,7 @@ export const CameraFramingOverlay: React.FC<CameraFramingOverlayProps> = ({
                             </div>
                             <button
                                 type="button"
-                                onClick={() => setMovementMenuOpen(false)}
+                                onClick={() => closeCameraFlyout('movement')}
                                 aria-label="Close"
                                 className="p-1 rounded text-zinc-400 hover:text-white hover:bg-white/10 cursor-pointer"
                                 title="Close"

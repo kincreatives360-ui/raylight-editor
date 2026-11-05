@@ -537,16 +537,45 @@ const StageComponent: React.FC<StageProps> = ({
 
     const handleResetCamera = useCallback(() => {
         beginDragTransaction();
-        updateActiveShotCamera({
-            orbit: 0,
-            tilt: 0,
-            roll: 0,
-            targetX: 0,
-            targetY: 0,
-            zoom: 1,
-        });
+        const currentShot = frame.activeShot;
+        const selectedCamBlock = currentShot.cameraBlocks?.find((block) => block.id === selectedCameraBlockId);
+
+        if (selectedCamBlock) {
+            const resetEndpoint = (endpoint: typeof selectedCamBlock.from) => ({
+                ...endpoint,
+                presetId: undefined,
+                anchorX: 0,
+                anchorY: 0,
+                anchorZ: 0,
+                zoom: 1,
+                roll: 0,
+                orbit: 0,
+                tilt: 0,
+            });
+
+            updateShot(currentShot.id, (shot) => ({
+                ...shot,
+                cameraBlocks: (shot.cameraBlocks || []).map((block) => block.id === selectedCamBlock.id
+                    ? {
+                        ...block,
+                        from: resetEndpoint(block.from),
+                        to: resetEndpoint(block.to),
+                        shake: block.shake ? { ...block.shake, from: 0, to: 0 } : block.shake,
+                    }
+                    : block),
+            }), { skipHistory: true });
+        } else {
+            updateActiveShotCamera({
+                orbit: 0,
+                tilt: 0,
+                roll: 0,
+                targetX: 0,
+                targetY: 0,
+                zoom: 1,
+            });
+        }
         commitDragTransaction();
-    }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
+    }, [beginDragTransaction, frame.activeShot, selectedCameraBlockId, updateShot, updateActiveShotCamera, commitDragTransaction]);
 
     const handleFrameSelectedLayers = useCallback(() => {
         const selectedIds = useSelectionStore.getState().selectedLayerIds;
@@ -1410,15 +1439,6 @@ const StageComponent: React.FC<StageProps> = ({
                     >
                         <Focus className="w-2.5 h-2.5 text-[var(--accent-primary,#0070e0)]" />
                         <span>Frame [F]</span>
-                    </button>
-                    <button
-                        type="button"
-                        onClick={handleResetCamera}
-                        className="px-2 py-0.5 rounded bg-white/10 hover:bg-white/20 text-[11px] text-gray-200 cursor-pointer transition flex items-center gap-1"
-                        title="Reset Camera Pose to Default"
-                    >
-                        <RotateCcw className="w-2.5 h-2.5" />
-                        <span>Reset</span>
                     </button>
                 </div>
             )}

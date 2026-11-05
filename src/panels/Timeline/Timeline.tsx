@@ -90,6 +90,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     } = useProjectStore();
 
     const isPlaying = usePlayheadStore((s) => s.isPlaying);
+    const currentTimeMs = usePlayheadStore((s) => s.currentTimeMs);
     const storeHoverTimeMs = usePlayheadStore((s) => s.hoverTimeMs);
     const setHoverTimeMs = usePlayheadStore((s) => s.setHoverTimeMs);
     const setIsPlaying = usePlayheadStore((s) => s.setIsPlaying);
@@ -1607,6 +1608,26 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                     return (
                                         <div
                                             key={shot.id}
+                                            role="button"
+                                            tabIndex={0}
+                                            aria-pressed={isSelected}
+                                            aria-label={`${shot.name}, ${(shot.durationMs / 1000).toFixed(2)} seconds. Enter opens its tracks; Space selects it.`}
+                                            onKeyDown={(e) => {
+                                                if (e.key === 'Enter') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    const hasSelectedLayer = shot.layers.some((layer) => selectedLayerSet.has(layer.id));
+                                                    selectShot(shot.id);
+                                                    setTimelineView('scene');
+                                                    setInspectorTab(hasSelectedLayer ? 'layer' : 'shot');
+                                                } else if (e.key === ' ') {
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    selectShot(shot.id);
+                                                    setInspectorTab('shot');
+                                                    setCurrentTimeMs(shot.startMs);
+                                                }
+                                            }}
                                             onPointerDown={(e) => startShotReorder(e, shot, shotIndex)}
                                             onClick={(e) => {
                                                 e.stopPropagation();
@@ -1629,7 +1650,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             }}
                                             title={`${shot.name} · ${(shot.durationMs / 1000).toFixed(2)}s · Drag to reorder, drag the right edge to trim, double-click to open layer tracks`}
                                             style={{ width: `${width}px` }}
-                                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
+                                                className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${isSelected
                                                     ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-sm'
                                                     : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
                                                 }`}
@@ -1656,7 +1677,9 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     {timelineView === 'scene' && activeShot && (
                         <div className="relative flex flex-col gap-0.5">
                             {/* Raylight exposes the add-layer lane before the layer rows. */}
-                            <div
+                            <button
+                                type="button"
+                                aria-label="Add a layer to this shot"
                                 onPointerDown={(e) => e.stopPropagation()}
                                 onClick={(e) => {
                                     e.stopPropagation();
@@ -1670,8 +1693,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 title="Add a layer to this shot"
                                 className="order-0 h-7 relative flex items-center justify-center rounded-md border border-dashed border-sky-500/30 bg-sky-500/[0.025] text-[10px] text-[#8495a8] hover:border-sky-400/70 hover:bg-sky-500/[0.07] hover:text-sky-200 cursor-pointer transition"
                             >
-                                <span>+ Add layer</span>
-                            </div>
+                                + Add layer
+                            </button>
 
                             {/* Camera track: always present, with a hover preview in empty space. */}
                             <div
@@ -1687,8 +1710,16 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                 }}
                                 title="Hover to preview a camera move; click to add it"
                                 aria-label="Camera track"
+                                role="group"
+                                tabIndex={0}
+                                onKeyDown={(e) => {
+                                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    addCameraBlockAtTime(Math.max(0, Math.min(activeShot.durationMs, currentTimeMs - activeShot.startMs)));
+                                }}
                                 style={{ order: 30 }}
-                                className="h-7 relative flex items-center cursor-pointer"
+                                className="h-7 relative flex items-center cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
                             >
                                     {hoverCameraTimeMs !== null && !activeShot.cameraBlocks.some((block) =>
                                         hoverCameraTimeMs >= block.startMs &&
@@ -1715,11 +1746,22 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <div
                                                 key={cb.id}
                                                 data-cam-pill="true"
+                                                role="button"
+                                                tabIndex={0}
+                                                aria-pressed={isCamSelected}
+                                                aria-label={`${modeLabel} camera move, ${(cb.durationMs / 1000).toFixed(2)} seconds`}
+                                                onKeyDown={(e) => {
+                                                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    selectCameraBlock(cb.id);
+                                                    setInspectorTab('camera');
+                                                }}
                                                 onPointerDown={(e) =>
                                                     startCameraBlockDrag(e, activeShot, cb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
-                                                className={`absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isCamSelected
+                                                className={`absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-300 ${isCamSelected
                                                         ? 'border-emerald-300 bg-emerald-700/80 text-white shadow'
                                                         : 'border-emerald-500/70 bg-emerald-950/80 text-emerald-200 hover:border-emerald-400'
                                                     }`}
@@ -1756,6 +1798,16 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             <div
                                                 key={lb.id}
                                                 data-light-pill="true"
+                                                role="group"
+                                                tabIndex={0}
+                                                aria-label={`${lb.label || 'Light Sweep'} light animation. Press Enter or Space to select.`}
+                                                onKeyDown={(e) => {
+                                                    if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                    e.preventDefault();
+                                                    e.stopPropagation();
+                                                    selectLightBlock(lb.id);
+                                                    setInspectorTab('shot');
+                                                }}
                                                 onClick={(e) => {
                                                     e.stopPropagation();
                                                     selectLightBlock(lb.id);
@@ -1765,7 +1817,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                                     startLightBlockDrag(e, activeShot, lb, 'move')
                                                 }
                                                 style={{ left: `${left}px`, width: `${width}px` }}
-                                                className={`group/light absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition ${isLightSelected
+                                                className={`group/light absolute top-1 bottom-1 rounded-full border px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 ${isLightSelected
                                                         ? 'border-amber-300 bg-amber-600/80 text-white shadow'
                                                         : 'border-amber-500/70 bg-amber-950/80 text-amber-200 hover:border-amber-400'
                                                     }`}
@@ -1850,11 +1902,22 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                                             {/* Main Layer Bar Row (h-7 = 28px — NO duplicate text header above it!) */}
                                             <div className="h-7 relative flex items-center">
                                                 <div
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-pressed={isSelected}
+                                                    aria-label={`${layer.name} layer. Press Enter or Space to select.`}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key !== 'Enter' && e.key !== ' ') return;
+                                                        e.preventDefault();
+                                                        e.stopPropagation();
+                                                        selectLayer(layer.id, false);
+                                                        setInspectorTab('layer');
+                                                    }}
                                                     onPointerDown={(e) =>
                                                         startLayerBarDrag(e, activeShot, layer, 'move')
                                                     }
                                                     style={{ left: `${left}px`, width: `${width}px` }}
-                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition ${barStyle} ${
+                                                    className={`absolute top-0.5 bottom-0.5 rounded-lg cursor-grab active:cursor-grabbing transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${barStyle} ${
                                                         ghostDragPreview?.id === layer.id ? 'opacity-40' : ''
                                                     }`}
                                                 >

@@ -1,7 +1,8 @@
 // src/ui/KeyboardShortcutsModal.tsx
-import React, { useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import { X, Search, Command, Keyboard } from 'lucide-react';
 import { getModifierKey } from '../utils/shortcuts';
+import { useModalFocus } from './useModalFocus';
 
 export interface ShortcutItem {
   keys: string[];
@@ -67,6 +68,9 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
 }) => {
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string>('All');
+  const dialogRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+  useModalFocus(isOpen, dialogRef, searchRef);
 
   const handleClose = () => {
     setSearch('');
@@ -96,9 +100,6 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
 
   return (
     <div
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="shortcuts-title"
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md transition-opacity animate-in fade-in duration-150"
       onClick={handleClose}
       onKeyDown={(e) => {
@@ -110,6 +111,11 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="shortcuts-title"
+        tabIndex={-1}
         className="w-full max-w-2xl max-h-[85vh] flex flex-col rounded-2xl bg-[#131317] border border-white/10 shadow-2xl overflow-hidden text-xs"
         onClick={(e) => e.stopPropagation()}
       >
@@ -143,12 +149,12 @@ export const KeyboardShortcutsModal: React.FC<KeyboardShortcutsModalProps> = ({
           <div className="relative">
             <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-[#71717a]" />
             <input
+              ref={searchRef}
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search shortcuts by action or key (e.g. animate, nudge, group, safe)..."
               className="w-full pl-9 pr-3 py-1.5 rounded-lg bg-[#0e0e11] border border-white/10 text-white placeholder-[#71717a] text-xs focus:outline-none focus:border-[#0088ff] focus:ring-1 focus:ring-[#0088ff] transition"
-              autoFocus
             />
           </div>
 

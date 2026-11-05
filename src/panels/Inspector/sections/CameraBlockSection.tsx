@@ -258,7 +258,7 @@ export const CameraBlockSection: React.FC<CameraBlockSectionProps> = ({
                                                 const next = applyCameraPreset(preset, ep);
                                                 patchEndpoint(next);
                                             }}
-                                            className={`px-1.5 py-1 rounded text-[10px] transition-all cursor-pointer truncate text-center ${
+                                            className={`px-1.5 py-1 rounded text-[10px] transition-colors cursor-pointer truncate text-center ${
                                                 isSelected
                                                     ? activeBtnClass
                                                     : 'bg-[#1c1c1f] hover:bg-white/10 text-[#d4d4d8] border border-white/5 hover:border-white/20'
