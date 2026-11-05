@@ -1,7 +1,25 @@
 // src/engine/evaluateCamera.ts
-import type { Shot } from '../model/types';
+import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { degToRad } from '../model/defaults';
 import { evaluateEasing } from './easing';
+import { lerp } from './math';
+import {
+    BASE_FOV_DEGREES,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    DEFAULT_CAMERA_Z,
+    CAMERA_SHAKE_AMPLITUDE_SCALE,
+    CAMERA_SHAKE_FREQ_MULTIPLIERS,
+    CAMERA_Z_COMPENSATION,
+    CAMERA_ROT_X_COMPENSATION,
+} from './constants';
+
+export {
+    BASE_FOV_DEGREES,
+    DEFAULT_FOCAL_LENGTH,
+    SENSOR_HEIGHT_MM,
+    DEFAULT_CAMERA_Z,
+};
 
 export interface EvaluatedCamera {
     target: { x: number; y: number; z: number };
@@ -12,23 +30,15 @@ export interface EvaluatedCamera {
     activeMode: 'static' | 'dolly' | 'zoom' | 'dollyzoom' | 'shake';
 }
 
-export const DEFAULT_FOCAL_LENGTH = 50;
-export const SENSOR_HEIGHT_MM = 24;
-
 export function focalLengthToFov(focalLengthMm: number): number {
     const safeFocal = Math.max(12, Math.min(200, focalLengthMm || DEFAULT_FOCAL_LENGTH));
     return (2 * Math.atan(SENSOR_HEIGHT_MM / (2 * safeFocal)) * 180) / Math.PI;
 }
 
-const BASE_FOV_DEGREES = 27.0006;
-
-function lerp(a: number, b: number, t: number): number {
-    return a + (b - a) * t;
-}
-
 export function evaluateShotCameraAtTime(
     shot: Shot,
-    shotLocalTimeMs: number
+    shotLocalTimeMs: number,
+    frameNumber?: number
 ): EvaluatedCamera {
     const framings = shot.framings || [];
     const defaultFraming = framings[0] || {
@@ -57,26 +67,38 @@ export function evaluateShotCameraAtTime(
     );
 
     const framingMap = new Map(framings.map((f) => [f.id, f]));
+    let prevResolvedTo: {
+        anchorX: number;
+        anchorY: number;
+        anchorZ: number;
+        zoom: number;
+        roll: number;
+        orbit: number;
+        tilt: number;
+        focalLength: number;
+    } | null = null;
 
     for (let i = 0; i < sortedBlocks.length; i++) {
         const block = sortedBlocks[i];
-        const fromFraming =
-            (block.fromFramingId ? framingMap.get(block.fromFramingId) : undefined) || defaultFraming;
+        const explicitFromFraming = block.fromFramingId ? framingMap.get(block.fromFramingId) : undefined;
+        const fromFraming = explicitFromFraming || defaultFraming;
         const toFraming =
             (block.toFramingId ? framingMap.get(block.toFramingId) : undefined) || fromFraming;
 
-        const fromEndpoint = block.from || {
-            anchorX: fromFraming.target.x,
-            anchorY: fromFraming.target.y,
-            anchorZ: fromFraming.target.z,
-            zoom: fromFraming.zoom,
-            roll: fromFraming.roll ?? 0,
-            orbit: fromFraming.orbit ?? 0,
-            tilt: fromFraming.tilt ?? 0,
-            focalLength: DEFAULT_FOCAL_LENGTH,
-        };
+        const fromEndpoint: CameraKeyframeEndpoint = block.from || (prevResolvedTo && !explicitFromFraming
+            ? { ...prevResolvedTo }
+            : {
+                anchorX: fromFraming.target.x,
+                anchorY: fromFraming.target.y,
+                anchorZ: fromFraming.target.z,
+                zoom: fromFraming.zoom,
+                roll: fromFraming.roll ?? 0,
+                orbit: fromFraming.orbit ?? 0,
+                tilt: fromFraming.tilt ?? 0,
+                focalLength: DEFAULT_FOCAL_LENGTH,
+            });
 
-        const toEndpoint = block.to || {
+        const toEndpoint: CameraKeyframeEndpoint = block.to || {
             anchorX: toFraming.target.x,
             anchorY: toFraming.target.y,
             anchorZ: toFraming.target.z,
@@ -85,6 +107,17 @@ export function evaluateShotCameraAtTime(
             orbit: toFraming.orbit ?? 0,
             tilt: toFraming.tilt ?? 0,
             focalLength: DEFAULT_FOCAL_LENGTH,
+        };
+
+        prevResolvedTo = {
+            anchorX: toEndpoint.anchorX,
+            anchorY: toEndpoint.anchorY,
+            anchorZ: toEndpoint.anchorZ ?? toFraming.target.z ?? 0,
+            zoom: toEndpoint.zoom,
+            roll: toEndpoint.roll ?? 0,
+            orbit: toEndpoint.orbit ?? 0,
+            tilt: toEndpoint.tilt ?? 0,
+            focalLength: toEndpoint.focalLength ?? fromEndpoint.focalLength ?? DEFAULT_FOCAL_LENGTH,
         };
 
         if (shotLocalTimeMs < block.startMs) {
@@ -159,6 +192,10 @@ export function evaluateShotCameraAtTime(
                 Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
             );
             focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+            if (Math.abs(toZ - fromZ) < 1e-6) {
+                // Compensate Z distance when no explicit Z shift was authored so subject width stays locked
+                targetZ = fromZ + (1 - fromBaseZoom / zoom) * CAMERA_Z_COMPENSATION;
+            }
         } else {
             // Dolly: physical 3D camera push with configured focal length (e.g. 50mm or custom lens)
             focalLength = lerp(fromFocal, toFocal, eased);
@@ -170,14 +207,19 @@ export function evaluateShotCameraAtTime(
         const shakeTo = block.shake?.to ?? 0;
         const currentShakePct = lerp(shakeFrom, shakeTo, eased);
         if (currentShakePct > 0) {
-            const amp = (currentShakePct / 100) * 0.045;
+            const amp = (currentShakePct / 100) * CAMERA_SHAKE_AMPLITUDE_SCALE;
             const freq = block.shake?.frequency ?? 1.0;
-            const tSec = shotLocalTimeMs * 0.001 * freq;
+            // Deterministic shake: use block ID hash as stable phase offset, advance continuously with shot-local time
+            const stableSeed = block.id
+                ? [...block.id].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 0)
+                : 0;
+            const tSec = (shotLocalTimeMs * 0.001 + stableSeed * 0.001) * freq;
+            const { xPrimary, xSecondary, yPrimary, ySecondary, rotZ: rotZFreq } = CAMERA_SHAKE_FREQ_MULTIPLIERS;
             targetX +=
-                (Math.sin(tSec * 17.3) * 0.6 + Math.cos(tSec * 31.7) * 0.4) * amp;
+                (Math.sin(tSec * xPrimary) * 0.6 + Math.cos(tSec * xSecondary) * 0.4) * amp;
             targetY +=
-                (Math.cos(tSec * 19.1) * 0.6 + Math.sin(tSec * 27.5) * 0.4) * amp;
-            rotZ += Math.sin(tSec * 14.2) * amp * 0.35;
+                (Math.cos(tSec * yPrimary) * 0.6 + Math.sin(tSec * ySecondary) * 0.4) * amp;
+            rotZ += Math.sin(tSec * rotZFreq) * amp * CAMERA_ROT_X_COMPENSATION;
         }
     }
 

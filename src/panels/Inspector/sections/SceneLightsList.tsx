@@ -1,19 +1,22 @@
+import { LIGHT_TYPE_META } from '../../../ui/lightTypes';
+import { InlineRenameInput } from '../../../ui/InlineRenameInput';
 import React, { useState } from 'react';
 import {
     Sun,
-    Flashlight,
-    Lightbulb,
-    Square,
-    Eye,
-    EyeOff,
     Copy,
     Trash2,
     Plus,
     ChevronDown,
 } from 'lucide-react';
-import type { Shot, SceneLight, LightSourceType } from '../../../model/types';
+import type { Shot, SceneLight, LightSourceType, LightRig } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { SceneLightRow } from './SceneLightRow';
+import { LightTypeIcon } from '../../../ui/LightTypeIcon';
+import { IconButton } from '../../../ui/primitives';
+import { MenuSurface, MenuItem } from '../../../ui/Menu';
+import { Eye, EyeOff } from 'lucide-react';
 import { generateId } from '../../../model/id';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 
 export interface SceneLightsListProps {
     activeShot: Shot;
@@ -31,20 +34,22 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
     compact: _compact = false,
 }) => {
     const updateShot = useProjectStore((s) => s.updateShot);
+    const setActiveLightTool = useSelectionStore((s) => s.setActiveLightTool);
     const [addMenuOpen, setAddMenuOpen] = useState(false);
     const [editingLightId, setEditingLightId] = useState<string | null>(null);
 
     const shotLight = activeShot.light;
-    const keyEnabled = shotLight?.keyLightEnabled !== false;
+    const keyEnabled = shotLight ? shotLight.keyLightEnabled !== false : false;
     const sources = shotLight?.sources || [];
 
     const handleToggleKeyLight = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const currentRig = shotLight || {
+        const currentRig: LightRig = shotLight || {
             position: { x: -0.28, y: 0.36, z: 0.9 },
             intensity: 1.2,
             temperature: 6500,
             ambience: 0.45,
+            sources: [],
         };
         updateShot(activeShot.id, {
             light: {
@@ -52,6 +57,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                 keyLightEnabled: !keyEnabled,
             },
         });
+        if (keyEnabled) onSelectLight(null);
     };
 
     const handleToggleSource = (e: React.MouseEvent, sourceId: string) => {
@@ -108,46 +114,8 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
 
     const handleAddLight = (type: LightSourceType) => {
         setAddMenuOpen(false);
-        const currentRig = shotLight || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-        };
-        const newId = generateId();
-        const typeNames: Record<LightSourceType, string> = {
-            directional: 'Sun',
-            spot: 'Spot',
-            point: 'Point',
-            area: 'Area',
-            ambient: 'Ambient',
-        };
-
-        const newLight: SceneLight = {
-            id: newId,
-            name: `${typeNames[type]} ${sources.length + 1}`,
-            type,
-            enabled: true,
-            position: { x: 0, y: 0.5, z: 1.0 },
-            target: { x: 0, y: 0, z: 0 },
-            intensity: 1.2,
-            color: '#ffffff',
-            temperature: 6500,
-            distance: type === 'point' || type === 'spot' ? 6 : undefined,
-            angle: type === 'spot' ? Math.PI / 6 : undefined,
-            penumbra: type === 'spot' ? 0.2 : undefined,
-            width: type === 'area' ? 3 : undefined,
-            height: type === 'area' ? 3 : undefined,
-            castShadow: true,
-        };
-
-        updateShot(activeShot.id, {
-            light: {
-                ...currentRig,
-                sources: [...sources, newLight],
-            },
-        });
-        onSelectLight(newId);
+        onSelectLight(null);
+        setActiveLightTool(type);
     };
 
     const handleRename = (sourceId: string, newName: string) => {
@@ -164,20 +132,6 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
         });
     };
 
-    const renderLightIcon = (type: LightSourceType) => {
-        switch (type) {
-            case 'directional':
-                return <Sun className="w-3.5 h-3.5 text-amber-400" />;
-            case 'spot':
-                return <Flashlight className="w-3.5 h-3.5 text-orange-400" />;
-            case 'point':
-                return <Lightbulb className="w-3.5 h-3.5 text-yellow-300" />;
-            case 'area':
-                return <Square className="w-3.5 h-3.5 text-blue-400" />;
-            default:
-                return <Sun className="w-3.5 h-3.5 text-amber-400" />;
-        }
-    };
 
     const isSunSelected =
         selectedLightId === 'sun-key' ||
@@ -197,88 +151,45 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                         className="h-6 px-2 rounded bg-white/[0.06] hover:bg-white/10 text-white text-[11px] font-medium flex items-center gap-1 border border-white/10 transition cursor-pointer"
                         title="Add light to scene"
                     >
-                        <Plus className="w-3 h-3 text-[#0088ff]" />
+                        <Plus className="w-3 h-3 text-sky-400" />
                         <span>Add Light</span>
                         <ChevronDown className="w-2.5 h-2.5 text-[#a1a1aa]" />
                     </button>
 
                     {addMenuOpen && (
-                        <div className="absolute right-0 top-full mt-1 w-32 rounded-lg bg-[#18181b] border border-white/10 shadow-2xl py-1 z-50 text-[11px]">
-                            <button
-                                type="button"
-                                onClick={() => handleAddLight('spot')}
+                        <MenuSurface
+                            className="absolute right-0 top-full mt-1 w-32 rounded-lg bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] py-1 z-50 text-[11px] origin-top-right"
+                        >
+                            {(['spot', 'point', 'area', 'directional'] as const).map((type) => <MenuItem
+                                key={type}
+                                unstyled
+                                onClick={() => handleAddLight(type)}
                                 className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-white/10 text-left text-white transition"
                             >
-                                <Flashlight className="w-3.5 h-3.5 text-orange-400" />
-                                <span>Spot Light</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleAddLight('point')}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-white/10 text-left text-white transition"
-                            >
-                                <Lightbulb className="w-3.5 h-3.5 text-yellow-300" />
-                                <span>Point Light</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleAddLight('area')}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-white/10 text-left text-white transition"
-                            >
-                                <Square className="w-3.5 h-3.5 text-blue-400" />
-                                <span>Area Light</span>
-                            </button>
-                            <button
-                                type="button"
-                                onClick={() => handleAddLight('directional')}
-                                className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-white/10 text-left text-white transition"
-                            >
-                                <Sun className="w-3.5 h-3.5 text-amber-400" />
-                                <span>Directional</span>
-                            </button>
-                        </div>
+                                <LightTypeIcon type={type} /><span>{LIGHT_TYPE_META[type].menuLabel}</span>
+                            </MenuItem>)}
+                        </MenuSurface>
                     )}
                 </div>
             </div>
 
             <div className="space-y-1">
-                <div data-testid="scene-light-item-room" data-selected={selectedLightId === 'room' ? 'true' : 'false'}
-                    onClick={() => onSelectLight('room')}
-                    className={`group px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] transition cursor-pointer ${selectedLightId === 'room' ? 'bg-[#0088ff]/15 border-[#0088ff]/40 text-white' : 'bg-[#18181b] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.04]'}`}>
-                    <div className="flex items-center gap-2 min-w-0"><Sun className="w-3.5 h-3.5 text-[#a1a1aa]" /><span className="truncate font-medium">Room</span></div>
-                    <span className="text-[10px] text-[#71717a]">Environment</span>
-                </div>
+                <SceneLightRow id="room" selected={selectedLightId === 'room'} onSelect={() => onSelectLight('room')}
+                    environment icon={<Sun className="w-3.5 h-3.5 text-[#a1a1aa]" />}
+                    name={<span className="truncate font-medium">Room</span>}
+                    actions={<span className="text-[10px] text-[#71717a]">Environment</span>} />
                 {/* 1. Primary Sun Key Light */}
-                <div
-                    data-testid="scene-light-item-sun-key"
-                    data-selected={isSunSelected ? 'true' : 'false'}
-                    onClick={() => onSelectLight('sun-key')}
-                    className={`group px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] transition cursor-pointer ${
-                        isSunSelected
-                            ? 'bg-[#0088ff]/15 border-[#0088ff]/40 text-white'
-                            : 'bg-[#18181b] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.04] hover:border-white/15'
-                    }`}
-                >
-                    <div className="flex items-center gap-2 min-w-0">
-                        {renderLightIcon('directional')}
-                        <span className="truncate font-medium">Sun</span>
-                    </div>
-
-                    <div className="flex items-center gap-1">
-                        <button
-                            type="button"
-                            onClick={handleToggleKeyLight}
-                            title="Toggle light visibility"
-                            className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                        >
-                            {keyEnabled ? (
-                                <Eye className="w-3 h-3 text-[#a1a1aa]" />
-                            ) : (
-                                <EyeOff className="w-3 h-3 text-red-400" />
-                            )}
-                        </button>
-                    </div>
-                </div>
+                {keyEnabled && <SceneLightRow id="sun-key" selected={isSunSelected} onSelect={() => onSelectLight('sun-key')}
+                    icon={<LightTypeIcon type="directional" />} name={<span className="truncate font-medium">Sun</span>}
+                    actions={<IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Remove sunlight"
+                        title="Remove sunlight"
+                        onClick={handleToggleKeyLight}
+                        icon={keyEnabled ? <Eye className="w-3 h-3 text-[#a1a1aa]" /> : <EyeOff className="w-3 h-3 text-red-400" />}
+                        className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
+                    />} />}
 
                 {/* 2. Additional Light Sources */}
                 {sources.map((source) => {
@@ -286,34 +197,15 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                     const isEditing = editingLightId === source.id;
 
                     return (
-                        <div
-                            key={source.id}
-                            data-testid={`scene-light-item-${source.id}`}
-                            data-selected={isSelected ? 'true' : 'false'}
-                            onClick={() => onSelectLight(source.id)}
-                            className={`group px-2.5 py-1.5 rounded-lg border flex items-center justify-between text-[11px] transition cursor-pointer ${
-                                isSelected
-                                    ? 'bg-[#0088ff]/15 border-[#0088ff]/40 text-white'
-                                    : 'bg-[#18181b] border-white/[0.06] text-[#d4d4d8] hover:bg-white/[0.04] hover:border-white/15'
-                            }`}
-                        >
-                            <div className="flex items-center gap-2 min-w-0 flex-1 mr-2">
-                                {renderLightIcon(source.type)}
-                                {isEditing ? (
-                                    <input
+                        <SceneLightRow key={source.id} id={source.id} selected={isSelected} custom
+                            onSelect={() => onSelectLight(source.id)} icon={<LightTypeIcon type={source.type} />}
+                            name={<>{isEditing ? (
+                                    <InlineRenameInput
                                         type="text"
-                                        autoFocus
                                         defaultValue={source.name || 'Light'}
-                                        onBlur={(e) => handleRename(source.id, e.target.value)}
-                                        onKeyDown={(e) => {
-                                            if (e.key === 'Enter') {
-                                                handleRename(source.id, e.currentTarget.value);
-                                            } else if (e.key === 'Escape') {
-                                                setEditingLightId(null);
-                                            }
-                                        }}
-                                        onClick={(e) => e.stopPropagation()}
-                                        className="h-5 px-1 bg-[#121214] border border-[#0088ff] rounded text-white text-[11px] outline-none w-full"
+                                        className="h-5 px-1 bg-[#121214] border border-sky-500 rounded text-white text-[11px] outline-none w-full"
+                                        onCommit={value => handleRename(source.id, value)}
+                                        onCancel={() => setEditingLightId(null)}
                                     />
                                 ) : (
                                     <span
@@ -326,40 +218,36 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                                     >
                                         {source.name || 'Light'}
                                     </span>
-                                )}
-                            </div>
-
-                            <div className="flex items-center gap-0.5 shrink-0">
-                                <button
-                                    type="button"
-                                    onClick={(e) => handleToggleSource(e, source.id)}
+                                )}</>}
+                            actions={<>
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label="Toggle light visibility"
                                     title="Toggle light visibility"
+                                    onClick={(e) => handleToggleSource(e, source.id)}
+                                    icon={source.enabled ? <Eye className="w-3 h-3 text-[#a1a1aa]" /> : <EyeOff className="w-3 h-3 text-red-400" />}
                                     className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
-                                >
-                                    {source.enabled ? (
-                                        <Eye className="w-3 h-3 text-[#a1a1aa]" />
-                                    ) : (
-                                        <EyeOff className="w-3 h-3 text-red-400" />
-                                    )}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={(e) => handleDuplicateSource(e, source)}
+                                />
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label="Duplicate light"
                                     title="Duplicate light"
+                                    onClick={(e) => handleDuplicateSource(e, source)}
+                                    icon={<Copy className="w-3 h-3" />}
                                     className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer opacity-0 group-hover:opacity-100"
-                                >
-                                    <Copy className="w-3 h-3" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={(e) => handleDeleteSource(e, source.id)}
+                                />
+                                <IconButton
+                                    unstyled
+                                    tooltip={false}
+                                    label="Delete light"
                                     title="Delete light"
+                                    onClick={(e) => handleDeleteSource(e, source.id)}
+                                    icon={<Trash2 className="w-3 h-3" />}
                                     className="p-1 rounded hover:bg-red-500/20 text-[#a1a1aa] hover:text-red-400 transition cursor-pointer opacity-0 group-hover:opacity-100"
-                                >
-                                    <Trash2 className="w-3 h-3" />
-                                </button>
-                            </div>
-                        </div>
+                                />
+                            </>} />
                     );
                 })}
             </div>

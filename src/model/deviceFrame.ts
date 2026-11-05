@@ -94,16 +94,7 @@ export const DEVICE_FINISH_PRESETS: DeviceFinishPreset[] = [
   { id: 'midnight', name: 'Midnight', color: '#1e2530', metalness: 0.80, roughness: 0.26 },
   { id: 'black', name: 'Black', color: '#121214', metalness: 0.60, roughness: 0.40 },
 ];
-export const IPHONE_15_PRO: DeviceSpec = {
-  id: 'iphone-15-pro',
-  name: 'iPhone 15 Pro',
-  family: 'phone',
-  category: 'phone',
-  body: { width: 70.6, height: 146.6, depth: 8.25, cornerRadius: 10.5 },
-  screen: { width: (1179 / 460) * 25.4, height: (2556 / 460) * 25.4, cornerRadius: 9.5 },
-  defaultCutout: 'dynamic-island',
-  aspectRatio: 1179 / 2556,
-};
+export const IPHONE_15_PRO: DeviceSpec = DEVICE_SPECS['iphone-15-pro'];
 
 export const ANDROID_FLAGSHIP: DeviceSpec = {
   id: 'android-flagship',

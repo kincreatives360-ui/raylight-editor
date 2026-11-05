@@ -1,6 +1,7 @@
 // src/engine/easing.test.ts
 import { describe, it, expect } from 'vitest';
 import { evaluateEasing, evaluateSpring, ALL_18_EASINGS } from './easing';
+import { easingFromSelection } from '../model/easingSelection';
 
 describe('Easing & Spring Engine', () => {
   it('includes all 18 easing functions and spring presets', () => {
@@ -10,6 +11,22 @@ describe('Easing & Spring Engine', () => {
     expect(ids).toContain('spring:snappy');
     expect(ids).toContain('preset:linear');
     expect(ids).toContain('bezier:cinematic');
+    expect(ids).toContain('bezier:whip');
+    expect(ids).not.toContain('bezier: whip');
+    expect(easingFromSelection('bezier:whip')).toEqual({
+      kind: 'bezier',
+      x1: 0.6,
+      y1: -0.28,
+      x2: 0.74,
+      y2: 0.05,
+    });
+    expect(easingFromSelection('bezier: whip')).toEqual({
+      kind: 'bezier',
+      x1: 0.6,
+      y1: -0.28,
+      x2: 0.74,
+      y2: 0.05,
+    });
   });
 
   it('clamps evaluateEasing boundaries t=0 and t=1 correctly', () => {
@@ -32,6 +49,15 @@ describe('Easing & Spring Engine', () => {
     const midVal = evaluateSpring('bouncy', 0.5);
     expect(midVal).toBeGreaterThan(0.5);
     expect(midVal).toBeLessThan(1.5);
+
+    // Critically damped springs ('gentle', 'slow', 'stiff') never overshoot 1.0
+    for (const preset of ['gentle', 'slow', 'stiff'] as const) {
+      for (let i = 1; i < 20; i++) {
+        const sample = evaluateSpring(preset, i / 20);
+        expect(sample).toBeGreaterThanOrEqual(0);
+        expect(sample).toBeLessThanOrEqual(1);
+      }
+    }
   });
 
   it('supports custom cubic-bezier evaluation strings', () => {

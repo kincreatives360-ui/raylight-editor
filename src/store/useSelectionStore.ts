@@ -1,5 +1,7 @@
+import { MIN_STAGE_WIDTH, defaultInspectorWidth, DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
 // src/store/useSelectionStore.ts
 import { create } from 'zustand';
+import type { LightSourceType } from '../model/types';
 
 export type InspectorTab =
     | 'project'
@@ -25,6 +27,17 @@ export type CanvasTool =
     | 'polygon'
     | 'pen';
 
+export interface CameraViewBookmark {
+    orbit: number;
+    tilt: number;
+    roll: number;
+    zoom: number;
+    targetX: number;
+    targetY: number;
+    targetZ: number;
+    focalLength: number;
+}
+
 interface SelectionStore {
     selectedShotId: string;
     selectedLayerIds: string[];
@@ -32,6 +45,8 @@ interface SelectionStore {
     selectedCameraBlockId: string | null;
     selectedLightBlockId: string | null;
     selectedLightId: string | null;
+    activeLightTool: LightSourceType | null;
+    setActiveLightTool: (type: LightSourceType | null) => void;
     selectedPresetType: 'entrance' | 'exit' | null;
     inspectorTab: InspectorTab;
 
@@ -52,6 +67,8 @@ interface SelectionStore {
     canvasPan: { x: number; y: number };
     gradientEditorActive: boolean;
     gradientEditorAngle: number;
+    gradientEditorLayerId: string | null;
+    cameraBookmarks: Record<string, CameraViewBookmark>;
 
     leftPanelOpen: boolean;
     rightSidebarOpen: boolean;
@@ -98,17 +115,13 @@ interface SelectionStore {
             | ((prev: { x: number; y: number }) => { x: number; y: number })
     ) => void;
     resetCanvasView: () => void;
-    setGradientEditor: (active: boolean, angle?: number) => void;
+    setGradientEditor: (active: boolean, angle?: number, layerId?: string | null) => void;
     setGradientEditorAngle: (angle: number) => void;
+    setCameraBookmark: (shotId: string, bookmark: CameraViewBookmark | null) => void;
 }
 
-export const DEFAULT_LEFT_PANEL_WIDTH = 260;
-export const MIN_LEFT_PANEL_WIDTH = 200;
-export const MAX_LEFT_PANEL_WIDTH = 460;
-
-export const DEFAULT_RIGHT_SIDEBAR_WIDTH = 300;
-export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
-export const MAX_RIGHT_SIDEBAR_WIDTH = 500;
+export { DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
+export const DEFAULT_RIGHT_SIDEBAR_WIDTH = defaultInspectorWidth(typeof window === 'undefined' ? 1536 : window.innerWidth);
 
 function getSavedPanelWidth(key: string, defaultVal: number, minVal: number, maxVal: number): number {
     try {
@@ -134,6 +147,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedCameraBlockId: null,
     selectedLightBlockId: null,
     selectedLightId: null,
+    activeLightTool: null,
     selectedPresetType: null,
     inspectorTab: 'project',
 
@@ -153,6 +167,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     canvasPan: { x: 0, y: 0 },
     gradientEditorActive: false,
     gradientEditorAngle: 0,
+    gradientEditorLayerId: null,
+    cameraBookmarks: {},
 
     leftPanelOpen: true,
     rightSidebarOpen: true,
@@ -161,11 +177,13 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     selectProject: () =>
         set({
+            selectedShotId: '',
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',
@@ -179,6 +197,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: defaultLayerId ? 'layer' : 'shot',
@@ -245,8 +264,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             inspectorTab: selectedLayerIds.length > 0 ? 'layer' : 'project',
         }),
 
-    clearLayerSelection: () =>
-        set({
+    clearLayerSelection: () => set((_state) => ({
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
@@ -255,7 +273,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',
-        }),
+        })),
 
     selectBlock: (blockId, layerId) =>
         set((state) => ({
@@ -292,6 +310,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectLight: (lightId) =>
         set({
             selectedLightId: lightId,
+            activeLightTool: null,
             selectedLayerIds: [],
             selectedBlockId: null,
             selectedCameraBlockId: null,
@@ -326,7 +345,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     setTimelineHeightPx: (heightPx) =>
         set({
-            timelineHeightPx: Math.max(150, Math.min(560, Math.round(heightPx))),
+            timelineHeightPx: Math.max(180, Math.min(560, Math.round(heightPx))),
         }),
 
     setTimelineScrollTop: (timelineScrollTop) => set({ timelineScrollTop }),
@@ -355,8 +374,11 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     setActiveTool: (activeTool) =>
         set((state) => ({
             activeTool,
+            activeLightTool: null,
             isCropping: activeTool !== 'select' ? false : state.isCropping,
         })),
+
+    setActiveLightTool: (activeLightTool) => set({ activeLightTool }),
 
     toggleAnimateMode: () =>
         set((state) => ({ isAnimateMode: !state.isAnimateMode })),
@@ -384,32 +406,26 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             canvasPan: { x: 0, y: 0 },
         }),
 
-    setGradientEditor: (gradientEditorActive, gradientEditorAngle) =>
+    setGradientEditor: (gradientEditorActive, gradientEditorAngle, gradientEditorLayerId = null) =>
         set((state) => ({
             gradientEditorActive,
             gradientEditorAngle: gradientEditorAngle ?? state.gradientEditorAngle,
+            gradientEditorLayerId,
         })),
 
     setGradientEditorAngle: (gradientEditorAngle) => set({ gradientEditorAngle }),
 
-    toggleLeftPanel: () => set((state) => {
-        const leftPanelOpen = !state.leftPanelOpen;
-        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
-        return { leftPanelOpen, ...(leftPanelOpen && compact ? { rightSidebarOpen: false } : {}) };
+    setCameraBookmark: (shotId, bookmark) => set((state) => {
+        const cameraBookmarks = { ...state.cameraBookmarks };
+        if (bookmark) cameraBookmarks[shotId] = bookmark;
+        else delete cameraBookmarks[shotId];
+        return { cameraBookmarks };
     }),
-    toggleRightSidebar: () => set((state) => {
-        const rightSidebarOpen = !state.rightSidebarOpen;
-        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
-        return { rightSidebarOpen, ...(rightSidebarOpen && compact ? { leftPanelOpen: false } : {}) };
-    }),
-    setLeftPanelOpen: (leftPanelOpen) => set(() => {
-        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
-        return { leftPanelOpen, ...(leftPanelOpen && compact ? { rightSidebarOpen: false } : {}) };
-    }),
-    setRightSidebarOpen: (rightSidebarOpen) => set(() => {
-        const compact = typeof window !== 'undefined' && window.innerWidth < 1024;
-        return { rightSidebarOpen, ...(rightSidebarOpen && compact ? { leftPanelOpen: false } : {}) };
-    }),
+
+    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen, ...(!state.leftPanelOpen && typeof window !== 'undefined' && window.innerWidth < MIN_STAGE_WIDTH + MIN_LEFT_PANEL_WIDTH + MIN_RIGHT_SIDEBAR_WIDTH ? { rightSidebarOpen: false } : {}) })),
+    toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
+    setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
+    setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
 
     setLeftPanelWidth: (width) => {
         const clamped = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(MAX_LEFT_PANEL_WIDTH, Math.round(width)));
@@ -446,7 +462,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         }
         set({
             leftPanelWidth: DEFAULT_LEFT_PANEL_WIDTH,
-            rightSidebarWidth: DEFAULT_RIGHT_SIDEBAR_WIDTH,
+            rightSidebarWidth: defaultInspectorWidth(typeof window === 'undefined' ? 1536 : window.innerWidth),
         });
     },
 }));

@@ -178,6 +178,28 @@ describe('evaluateLightBlocks', () => {
     expect(spot?.penumbra).toBeCloseTo(0.5);
   });
 
+  it('an explicit property animates only its own channel', () => {
+    const block: LightAnimationBlock = {
+      id: 'position-only', label: 'Position Only', targetLightId: 'key', property: 'position',
+      startMs: 0, durationMs: 1000, fromX: 1, fromY: 2, fromZ: 3,
+      toX: 5, toY: 6, toZ: 7, fromIntensity: 0.1, toIntensity: 9,
+      easing: { kind: 'preset', name: 'linear' },
+    };
+    const halfway = evaluateLightBlocks(baseRig, [block], 500);
+    expect(halfway.position).toEqual({ x: 3, y: 4, z: 5 });
+    expect(halfway.keyIntensity).toBe(baseRig.intensity);
+  });
+  it('Room Ambience animation changes the room while preserving the key and other light channels', () => {
+    const block: LightAnimationBlock = {
+      id: 'room-ambience', label: 'Room fade', targetLightId: 'room', property: 'ambience',
+      startMs: 0, durationMs: 1000, fromX: 0, fromY: 0, toX: 0, toY: 0,
+      fromIntensity: 0.2, toIntensity: 0.8, easing: { kind: 'preset', name: 'linear' },
+    };
+    const halfway = evaluateLightBlocks(baseRig, [block], 500);
+    expect(halfway.ambience).toBeCloseTo(0.5);
+    expect(halfway.position).toEqual(baseRig.position);
+    expect(halfway.keyIntensity).toBe(baseRig.keyIntensity);
+  });
   it('cloneLightRig produces a deep copy without mutation', () => {
     const clone = cloneLightRig(baseRig);
     expect(clone).toEqual(baseRig);
@@ -187,3 +209,5 @@ describe('evaluateLightBlocks', () => {
     expect(clone.sources?.[0].position).not.toBe(baseRig.sources?.[0].position);
   });
 });
+
+

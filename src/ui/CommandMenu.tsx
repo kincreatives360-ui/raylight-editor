@@ -1,8 +1,10 @@
+import { ShortcutKey } from './ShortcutKey';
+import { SearchField } from './SearchField';
+import { ModalShell } from './ModalShell';
 // src/ui/CommandMenu.tsx
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Search } from 'lucide-react';
+
 import { formatShortcut } from '../utils/shortcuts';
-import { useModalFocus } from './useModalFocus';
 
 export interface CommandItem {
   id: string;
@@ -28,7 +30,6 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
-  const dialogRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
   // Filter commands by query
@@ -55,7 +56,15 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
 
   // Derive clamped active index without setState effect
   const activeIndex = Math.min(selectedIndex, Math.max(0, filteredCommands.length - 1));
-  useModalFocus(isOpen, dialogRef, inputRef);
+
+  // Focus input when opened
+  useEffect(() => {
+    if (isOpen) {
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+      });
+    }
+  }, [isOpen]);
 
   // Scroll active item into view
   useEffect(() => {
@@ -90,25 +99,17 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div
-      className="fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150"
-      onClick={onClose}
+    <ModalShell
+        onClose={onClose}
+        initialFocusRef={inputRef}
+        backdropProps={{"role": "dialog", "aria-modal": "true", "aria-label": "Command Menu", "className": "fixed inset-0 z-50 flex items-start justify-center pt-[15vh] px-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-150", "onClick": onClose}}
+        surfaceProps={{"id": "raylight-command-menu", "className": "raylight-modal w-full max-w-xl rounded-2xl bg-surface border border-subtle shadow-2xl overflow-hidden flex flex-col text-foreground", "onClick": (e) => e.stopPropagation(), "onKeyDown": handleKeyDown}}
     >
-      <div
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label="Command Menu"
-        tabIndex={-1}
-        className="w-full max-w-xl rounded-2xl bg-[#141418] border border-white/10 shadow-2xl overflow-hidden flex flex-col text-white"
-        onClick={(e) => e.stopPropagation()}
-        onKeyDown={handleKeyDown}
-      >
         {/* Search Header */}
-        <div className="flex items-center gap-3 px-4 py-3.5 border-b border-white/[0.08] bg-[#18181f]">
-          <Search className="w-4 h-4 text-zinc-400 shrink-0" />
-          <input
-            ref={inputRef}
+        <SearchField
+            containerClassName="flex items-center gap-3 px-4 py-3.5 border-b border-subtle bg-surface"
+            iconClassName="w-4 h-4 text-zinc-400 shrink-0"
+            inputRef={inputRef}
             type="text"
             value={query}
             onChange={(e) => {
@@ -116,18 +117,12 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               setSelectedIndex(0);
             }}
             placeholder="Type a command or search actions..."
-            role="combobox"
-            aria-expanded="true"
-            aria-haspopup="listbox"
             className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
             aria-autocomplete="list"
             aria-controls="command-list"
-            aria-activedescendant={filteredCommands[activeIndex] ? `command-option-${filteredCommands[activeIndex].id}` : undefined}
-          />
-          <kbd className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
+        ><ShortcutKey className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
             Esc
-          </kbd>
-        </div>
+          </ShortcutKey></SearchField>
 
         {/* Results List */}
         <div
@@ -147,7 +142,6 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               return (
                 <div
                   key={cmd.id}
-                  id={`command-option-${cmd.id}`}
                   role="option"
                   aria-selected={isSelected}
                   data-active={isSelected}
@@ -158,7 +152,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                   onMouseEnter={() => setSelectedIndex(idx)}
                   className={`flex items-center justify-between px-3 py-2.5 rounded-xl cursor-pointer text-xs select-none transition-colors ${
                     isSelected
-                      ? 'bg-[#0070e0] text-white shadow-sm'
+                      ? 'bg-brand-blue text-white shadow-xs'
                       : 'text-zinc-300 hover:bg-white/[0.05]'
                   }`}
                 >
@@ -195,7 +189,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                       {cmd.category}
                     </span>
                     {cmd.shortcut && cmd.shortcut.length > 0 && (
-                      <kbd
+                      <ShortcutKey
                         className={`font-mono text-[11px] px-1.5 py-0.5 rounded border ${
                           isSelected
                             ? 'bg-white/20 text-white border-white/30'
@@ -203,7 +197,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
                         }`}
                       >
                         {formatShortcut(cmd.shortcut)}
-                      </kbd>
+                      </ShortcutKey>
                     )}
                   </div>
                 </div>
@@ -213,19 +207,18 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] bg-[#121216] text-[11px] text-zinc-400">
+        <div className="flex items-center justify-between px-4 py-2 border-t border-subtle bg-app text-[11px] text-muted-foreground">
           <div className="flex items-center gap-2">
             <span>Navigation:</span>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</kbd>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↓</kbd>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↑</ShortcutKey>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">↓</ShortcutKey>
             <span>Execute:</span>
-            <kbd className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">Enter</kbd>
+            <ShortcutKey className="px-1.5 py-0.5 bg-white/[0.06] rounded border border-white/10 font-mono text-[11px]">Enter</ShortcutKey>
           </div>
           <span className="font-mono text-[11px] tabular-nums">
             {filteredCommands.length} command{filteredCommands.length === 1 ? '' : 's'}
           </span>
         </div>
-      </div>
-    </div>
+      </ModalShell>
   );
 };

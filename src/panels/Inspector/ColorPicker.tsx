@@ -1,15 +1,19 @@
-import { FigmaSelect } from '../../ui/FigmaSelect';
+import { useFloatingPanel } from '../../ui/useFloatingPanel';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Plus, RotateCcw, RotateCw, Trash2 } from 'lucide-react';
-import type { GradientStop } from '../../model/types';
+import { Pipette } from 'lucide-react';
+import { GradientEditorPanel } from './GradientEditorPanel';
+import { useProjectStore } from '../../store/useProjectStore';
+import type { GradientStop, MeshGradientPoint } from '../../model/types';
 import { RAYLIGHT_COLOR_PALETTE } from '../../model/types';
+import { createCanvasFillStyle } from '../../engine/canvasRenderer';
 
 type Hsv = { h: number; s: number; v: number };
 export interface GradientValue {
     angle: number;
     stops: GradientStop[];
-    gradientType?: 'linear' | 'radial';
+    gradientType?: 'linear' | 'radial' | 'angular' | 'diamond' | 'mesh';
+    mesh?: MeshGradientPoint[];
 }
 
 function normalizeHex(value: string): string | null {
@@ -57,9 +61,11 @@ interface ColorPickerProps {
     onExitGradient?: () => void;
     compact?: boolean;
     showGradientMode?: boolean;
+    gradientTypes?: GradientValue['gradientType'][];
     className?: string;
     children?: React.ReactNode;
     disabled?: boolean;
+    defaultOpen?: boolean;
 }
 
 const stopIdMap = new WeakMap<GradientStop, string>();
@@ -77,6 +83,7 @@ function getStopId(stop: GradientStop): string {
 export const ColorPicker: React.FC<ColorPickerProps> = ({
     color,
     onChange,
+    defaultOpen = false,
     label = 'Color',
     gradientValue,
     onGradientChange,
@@ -84,18 +91,52 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     onExitGradient,
     compact = false,
     showGradientMode = true,
+    gradientTypes = ['linear', 'radial', 'angular', 'diamond', 'mesh'],
     className = '',
     children,
     disabled = false,
 }) => {
     const anchorRef = useRef<HTMLButtonElement>(null);
     const popupRef = useRef<HTMLDivElement>(null);
+    const gradientPreviewRef = useRef<HTMLCanvasElement>(null);
     const squareRef = useRef<HTMLDivElement>(null);
     const hexInputRef = useRef<HTMLInputElement>(null);
     const hueBarRef = useRef<HTMLDivElement>(null);
+
+    const hasEyeDropper = typeof window !== 'undefined' && 'EyeDropper' in window;
+    const handleEyeDropper = async () => {
+        if (typeof window === 'undefined') return;
+        const EyeDropperClass = (window as unknown as { EyeDropper?: new () => { open: () => Promise<{ sRGBHex: string }> } }).EyeDropper;
+        if (!EyeDropperClass) return;
+        try {
+            const ed = new EyeDropperClass();
+            const res = await ed.open();
+            if (res?.sRGBHex) {
+                commitHex(res.sRGBHex);
+            }
+        } catch {
+            // Cancelled
+        }
+    };
+
+    const project = useProjectStore.getState().project;
+    const documentColors = useMemo(() => {
+        const colors = new Set<string>();
+        if (project.background?.kind === 'solid' && project.background.color) {
+            colors.add(project.background.color.toLowerCase());
+        }
+        for (const shot of project.shots) {
+            for (const l of shot.layers) {
+                if (l.kind === 'text' && l.font?.color) colors.add(l.font.color.toLowerCase());
+                if (l.kind === 'shape' && l.fill?.kind === 'solid' && l.fill.color) colors.add(l.fill.color.toLowerCase());
+            }
+        }
+        return Array.from(colors).filter((c) => /^#[0-9a-f]{6}$/i.test(c)).slice(0, 7);
+    }, [project]);
     const pickerId = useId();
-    const [open, setOpen] = useState(false);
+    const [open, setOpen] = useState(defaultOpen);
     const [pickerMode, setPickerMode] = useState<'color' | 'gradient'>('color');
+    const [selectedMeshPoint, setSelectedMeshPoint] = useState(4);
     const [hexDraft, setHexDraft] = useState(color);
     const [hsv, setHsv] = useState<Hsv>(() => hexToHsv(color));
     const [position, setPosition] = useState({ left: 0, top: 0 });
@@ -106,11 +147,22 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     const onExitGradientRef = useRef(onExitGradient);
 
     const hueColor = useMemo(() => hsvToHex({ h: hsv.h, s: 1, v: 1 }), [hsv.h]);
-    const gradient = gradientValue ?? {
+    const gradient = useMemo(() => gradientValue ?? {
         angle: 0,
         gradientType: 'linear' as const,
         stops: [{ at: 0, color }, { at: 1, color: '#000000' }],
-    };
+    }, [gradientValue, color]);
+
+    useEffect(() => {
+        const canvas = gradientPreviewRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx) return;
+        canvas.width = 300;
+        canvas.height = 36;
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = createCanvasFillStyle(ctx, { kind: 'gradient', ...gradient }, canvas.width, canvas.height);
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+    }, [gradient]);
 
     useEffect(() => {
         hsvRef.current = hsv;
@@ -129,9 +181,8 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         }
     }, [color]);
 
-    useEffect(() => {
-        if (!open) return;
-        const updatePosition = () => {
+    useFloatingPanel({ open, surfaceRef: popupRef, anchorRef, positionKey: pickerMode,
+        reposition: () => {
             const rect = anchorRef.current?.getBoundingClientRect();
             if (!rect) return;
             const width = 312;
@@ -139,29 +190,10 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
             const left = Math.max(8, Math.min(rect.left, window.innerWidth - width - 8));
             const below = rect.bottom + 8;
             setPosition({ left, top: below + height < window.innerHeight ? below : Math.max(8, rect.top - height - 8) });
-        };
-        updatePosition();
-        window.addEventListener('resize', updatePosition);
-        window.addEventListener('scroll', updatePosition, true);
-        const onPointerDown = (event: PointerEvent) => {
-            const target = event.target as HTMLElement | null;
-            if (!target) return;
-            if (anchorRef.current?.contains(target) || popupRef.current?.contains(target)) {
-                return;
-            }
-            if (target.closest && target.closest('[data-raylight-color-picker]')) {
-                return;
-            }
-            setOpen(false);
-            onExitGradientRef.current?.();
-        };
-        window.addEventListener('pointerdown', onPointerDown);
-        return () => {
-            window.removeEventListener('resize', updatePosition);
-            window.removeEventListener('scroll', updatePosition, true);
-            window.removeEventListener('pointerdown', onPointerDown);
-        };
-    }, [open, pickerMode]);
+        },
+        onClose: () => { setOpen(false); onExitGradientRef.current?.(); }, escape: false,
+        ignoreOutside: target => !!target.closest?.('[data-raylight-color-picker], [data-gradient-editor]'),
+    });
 
     const handleSquarePointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
         event.preventDefault();
@@ -312,6 +344,11 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     };
 
     const updateGradient = (next: GradientValue) => onGradientChange?.(next);
+    const ensureMesh = (value: GradientValue): MeshGradientPoint[] => value.mesh?.length === 9 ? value.mesh : Array.from({ length: 9 }, (_, index) => ({
+        x: (index % 3) / 2, y: Math.floor(index / 3) / 2,
+        color: gradient.stops[Math.round(index / 8 * (gradient.stops.length - 1))]?.color ?? color,
+        opacity: gradient.stops[Math.round(index / 8 * (gradient.stops.length - 1))]?.opacity ?? 1,
+    }));
     const updateStop = (index: number, patch: Partial<GradientStop>) => {
         const oldStop = gradient.stops[index];
         const stableId = oldStop ? getStopId(oldStop) : `stop-id-${nextStopId++}`;
@@ -319,6 +356,21 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
         stopIdMap.set(newStop, stableId);
         const stops = gradient.stops.map((stop, stopIndex) => (stopIndex === index ? newStop : stop));
         updateGradient({ ...gradient, stops });
+    };
+    const addGradientStop = () => {
+        const sorted = [...gradient.stops].sort((a, b) => a.at - b.at);
+        let at = 0.5;
+        for (let index = 0; index < sorted.length - 1; index++) {
+            const gap = sorted[index + 1].at - sorted[index].at;
+            if (gap > 0.01) { at = sorted[index].at + gap / 2; break; }
+        }
+        const newStop: GradientStop = { at, color: '#ffffff', opacity: 1 };
+        stopIdMap.set(newStop, `stop-id-${nextStopId++}`);
+        updateGradient({ ...gradient, stops: [...gradient.stops, newStop].sort((a, b) => a.at - b.at) });
+    };
+    const updateMeshPoint = (index: number, patch: Partial<MeshGradientPoint>) => {
+        const mesh = ensureMesh(gradient).map((point, pointIndex) => pointIndex === index ? { ...point, ...patch } : point);
+        updateGradient({ ...gradient, gradientType: 'mesh', mesh });
     };
     const enterGradientMode = () => {
         setPickerMode('gradient');
@@ -419,6 +471,17 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                             className="min-w-0 w-[86px] bg-transparent font-mono text-[var(--text-primary,#f4f4f5)] outline-none"
                             spellCheck={false}
                         />
+                        {hasEyeDropper && (
+                            <button
+                                type="button"
+                                aria-label="Pick color from screen"
+                                title="Pick color from screen (Eyedropper)"
+                                onClick={handleEyeDropper}
+                                className="ml-auto p-1 rounded hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+                            >
+                                <Pipette className="w-3.5 h-3.5" />
+                            </button>
+                        )}
                     </label>
                     <div className="flex h-[205px] gap-3">
                         <div
@@ -488,197 +551,44 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                     <div className="mt-3 flex items-center justify-between gap-1.5">
                         {RAYLIGHT_COLOR_PALETTE.map((swatch) => <button key={swatch} type="button" aria-label={`Set color ${swatch}`} title={swatch} onClick={() => commitHex(swatch)} className={`h-6 w-6 shrink-0 rounded-full border transition hover:scale-110 ${hexDraft.toLowerCase() === swatch ? 'border-white ring-1 ring-white/50' : 'border-white/15'}`} style={{ backgroundColor: swatch }} />)}
                     </div>
+                    {documentColors.length > 0 && (
+                        <div className="mt-2 pt-2 border-t border-white/[0.06] flex items-center justify-between gap-1.5">
+                            <span className="text-[10px] text-zinc-500 font-mono">DOC</span>
+                            <div className="flex items-center gap-1.5">
+                                {documentColors.map((swatch) => (
+                                    <button
+                                        key={swatch}
+                                        type="button"
+                                        aria-label={`Set document color ${swatch}`}
+                                        title={swatch}
+                                        onClick={() => commitHex(swatch)}
+                                        className={`h-5 w-5 shrink-0 rounded-full border transition hover:scale-110 ${hexDraft.toLowerCase() === swatch ? 'border-white ring-1 ring-white/50' : 'border-white/15'}`}
+                                        style={{ backgroundColor: swatch }}
+                                    />
+                                ))}
+                            </div>
+                        </div>
+                    )}
                 </>
             ) : (
-                <div className="space-y-2.5">
-                    <div className="flex items-center gap-2">
-                        <FigmaSelect
-                            aria-label="Gradient type"
-                            value={gradient.gradientType ?? 'linear'}
-                            onChange={(event) => updateGradient({ ...gradient, gradientType: event.target.value as 'linear' | 'radial' })}
-                            className="h-8 flex-1 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-2 text-[11px] text-[var(--text-primary,#f4f4f5)] outline-none"
-                        >
-                            <option value="linear">Linear</option>
-                            <option value="radial">Radial</option>
-                        </FigmaSelect>
-                        <button
-                            type="button"
-                            aria-label="Reverse gradient"
-                            title="Reverse gradient"
-                            onClick={() => updateGradient({ ...gradient, stops: [...gradient.stops].reverse().map((stop) => ({ ...stop, at: 1 - stop.at })).sort((a, b) => a.at - b.at) })}
-                            className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--bg-subtle,#1c1c1f)] text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100"
-                        >
-                            <RotateCcw className="h-4 w-4" />
-                        </button>
-                        <button
-                            type="button"
-                            aria-label="Rotate gradient 90 degrees"
-                            title="Rotate gradient 90°"
-                            onClick={() => updateGradient({ ...gradient, angle: (gradient.angle + 90) % 360 })}
-                            className="grid h-8 w-8 place-items-center rounded-lg bg-[var(--bg-subtle,#1c1c1f)] text-[var(--text-muted,#a1a1aa)] hover:text-white hover:bg-[var(--bg-hover,rgba(255,255,255,0.05))] transition-colors duration-100"
-                        >
-                            <RotateCw className="h-4 w-4" />
-                        </button>
-                    </div>
-                    <div
-                        className="relative h-9 rounded-lg border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-canvas,#07080d)] shadow-inner"
-                        style={{ background: `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color}${Math.round((stop.opacity ?? 1) * 255).toString(16).padStart(2, '0')} ${stop.at * 100}%`).join(', ')})` }}
-                    >
-                        <div className="absolute inset-0 rounded-lg bg-[linear-gradient(45deg,#333_25%,transparent_25%,transparent_75%,#333_75%),linear-gradient(45deg,#333_25%,#111_25%,#111_75%,#333_75%)] bg-[length:12px_12px] bg-[position:0_0,6px_6px] opacity-20 pointer-events-none overflow-hidden rounded-lg" />
-                        <div className="absolute inset-0 rounded-lg pointer-events-none overflow-hidden" style={{ background: gradient.gradientType === 'radial' ? `radial-gradient(circle, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` : `linear-gradient(${gradient.angle}deg, ${gradient.stops.map((stop) => `${stop.color} ${stop.at * 100}%`).join(', ')})` }} />
-                        <svg
-                            className="absolute inset-0 h-full w-full touch-none overflow-visible"
-                            viewBox="0 0 300 36"
-                            preserveAspectRatio="none"
-                            onPointerDown={(event) => {
-                                const bounds = event.currentTarget.getBoundingClientRect();
-                                const padPx = (12 / 300) * bounds.width;
-                                const usableWidth = bounds.width - padPx * 2;
-                                const at = usableWidth > 0
-                                    ? Math.max(0, Math.min(1, (event.clientX - bounds.left - padPx) / usableWidth))
-                                    : 0;
-                                const nearest = gradient.stops.reduce((best, stop, index) => Math.abs(stop.at - at) < Math.abs(gradient.stops[best].at - at) ? index : best, 0);
-                                try {
-                                    (event.currentTarget as SVGSVGElement).setPointerCapture(event.pointerId);
-                                } catch {
-                                    // ignore
-                                }
-                                (event.currentTarget as SVGSVGElement).dataset.dragStop = String(nearest);
-                            }}
-                            onPointerMove={(event) => {
-                                const raw = event.currentTarget.dataset.dragStop;
-                                if (raw === undefined || (event.buttons & 1) === 0) return;
-                                const bounds = event.currentTarget.getBoundingClientRect();
-                                const padPx = (12 / 300) * bounds.width;
-                                const usableWidth = bounds.width - padPx * 2;
-                                const at = usableWidth > 0
-                                    ? Math.max(0, Math.min(1, (event.clientX - bounds.left - padPx) / usableWidth))
-                                    : 0;
-                                updateStop(Number(raw), { at });
-                            }}
-                            onPointerUp={(event) => { delete event.currentTarget.dataset.dragStop; }}
-                            onPointerCancel={(event) => { delete event.currentTarget.dataset.dragStop; }}
-                            onLostPointerCapture={(event) => { delete (event.currentTarget as SVGSVGElement).dataset.dragStop; }}
-                        >
-                            {gradient.stops.map((stop) => {
-                                const cx = 12 + stop.at * (300 - 24);
-                                return (
-                                    <circle
-                                        key={`gradient-circle-${getStopId(stop)}`}
-                                        cx={cx}
-                                        cy="18"
-                                        r="7.5"
-                                        fill={stop.color}
-                                        stroke="white"
-                                        strokeWidth="2.5"
-                                        className="cursor-pointer filter drop-shadow(0 1px 3px rgba(0,0,0,0.6))"
-                                    />
-                                );
-                            })}
-                        </svg>
-                    </div>
-                    <div className="flex items-center justify-between text-[11px] text-[var(--text-muted,#a1a1aa)]">
-                        <span>Stops</span>
-                        <button
-                            type="button"
-                            aria-label="Add gradient stop"
-                            title="Add stop"
-                            onClick={() => {
-                                const sorted = [...gradient.stops].sort((a, b) => a.at - b.at);
-                                let at = 0.5;
-                                for (let index = 0; index < sorted.length - 1; index++) {
-                                    const gap = sorted[index + 1].at - sorted[index].at;
-                                    if (gap > 0.01) { at = sorted[index].at + gap / 2; break; }
-                                }
-                                const newStop: GradientStop = { at, color: '#ffffff', opacity: 1 };
-                                const newId = `stop-id-${nextStopId++}`;
-                                stopIdMap.set(newStop, newId);
-                                updateGradient({ ...gradient, stops: [...gradient.stops, newStop].sort((a, b) => a.at - b.at) });
-                            }}
-                            className="grid h-7 w-7 place-items-center rounded-md bg-[var(--bg-subtle,#1c1c1f)] text-white hover:bg-[var(--bg-muted,#242428)] transition-colors duration-100"
-                        >
-                            <Plus className="h-4 w-4" />
-                        </button>
-                    </div>
-                    <div className="max-h-[180px] space-y-1 overflow-y-auto">
-                        {gradient.stops.map((stop, index) => (
-                            <div key={getStopId(stop)} className="grid grid-cols-[42px_1fr_42px_26px] items-center gap-1 rounded-md border border-[var(--border-subtle,rgba(255,255,255,0.07))] bg-[var(--bg-subtle,#1c1c1f)] px-1.5 py-1">
-                                <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
-                                    <input
-                                        aria-label={`Stop ${index + 1} position`}
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={Math.round(stop.at * 100)}
-                                        onChange={(event) => {
-                                            const val = event.target.value.trim();
-                                            const num = val === '' ? 0 : Number(val);
-                                            if (Number.isFinite(num)) {
-                                                updateStop(index, { at: Math.max(0, Math.min(100, num)) / 100 });
-                                            }
-                                        }}
-                                        onKeyDown={(e) => e.stopPropagation()}
-                                        className="w-7 bg-transparent text-right outline-none"
-                                    />
-                                    <span>%</span>
-                                </label>
-                                <label className="flex min-w-0 items-center gap-1 rounded bg-[var(--bg-surface,#161619)] px-1">
-                                    <ColorField
-                                        aria-label={`Stop ${index + 1} color`}
-                                        value={normalizeHex(stop.color) ?? '#000000'}
-                                        onChange={(event) => updateStop(index, { color: event.target.value })}
-                                        className="h-5 w-5 shrink-0 cursor-pointer border-0 bg-transparent p-0"
-                                    />
-                                    <input
-                                        aria-label={`Stop ${index + 1} hex`}
-                                        value={stop.color.replace(/^#/, '').toUpperCase()}
-                                        onChange={(event) => { const value = normalizeHex(event.target.value); if (value) updateStop(index, { color: value }); }}
-                                        onKeyDown={(e) => {
-                                            e.stopPropagation();
-                                            if (e.key === 'Escape') {
-                                                e.preventDefault();
-                                                setOpen(false);
-                                                onExitGradient?.();
-                                                anchorRef.current?.focus();
-                                            }
-                                        }}
-                                        className="min-w-0 w-full bg-transparent font-mono text-[10px] text-[var(--text-primary,#f4f4f5)] outline-none"
-                                    />
-                                </label>
-                                <label className="flex items-center text-[10px] text-[var(--text-secondary,#c4c4cc)]">
-                                    <input
-                                        aria-label={`Stop ${index + 1} opacity`}
-                                        type="number"
-                                        min="0"
-                                        max="100"
-                                        value={Math.round((stop.opacity ?? 1) * 100)}
-                                        onChange={(event) => {
-                                            const val = event.target.value.trim();
-                                            const num = val === '' ? 100 : Number(val);
-                                            if (Number.isFinite(num)) {
-                                                updateStop(index, { opacity: Math.max(0, Math.min(100, num)) / 100 });
-                                            }
-                                        }}
-                                        onKeyDown={(e) => e.stopPropagation()}
-                                        className="w-7 bg-transparent text-right outline-none"
-                                    />
-                                    <span>%</span>
-                                </label>
-                                <button
-                                    type="button"
-                                    aria-label={`Remove stop ${index + 1}`}
-                                    disabled={gradient.stops.length <= 2}
-                                    onClick={() => updateGradient({ ...gradient, stops: gradient.stops.filter((_, stopIndex) => stopIndex !== index) })}
-                                    className="grid h-6 w-6 place-items-center rounded text-[var(--text-muted,#a1a1aa)] hover:text-[var(--accent-danger,#f43f5e)] disabled:opacity-40 transition-colors duration-100"
-                                >
-                                    <Trash2 className="h-3.5 w-3.5" />
-                                </button>
-                            </div>
-                        ))}
-                    </div>
-                    <div className="text-right text-[10px] text-[var(--text-muted,#a1a1aa)]">Angle {gradient.angle}°</div>
-                </div>
-            )}
+                                <GradientEditorPanel
+                    gradient={gradient}
+                    gradientTypes={gradientTypes}
+                    gradientPreviewRef={gradientPreviewRef}
+                    selectedMeshPoint={selectedMeshPoint}
+                    setSelectedMeshPoint={setSelectedMeshPoint}
+                    ensureMesh={ensureMesh}
+                    updateMeshPoint={updateMeshPoint}
+                    updateGradient={updateGradient}
+                    updateStop={updateStop}
+                    addGradientStop={addGradientStop}
+                    getStopId={getStopId}
+                    normalizeHex={normalizeHex}
+                    setOpen={setOpen}
+                    onExitGradient={onExitGradient}
+                    anchorRef={anchorRef}
+                    ColorField={ColorField}
+                />            )}
         </div>,
         document.body,
     ) : null;
@@ -709,7 +619,7 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     </>;
 };
 
-interface ColorFieldProps {
+export interface ColorFieldProps {
     value: string;
     onChange: (event: { target: { value: string } }) => void;
     className?: string;

@@ -1,8 +1,11 @@
+import { IconButton } from '../ui/primitives';
+import { ShortcutKey } from '../ui/ShortcutKey';
 // src/stage/OrientationGizmo.tsx
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import * as THREE from 'three';
-import { RotateCcw, Focus, ChevronDown } from 'lucide-react';
+import { RotateCcw, Focus, ChevronDown, ChevronUp } from 'lucide-react';
 import { radToDeg } from '../model/defaults';
+import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 
 interface OrientationGizmoProps {
     cameraRotation: { x: number; y: number; z: number };
@@ -32,27 +35,18 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
     const [isHovered, setIsHovered] = useState(false);
     const [isDragging, setIsDragging] = useState(false);
     const [menuOpen, setMenuOpen] = useState(false);
-    const orientationHelpId = useId();
-    const quickViewsId = useId();
-    const quickViewsTriggerRef = React.useRef<HTMLButtonElement>(null);
-    const closeQuickViews = () => {
-        setMenuOpen(false);
-        quickViewsTriggerRef.current?.focus();
-    };
     const dragStartRef = React.useRef<{
         x: number;
         y: number;
         startYaw: number;
         startPitch: number;
-        pointerId: number;
-        element: HTMLDivElement;
+        hasMoved: boolean;
     } | null>(null);
 
     const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
         if (e.button !== 0) return;
         e.preventDefault();
         e.stopPropagation();
-        if (dragStartRef.current) return;
         try {
             e.currentTarget.setPointerCapture(e.pointerId);
         } catch {
@@ -64,18 +58,20 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
             y: e.clientY,
             startYaw: radToDeg(cameraRotation.y),
             startPitch: radToDeg(cameraRotation.x),
-            pointerId: e.pointerId,
-            element: e.currentTarget,
+            hasMoved: false,
         };
         onDragStart?.();
     };
 
     const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-        if (!dragStartRef.current || dragStartRef.current.pointerId !== e.pointerId) return;
+        if (!dragStartRef.current) return;
         e.preventDefault();
         e.stopPropagation();
         const dx = e.clientX - dragStartRef.current.x;
         const dy = e.clientY - dragStartRef.current.y;
+        if (Math.hypot(dx, dy) > 2) {
+            dragStartRef.current.hasMoved = true;
+        }
 
         const deltaOrbit = dx * 0.75;
         const deltaTilt = -dy * 0.75;
@@ -88,55 +84,26 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         }
     };
 
-    const endDrag = useCallback((pointerId?: number) => {
-        const drag = dragStartRef.current;
-        if (!drag || (pointerId !== undefined && drag.pointerId !== pointerId)) return;
-        dragStartRef.current = null;
-        try {
-            if (drag.element.hasPointerCapture(drag.pointerId)) {
-                drag.element.releasePointerCapture(drag.pointerId);
-            }
-        } catch {
-            // Capture may already have been released by the browser.
-        }
+    const endDrag = () => {
+        if (!dragStartRef.current) return;
         setIsDragging(false);
+        dragStartRef.current = null;
         onDragEnd?.();
-    }, [onDragEnd]);
-
-    useEffect(() => {
-        const handleWindowBlur = () => endDrag();
-        window.addEventListener('blur', handleWindowBlur);
-        return () => window.removeEventListener('blur', handleWindowBlur);
-    }, [endDrag]);
-
-    const handleOrientationKeyDown = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        const step = e.shiftKey ? 15 : e.altKey ? 1 : 5;
-        let orbit = radToDeg(cameraRotation.y);
-        let tilt = radToDeg(cameraRotation.x);
-
-        switch (e.key) {
-            case 'ArrowLeft': orbit -= step; break;
-            case 'ArrowRight': orbit += step; break;
-            case 'ArrowUp': tilt += step; break;
-            case 'ArrowDown': tilt -= step; break;
-            default: return;
-        }
-
-        e.preventDefault();
-        e.stopPropagation();
-        onSetOrientation(
-            ((Math.round(orbit) % 360) + 360) % 360,
-            Math.max(-89, Math.min(89, Math.round(tilt))),
-            radToDeg(cameraRotation.z),
-        );
     };
 
     const handlePointerUp = (e: React.PointerEvent<HTMLDivElement>) => {
-        endDrag(e.pointerId);
+        try {
+            if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+                e.currentTarget.releasePointerCapture(e.pointerId);
+            }
+        } catch {
+            // ignore
+        }
+        endDrag();
     };
 
-    const handleLostPointerCapture = (e: React.PointerEvent<HTMLDivElement>) => {
-        endDrag(e.pointerId);
+    const handleLostPointerCapture = (_e: React.PointerEvent<HTMLDivElement>) => {
+        endDrag();
     };
 
     // Compute projected 2D coordinates for the unit axes (X, Y, Z)
@@ -189,25 +156,20 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
         <div
             onMouseEnter={() => setIsHovered(true)}
             onMouseLeave={() => setIsHovered(false)}
-            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
             className="absolute right-3 z-35 flex flex-col items-center gap-1.5 select-none"
             style={{ top: topInset }}
         >
             {/* 3D Trackball Sphere (The Ball Method) */}
-            <div
-                role="group"
-                tabIndex={0}
-                aria-label="Camera orientation"
-                aria-describedby={orientationHelpId}
-                onKeyDown={handleOrientationKeyDown}
-                onPointerDown={handlePointerDown}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={handlePointerUp}
-                onLostPointerCapture={handleLostPointerCapture}
-                title="Drag to orbit; focus and use arrow keys to rotate the camera"
-                className={`relative group flex items-center justify-center w-13 h-13 rounded-full border touch-none cursor-grab active:cursor-grabbing transition-[transform,border-color,box-shadow] duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 ${
+<div
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onPointerCancel={handlePointerUp}
+            onLostPointerCapture={handleLostPointerCapture}
+            title="Drag 3D trackball sphere to orbit camera"
+                className={`relative group flex items-center justify-center w-13 h-13 rounded-full border touch-none cursor-grab active:cursor-grabbing transition-[transform,border-color,box-shadow] duration-150 ${
                     isDragging
                         ? 'cursor-grabbing border-sky-400 ring-2 ring-sky-500/30 scale-105 shadow-2xl'
                         : 'border-white/15 hover:border-white/30 hover:scale-105 shadow-xl'
@@ -299,110 +261,106 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 }`} />
             </div>
 
-            <span id={orientationHelpId} className="sr-only">
-                Drag to orbit the camera. When focused, use the arrow keys to rotate in 5 degree steps, Shift plus an arrow for 15 degree steps, or Alt plus an arrow for 1 degree steps.
-            </span>
-
             {/* Minimalist Controls Under the Ball: Single Reset Button & Settings toggle */}
-            <div className="relative flex items-center gap-1">
+            <div className="flex items-center gap-1">
                 <button
                     type="button"
                     onClick={onResetCamera}
-                    aria-label="Reset camera pose to default"
+                    onMouseDown={(e) => e.stopPropagation()}
                     title="Reset Camera Pose to Default"
-                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 hover:border-white/20 text-[#a1a1aa] hover:text-white text-[11px] font-mono cursor-pointer transition shadow-sm"
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-surface/90 hover:bg-muted border border-subtle hover:border-medium text-muted-foreground hover:text-foreground text-[11px] font-mono cursor-pointer transition shadow-xs"
                 >
                     <RotateCcw className="w-2.5 h-2.5" />
                     <span>Reset</span>
                 </button>
 
                 {/* Screen settings trigger for presets and framing */}
-                <button
-                    type="button"
-                    ref={quickViewsTriggerRef}
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Angle menu"
+                    icon={<>
+                        {menuOpen ? <ChevronUp className="w-2.5 h-2.5" /> : <ChevronDown className="w-2.5 h-2.5" />}
+
+                    </>}
                     onClick={() => setMenuOpen((prev) => !prev)}
-                    aria-label="Camera angles and framing presets"
-                    aria-expanded={menuOpen}
-                    aria-controls={quickViewsId}
-                    title="Camera angles and framing presets"
-                    className={`p-1 rounded-full bg-[#18181c]/90 hover:bg-[#25252b] border border-white/10 text-[#a1a1aa] hover:text-white cursor-pointer transition shadow-sm ${
+                    onMouseDown={(e) => e.stopPropagation()}
+                    title="Angle"
+                    className={`p-1 rounded-full bg-surface/90 hover:bg-muted border border-subtle text-muted-foreground hover:text-foreground cursor-pointer transition shadow-xs ${
                         menuOpen ? 'bg-white/20 text-white' : ''
                     }`}
-                >
-                    <ChevronDown className={`w-2.5 h-2.5 transition-transform duration-150 ${menuOpen ? 'rotate-180' : ''}`} />
-                </button>
+                />
+            </div>
 
-                {/* Quick Views reveals below the gizmo controls without shifting the canvas. */}
-                <div
-                    id={quickViewsId}
-                    aria-hidden={!menuOpen}
-                    inert={!menuOpen}
-                    className={`absolute right-0 top-full mt-1.5 flex w-44 origin-top-right flex-col gap-1.5 rounded-xl border border-white/10 bg-[#141418]/95 p-2 text-left text-white/90 shadow-2xl backdrop-blur-xl z-40 pointer-events-auto select-none transition-[opacity,transform,visibility] ${
-                        menuOpen
-                            ? 'visible translate-y-0 scale-100 opacity-100 duration-[180ms] ease-[cubic-bezier(0.16,1,0.3,1)]'
-                            : 'invisible pointer-events-none translate-y-1 scale-[.98] opacity-0 duration-100 ease-in'
-                    }`}
-                    onPointerDown={(e) => e.stopPropagation()}
-                    onKeyDown={(event) => {
-                        if (event.key === 'Escape') {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            closeQuickViews();
-                        }
-                    }}
-                >
-                    <div className="text-[11px] font-semibold text-white/50 uppercase tracking-wider px-1">
-                        Quick Views
-                    </div>
-                    <div className="grid grid-cols-2 gap-1">
-                        <button
-                            type="button"
-                            onClick={() => { onSetOrientation(0, 0, 0); closeQuickViews(); }}
-                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
-                        >
-                            Front
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { onSetOrientation(0, -89, 0); closeQuickViews(); }}
-                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
-                        >
-                            Top
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { onSetOrientation(90, 0, 0); closeQuickViews(); }}
-                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white font-mono cursor-pointer transition text-left"
-                        >
-                            Right
-                        </button>
-                        <button
-                            type="button"
-                            onClick={() => { onSetOrientation(45, 35.26, 0); closeQuickViews(); }}
-                            className="px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-[11px] text-sky-400 hover:text-sky-300 font-mono cursor-pointer transition text-left"
-                        >
-                            Iso
-                        </button>
-                    </div>
-
-                    {onFrameSelection && (
-                        <button
-                            type="button"
-                            onClick={() => { onFrameSelection(); closeQuickViews(); }}
-                            className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-[#d4d4d8] hover:text-white cursor-pointer transition"
-                        >
-                            <span className="flex items-center gap-1.5">
-                                <Focus className="w-3 h-3 text-sky-400" />
-                                <span>{hasSelection ? 'Frame Selection' : 'Frame Scene'}</span>
-                            </span>
-                            <kbd className="text-[10px] text-white/40 font-mono">F</kbd>
-                        </button>
-                    )}
+            {/* Hidden-by-default Screen Settings Popover (Keeps canvas clean) */}
+            <div
+                className={`flex flex-col gap-1.5 w-44 p-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl z-40 text-left pointer-events-auto select-none transition-all duration-150 ${
+                    menuOpen ? 'opacity-100 translate-y-0 scale-100' : 'hidden'
+                }`}
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <div className="text-[11px] font-semibold text-disabled uppercase tracking-wider px-1">
+                    Quick Views
                 </div>
+                <div className="grid grid-cols-2 gap-1">
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(0, 0, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
+                    >
+                        Front
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(0, -89, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
+                    >
+                        Top
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(90, 0, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
+                    >
+                        Right
+                    </button>
+                    <button
+                        type="button"
+                        onClick={() => { onSetOrientation(45, 35.26, 0); setMenuOpen(false); }}
+                        className="px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-[11px] text-sky-400 hover:text-sky-300 font-mono cursor-pointer transition text-left"
+                    >
+                        Iso
+                    </button>
+                    {CAMERA_ANGLE_VIEWS.filter((view) => view.id !== 'front').map((view) => (
+                        <button
+                            key={view.id}
+                            type="button"
+                            onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll); setMenuOpen(false); }}
+                            className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
+                        >
+                            {view.label}
+                        </button>
+                    ))}
+                </div>
+
+                {onFrameSelection && (
+                    <button
+                        type="button"
+                        onClick={() => { onFrameSelection(); setMenuOpen(false); }}
+                        onMouseDown={(e) => e.stopPropagation()}
+                        className="mt-1 w-full flex items-center justify-between px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer transition"
+                    >
+                        <span className="flex items-center gap-1.5">
+                            <Focus className="w-3 h-3 text-sky-400" />
+                            <span>{hasSelection ? 'Frame Selection' : 'Frame Scene'}</span>
+                        </span>
+                        <ShortcutKey className="text-[10px] text-disabled font-mono">F</ShortcutKey>
+                    </button>
+                )}
             </div>
 
             {/* Readout Pill (Visible on hover/drag to keep canvas clean) */}
-            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-white/10 text-[11px] font-mono tabular-nums text-[#a1a1aa] tracking-tight pointer-events-none transition-opacity duration-150 ${
+            <div className={`px-2 py-0.5 rounded-full bg-black/60 backdrop-blur-sm border border-subtle text-[11px] font-mono tabular-nums text-muted-foreground tracking-tight pointer-events-none transition-opacity duration-150 ${
                 isHovered || isDragging ? 'opacity-100' : 'opacity-0'
             }`}>
                 {yawDeg}° / {pitchDeg}° • {Number(currentZoom.toFixed(2))}x

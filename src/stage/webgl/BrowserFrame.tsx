@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -8,7 +12,6 @@ import {
   roundedRect,
 } from './phoneGeometry';
 import { useDisposable } from './useDisposable';
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export function BrowserFrame({
   metrics,
@@ -19,15 +22,14 @@ export function BrowserFrame({
   settings: DeviceFrameSettings;
   rotation?: { x: number; y: number; z: number };
 }) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings, {
+    opacity: settings.glassOpacity * 0.5,
+    clearcoat: 0.8,
+    clearcoatRoughness: 0,
+    reflectionOpacity: settings.reflection * 0.5,
+  });
   const depth = Math.max(0.003, metrics.bodyDepth * 0.4);
-
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
 
   const titlebarHeight = Math.max(0.02, metrics.bodyHeight * 0.09);
 
@@ -64,43 +66,6 @@ export function BrowserFrame({
   const yellowDotMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: '#ffbd2e' }), []);
   const greenDotMaterial = useMemo(() => new THREE.MeshBasicMaterial({ color: '#27c93f' }), []);
 
-  const screenGlassMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: settings.glassTint,
-        transparent: true,
-        opacity: settings.glassOpacity * 0.5,
-        roughness: settings.glassRoughness,
-        metalness: 0,
-        clearcoat: 0.8,
-        depthWrite: false,
-      }),
-    [settings.glassTint, settings.glassOpacity, settings.glassRoughness]
-  );
-
-  const reflectionMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: reflectionTexture,
-        transparent: true,
-        opacity: settings.reflection * 0.5,
-        depthWrite: false,
-      }),
-    [reflectionTexture, settings.reflection]
-  );
-
-  const shadowMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture,
-        transparent: true,
-        opacity: effectiveShadowOpacity,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    [shadowTexture, effectiveShadowOpacity]
-  );
-
   // Geometries
   const bodyGeometry = useMemo(
     () =>
@@ -129,24 +94,16 @@ export function BrowserFrame({
     [urlBarWidth, urlBarHeight]
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-
   useDisposable(bodyGeometry);
   useDisposable(screenGeometry);
   useDisposable(dotGeometry);
   useDisposable(urlBarGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
   useDisposable(titlebarMaterial);
   useDisposable(urlBarMaterial);
   useDisposable(redDotMaterial);
   useDisposable(yellowDotMaterial);
   useDisposable(greenDotMaterial);
-  useDisposable(screenGlassMaterial);
-  useDisposable(reflectionMaterial);
-  useDisposable(shadowMaterial);
 
   const titlebarCenterY = metrics.screenHeight / 2 + titlebarHeight / 2;
   const dotSpacing = dotRadius * 2.8;
@@ -155,20 +112,18 @@ export function BrowserFrame({
   return (
     <group name="browser-window-frame">
       {/* Contact Studio Shadow */}
-      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-        <mesh
-          name="browser-window-shadow"
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
-          scale={[
-            metrics.bodyWidth * (1.14 + settings.shadowBlur * 0.45),
-            (metrics.bodyHeight + titlebarHeight) * (0.35 + settings.shadowBlur * 0.16),
-            1,
-          ]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+        opacity={effectiveShadowOpacity}
+        name="browser-window-shadow"
+        position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
+        scale={[
+          metrics.bodyWidth * (1.14 + settings.shadowBlur * 0.45),
+          (metrics.bodyHeight + titlebarHeight) * (0.35 + settings.shadowBlur * 0.16),
+          1,
+        ]}
+        renderOrder={-2}
+      />
 
       {/* Window Chassis Backing */}
       <mesh
@@ -181,17 +136,10 @@ export function BrowserFrame({
       />
 
       {/* Screen Glass & Reflection */}
-      <mesh
-        name="browser-screen-glass"
+      <DeviceScreenSurface
         geometry={screenGeometry}
-        material={screenGlassMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.0005]}
-      />
-      <mesh
-        name="browser-screen-reflection"
-        geometry={screenGeometry}
-        material={reflectionMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.001]}
+        glass={{ name: 'browser-screen-glass', material: glassMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.0005] }}
+        reflection={{ name: 'browser-screen-reflection', material: reflectionMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.001] }}
       />
 
       {/* Titlebar Elements */}

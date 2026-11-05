@@ -15,7 +15,7 @@
 - [ ] Export: correct canvas selection, exact-size/time capture for PNG/GIF/video, recorder readiness/finalization, invalid-data rejection and cancellation cleanup.
 - [ ] Canvas fallback: grading and ordered scene effects, masks and missing layer effects.
 - [ ] GPU layers: shadows, glow, blend modes, backdrop blur, glass, warp, sweep/path reveals and animated glow.
-- [ ] Evaluation: animated rack focus, aperture direction, bokeh settings, split-curve continuity.
+- [ ] Evaluation: split-curve continuity.
 - [ ] Inspector: normalized units and accessible scene-effect controls/order.
 - [ ] Confirm earlier resolution, gizmo placement, duplicate crop/HUD and merge fixes remain present.
 - [ ] Run focused regressions, TypeScript/build, full tests and review integrated diff.

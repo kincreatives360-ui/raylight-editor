@@ -1,3 +1,6 @@
+import { mergeGradient } from '../../../stage/gradientGeometry';
+import { InspectorRow } from '../../../ui/primitives';
+import { SegmentedControl, Switch } from '../../../ui/primitives';
 import { IconButton } from '../../../ui/primitives';
 import { LayerStrokeSection } from './LayerStrokeSection';
 // src/panels/Inspector/sections/ShapeSection.tsx
@@ -14,6 +17,7 @@ import React from 'react';
 import type { AnimationBlockProperty } from '../../../model/schema';
 import type { ShapeLayer, ShapeMask } from '../../../model/types';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import { ColorPicker } from '../ColorPicker';
 
@@ -25,7 +29,6 @@ interface ShapeSectionProps {
 }
 
 
-const ToggleSwitch = ({ checked, onChange }: { checked: boolean; onChange: (value: boolean) => void }) => <IconButton label={checked ? 'Remove mask' : 'Add mask'} icon={checked ? <Minus /> : <Plus />} onClick={() => onChange(!checked)} />;
 
 export const ShapeSection: React.FC<ShapeSectionProps> = ({
     activeShotId,
@@ -90,8 +93,13 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     <span className="text-[13px] font-semibold text-[#e4e4e7]">
                         Fill
                     </span>
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label={hasFill ? 'Remove Fill' : 'Add Fill'}
+                        icon={<>
+                            {hasFill ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        </>}
                         onClick={() => {
                             if (hasFill) {
                                 // Remove / hide fill
@@ -125,36 +133,25 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         }}
                         className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
                         title={hasFill ? 'Remove Fill' : 'Add Fill'}
-                    >
-                        {hasFill ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                    </button>
+                    />
                 </div>
 
                 {hasFill && (
                     <div className="object-design-color-row"><ColorPicker
                         color={fillColor}
-                        gradientValue={layer.fill.kind === 'gradient' ? { angle: layer.fill.angle, stops: layer.fill.stops, gradientType: layer.fill.gradientType } : undefined}
-                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: { kind: 'gradient', angle: gradient.angle, stops: gradient.stops, gradientType: gradient.gradientType } } : l)}
+                        gradientValue={layer.fill.kind === 'gradient' ? { angle: layer.fill.angle, stops: layer.fill.stops, gradientType: layer.fill.gradientType, mesh: layer.fill.mesh } : undefined}
+                        onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: mergeGradient(l.fill.kind === 'gradient' ? l.fill : undefined, gradient) } : l)}
+                        onEnterGradient={() => useSelectionStore.getState().setGradientEditor(true, layer.fill.kind === 'gradient' ? layer.fill.angle : 0, layer.id)}
+                        onExitGradient={() => useSelectionStore.getState().setGradientEditor(false)}
                         onChange={(newColor) =>
                             updateLayer(activeShotId, layer.id, (l) => {
                                 if (l.kind !== 'shape') return l;
-                                if (l.fill.kind === 'gradient') {
-                                    return {
-                                        ...l,
-                                        fill: {
-                                            ...l.fill,
-                                            stops: l.fill.stops.length > 0
-                                                ? [{ ...l.fill.stops[0], color: newColor }, ...l.fill.stops.slice(1)]
-                                                : [{ at: 0, color: newColor, opacity: 1 }, { at: 1, color: '#000000', opacity: 1 }],
-                                        },
-                                    };
-                                }
                                 return {
                                     ...l,
                                     fill: {
                                         kind: 'solid',
                                         color: newColor,
-                                        opacity: l.fill.opacity ?? 1,
+                                        opacity: l.fill.kind === 'solid' ? l.fill.opacity ?? 1 : 1,
                                     },
                                 };
                             })
@@ -176,20 +173,23 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                             </span>
 
                         </div>
-                    </ColorPicker><button
-                        type="button"
+                    </ColorPicker><IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Add Opacity Animation Block"
+                        icon={<>
+                            <Diamond className="w-3.5 h-3.5 fill-none" />
+                            <span className="absolute -top-1 -right-1 text-[10px] font-bold leading-none select-none">
+                                +
+                            </span>
+                        </>}
                         onClick={(e) => {
                             e.stopPropagation();
                             onAddAnimationBlock?.('opacity');
                         }}
                         title="Add Opacity Animation Block"
                         className="relative flex items-center justify-center text-[#a1a1aa] hover:text-white p-0.5 cursor-pointer transition"
-                    >
-                            <Diamond className="w-3.5 h-3.5 fill-none" />
-                            <span className="absolute -top-1 -right-1 text-[10px] font-bold leading-none select-none">
-                                +
-                            </span>
-                        </button></div>
+                    /></div>
                 )}
             </div>
 
@@ -200,8 +200,13 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                     <span className="text-[13px] font-semibold text-[#e4e4e7]">
                         Mask
                     </span>
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label={layer.mask?.enabled ? 'Disable Mask' : 'Add Mask'}
+                        icon={<>
+                            {layer.mask?.enabled ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
+                        </>}
                         onClick={() => {
                             if (layer.mask?.enabled) {
                                 updateMask({ enabled: false });
@@ -211,60 +216,40 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         }}
                         className="p-1 rounded hover:bg-white/10 text-[#a1a1aa] hover:text-white transition cursor-pointer"
                         title={layer.mask?.enabled ? 'Disable Mask' : 'Add Mask'}
-                    >
-                        {layer.mask?.enabled ? <Minus className="w-3.5 h-3.5" /> : <Plus className="w-3.5 h-3.5" />}
-                    </button>
+                    />
                 </div>
 
                 {layer.mask?.enabled && (
                     <div className="space-y-3 pt-0.5">
                         {/* Shape: 3 Segmented Buttons */}
-                        <div className="space-y-1.5">
-                            <span className="text-[11px] text-[#a1a1aa] block">
-                                Shape
-                            </span>
-                            <div className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]">
-                                <button
-                                    type="button"
-                                    onClick={() => updateMask({ shape: 'rectangle' })}
-                                    className={`h-6 rounded flex items-center justify-center cursor-pointer transition ${mask.shape === 'rectangle'
-                                            ? 'bg-[#2a2a30] text-white'
-                                            : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                    title="Rectangle"
-                                >
-                                    <Square className="w-3.5 h-3.5 rounded-[3px]" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => updateMask({ shape: 'circle' })}
-                                    className={`h-6 rounded flex items-center justify-center cursor-pointer transition ${mask.shape === 'circle'
-                                            ? 'bg-[#2a2a30] text-white'
-                                            : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                    title="Circle"
-                                >
-                                    <Circle className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => updateMask({ shape: 'path' })}
-                                    className={`h-6 rounded flex items-center justify-center cursor-pointer transition ${mask.shape === 'path'
-                                            ? 'bg-[#2a2a30] text-white'
-                                            : 'text-[#a1a1aa] hover:text-white'
-                                        }`}
-                                    title="Vector Path"
-                                >
-                                    <Spline className="w-3.5 h-3.5" />
-                                </button>
-                            </div>
-                        </div>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-1.5"
+                            labelTag="span"
+                            labelClassName="text-[11px] text-[#a1a1aa] block"
+                            label={<>Shape
+                            </>}
+                        >
+                            <SegmentedControl
+                                unstyled
+                                ariaLabel="Mask shape"
+                                value={mask.shape}
+                                onChange={shape => updateMask({ shape })}
+                                className="grid grid-cols-3 gap-0.5 bg-[#1c1c1f] p-0.5 rounded-lg border border-white/[0.06]"
+                                buttonClassName={(_, selected) => `h-6 rounded flex items-center justify-center cursor-pointer transition ${selected ? 'bg-[#2a2a30] text-white' : 'text-[#a1a1aa] hover:text-white'}`}
+                                options={[{ value: 'rectangle', ariaLabel: 'Rectangle', title: 'Rectangle', icon: <Square className="w-3.5 h-3.5 rounded-[3px]" /> }, { value: 'circle', ariaLabel: 'Circle', title: 'Circle', icon: <Circle className="w-3.5 h-3.5" /> }, { value: 'path', ariaLabel: 'Vector Path', title: 'Vector Path', icon: <Spline className="w-3.5 h-3.5" /> }]}
+                            />
+                        </InspectorRow>
 
                         {/* Feather */}
-                        <div className="space-y-1.5">
-                            <span className="text-[11px] text-[#a1a1aa] block">
-                                Feather
-                            </span>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-1.5"
+                            labelTag="span"
+                            labelClassName="text-[11px] text-[#a1a1aa] block"
+                            label={<>Feather
+                            </>}
+                        >
                             <ScrubInput
                                 label={<Feather className="w-3.5 h-3.5 text-[#a1a1aa]" />}
                                 value={mask.feather}
@@ -274,13 +259,17 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                 unit=" px"
                                 onChange={(feather) => updateMask({ feather })}
                             />
-                        </div>
+                        </InspectorRow>
 
                         {/* Opacity & grow */}
-                        <div className="space-y-1.5">
-                            <span className="text-[11px] text-[#a1a1aa] block">
-                                Opacity &amp; grow
-                            </span>
+                        <InspectorRow
+                            unstyled
+                            className="space-y-1.5"
+                            labelTag="span"
+                            labelClassName="text-[11px] text-[#a1a1aa] block"
+                            label={<>Opacity &amp; grow
+                            </>}
+                        >
                             <div className="grid grid-cols-2 gap-1.5">
                                 <ScrubInput
                                     label="Opacity"
@@ -303,12 +292,12 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                                     onChange={(grow) => updateMask({ grow })}
                                 />
                             </div>
-                        </div>
+                        </InspectorRow>
 
                         {/* Invert */}
                         <div className="flex items-center justify-between pt-0.5">
                             <span className="text-[11px] text-[#a1a1aa]">Invert</span>
-                            <ToggleSwitch
+                            <Switch ariaLabel="Invert mask"
                                 checked={mask.invert}
                                 onChange={(invert) => updateMask({ invert })}
                             />
@@ -317,7 +306,7 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         {/* Show */}
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] text-[#a1a1aa]">Show</span>
-                            <ToggleSwitch
+                            <Switch ariaLabel="Show mask"
                                 checked={mask.show}
                                 onChange={(show) => updateMask({ show })}
                             />

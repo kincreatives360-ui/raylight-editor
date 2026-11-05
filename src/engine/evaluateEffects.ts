@@ -1,8 +1,7 @@
 // src/engine/evaluateEffects.ts
 import type { Shot, Effects, EffectKey } from '../model/types';
 
-import { DEFAULT_EFFECTS_ORDER } from '../model/defaults';
-import { evaluateEasing } from './easing';
+import { DEFAULT_EFFECTS_ORDER } from '../model/enums';
 
 export interface ActiveEffectPass {
     key: EffectKey;
@@ -14,64 +13,15 @@ export interface EvaluatedEffects {
     state: Effects;
     orderedEnabledPasses: ActiveEffectPass[];
     deterministicSeed: number; // Driven by frameNumber so two exports always match
+    motionVector?: { x: number; y: number };
 }
 
-// Pure Function: Calculates exact Depth-of-Field blur in pixels for a layer at layerZ
-export function calculateLayerDofBlurPx(
-    layerZ: number,
-    dof: Effects['depthOfField']
-): number {
-    if (!dof.enabled) return 0;
-
-    const distanceToFocus = Math.abs(layerZ - dof.target.z);
-    const halfFocusZone = dof.focusRange * 0.5;
-
-    // Inside the sharp focus range -> 0 blur
-    if (distanceToFocus <= halfFocusZone) return 0;
-
-    const outOfFocusDist = distanceToFocus - halfFocusZone;
-    // Circle of Confusion scaled by aperture, bokehScale, and focalLength
-    const lensFactor = (dof.focalLength ?? 50) / 50;
-    const rawBlur =
-        outOfFocusDist * (2.8 * 2.8 / Math.max(0.1, dof.aperture)) * dof.bokehScale * lensFactor * 1.6;
-
-    if (!Number.isFinite(rawBlur)) return 0;
-    return Number(Math.min(40, Math.max(0, rawBlur)).toFixed(2));
-}
-
-// Pure Function: Evaluates the 10-effect chain and deterministic frame seed
+// Pure Function: Evaluates ordered scene effects and deterministic frame seed
 export function evaluateEffectsAtTime(
     shot: Shot,
-    frameNumber: number,
-    shotLocalTimeMs = 0
+    frameNumber: number
 ): EvaluatedEffects {
-    let effects = shot.effects;
-
-    // Animate depth of field target.z if focusBlocks are configured (Rack Focus)
-    if (shot.focusBlocks && shot.focusBlocks.length > 0 && effects.depthOfField.enabled) {
-        let activeZ = effects.depthOfField.target.z;
-        for (const original of shot.focusBlocks) {
-            const fb = {...original, startMs: original.sourceStartMs ?? original.startMs, durationMs: original.sourceDurationMs ?? original.durationMs};
-            if (shotLocalTimeMs >= fb.startMs && shotLocalTimeMs <= fb.startMs + fb.durationMs) {
-                const raw = (shotLocalTimeMs - fb.startMs) / Math.max(1, fb.durationMs);
-                const progress = evaluateEasing(raw, fb.easing);
-                activeZ = fb.fromZ + (fb.toZ - fb.fromZ) * progress;
-                break;
-            } else if (shotLocalTimeMs > fb.startMs + fb.durationMs) {
-                activeZ = fb.toZ;
-            }
-        }
-        effects = {
-            ...effects,
-            depthOfField: {
-                ...effects.depthOfField,
-                target: {
-                    ...effects.depthOfField.target,
-                    z: Number(activeZ.toFixed(4)),
-                },
-            },
-        };
-    }
+    const effects = shot.effects;
 
     // Deterministic pseudo-random seed from frameNumber (never uses Math.random())
     const frame = Math.max(0, Math.floor(Number.isFinite(frameNumber) ? frameNumber : 0));
@@ -79,15 +29,30 @@ export function evaluateEffectsAtTime(
     const deterministicSeed = seedRaw / 4294967296;
 
     const orderedEnabledPasses: ActiveEffectPass[] = [];
+    const configuredOrder = Array.isArray(shot.appliedEffects)
+        ? shot.appliedEffects
+        : [...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER];
+    const effectOrder = [...new Set(configuredOrder)].filter((key): key is EffectKey =>
+        DEFAULT_EFFECTS_ORDER.includes(key)
+    );
 
-    [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])].forEach((key, index) => {
+    effectOrder.forEach((key, index) => {
         const item = effects[key];
         if (!item || !item.enabled) return;
 
         let summary = 'Active';
         switch (key) {
-            case 'depthOfField':
-                summary = `Target Z:${effects.depthOfField.target.z.toFixed(2)} | f/${effects.depthOfField.aperture} | ${effects.depthOfField.bokehShape}`;
+            case 'atmosphere':
+                summary = `Fog: ${Math.round(effects.atmosphere.fog * 100)}% | Mist: ${Math.round(effects.atmosphere.mist * 100)}%`;
+                break;
+            case 'gradientMap':
+                summary = `${effects.gradientMap.blendMode} | Blend: ${Math.round(effects.gradientMap.blend * 100)}%`;
+                break;
+            case 'fishEye':
+                summary = `Distortion: ${Math.round(effects.fishEye.amount * 100)}%`;
+                break;
+            case 'lensDistortion':
+                summary = `${effects.lensDistortion.mode} | Strength: ${Math.round(effects.lensDistortion.strength * 100)}%`;
                 break;
             case 'bloom':
                 summary = `Intensity: ${effects.bloom.intensity} | Threshold: ${effects.bloom.threshold}`;

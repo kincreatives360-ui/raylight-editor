@@ -1,7 +1,7 @@
 // src/store/groupSemantics.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useProjectStore, pruneEmptyGroups } from './useProjectStore';
-import { isLayerEffectivelyHidden, isLayerEffectivelyLocked } from '../engine/evaluateShot';
+import { isLayerEffectivelyHidden, isLayerEffectivelyLocked, evaluateProjectAtTime } from '../engine/evaluateShot';
 import type { Group, Layer } from '../model/types';
 import { createDefaultImageLayer, createDefaultTextLayer } from '../model/defaults';
 
@@ -139,5 +139,53 @@ describe('Group Semantics: Visibility, Locking, and Nested Group Pruning', () =>
         // If layer-1 is deleted, both child and parent should be pruned bottom-up
         const prunedEmpty = pruneEmptyGroups(groups, []);
         expect(prunedEmpty.length).toBe(0);
+    });
+
+    it('P1: inherits spatial transform and animation blocks from parent groups in evaluateProjectAtTime', () => {
+        const store = useProjectStore.getState();
+        const shotId = store.project.shots[0].id;
+
+        const layer = store.addLayerToShot(shotId, 'text', {
+            name: 'Group Child',
+            position: { x: 10, y: 20, z: 5 },
+            scale: { x: 1, y: 1, z: 1 },
+            opacity: 1,
+        });
+
+        const group = store.createGroupFromLayers(shotId, [layer.id], 'Transform Group');
+        expect(group).not.toBeNull();
+
+        // Update group with spatial transform and animation block
+        store.updateGroupInShot(shotId, group!.id, (g) => ({
+            ...g,
+            position: { x: 100, y: 50, z: 20 },
+            scale: { x: 2, y: 2, z: 1 },
+            opacity: 0.8,
+            blocks: [
+                {
+                    id: 'group-anim-1',
+                    label: 'Position',
+                    property: 'position',
+                    amount: { x: 50, y: 0, z: 0 },
+                    startMs: 0,
+                    durationMs: 1000,
+                    easing: { kind: 'preset', name: 'linear' },
+                },
+            ],
+        }));
+
+        const project = useProjectStore.getState().project;
+        const frame0 = evaluateProjectAtTime(project, 0);
+        const evalL0 = frame0.layers.find((l) => l.id === layer.id)!;
+        expect(evalL0.position.x).toBe(120);
+        expect(evalL0.position.y).toBe(90);
+        expect(evalL0.position.z).toBe(25);
+        expect(evalL0.scale.x).toBe(2);
+        expect(evalL0.scale.y).toBe(2);
+        expect(evalL0.opacity).toBeCloseTo(0.8, 2);
+
+        const frame1000 = evaluateProjectAtTime(project, 1000);
+        const evalL1000 = frame1000.layers.find((l) => l.id === layer.id)!;
+        expect(evalL1000.position.x).toBe(170);
     });
 });

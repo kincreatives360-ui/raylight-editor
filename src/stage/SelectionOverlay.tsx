@@ -1,7 +1,7 @@
 // src/stage/SelectionOverlay.tsx
 import React, { useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
-import { Move, RotateCw, Compass, Lock, Crop, Type, Sparkles } from 'lucide-react';
+import { SelectionOverlayVisuals, type ResizeHandleDir } from './SelectionOverlayVisuals';
 import type { Shot, TextLayer, ImageLayer, VideoLayer } from '../model/types';
 import { degToRad, radToDeg } from '../model/defaults';
 import {
@@ -15,9 +15,9 @@ import { computeSmartSnap, type SnapGuideLine } from './stageUtils';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,
-    evaluateCameraPose,
     getLayerProjectedCorners,
 } from './webgl/cameraMath';
+import { useCameraPose } from './CameraPoseContext';
 import { getDevicePlacementSize, isFixedDeviceFrame, resizeDeviceFromHandle } from '../model/deviceFrame';
 
 interface SelectionOverlayProps {
@@ -30,8 +30,6 @@ interface SelectionOverlayProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
 }
-
-type ResizeHandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     frame,
@@ -58,11 +56,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         isCropping,
         canvasZoom,
         selectBlock,
+        selectedBlockId,
         setTimelineLayerExpanded,
     } = useSelectionStore();
 
     const overlayRootRef = useRef<HTMLDivElement | null>(null);
     const [isEditingInlineText, setIsEditingInlineText] = useState(false);
+    const { cameraPose, targetAspect: aspect, evaluateCustomPose } = useCameraPose();
 
     const activeShot: Shot = frame.activeShot;
     const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
@@ -75,16 +75,12 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const primaryEval = selectedEvalLayers[0];
     const { layer } = primaryEval;
     const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
-
-    const aspect = frameWidth / Math.max(frameHeight, 1);
-    const defaultCamera = project.defaultCamera || {
-        position: { x: 0, y: 0, z: DEFAULT_CAMERA_Z },
+    const refCameraZ = evaluateCustomPose({
+        position: { x: 0, y: 0, z: 2.65 },
         rotation: { x: 0, y: 0, z: 0 },
-        focalLength: DEFAULT_FOCAL_LENGTH,
-    };
-    const cameraPose = evaluateCameraPose(frame.camera, defaultCamera, aspect);
-    const refCameraZ = defaultCamera.position?.z ?? DEFAULT_CAMERA_Z;
-    const refFocalLength = defaultCamera.focalLength ?? DEFAULT_FOCAL_LENGTH;
+        focalLength: 50,
+    }).position?.z ?? 2.65;
+    const refFocalLength = 50;
     const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
     // The shared layout projects the resolved body; crop handles use the display aperture.
@@ -103,10 +99,117 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
 
     const primaryProj = projectCorners(primaryEval);
 
+    const selectedBlock = layer?.blocks?.find((b) => b.id === selectedBlockId);
+    const isMotionBlock = Boolean(selectedBlock && (selectedBlock.property === 'position' || selectedBlock.property === 'followPath'));
+    const motionAmt = selectedBlock
+        ? typeof selectedBlock.amount === 'object'
+            ? selectedBlock.amount
+            : { x: selectedBlock.amount, y: 0, z: 0 }
+        : { x: 0, y: 0, z: 0 };
+    const motionDeltaX = motionAmt.x * frameWidth * zoom;
+    const motionDeltaY = motionAmt.y * frameHeight * zoom;
+    const motionStartPoint = primaryProj.pCenter;
+    const motionEndPoint = {
+        x: primaryProj.pCenter.x + motionDeltaX,
+        y: primaryProj.pCenter.y + motionDeltaY,
+    };
+    const motionMidControl = {
+        x: (motionStartPoint.x + motionEndPoint.x) / 2,
+        y: (motionStartPoint.y + motionEndPoint.y) / 2 - 25,
+    };
+
+    const handleStartDragMotionEnd = (e: React.PointerEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        if (!selectedBlock) return;
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const initAmtX = motionAmt.x;
+        const initAmtY = motionAmt.y;
+
+        bindPointerDrag(
+            e,
+            (moveEvent) => {
+                const dxPx = (moveEvent.clientX - startX) / (canvasZoom * zoom);
+                const dyPx = (moveEvent.clientY - startY) / (canvasZoom * zoom);
+                const deltaFracX = dxPx / frameWidth;
+                const deltaFracY = dyPx / frameHeight;
+                const nextX = Number((initAmtX + deltaFracX).toFixed(4));
+                const nextY = Number((initAmtY + deltaFracY).toFixed(4));
+
+                updateShot(
+                    activeShot.id,
+                    (s) => ({
+                        ...s,
+                        layers: s.layers.map((l) =>
+                            l.id === layer.id
+                                ? {
+                                    ...l,
+                                    blocks: l.blocks.map((b) =>
+                                        b.id === selectedBlock.id
+                                            ? { ...b, amount: { ...motionAmt, x: nextX, y: nextY } }
+                                            : b
+                                    ),
+                                }
+                                : l
+                        ),
+                    }),
+                    { skipHistory: true }
+                );
+            },
+            () => {
+                updateShot(activeShot.id, (s) => ({ ...s }));
+            }
+        );
+    };
+
+    const bindPointerDrag = (
+        e: React.PointerEvent | React.MouseEvent,
+        onMove: (moveEvent: PointerEvent | MouseEvent) => void,
+        onEnd?: () => void
+    ) => {
+        const target = e.currentTarget as Element | null;
+        const pointerId = 'pointerId' in e ? e.pointerId : undefined;
+        if (pointerId !== undefined && target && 'setPointerCapture' in target) {
+            try {
+                target.setPointerCapture(pointerId);
+            } catch {
+                // Ignore synthetic or non-capturable pointer events
+            }
+        }
+
+        const handleUp = () => {
+            if (pointerId !== undefined && target && 'releasePointerCapture' in target) {
+                try {
+                    if (target.hasPointerCapture(pointerId)) {
+                        target.releasePointerCapture(pointerId);
+                    }
+                } catch {
+                    // Ignore release errors
+                }
+            }
+            onEnd?.();
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', handleUp);
+            window.removeEventListener('pointercancel', handleUp);
+            window.removeEventListener('mousemove', onMove);
+            window.removeEventListener('mouseup', handleUp);
+        };
+
+        if (pointerId !== undefined) {
+            window.addEventListener('pointermove', onMove);
+            window.addEventListener('pointerup', handleUp);
+            window.addEventListener('pointercancel', handleUp);
+        } else {
+            window.addEventListener('mousemove', onMove);
+            window.addEventListener('mouseup', handleUp);
+        }
+    };
+
     // ============================================================================
     // 1. DRAG TO MOVE (Supports V Plane-Aware Move, G Screen Move, & Shift+A Rec!)
     // ============================================================================
-    const handleStartMove = (e: React.MouseEvent) => {
+    const handleStartMove = (e: React.PointerEvent | React.MouseEvent) => {
         if (activeTool === 'hand') return;
         if (activeTool === 'tilt') {
             handleStart3DTilt(e);
@@ -145,7 +248,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastDyFrac = 0;
         let lastDzFrac = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const dxPx = (moveEvent.clientX - startClientX) / (canvasZoom * zoom);
             const dyPx = (moveEvent.clientY - startClientY) / (canvasZoom * zoom);
 
@@ -235,21 +338,16 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
+        bindPointerDrag(e, onMouseMove, () => {
             onUpdateGuides([]);
             commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        });
     };
 
     // ============================================================================
     // 2. CORNER & EDGE RESIZE OR ON-CANVAS CROP HANDLES
     // ============================================================================
-    const handleStartResize = (e: React.MouseEvent, dir: ResizeHandleDir) => {
+    const handleStartResize = (e: React.PointerEvent | React.MouseEvent, dir: ResizeHandleDir) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -263,7 +361,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             const boxW = Math.max(40, primaryEval.size.width * frameWidth * canvasZoom);
             const boxH = Math.max(40, primaryEval.size.height * frameHeight * canvasZoom);
 
-            const onCropMove = (moveEvent: MouseEvent) => {
+            const onCropMove = (moveEvent: PointerEvent | MouseEvent) => {
                 const dx = (moveEvent.clientX - startClientX) / boxW;
                 const dy = (moveEvent.clientY - startClientY) / boxH;
 
@@ -312,14 +410,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 );
             };
 
-            const onCropUp = () => {
-                commitDragTransaction();
-                window.removeEventListener('mousemove', onCropMove);
-                window.removeEventListener('mouseup', onCropUp);
-            };
-
-            window.addEventListener('mousemove', onCropMove);
-            window.addEventListener('mouseup', onCropUp);
+            bindPointerDrag(e, onCropMove, commitDragTransaction);
             return;
         }
 
@@ -331,37 +422,71 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
                 : layer.size.height;
         const initialPosX = layer.position.x;
         const initialPosY = layer.position.y;
+        const rotZ = primaryEval.rotation.z || 0;
+        const cosZ = Math.cos(rotZ);
+        const sinZ = Math.sin(rotZ);
+        const safeAspect = initialH > 0.0001 ? initialW / initialH : 1;
 
         let lastDW = 0;
         let lastDH = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
-            const dxFrac =
-                (moveEvent.clientX - startClientX) / (frameWidth * canvasZoom * zoom);
-            const dyFrac =
-                (moveEvent.clientY - startClientY) / (frameHeight * canvasZoom * zoom);
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
+            const screenDxPx =
+                (moveEvent.clientX - startClientX) / (canvasZoom * zoom);
+            const screenDyPx =
+                (moveEvent.clientY - startClientY) / (canvasZoom * zoom);
+
+            // Project pointer delta onto the layer's local rotated axes
+            const localDxPx = screenDxPx * cosZ + screenDyPx * sinZ;
+            const localDyPx = -screenDxPx * sinZ + screenDyPx * cosZ;
+            const dxFrac = localDxPx / frameWidth;
+            const dyFrac = localDyPx / frameHeight;
+
+            const isSymmetric = Boolean(moveEvent.altKey);
+            const isAspectLocked = Boolean(moveEvent.shiftKey);
+            const mult = isSymmetric ? 2 : 1;
 
             let nextW = initialW;
             let nextH = initialH;
-            let nextPosX = initialPosX;
-            let nextPosY = initialPosY;
 
             if (dir.includes('e')) {
-                nextW = Math.max(0.04, initialW + dxFrac);
-                nextPosX = initialPosX + (nextW - initialW) / 2;
+                nextW = Math.max(0.04, initialW + dxFrac * mult);
             }
             if (dir.includes('w')) {
-                nextW = Math.max(0.04, initialW - dxFrac);
-                nextPosX = initialPosX - (nextW - initialW) / 2;
+                nextW = Math.max(0.04, initialW - dxFrac * mult);
             }
             if (dir.includes('s')) {
-                nextH = Math.max(0.02, initialH + dyFrac);
-                nextPosY = initialPosY + (nextH - initialH) / 2;
+                nextH = Math.max(0.02, initialH + dyFrac * mult);
             }
             if (dir.includes('n')) {
-                nextH = Math.max(0.02, initialH - dyFrac);
-                nextPosY = initialPosY - (nextH - initialH) / 2;
+                nextH = Math.max(0.02, initialH - dyFrac * mult);
             }
+
+            if (isAspectLocked && layer.kind !== 'text') {
+                if ((dir === 'e' || dir === 'w') || (dir.length === 2 && Math.abs(dxFrac) >= Math.abs(dyFrac))) {
+                    nextH = Math.max(0.02, nextW / safeAspect);
+                } else {
+                    nextW = Math.max(0.04, nextH * safeAspect);
+                }
+            }
+
+            let localShiftFracX = 0;
+            let localShiftFracY = 0;
+            if (!isSymmetric) {
+                if (dir.includes('e')) localShiftFracX = (nextW - initialW) / 2;
+                if (dir.includes('w')) localShiftFracX = -(nextW - initialW) / 2;
+                if (dir.includes('s')) localShiftFracY = (nextH - initialH) / 2;
+                if (dir.includes('n')) localShiftFracY = -(nextH - initialH) / 2;
+            }
+
+            // Rotate the local center shift back into world space so the opposite edge/corner stays pinned
+            const localShiftPxX = localShiftFracX * frameWidth;
+            const localShiftPxY = localShiftFracY * frameHeight;
+            const worldShiftPxX = localShiftPxX * cosZ - localShiftPxY * sinZ;
+            const worldShiftPxY = localShiftPxX * sinZ + localShiftPxY * cosZ;
+
+            let nextPosX = initialPosX + worldShiftPxX / frameWidth;
+            let nextPosY = initialPosY + worldShiftPxY / frameHeight;
 
             const isMedia = layer.kind === 'image' || layer.kind === 'video';
             const mediaDeviceFrame = isMedia ? (layer as ImageLayer | VideoLayer).deviceFrame : undefined;
@@ -443,20 +568,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     // ============================================================================
     // 3. TOP 2D ROTATION KNOB (Rotate Z - Fixed Stage-Relative Angle!)
     // ============================================================================
-    const handleStartRotateZ = (e: React.MouseEvent) => {
+    const handleStartRotateZ = (e: React.PointerEvent | React.MouseEvent) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -477,7 +595,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let accumulatedDelta = 0;
         let lastDeltaRad = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const currentAngle = Math.atan2(
                 moveEvent.clientY - centerClientY,
                 moveEvent.clientX - centerClientX
@@ -520,20 +638,13 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     // ============================================================================
     // 4. 3D TILT DRAG (Pitch & Yaw - X and Y Rotations + Shift+A Rec!)
     // ============================================================================
-    const handleStart3DTilt = (e: React.MouseEvent) => {
+    const handleStart3DTilt = (e: React.PointerEvent | React.MouseEvent) => {
         e.stopPropagation();
         if (isLocked) return;
 
@@ -546,7 +657,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
         let lastPitchRad = 0;
         let lastYawRad = 0;
 
-        const onMouseMove = (moveEvent: MouseEvent) => {
+        const onMouseMove = (moveEvent: PointerEvent | MouseEvent) => {
             const deltaYaw = (moveEvent.clientX - startClientX) * 0.45;
             const deltaPitch = -(moveEvent.clientY - startClientY) * 0.45;
 
@@ -600,14 +711,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
             );
         };
 
-        const onMouseUp = () => {
-            commitDragTransaction();
-            window.removeEventListener('mousemove', onMouseMove);
-            window.removeEventListener('mouseup', onMouseUp);
-        };
-
-        window.addEventListener('mousemove', onMouseMove);
-        window.addEventListener('mouseup', onMouseUp);
+        bindPointerDrag(e, onMouseMove, commitDragTransaction);
     };
 
     const handleItems: {
@@ -636,221 +740,36 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     return (
         <div
             ref={overlayRootRef}
+            onMouseDown={(e) => e.stopPropagation()}
             className="absolute inset-0 pointer-events-none z-30 overflow-visible select-none"
         >
-            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
-                {selectedEvalLayers.slice(1).map((sec) => {
-                    const secProj = projectCorners(sec);
-                    const pts = secProj.corners.map((point) => `${point.x},${point.y}`).join(' ');
-                    return (
-                        <g key={sec.id}>
-                            <polygon
-                                points={pts}
-                                fill="var(--accent-primary, #0088ff)"
-                                fillOpacity="0.04"
-                                stroke="var(--accent-primary, #0088ff)"
-                                strokeWidth="1.5"
-                                strokeDasharray="5 3"
-                                className="cursor-move pointer-events-auto"
-                                onMouseDown={handleStartMove}
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
-                                }}
-                            />
-                        </g>
-                    );
-                })}
-
-                {!isEditingInlineText && (
-                    <g>
-                        {!isLocked && !isCropping && (
-                            <line
-                                x1={primaryProj.pN.x}
-                                y1={primaryProj.pN.y}
-                                x2={primaryProj.pRot.x}
-                                y2={primaryProj.pRot.y}
-                                stroke={borderColor}
-                                strokeWidth="1.5"
-                                strokeDasharray="3 2"
-                            />
-                        )}
-
-                        {primaryProj.corners.length > 4 && (
-                            <polygon
-                                points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
-                                fill="none"
-                                stroke={borderColor}
-                                strokeWidth="1"
-                                strokeDasharray="3 3"
-                                strokeOpacity="0.45"
-                            />
-                        )}
-
-                        <polygon
-                            points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
-                            fill="var(--accent-primary, #0088ff)"
-                            fillOpacity="0.02"
-                            stroke={borderColor}
-                            strokeWidth="1.75"
-                            strokeDasharray={isLocked || isCropping ? '6 4' : 'none'}
-                            className={`pointer-events-auto ${isLocked
-                                    ? 'cursor-not-allowed'
-                                    : activeTool === 'tilt'
-                                        ? 'cursor-grab'
-                                        : 'cursor-move'
-                                }`}
-                            onMouseDown={handleStartMove}
-                            onDoubleClick={(e) => {
-                                if (layer.kind === 'text') {
-                                    e.stopPropagation();
-                                    setIsEditingInlineText(true);
-                                }
-                            }}
-                        />
-                    </g>
-                )}
-            </svg>
-
-            {/* TOP 2D ROTATION LOLLIPOP KNOB */}
-            {!isLocked && !isCropping && !isEditingInlineText && (
-                <div
-                    style={{
-                        left: `${primaryProj.pRot.x}px`,
-                        top: `${primaryProj.pRot.y}px`,
-                        transform: 'translate(-50%, -50%)',
-                    }}
-                    onMouseDown={handleStartRotateZ}
-                    title="Drag around object to Spin / Rotate (Roll Z)"
-                    className="absolute pointer-events-auto w-5 h-5 rounded-full bg-[var(--accent-primary,#0088ff)] hover:bg-[var(--accent-hover,#0077e6)] border-2 border-white shadow-xl flex items-center justify-center cursor-grab active:cursor-grabbing transition-transform duration-100 ease-out hover:scale-110"
-                >
-                    <RotateCw className="w-2.5 h-2.5 text-white" />
-                </div>
-            )}
-
-            {/* 8 RESIZE / CROP HANDLES */}
-            {!isLocked &&
-                !isEditingInlineText &&
-                handleItems.map((h) =>
-                    h.dir === 'ne' ? (
-                        <div
-                            key={h.dir}
-                            onMouseDown={(e) => handleStartResize(e, h.dir)}
-                            style={{
-                                left: `${h.pos.x}px`,
-                                top: `${h.pos.y}px`,
-                                transform: 'translate(-50%, -50%)',
-                                cursor: h.cursor,
-                            }}
-                            title={isCropping ? "Crop handle" : "Scale handle"}
-                            className={`w-5 h-5 rounded-full ${
-                                isCropping
-                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
-                                    : isAnimateMode
-                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
-                                        : 'bg-[#0088ff] border-white'
-                            } border-2 shadow-xl flex items-center justify-center absolute pointer-events-auto hover:scale-125 transition-transform duration-100 ease-out z-20`}
-                        >
-                            <Sparkles className="w-2.5 h-2.5 text-white" />
-                        </div>
-                    ) : (
-                        <div
-                            key={h.dir}
-                            onMouseDown={(e) => handleStartResize(e, h.dir)}
-                            style={{
-                                left: `${h.pos.x}px`,
-                                top: `${h.pos.y}px`,
-                                transform: 'translate(-50%, -50%)',
-                                cursor: h.cursor,
-                            }}
-                            className={`w-3 h-3 rounded-xs border-2 shadow-lg absolute pointer-events-auto ${isCropping
-                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
-                                    : isAnimateMode
-                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
-                                        : 'bg-white border-[var(--accent-primary,#0088ff)]'
-                                } hover:scale-125 transition-transform duration-100 ease-out`}
-                        />
-                    )
-                )}
-
-            {/* INLINE TEXT EDITOR OR CENTER PILLS */}
-            <div
-                style={{
-                    left: `${primaryProj.pCenter.x}px`,
-                    top: `${primaryProj.pCenter.y}px`,
-                    transform: 'translate(-50%, -50%)',
-                }}
-                className="absolute flex items-center justify-center pointer-events-auto"
-            >
-                {isEditingInlineText && layer.kind === 'text' ? (
-                    <div
-                        className="p-1 z-40"
-                        style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
-                    >
-                        <textarea
-                            autoFocus
-                            value={(layer as TextLayer).content}
-                            onChange={(e) =>
-                                updateLayer(activeShot.id, layer.id, (l) =>
-                                    l.kind === 'text' ? { ...l, content: e.target.value } : l
-                                )
-                            }
-                            onKeyDown={(e) => {
-                                e.stopPropagation();
-                                if (
-                                    e.key === 'Escape' ||
-                                    (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
-                                ) {
-                                    setIsEditingInlineText(false);
-                                }
-                            }}
-                            onBlur={() => setIsEditingInlineText(false)}
-                            className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
-                        />
-                    </div>
-                ) : isLocked ? (
-                    <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[11px] font-mono flex items-center gap-1 shadow-lg">
-                        <Lock className="w-3 h-3" /> Locked
-                    </div>
-                ) : isCropping ? (
-                    <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[11px] font-semibold flex items-center gap-1 shadow-lg">
-                        <Crop className="w-3 h-3" /> Drag Corners to Crop
-                    </div>
-                ) : (
-                    <div className="flex items-center gap-1.5 opacity-85 hover:opacity-100 transition-opacity duration-100">
-                        {layer.kind === 'text' && (
-                            <button
-                                onMouseDown={(e) => {
-                                    e.stopPropagation();
-                                    setIsEditingInlineText(true);
-                                }}
-                                className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--accent-primary,#0070e0)] border border-white/25 shadow-lg flex items-center gap-1 cursor-pointer text-[11px] font-medium text-white transition-colors duration-100"
-                            >
-                                <Type className="w-3 h-3" />
-                                <span>Edit</span>
-                            </button>
-                        )}
-
-                        <div
-                            onMouseDown={handleStartMove}
-                            title="Drag to move in 3D space"
-                            className="w-6 h-6 rounded-full bg-[var(--accent-primary,#0070e0)] hover:bg-[var(--accent-hover,#005bb5)] border border-white/80 shadow-lg flex items-center justify-center cursor-move transition-colors duration-100"
-                        >
-                            <Move className="w-3 h-3 text-white" />
-                        </div>
-
-                        <div
-                            onMouseDown={handleStart3DTilt}
-                            title="Drag in any direction to Tilt in 3D (Pitch & Yaw)"
-                            className="px-2 h-6 rounded-full bg-[var(--bg-surface,#161619)]/90 hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-medium,rgba(255,255,255,0.12))] shadow-lg flex items-center gap-1 cursor-grab active:cursor-grabbing text-[11px] font-medium text-white transition-colors duration-100"
-                        >
-                            <Compass className="w-3 h-3" />
-                            <span>Tilt</span>
-                        </div>
-                    </div>
-                )}
-            </div>
-
+            <SelectionOverlayVisuals
+                selectedEvalLayers={selectedEvalLayers}
+                projectCorners={projectCorners}
+                primaryProj={primaryProj}
+                layer={layer}
+                activeShotId={activeShot.id}
+                frameWidth={frameWidth}
+                isLocked={isLocked}
+                isCropping={isCropping}
+                isAnimateMode={isAnimateMode}
+                isEditingInlineText={isEditingInlineText}
+                setIsEditingInlineText={setIsEditingInlineText}
+                activeTool={activeTool}
+                borderColor={borderColor}
+                isMotionBlock={isMotionBlock}
+                motionStartPoint={motionStartPoint}
+                motionEndPoint={motionEndPoint}
+                motionMidControl={motionMidControl}
+                motionAmount={motionAmt}
+                handleItems={handleItems}
+                onMoveStart={handleStartMove}
+                onMotionEndStart={handleStartDragMotionEnd}
+                onRotateStart={handleStartRotateZ}
+                onResizeStart={handleStartResize}
+                onSelectLayer={onSelectLayer}
+                updateLayer={updateLayer}
+            />
         </div>
     );
 };

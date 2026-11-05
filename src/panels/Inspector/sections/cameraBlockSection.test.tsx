@@ -11,7 +11,7 @@ import {
 } from '../../../stage/webgl/cameraMath';
 
 describe('CameraBlockSection Inspector UI', () => {
-    it('renders Movement Preset section with dropdown categories and quick moves', () => {
+    it('renders the movement preset flyout trigger and keeps every movement preset available', () => {
         const shot = useProjectStore.getState().project.shots[0];
         const block = createDefaultCameraBlock('block-test', 0, 2000);
 
@@ -23,31 +23,14 @@ describe('CameraBlockSection Inspector UI', () => {
             />
         );
 
-        // Movement Preset header and dropdown
-        expect(html).toContain('Movement Preset');
-        expect(html).toContain('Zoom Moves (Lens Magnification)');
-        expect(html).toContain('Pan &amp; Tilt (Fixed Tripod Rotation)');
-        expect(html).toContain('Dolly, Truck &amp; Pedestal (3D Space Tracks)');
-        expect(html).toContain('Special FX (Vertigo &amp; Organic Sway)');
-
-        // Quick Move buttons
-        expect(html).toContain('Zoom In');
-        expect(html).toContain('Zoom Out');
-        expect(html).toContain('Pan L');
-        expect(html).toContain('Pan R');
-        expect(html).toContain('Tilt Up');
-        expect(html).toContain('Tilt Down');
-        expect(html).toContain('Dolly In');
-        expect(html).toContain('Dolly Out');
-        expect(html).toContain('Truck L');
-        expect(html).toContain('Truck R');
-        expect(html).toContain('Ped Up');
-        expect(html).toContain('Ped Down');
-        expect(html).toContain('Vertigo (Dolly Zoom)');
-        expect(html).toContain('Handheld Sway');
+        // Presets are opened from the compact add control, without a redundant quick-move grid.
+        expect(html).toContain('>Move</span>');
+        expect(html).toContain('aria-label="Add camera movement preset"');
+        expect(html).not.toContain('Quick Moves');
+        expect(html).not.toContain('Select camera movement preset');
 
         // Physics mode radiogroup uniquely identified by role and label
-        expect(html).toContain('Physics / Projection Mode');
+        expect(html).toContain('role="radiogroup" aria-label="Camera move mode"');
         expect(html).toContain('role="radiogroup" aria-label="Camera move mode"');
         expect(html).toContain('role="radio" aria-checked="true"');
         expect(html).toMatch(/role="radio"[^>]*>Dolly<\/button>/);
@@ -80,7 +63,7 @@ describe('CameraBlockSection Inspector UI', () => {
         expect(updatedZoom.to?.zoom).toBeGreaterThan(updatedZoom.from?.zoom ?? 1);
         expect(getMovementPresetIdByLabel(updatedZoom.label)).toBe('zoom-in');
 
-        // Render Inspector with the updated Dolly In block and verify it highlights the Dolly In quick button
+        // The active preset can be removed from the movement settings.
         const dollyHtml = renderToStaticMarkup(
             <CameraBlockSection
                 activeShotId="shot-1"
@@ -88,7 +71,7 @@ describe('CameraBlockSection Inspector UI', () => {
                 onDone={() => {}}
             />
         );
-        expect(dollyHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Dolly In">Dolly In</button>');
+        expect(dollyHtml).toContain('aria-label="Remove applied camera movement preset"');
 
         // 2. Select Pan Left
         const updatedPan = applyCameraMovementPreset(block, 'pan-left', {
@@ -101,7 +84,7 @@ describe('CameraBlockSection Inspector UI', () => {
         expect(updatedPan.to?.orbit).toBeLessThan(updatedPan.from?.orbit ?? 0);
         expect(getMovementPresetIdByLabel(updatedPan.label)).toBe('pan-left');
 
-        // Render Inspector with Pan Left block and verify it highlights the Pan L quick button
+        // Preset names are no longer duplicated as inspector badges.
         const panHtml = renderToStaticMarkup(
             <CameraBlockSection
                 activeShotId="shot-1"
@@ -109,7 +92,7 @@ describe('CameraBlockSection Inspector UI', () => {
                 onDone={() => {}}
             />
         );
-        expect(panHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Pan L">Pan L</button>');
+        expect(panHtml).not.toContain('>Pan Left</span>');
 
         // 3. Select Vertigo (Dolly Zoom In)
         const updatedVertigo = applyCameraMovementPreset(block, 'dolly-zoom-in', {
@@ -128,7 +111,7 @@ describe('CameraBlockSection Inspector UI', () => {
                 onDone={() => {}}
             />
         );
-        expect(vertigoHtml).toContain('bg-sky-500 text-black font-semibold shadow-xs" title="Vertigo (Dolly Zoom)">Vertigo (Dolly Zoom)</button>');
+        expect(vertigoHtml).toContain('aria-label="Remove applied camera movement preset"');
     });
 
     it('renders all 4 visual preset optgroups in From and To endpoint selectors', () => {
@@ -181,7 +164,7 @@ describe('CameraBlockSection Inspector UI', () => {
         expect(html).toContain('Stiff');
         expect(html).toContain('Damp');
         expect(html).toContain('Mass');
-        expect(html).toContain('Dolly In');
+        expect(html).not.toContain('>Dolly In</span>');
     });
 });
 
@@ -189,3 +172,34 @@ describe('CameraBlockSection Inspector UI', () => {
 vi.mock('../../../ui/FigmaSelect', () => ({
     FigmaSelect: (props: SelectHTMLAttributes<HTMLSelectElement>) => <select {...props} />,
 }));
+
+describe('CameraBlockSection reference controls', () => {
+    it('presents the screenshot camera endpoint and motion controls in the inspector', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const block = createDefaultCameraBlock('block-reference', 362, 1000);
+        const html = renderToStaticMarkup(
+            <CameraBlockSection activeShotId={shot.id} activeCameraBlock={block} onDone={() => {}} />
+        );
+
+        for (const label of ['Alignment', 'Anchor', 'Zoom', 'Roll', 'Orbit &amp; tilt', 'Move', 'Shake', 'Amount', 'Timing', 'Start &amp; length', 'Easing']) {
+            expect(html).toContain(label);
+        }
+        expect(html).toContain('aria-label="Camera move mode"');
+        expect(html).toContain('aria-label="Easing settings"');
+        expect(html).toContain('aria-label="Camera easing curve preview"');
+        expect(html).not.toContain('>Front (Eye-Level)</span>');
+        expect(html).not.toContain('>Custom</span>');
+        expect(html).not.toContain('>Camera Move</span>');
+        expect(html).not.toContain('Physics / Projection Mode');
+    });
+
+    it('renders all four custom cubic Bezier handles', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        const block = createDefaultCameraBlock('block-bezier', 0, 2000);
+        block.easing = { kind: 'bezier', x1: 0.16, y1: 1, x2: 0.3, y2: 1 };
+        const html = renderToStaticMarkup(
+            <CameraBlockSection activeShotId={shot.id} activeCameraBlock={block} onDone={() => {}} />
+        );
+        for (const handle of ['X1', 'Y1', 'X2', 'Y2']) expect(html).toContain(`aria-label="${handle}"`);
+    });
+});

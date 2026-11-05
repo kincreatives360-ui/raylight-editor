@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -10,7 +14,6 @@ import {
   roundedRect,
 } from './phoneGeometry';
 import { useDisposable } from './useDisposable';
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export function MacBookProFrame({
   metrics,
@@ -21,8 +24,8 @@ export function MacBookProFrame({
   settings: DeviceFrameSettings;
   rotation?: { x: number; y: number; z: number };
 }) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings);
 
   const lidDepth = Math.max(0.003, metrics.bodyDepth * 0.5);
   const baseLength = metrics.bodyHeight * 0.94;
@@ -32,12 +35,6 @@ export function MacBookProFrame({
   const lidAngleDeg = settings.lidAngle ?? 110;
   // Lid angle between base and display: 90 deg means perpendicular, 110 deg means opened back 20 deg
   const basePivotAngleRad = ((180 - lidAngleDeg) * Math.PI) / 180;
-
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
 
   const shellMaterial = useMemo(
     () =>
@@ -57,32 +54,6 @@ export function MacBookProFrame({
         color: '#0a0a0c',
       }),
     []
-  );
-
-  const screenGlassMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: settings.glassTint,
-        transparent: true,
-        opacity: settings.glassOpacity,
-        roughness: settings.glassRoughness,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: settings.glassRoughness,
-        depthWrite: false,
-      }),
-    [settings.glassTint, settings.glassOpacity, settings.glassRoughness]
-  );
-
-  const reflectionMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: reflectionTexture,
-        transparent: true,
-        opacity: settings.reflection * 0.75,
-        depthWrite: false,
-      }),
-    [reflectionTexture, settings.reflection]
   );
 
   const keyboardWellMaterial = useMemo(
@@ -114,18 +85,6 @@ export function MacBookProFrame({
         metalness: 0.4,
       }),
     []
-  );
-
-  const shadowMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture,
-        transparent: true,
-        opacity: effectiveShadowOpacity,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    [shadowTexture, effectiveShadowOpacity]
   );
 
   const appleMarkMaterial = useMemo(
@@ -232,8 +191,6 @@ export function MacBookProFrame({
     [metrics.bodyWidth, lidDepth]
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-
   useDisposable(lidBodyGeometry);
   useDisposable(lidBezelGeometry);
   useDisposable(screenGeometry);
@@ -243,17 +200,11 @@ export function MacBookProFrame({
   useDisposable(trackpadGeometry);
   useDisposable(hingeGeometry);
   useDisposable(markGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
   useDisposable(bezelMaterial);
-  useDisposable(screenGlassMaterial);
-  useDisposable(reflectionMaterial);
   useDisposable(keyboardWellMaterial);
   useDisposable(trackpadMaterial);
   useDisposable(hingeMaterial);
-  useDisposable(shadowMaterial);
   useDisposable(appleMarkMaterial);
 
   return (
@@ -288,17 +239,10 @@ export function MacBookProFrame({
         />
 
         {/* Screen Glass & Reflection */}
-        <mesh
-          name="macbook-screen-glass"
+        <DeviceScreenSurface
           geometry={screenGeometry}
-          material={screenGlassMaterial}
-          position={[0, 0, 0.0005]}
-        />
-        <mesh
-          name="macbook-screen-reflection"
-          geometry={screenGeometry}
-          material={reflectionMaterial}
-          position={[0, 0, 0.001]}
+          glass={{ name: 'macbook-screen-glass', material: glassMaterial, position: [0, 0, 0.0005] }}
+          reflection={{ name: 'macbook-screen-reflection', material: reflectionMaterial, position: [0, 0, 0.001] }}
         />
 
         {/* Camera Notch */}
@@ -351,17 +295,15 @@ export function MacBookProFrame({
           />
 
           {/* Contact Shadow Under Base */}
-          {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-            <mesh
-              name="macbook-contact-shadow"
-              geometry={shadowGeometry}
-              material={shadowMaterial}
-              position={[0, -baseLength / 2, -baseThickness - 0.005]}
-              scale={[metrics.bodyWidth * 0.65, baseLength * 0.65, 1]}
-              rotation={[-Math.PI / 2, 0, 0]}
-              renderOrder={-2}
-            />
-          )}
+          <DeviceContactShadow
+            visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+            opacity={effectiveShadowOpacity}
+            name="macbook-contact-shadow"
+            position={[0, -baseLength / 2, -baseThickness - 0.005]}
+            scale={[metrics.bodyWidth * 0.65, baseLength * 0.65, 1]}
+            rotation={[-Math.PI / 2, 0, 0]}
+            renderOrder={-2}
+          />
         </group>
       </group>
     </group>

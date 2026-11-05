@@ -1,3 +1,5 @@
+
+import { useFloatingPanel } from './useFloatingPanel';
 import React, { Children, isValidElement, useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, ChevronDown } from 'lucide-react';
@@ -19,7 +21,7 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
     const selected = options.find((option) => option.value === selectedValue);
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(0);
-    const [position, setPosition] = useState({ left: 0, top: 0, width: 180, maxHeight: 280 });
+    const [position, setPosition] = useState<{ left: number; top: number; width: number; maxHeight: number; transformOrigin?: string }>({ left: 0, top: 0, width: 180, maxHeight: 280, transformOrigin: 'top left' });
     const [label, setLabel] = useState('');
     const trigger = useRef<HTMLButtonElement>(null);
     const menu = useRef<HTMLDivElement>(null);
@@ -46,23 +48,12 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         const above = rect.top - 12;
         const placeBelow = below >= Math.min(height, options.length * 28 + 8) || below >= above;
         const maxHeight = Math.max(64, Math.min(height, placeBelow ? below : above));
-        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, options.length * 28 + 8) - 4), width, maxHeight });
+        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, options.length * 28 + 8) - 4), width, maxHeight, transformOrigin: placeBelow ? 'top left' : 'bottom left' });
         setActive(Math.max(0, options.findIndex((option) => option.value === selectedValue && !option.disabled)));
         setOpen(true);
     };
-    useEffect(() => {
-        if (!open) return;
-        menu.current?.focus();
-        const outside = (event: PointerEvent) => {
-            if (!menu.current?.contains(event.target as Node) && !trigger.current?.contains(event.target as Node)) setOpen(false);
-        };
-        const dismiss = () => setOpen(false);
-        document.addEventListener('pointerdown', outside);
-        window.addEventListener('resize', dismiss);
-        const scroll = (event: Event) => { if (!menu.current?.contains(event.target as Node)) dismiss(); };
-        window.addEventListener('scroll', scroll, true);
-        return () => { document.removeEventListener('pointerdown', outside); window.removeEventListener('resize', dismiss); window.removeEventListener('scroll', scroll, true); };
-    }, [open]);
+    useFloatingPanel({ open, surfaceRef: menu, anchorRef: trigger, onClose: () => setOpen(false), dismissOnViewportChange: true, escape: false });
+    useEffect(() => { if (open) menu.current?.focus(); }, [open]);
     useEffect(() => { if (open) document.getElementById(`${menuId}-${active}`)?.scrollIntoView({ block: 'nearest' }); }, [active, open, menuId]);
     const move = (direction: number) => {
         for (let step = 1; step <= options.length; step++) {
@@ -71,11 +62,7 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         }
     };
     return <>
-        <button ref={trigger} type="button" role="combobox" id={id} title={title} disabled={disabled}
-            aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))}
-            aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined}
-            className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()}
-            onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
+        <button type="button" aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))} ref={trigger} role="combobox" id={id} title={title} disabled={disabled} aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined} className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()} onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
             <span className="min-w-0 flex-1 truncate text-left">{selected?.label ?? 'Choose option'}</span><ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0 opacity-60" />
         </button>
         {open && createPortal(<div ref={menu} id={menuId} role="listbox" tabIndex={-1} aria-label={ariaLabel ?? (label || title || 'Options')}

@@ -8,12 +8,12 @@ import type {
   TextLayer,
   Transitionish,
   SceneEffects,
-  EffectKey,
   LightRig,
   ProjectAudio,
   CameraBlock,
 } from './types';
 import { generateId } from './id';
+import { DEFAULT_EFFECTS_ORDER } from './enums';
 
 export const CURRENT_SCHEMA_VERSION = 2;
 
@@ -73,7 +73,7 @@ export const radToDeg = (radians: number): number =>
   Number(((radians * 180) / Math.PI).toFixed(1));
 
 export const DEFAULT_TRANSITION_IN: Transitionish = {
-  type: 'fade',
+  type: 'none',
   durationMs: 650,
   delayMs: 0,
   distance: 0.16,
@@ -95,61 +95,66 @@ export const DEFAULT_LIGHT_RIG: LightRig = {
   temperature: 6100,
   ambience: 0.45,
   ambientColor: '#f8fafc',
-  keyLightEnabled: true,
+  keyLightEnabled: false,
+  fillEnabled: false,
   castShadow: true,
-  showGizmos: false,
+  showGizmos: true,
   sources: [],
 };
 
-export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
-  'depthOfField',
-  'bloom',
-  'motionBlur',
-  'chromaticAberration',
-  'colorGrade',
-  'vignette',
-  'filmGrain',
-  'ghost',
-  'edgeFade',
-  'glitch',
-];
-
 export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
-  depthOfField: {
+  atmosphere: { enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 },
+  gradientMap: {
     enabled: false,
-    target: { x: 0, y: 0, z: 0 },
-    focusRange: 0.35,
-    aperture: 2.8,
-    bokehScale: 4.5,
-    bokehShape: 'anamorphic',
+    stops: [{ at: 0, color: '#171a45' }, { at: 0.45, color: '#f05a9d' }, { at: 1, color: '#ffbc62' }],
+    blend: 1, shift: 0, spread: 1, blendMode: 'normal',
   },
+  fishEye: { enabled: false, amount: 0.52, centerX: 0, centerY: 0, scale: 1, edgeMode: 'balanced' },
+  lensDistortion: { enabled: false, mode: 'pinch', strength: 0.25, centerX: 0, centerY: 0, edgeMode: 'fill', measure: 'width' },
   bloom: {
     enabled: false,
     intensity: 0.35,
     threshold: 0.75,
+    radius: 1,
+    softness: 0.5,
+    blendMode: 'screen',
   },
   vignette: {
     enabled: false,
     intensity: 0.42,
+    midpoint: 0.5,
+    roundness: 1,
   },
   motionBlur: {
     enabled: false,
     shutterAngle: 180,
+    samples: 18,
+    angle: 0,
+    direction: 'camera',
+    amount: 0.01,
   },
   chromaticAberration: {
     enabled: false,
     offset: 0.002,
+    verticalOffset: 0,
+    edgeStrength: 1,
+    mode: 'lens', angle: 0, softness: 0.6, centerX: 0, centerY: 0, channelRed: 1, channelGreen: 0, channelBlue: -1, fringeColorAngle: 0,
   },
   filmGrain: {
     enabled: false,
     intensity: 0.025,
     size: 1.2,
+    softness: 0,
+    colorAmount: 0.4, aspect: 1, seed: 0, shadowStrength: 0.7, midStrength: 1, highlightStrength: 0.45, midpoint: 0.4,
+    stock: 'Tungsten 500', protectBlacks: true, blendMode: 'film', motion: 'frame', smooth: false, perChannel: false,
   },
   ghost: {
     enabled: false,
     opacity: 0.25,
     offset: 0.02,
     blur: 4,
+    angle: 0,
+    spread: 1,
   },
   colorGrade: {
     enabled: false,
@@ -158,15 +163,23 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     saturation: 1.0,
     temperature: 0,
     tint: 0,
+    highlights: 0,
+    shadows: 0,
+    lift: 0, gamma: 1, vibrance: 0, blackPoint: 0, whitePoint: 1,
   },
   edgeFade: {
     enabled: false,
     top: 0.1,
     bottom: 0.1,
+    softness: 1,
+    color: '#0a0a0c',
   },
   glitch: {
     enabled: false,
     intensity: 0.15,
+    bandSize: 50,
+    colorShift: 0.5,
+    mode: 'digital', jitter: 0.2, scanlines: 0, seed: 0,
   },
 };
 
@@ -275,29 +288,29 @@ export function createDefaultShapeLayer(
     position: { x: 0, y: 0, z: 0.12 },
     rotation: { x: 0, y: 0, z: 0 },
     scale: { x: 1, y: 1, z: 1 },
-    opacity: 0.95,
+    opacity: 1,
     blendMode: 'normal',
     shape: 'rectangle',
     size: { width: 0.3, height: 0.18 },
-    cornerRadius: 0.05,
+    cornerRadius: 0,
     fill: {
       kind: 'gradient',
       angle: 135,
       stops: [
-        { at: 0, color: '#0284c7' },
-        { at: 1, color: '#1e1b4b' },
+        { at: 0, color: '#ffffff' },
+        { at: 1, color: '#ffffff' },
       ],
     },
     stroke: {
-      color: '#38bdf8',
+      color: '#ffffff',
       width: 0.002,
-      opacity: 0.65,
+      opacity: 0,
     },
     entrance: { ...DEFAULT_TRANSITION_IN },
     exit: { ...DEFAULT_TRANSITION_OUT },
     blocks: [],
     effects: {
-      backdropBlur: 0.025,
+      backdropBlur: 0,
       layerBlur: 0,
     },
     ...overrides,
@@ -421,9 +434,11 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
       createDefaultShot({
         id: 'shot-1',
         name: 'Shot 1',
+        isPlaceholder: true,
         startMs: 0,
         durationMs: 4000,
         lane: 0,
+        layers: [],
       }),
     ],
     ...overrides,
@@ -431,6 +446,184 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
 }
 
 export const DEFAULT_PROJECT: Project = createDefaultProject();
+
+/**
+ * Canonical Phase 0 deterministic multi-shot fixture exercising:
+ * - Multiple shots (Shot 1: 0..3000ms, Shot 2: 3000..7000ms) with a 1000ms crossfade transition
+ * - Video layers in Shot 1 and Shot 2 (including a reused/shared video asset across both shots)
+ * - Audio clips before/at t=0ms and future audio clips starting after t=0ms (1200ms, 3200ms)
+ * - 3D device-framed image layers, shape layers, text layers, camera blocks, lights, and effects
+ */
+export function createMultiShotContractFixture(): Project {
+  const sharedVideoAssetId = 'asset-shared-video';
+  const shot2VideoAssetId = 'asset-shot2-video';
+  const mockupImageAssetId = 'asset-mockup-img';
+
+  const shot1 = createDefaultShot({
+    id: 'shot-1',
+    name: 'Intro Shot',
+    isPlaceholder: false,
+    startMs: 0,
+    durationMs: 3000,
+    useProjectBackground: true,
+    layers: [
+      createDefaultVideoLayer({
+        id: 'vid-shot1',
+        name: 'Intro Shared Video',
+        order: 0,
+        assetId: sharedVideoAssetId,
+        inMs: 500,
+        outMs: 2800,
+        position: { x: -0.18, y: 0, z: 0 },
+      }),
+      createDefaultImageLayer({
+        id: 'img-shot1-device',
+        name: 'Hero Device Mockup',
+        order: 1,
+        assetId: mockupImageAssetId,
+        inMs: 0,
+        outMs: 3000,
+        position: { x: 0.16, y: 0, z: 0.25 },
+      }),
+      createDefaultTextLayer({
+        id: 'txt-shot1-title',
+        name: 'Intro Headline',
+        order: 2,
+        content: 'RAYLIGHT PHASE 0',
+        inMs: 0,
+        outMs: 3000,
+        entrance: {
+          ...DEFAULT_TRANSITION_IN,
+          type: 'slide-up',
+          durationMs: 600,
+        },
+      }),
+    ],
+    cameraBlocks: [
+      createDefaultCameraBlock('cam-shot1-push', 0, 2500, 'f1', 'f2', 'Intro Push'),
+    ],
+  });
+
+  const shot2 = createDefaultShot({
+    id: 'shot-2',
+    name: 'Feature Shot',
+    isPlaceholder: false,
+    startMs: 3000,
+    durationMs: 4000,
+    useProjectBackground: false,
+    background: {
+      kind: 'solid',
+      color: '#111827',
+    },
+    transition: {
+      type: 'crossfade',
+      durationMs: 1000,
+      easing: { kind: 'preset', name: 'linear' },
+    },
+    layers: [
+      createDefaultVideoLayer({
+        id: 'vid-shot2-shared',
+        name: 'Reused Video in Shot 2',
+        order: 0,
+        assetId: sharedVideoAssetId,
+        inMs: 400,
+        outMs: 3600,
+        position: { x: -0.2, y: 0, z: -0.1 },
+      }),
+      createDefaultVideoLayer({
+        id: 'vid-shot2-unique',
+        name: 'Unique Video in Shot 2',
+        order: 1,
+        assetId: shot2VideoAssetId,
+        inMs: 0,
+        outMs: 4000,
+        position: { x: 0.2, y: 0, z: 0.3 },
+      }),
+      createDefaultShapeLayer({
+        id: 'shp-shot2-badge',
+        name: 'Feature Card',
+        order: 2,
+        inMs: 200,
+        outMs: 3800,
+        position: { x: 0, y: -0.25, z: 0.45 },
+      }),
+    ],
+    effects: {
+      ...createDefaultEffects(),
+      bloom: { enabled: true, intensity: 0.6, threshold: 0.7 },
+      motionBlur: { enabled: true, shutterAngle: 180, samples: 8 },
+    },
+  });
+
+  return createDefaultProject({
+    id: 'project-phase0-fixture',
+    name: 'Phase 0 Multi-Shot Contract Fixture',
+    fps: 60,
+    assets: {
+      [sharedVideoAssetId]: {
+        id: sharedVideoAssetId,
+        name: 'shared-demo.mp4',
+        mimeType: 'video/mp4',
+        dataUrl: 'data:video/mp4;base64,AAAAIGZ0eXBpc29t',
+        width: 1920,
+        height: 1080,
+      },
+      [shot2VideoAssetId]: {
+        id: shot2VideoAssetId,
+        name: 'shot2-clip.mp4',
+        mimeType: 'video/mp4',
+        dataUrl: 'data:video/mp4;base64,BBBBIGZ0eXBpc29t',
+        width: 1920,
+        height: 1080,
+      },
+      [mockupImageAssetId]: {
+        id: mockupImageAssetId,
+        name: 'mockup.png',
+        mimeType: 'image/png',
+        dataUrl: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+        width: 1179,
+        height: 2556,
+      },
+    },
+    audio: {
+      muted: false,
+      masterVolume: 1.0,
+      clips: [
+        {
+          id: 'clip-intro-at-zero',
+          name: 'Intro Chime (t=0)',
+          startMs: 0,
+          durationMs: 800,
+          offsetMs: 0,
+          volume: 0.9,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+        {
+          id: 'clip-future-shot1',
+          name: 'Future Whoosh (t=1200ms)',
+          startMs: 1200,
+          durationMs: 600,
+          offsetMs: 0,
+          volume: 0.85,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+        {
+          id: 'clip-future-shot2',
+          name: 'Shot 2 Impact (t=3200ms)',
+          startMs: 3200,
+          durationMs: 1500,
+          offsetMs: 100,
+          volume: 1.0,
+          muted: false,
+          dataUrl: 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=',
+        },
+      ],
+    },
+    shots: [shot1, shot2],
+  });
+}
 
 
 

@@ -1,5 +1,5 @@
 // src/ui/ScrubInput.tsx
-import React, { useState, useRef, useCallback, useEffect } from 'react';
+import React, { useState, useRef, useCallback, useEffect, useId } from 'react';
 import { useProjectStore } from '../store/useProjectStore';
 
 const DRAG_THRESHOLD = 3;
@@ -30,6 +30,87 @@ function inferStepDecimals(stepValue: number): number {
         return Math.min(20, str.split('.')[1]?.length ?? 0);
     }
     return 0;
+}
+
+export function evaluateMathExpression(expr: string): number | null {
+    const cleaned = expr.trim().replace(/,/g, '');
+    if (!cleaned) return null;
+    const direct = Number(cleaned);
+    if (!Number.isNaN(direct)) return direct;
+
+    const tokens: string[] = [];
+    let i = 0;
+    while (i < cleaned.length) {
+        const ch = cleaned[i];
+        if (/\s/.test(ch)) {
+            i++;
+        } else if ('+-*/()'.includes(ch)) {
+            tokens.push(ch);
+            i++;
+        } else if (/[\d.]/.test(ch)) {
+            let numStr = '';
+            while (i < cleaned.length && /[\d.]/.test(cleaned[i])) {
+                numStr += cleaned[i];
+                i++;
+            }
+            tokens.push(numStr);
+        } else {
+            return null;
+        }
+    }
+
+    let pos = 0;
+    function parsePrimary(): number {
+        const token = tokens[pos++];
+        if (!token) throw new Error('Unexpected end');
+        if (token === '(') {
+            const val = parseAddSub();
+            if (tokens[pos++] !== ')') throw new Error('Expected )');
+            return val;
+        }
+        if (token === '-') {
+            return -parsePrimary();
+        }
+        if (token === '+') {
+            return parsePrimary();
+        }
+        const num = parseFloat(token);
+        if (Number.isNaN(num)) throw new Error('Invalid number');
+        return num;
+    }
+
+    function parseMulDiv(): number {
+        let left = parsePrimary();
+        while (pos < tokens.length && (tokens[pos] === '*' || tokens[pos] === '/')) {
+            const op = tokens[pos++];
+            const right = parsePrimary();
+            if (op === '*') left *= right;
+            else if (op === '/') {
+                if (right === 0) return 0;
+                left /= right;
+            }
+        }
+        return left;
+    }
+
+    function parseAddSub(): number {
+        let left = parseMulDiv();
+        while (pos < tokens.length && (tokens[pos] === '+' || tokens[pos] === '-')) {
+            const op = tokens[pos++];
+            const right = parseMulDiv();
+            if (op === '+') left += right;
+            else if (op === '-') left -= right;
+        }
+        return left;
+    }
+
+    try {
+        const res = parseAddSub();
+        return pos === tokens.length && Number.isFinite(res) ? res : null;
+    } catch {
+        const fallback = parseFloat(cleaned);
+        return Number.isFinite(fallback) ? fallback : null;
+    }
 }
 
 export const ScrubInput: React.FC<ScrubInputProps> = ({
@@ -108,9 +189,9 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         isCommittedRef.current = true;
         setIsEditing(false);
 
-        const parsed = parseFloat(inputText);
-        if (Number.isFinite(parsed)) {
-            onChange(clampAndRound(parsed));
+        const evaluated = evaluateMathExpression(inputText);
+        if (evaluated !== null && Number.isFinite(evaluated)) {
+            onChange(clampAndRound(evaluated));
         }
     };
 
@@ -252,7 +333,10 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
         }
     };
 
+    const generatedLabelId = useId();
     const labelString = typeof label === 'string' ? label : undefined;
+    const hasAccessibleName = Boolean(ariaLabel ?? labelString);
+    const labelId = !hasAccessibleName ? generatedLabelId : undefined;
 
     return (
         <div
@@ -260,6 +344,7 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             role="spinbutton"
             tabIndex={isEditing ? -1 : 0}
             aria-label={ariaLabel ?? labelString}
+            aria-labelledby={labelId}
             aria-valuenow={safeValue}
             aria-valuemin={Number.isFinite(min) ? min : undefined}
             aria-valuemax={Number.isFinite(max) ? max : undefined}
@@ -276,11 +361,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             style={{ touchAction: 'none' }}
             className={`h-7 px-2.5 rounded-md ${
                 isScrubbing
-                    ? 'bg-[#242428] border-[#0088ff] ring-1 ring-[#0088ff]/40 shadow-sm'
+                    ? 'bg-[var(--bg-muted)] border border-[var(--border-focus)] ring-1 ring-[var(--border-focus)]/40 shadow-sm'
                     : 'bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))]'
             } focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
         >
-            <span className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
+            <span id={labelId} className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
                 {label}
             </span>
 
@@ -288,6 +373,8 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                 <input
                     ref={inputRef}
                     type="text"
+                    aria-label={ariaLabel ?? labelString}
+                    aria-labelledby={labelId}
                     value={inputText}
                     onChange={(e) => setInputText(e.target.value)}
                     onBlur={commitTextInput}

@@ -1,12 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
-import { RoomEnvironment } from 'three/examples/jsm/environments/RoomEnvironment.js';
 import type { Project, Background } from '../../model/types';
-import { resolveShotBackground } from '../../model/types';
-import type {
-    EvaluatedProjectFrame,
-    EvaluatedLayerWithEffects,
+import {
+    getShotTransitionCompositeState,
+    type EvaluatedProjectFrame,
+    type EvaluatedLayerWithEffects,
 } from '../../engine/evaluateShot';
 import { SceneBackground } from './SceneBackground';
 import { SceneLighting } from './SceneLighting';
@@ -15,7 +14,8 @@ import { ThreeLayerObject } from './ThreeLayerObject';
 import { SceneEffectsPipeline } from './SceneEffectsPipeline';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { getViewportPixelRatio } from './viewportResolution';
-import { registerStageCapture } from '../../engine/stageCapture';
+import { registerStageCapture, type StageCaptureSession } from '../../engine/stageCapture';
+import { useBackground } from '../../stage/BackgroundContext';
 
 
 interface ViewportCanvasProps {
@@ -28,6 +28,7 @@ interface ViewportCanvasProps {
     onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
     onPointerMissed?: () => void;
     cameraRef?: React.MutableRefObject<THREE.PerspectiveCamera | null>;
+    effectiveTimeMs?: number;
 }
 
 function useDevicePixelRatio() {
@@ -47,56 +48,162 @@ function useDevicePixelRatio() {
     return deviceDpr;
 }
 
-const StudioEnvironment: React.FC = () => {
-    const { gl } = useThree();
-
-    const envTexture = useMemo(() => {
-        const pmrem = new THREE.PMREMGenerator(gl);
-        pmrem.compileEquirectangularShader();
-        const texture = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
-        pmrem.dispose();
-        return texture;
-    }, [gl]);
-
-    useEffect(() => {
-        return () => {
-            envTexture.dispose();
-        };
-    }, [envTexture]);
-
-    return <primitive object={envTexture} attach="environment" />;
-};
-
 const ViewportRenderBridge: React.FC<{
     frame: EvaluatedProjectFrame;
     selectedLayerIds: string[];
-    background?: Background;
-}> = ({ frame, selectedLayerIds, background }) => {
+    frameloop: 'always' | 'demand';
+}> = ({ frame, selectedLayerIds, frameloop }) => {
     const { invalidate } = useThree();
+    const { effectiveBackground } = useBackground();
 
     useEffect(() => {
-        invalidate();
-    }, [frame, selectedLayerIds, background, invalidate]);
+        if (frameloop === 'demand') {
+            invalidate();
+        }
+    }, [frame, selectedLayerIds, effectiveBackground, invalidate, frameloop]);
 
     return null;
 };
 
 
-const StageCaptureBridge: React.FC = () => {
+const StageCaptureBridge: React.FC<{ frame: EvaluatedProjectFrame }> = ({ frame }) => {
     const { gl, invalidate } = useThree();
+    const frameRef = useRef(frame);
+    useEffect(() => {
+        frameRef.current = frame;
+    }, [frame]);
 
     useEffect(() => {
-        const unregister = registerStageCapture(async (_timeMs: number, _width: number, _height: number) => {
+        const nextFrame = () => new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
+        const waitForTime = async (timeMs: number): Promise<boolean> => {
+            let attempts = 0;
+            while (Math.abs(frameRef.current.globalTimeMs - timeMs) > 0.75 && attempts < 30) {
+                await nextFrame();
+                attempts += 1;
+            }
+            return Math.abs(frameRef.current.globalTimeMs - timeMs) <= 0.75;
+        };
+
+        const renderAndCopy = (
+            ctx: CanvasRenderingContext2D,
+            width: number,
+            height: number
+        ): Promise<void> => {
             invalidate();
-            await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
-            return gl.domElement;
-        });
+            return nextFrame()
+                .then(() => nextFrame())
+                .then(() => {
+                    ctx.drawImage(gl.domElement, 0, 0, width, height);
+                });
+        };
+
+        let captureQueue: Promise<unknown> = Promise.resolve();
+        function runSerialized<T>(fn: () => Promise<T>): Promise<T> {
+            const run = captureQueue.then(fn, fn);
+            captureQueue = run.catch(() => {});
+            return run;
+        }
+
+        // Single-shot capture (PNG stills): resize, render, copy, restore under exclusive lock.
+        const singleCapture = (
+            timeMs: number,
+            width: number,
+            height: number
+        ): Promise<HTMLCanvasElement | null> => {
+            return runSerialized(async () => {
+                if (!(await waitForTime(timeMs))) return null;
+                if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
+
+                const size = gl.getSize(new THREE.Vector2());
+                const pixelRatio = gl.getPixelRatio();
+                const renderTarget = gl.getRenderTarget();
+                const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
+                try {
+                    if (needsResize) {
+                        gl.setRenderTarget(null);
+                        gl.setPixelRatio(1);
+                        gl.setSize(width, height, false);
+                    }
+                    const captured = document.createElement('canvas');
+                    captured.width = width;
+                    captured.height = height;
+                    const context = captured.getContext('2d');
+                    if (!context) return null;
+                    await renderAndCopy(context, width, height);
+                    return captured;
+                } finally {
+                    if (needsResize) {
+                        gl.setRenderTarget(null);
+                        gl.setPixelRatio(pixelRatio);
+                        gl.setSize(size.x, size.y, false);
+                        gl.setRenderTarget(renderTarget);
+                        invalidate();
+                    }
+                }
+            });
+        };
+
+        // Multi-frame session: resize once, reuse one capture canvas under exclusive lifecycle.
+        const createSession = async (
+            width: number,
+            height: number
+        ): Promise<StageCaptureSession | null> => {
+            if (width > gl.capabilities.maxTextureSize || height > gl.capabilities.maxTextureSize) return null;
+
+            return runSerialized(async () => {
+                const size = gl.getSize(new THREE.Vector2());
+                const pixelRatio = gl.getPixelRatio();
+                const renderTarget = gl.getRenderTarget();
+                const needsResize = size.x !== width || size.y !== height || pixelRatio !== 1;
+                const restore = (): void => {
+                    if (!needsResize) return;
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(pixelRatio);
+                    gl.setSize(size.x, size.y, false);
+                    gl.setRenderTarget(renderTarget);
+                    invalidate();
+                };
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+                if (!ctx) {
+                    restore();
+                    return null;
+                }
+                if (needsResize) {
+                    gl.setRenderTarget(null);
+                    gl.setPixelRatio(1);
+                    gl.setSize(width, height, false);
+                }
+
+                let ended = false;
+                return {
+                    async captureFrame(timeMs: number): Promise<HTMLCanvasElement | null> {
+                        if (ended) return null;
+                        if (!(await waitForTime(timeMs))) return null;
+                        await renderAndCopy(ctx, width, height);
+                        return canvas;
+                    },
+                    async end(): Promise<void> {
+                        if (ended) return;
+                        ended = true;
+                        restore();
+                        canvas.width = 0;
+                        canvas.height = 0;
+                    },
+                };
+            });
+        };
+
+        const unregister = registerStageCapture(singleCapture, createSession);
         return unregister;
     }, [gl, invalidate]);
 
     return null;
 };
-
 const WebGLContextGuard: React.FC = () => {
     const { gl, invalidate, scene, size } = useThree();
 
@@ -198,10 +305,13 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
     onSelectLayer,
     onPointerMissed,
     cameraRef,
+    effectiveTimeMs = 0,
 }) => {
     const activeShot = frame.activeShot;
-    const layers: EvaluatedLayerWithEffects[] = frame.layers;
-    const activeBackground = resolveShotBackground(project, activeShot);
+    const transitionState = getShotTransitionCompositeState(frame);
+    const layers: EvaluatedLayerWithEffects[] = transitionState.incomingLayers;
+    const outgoingLayers: EvaluatedLayerWithEffects[] = transitionState.outgoingLayers;
+    const { effectiveBackground: activeBackground } = useBackground();
     const { isPlaying } = usePlayheadStore();
     const isAnimatedBg = activeBackground.kind === 'shader' || activeBackground.kind === 'noise';
     const deviceDpr = useDevicePixelRatio();
@@ -238,13 +348,10 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <ViewportRenderBridge
                     frame={frame}
                     selectedLayerIds={selectedLayerIds}
-                    background={activeBackground}
+                    frameloop={isPlaying || isAnimatedBg ? 'always' : 'demand'}
                 />
                 <WebGLContextGuard />
-                <StageCaptureBridge />
-
-                {/* Studio PBR Reflection Environment Map */}
-                <StudioEnvironment />
+                <StageCaptureBridge frame={frame} />
 
                 {/* 1. Time-Evaluated 3D Camera (Supports Dolly, Zoom & Dolly-Zoom!) */}
                 <ViewportCamera
@@ -265,10 +372,21 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                 <SceneLighting light={activeShot?.light} />
 
                 {/* 3. Screen-Space Shot-Aware Background with Transition Support */}
-                <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} />
+                <SceneBackground project={project} frame={frame} background={activeBackground} assets={project.assets} light={activeShot?.light} />
 
-                {/* 4. 3D Scene Objects / Layers with Depth Awareness */}
+                {/* 4. 3D Scene Objects / Layers with Depth Awareness & Shot Transition Parity */}
                 <group name="raylight_layers_root">
+                    {outgoingLayers.map((outLayer) => (
+                        <ThreeLayerObject
+                            key={`outgoing-${outLayer.id}`}
+                            evalLayer={outLayer}
+                            project={project}
+                            evaluatedCamera={transitionState.outgoingCamera ?? frame.camera}
+                            onSelect={() => {}}
+                            shotStartMs={transitionState.outgoingShotStartMs}
+                            currentTimeMs={effectiveTimeMs}
+                        />
+                    ))}
                     {layers.map((evalLayer) => (
                         <ThreeLayerObject
                             key={evalLayer.id}
@@ -276,14 +394,23 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             project={project}
                             evaluatedCamera={frame.camera}
                             onSelect={onSelectLayer}
+                            shotStartMs={activeShot?.startMs ?? 0}
+                            currentTimeMs={effectiveTimeMs}
                         />
                     ))}
                 </group>
 
                 {/* 5. Realtime Cinematic Scene Effects (Bloom, Vignette, Chromatic Aberration, Grain, Glitch) */}
-                <SceneEffectsPipeline effects={frame.effects} />
+                <SceneEffectsPipeline
+                    effects={frame.effects}
+                    outgoingEffects={frame.shotTransition.outgoingFrame?.effects}
+                    transitionProgress={frame.shotTransition.progress}
+                />
             </Canvas>
         </WebGLErrorBoundary>
     </div>
 );
 };
+
+
+

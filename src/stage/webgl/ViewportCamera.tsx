@@ -31,7 +31,6 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
     const pose = evaluateCameraPose(evaluatedCamera, defaultCamera, aspect);
 
     // R3F exposes Three.js camera as a mutable external object; applying the evaluated pose here is intentional.
-    // eslint-disable-next-line react-hooks/immutability
     useLayoutEffect(() => {
         if (camera instanceof THREE.PerspectiveCamera) {
             camera.position.set(pose.position.x, pose.position.y, pose.position.z);
@@ -41,7 +40,6 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
                 pose.rotation.z
             );
             if (Math.abs(camera.fov - pose.fov) > 0.001) {
-                // eslint-disable-next-line react-hooks/immutability
                 camera.fov = pose.fov;
             }
             camera.updateMatrixWorld(true);
@@ -64,10 +62,6 @@ export const ViewportCamera: React.FC<ViewportCameraProps> = ({
         cameraRef,
         invalidate,
     ]);
-
-    useEffect(() => {
-        invalidate();
-    }, [pose.position.x, pose.position.y, pose.position.z, pose.fov, invalidate]);
 
     return null;
 };

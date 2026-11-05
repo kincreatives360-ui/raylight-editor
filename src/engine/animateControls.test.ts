@@ -6,25 +6,25 @@ import type { AnimationBlock, Transitionish } from '../model/types';
 const easing = { kind: 'preset', name: 'linear' } as const;
 const transition = (type: string, extra = {}) => ({ type, durationMs: 1000, delayMs: 0, distance: .2, easing, ...extra }) as Transitionish;
 const textLayer = () => createDefaultTextLayer({ content: 'Hello world\nNext line', inMs: 0, outMs: 4000, entrance: transition('none'), exit: transition('none') });
-const block = (property: string, extra = {}) => ({ id: 'b', label: property, property, startMs: 0, durationMs: 1000, amount: .15, easing, ...extra }) as AnimationBlock;
+const block = (property: string, extra = {}) => ({ id: `b-${property}`, label: property, property, startMs: 0, durationMs: 1000, amount: .15, easing, ...extra }) as AnimationBlock;
 describe('Animate controls', () => {
  it('persists new options', () => {
-  const t = transition('rack-focus', { enabled: false, blur: 64, fade: false, stagger: 'word' }); expect(TransitionishSchema.parse(t)).toEqual(t);
+  const t = transition('blur', { enabled: false, blur: 64, fade: false, stagger: 'word' }); expect(TransitionishSchema.parse(t)).toEqual(t);
   for (const property of ['wiggle', 'emphasis', 'changeText', 'shimmer']) { const b = block(property, { enabled: false, settings: { text: 'New', color: '#ff0000', intensity: 2, width: .3, direction: 'left' } }); expect(AnimationBlockSchema.parse(b)).toEqual(b); }
  });
  it('round-trips a saved project with muted stacked transitions and all block settings', () => {
-  const entrance={...transition('focus',{enabled:false,blur:70,fade:false,stagger:'line'}),id:'transition'};
+  const entrance={...transition('blur',{enabled:false,blur:70,fade:false,stagger:'line'}),id:'transition'};
   const settings={targetPosition:{x:.2,y:.3,z:.1},targetScale:{x:2,y:2,z:1},targetSize:{width:.4,height:.2},color:'#22aaff',intensity:1.5,width:.25,direction:'down' as const,text:'Replacement'};
   const blocks=['wiggle','emphasis','changeText','shimmer','morph'].map(property=>block(property,{enabled:false,settings}));
   const layer={...textLayer(),entrances:[entrance],exits:[entrance],blocks};
   const parsed=validateProject(JSON.parse(JSON.stringify({...DEFAULT_PROJECT,shots:[createDefaultShot({layers:[layer]})]})));
-  expect(parsed.success).toBe(true); if (!parsed.success) throw new Error(parsed.errors.join(', '));
+  expect(parsed.success).toBe(true); if ('errors' in parsed) throw new Error(parsed.errors.join(', '));
   expect(parsed.data.shots[0].layers[0].entrances).toEqual([entrance]);
   expect(parsed.data.shots[0].layers[0].blocks).toEqual(blocks);
  });
- it('uses distinct real blur and focus depth', () => {
-  const l = textLayer(); const r = ['blur', 'focus', 'rack-focus'].map(type => evaluateLayerAtTime({ ...l, entrance: transition(type, { fade: false }) }, 250));
-  expect(r[0].extraLayerBlur).toBeCloseTo(30); expect(r[1].extraLayerBlur).toBeCloseTo(22.5); expect(r[2].extraLayerBlur).toBeGreaterThan(0); expect(r[2].position.z).not.toBe(l.position.z); expect(r.every(x => x.opacity === 1)).toBe(true);
+ it('applies the blur entrance without affecting opacity when fade is disabled', () => {
+  const l = textLayer(); const r = evaluateLayerAtTime({ ...l, entrance: transition('blur', { fade: false }) }, 250);
+  expect(r.extraLayerBlur).toBeCloseTo(30); expect(r.opacity).toBe(1);
   expect(evaluateLayerAtTime({ ...l, entrance: transition('blur') }, 1000).extraLayerBlur).toBe(0);
  });
  it('reveals text in letter word line units, reverses exit, staggers slide', () => {
@@ -51,9 +51,9 @@ describe('Animate controls', () => {
  });
  it('keeps blur finite under back and spring easing overshoot', () => {
   const l = textLayer();
-  for (const type of ['blur','focus','rack-focus']) for (const name of ['ease-in-back','ease-out-back'] as const) {
+  for (const name of ['ease-in-back','ease-out-back'] as const) {
    for (const t of [100,250,500,750,900]) {
-    const r=evaluateLayerAtTime({...l,entrance:transition(type,{easing:{kind:'preset',name}})},t);
+    const r=evaluateLayerAtTime({...l,entrance:transition('blur',{easing:{kind:'preset',name}})},t);
     expect(Number.isFinite(r.extraLayerBlur)).toBe(true); expect(r.extraLayerBlur).toBeGreaterThanOrEqual(0);
    }
   }

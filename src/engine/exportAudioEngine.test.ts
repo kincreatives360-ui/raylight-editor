@@ -1,7 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { getExportDimensions, estimateExportMetrics } from './exportMetrics';
-import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache } from './audioEngine';
-import { runVideoExportPipeline } from './exporter';
+import { generateWaveformPeaks, decodeAudioFromDataUrl, clearWaveformCache, syncAudioPlayback, stopAudioPlayback } from './audioEngine';
 import type { Project, AudioClip } from '../model/types';
 import { createDefaultProject } from '../model/defaults';
 
@@ -257,6 +256,39 @@ describe('Audio Engine Waveform Generation & Peak Clamping', () => {
 });
 
 describe('Audio Engine Concurrent Decoding', () => {
+    it('evicts old decoded buffers so the audio cache stays bounded', async () => {
+        const originalWindow = (globalThis as unknown as { window?: unknown }).window;
+        const originalFetch = globalThis.fetch;
+        const mockBuffer = {
+            sampleRate: 44100,
+            duration: 1,
+            numberOfChannels: 1,
+            getChannelData: () => new Float32Array(100),
+        } as unknown as AudioBuffer;
+        class MockAudioContext {
+            state = 'running';
+            decodeAudioData = vi.fn().mockResolvedValue(mockBuffer);
+            resume = vi.fn().mockResolvedValue(undefined);
+        }
+        (globalThis as unknown as { window: unknown }).window = { AudioContext: MockAudioContext };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+        } as unknown as Response);
+
+        try {
+            const urls = Array.from({ length: 33 }, (_, index) => `data:audio/wav;base64,lru-${index}`);
+            for (const url of urls) await decodeAudioFromDataUrl(url);
+            await decodeAudioFromDataUrl(urls[0]);
+            expect(globalThis.fetch).toHaveBeenCalledTimes(34);
+        } finally {
+            (globalThis as unknown as { window?: unknown }).window = originalWindow;
+            globalThis.fetch = originalFetch;
+        }
+    });
+
     it('handles concurrent decodeAudioFromDataUrl calls without errors and shares cached result', async () => {
         const mockBuffer = {
             sampleRate: 44100,
@@ -306,60 +338,83 @@ describe('Audio Engine Concurrent Decoding', () => {
     });
 });
 
-describe('Export Pipeline Cancellation', () => {
-    it('cleanly aborts runVideoExportPipeline when AbortSignal is triggered', async () => {
+describe('Audio Preview Playback Scheduling', () => {
+    it('schedules both active and future audio clips using Web Audio lookahead timestamps (F-01)', async () => {
+        const mockBuffer = {
+            sampleRate: 44100,
+            duration: 5,
+            numberOfChannels: 2,
+            getChannelData: () => new Float32Array(500),
+        } as unknown as AudioBuffer;
+
+        const startedSources: Array<{ when: number; offset: number; duration: number }> = [];
         const originalWindow = (globalThis as unknown as { window?: unknown }).window;
-        const originalDocument = (globalThis as unknown as { document?: unknown }).document;
+        const originalFetch = globalThis.fetch;
 
-        const mockCanvas = {
-            width: 100,
-            height: 100,
-            getContext: vi.fn(() => ({
-                drawImage: vi.fn(),
-                getImageData: vi.fn(() => ({ data: new Uint8Array(4) })),
-            })),
-            toBlob: vi.fn((cb) => cb(new Blob())),
-        };
-
-        (globalThis as unknown as { document: unknown }).document = {
-            createElement: vi.fn((tag: string) => {
-                if (tag === 'canvas') return mockCanvas;
-                if (tag === 'a') return { href: '', download: '', click: vi.fn() };
-                return {};
-            }),
-            getElementById: vi.fn(() => null),
-            querySelector: vi.fn(() => null),
-            body: {
-                appendChild: vi.fn(),
-                removeChild: vi.fn(),
-            },
-            fonts: { ready: Promise.resolve() },
-        };
+        class MockAudioContext {
+            state = 'running';
+            currentTime = 10;
+            destination = {};
+            decodeAudioData = vi.fn().mockResolvedValue(mockBuffer);
+            resume = vi.fn().mockResolvedValue(undefined);
+            createGain = vi.fn(() => ({
+                gain: { value: 1, setValueAtTime: vi.fn() },
+                connect: vi.fn(),
+                disconnect: vi.fn(),
+            }));
+            createBufferSource = vi.fn(() => ({
+                buffer: null as AudioBuffer | null,
+                connect: vi.fn(),
+                disconnect: vi.fn(),
+                stop: vi.fn(),
+                start: vi.fn((when: number, offset: number, duration: number) => {
+                    startedSources.push({ when, offset, duration });
+                }),
+            }));
+        }
 
         (globalThis as unknown as { window: unknown }).window = {
-            requestAnimationFrame: (cb: () => void) => setTimeout(cb, 0),
+            AudioContext: MockAudioContext,
         };
+        globalThis.fetch = vi.fn().mockResolvedValue({
+            ok: true,
+            status: 200,
+            statusText: 'OK',
+            arrayBuffer: vi.fn().mockResolvedValue(new ArrayBuffer(8)),
+        } as unknown as Response);
 
         try {
-            const project = createDefaultProject();
-            const controller = new AbortController();
-            controller.abort();
+            const urlA = 'data:audio/wav;base64,lookaheadClipA';
+            const urlB = 'data:audio/wav;base64,lookaheadClipB';
+            await decodeAudioFromDataUrl(urlA);
+            await decodeAudioFromDataUrl(urlB);
 
-            const progressCalls: number[] = [];
-            await expect(
-                runVideoExportPipeline(
-                    project,
-                    (prog) => progressCalls.push(prog.frameIndex),
-                    { format: 'gif' },
-                    controller.signal
-                )
-            ).resolves.toBeUndefined();
+            syncAudioPlayback(
+                {
+                    masterVolume: 1,
+                    muted: false,
+                    clips: [
+                        { id: 'c1', name: 'Active Now', dataUrl: urlA, startMs: 0, durationMs: 1000, offsetMs: 100, volume: 0.8, muted: false },
+                        { id: 'c2', name: 'Future Clip', dataUrl: urlB, startMs: 1500, durationMs: 800, offsetMs: 200, volume: 0.9, muted: false },
+                    ],
+                },
+                true,
+                200
+            );
 
-            // The pipeline aborted before executing frame capture loop
-            expect(progressCalls.length).toBeLessThanOrEqual(1);
+            expect(startedSources.length).toBe(2);
+            // Active clip starts immediately at ctx.currentTime (10s) with offset (100 + 200)/1000 = 0.3s
+            expect(startedSources[0].when).toBeCloseTo(10, 3);
+            expect(startedSources[0].offset).toBeCloseTo(0.3, 3);
+            expect(startedSources[0].duration).toBeCloseTo(0.8, 3);
+            // Future clip is scheduled at ctx.currentTime + (1500 - 200)/1000 = 11.3s with offset 0.2s
+            expect(startedSources[1].when).toBeCloseTo(11.3, 3);
+            expect(startedSources[1].offset).toBeCloseTo(0.2, 3);
+            expect(startedSources[1].duration).toBeCloseTo(0.8, 3);
         } finally {
-            (globalThis as unknown as { document: unknown }).document = originalDocument;
+            stopAudioPlayback();
             (globalThis as unknown as { window: unknown }).window = originalWindow;
+            globalThis.fetch = originalFetch;
         }
     });
 });

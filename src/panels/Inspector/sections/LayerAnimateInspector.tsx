@@ -1,15 +1,18 @@
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, SlidersHorizontal, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
+import { MenuItem } from '../../../ui/Menu';
+import { AxisFields } from '../../../ui/AxisFields';
+import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
+import { SegmentedControl } from '../../../ui/primitives';
+import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { degToRad, radToDeg } from '../../../model/defaults';
-import { easingFromSelection } from '../../../model/easingSelection';
 import type { AnimationBlock, AnimationBlockProperty, Easing, Layer, Shot, Transitionish, TransitionType, Vec3 } from '../../../model/types';
 import { usePlayheadStore } from '../../../store/usePlayheadStore';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
+import { EasingControl } from '../../../ui/EasingControl';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
-import { IconButton, InspectorRow } from '../../../ui/primitives';
+import { IconButton, InspectorRow, Switch } from '../../../ui/primitives';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import { EasingPopover } from '../../Timeline/EasingPopover';
 import { addBlocksToShot, animationLabel, availableAnimations, availablePresets, createAnimationBlock, createPreset, editPreset, presetLabel, presetList, replacePresets, type PresetSide } from '../animationModel';
 import { ColorPicker } from '../ColorPicker';
 import { InspectorFlyout } from './InspectorFlyout';
@@ -17,28 +20,37 @@ import './layerAnimate.css';
 function AnimationIcon({ property }: {
     property: string;
 }) {
-    const Icon = property === 'position' || property.startsWith('slide') ? Move : property === 'rotation' ? RotateCw : property === 'tilt' ? Compass : property === 'size' || property === 'scale' || property === 'emphasis' ? Maximize2 : property === 'opacity' || property === 'fade' ? CircleDashed : property === 'shimmer' ? Star : property === 'followPath' ? Spline : property === 'wiggle' ? Waves : property === 'typewriter' || property === 'counter' || property === 'changeText' ? Type : property === 'blur' || property === 'focus' || property === 'rack-focus' || property === 'layerBlur' ? Focus : property === 'mask-sweep' || property === 'maskSweep' || property === 'pathReveal' ? Scan : property === 'cornerRadius' ? Square : Sparkles;
+    const Icon = property === 'position' || property.startsWith('slide') ? Move : property === 'rotation' ? RotateCw : property === 'tilt' ? Compass : property === 'size' || property === 'scale' || property === 'emphasis' ? Maximize2 : property === 'opacity' || property === 'fade' ? CircleDashed : property === 'shimmer' ? Star : property === 'followPath' ? Spline : property === 'wiggle' ? Waves : property === 'typewriter' || property === 'counter' || property === 'changeText' ? Type : property === 'blur' || property === 'layerBlur' ? Focus : property === 'mask-sweep' || property === 'maskSweep' || property === 'pathReveal' ? Scan : property === 'cornerRadius' ? Square : Sparkles;
     return <Icon aria-hidden="true"/>;
 }
 function Field({ label, children }: {
     label: string;
     children: ReactNode;
 }) { return <InspectorRow label={label} stacked>{children}</InspectorRow>; }
-const EASINGS = [['preset:linear', 'Linear'], ['preset:ease-in', 'Ease in'], ['preset:ease-out', 'Ease out'], ['preset:ease-in-out', 'Ease in and out'], ['preset:ease-out-back', 'Back'], ['preset:ease-out-expo', 'Expo'], ['spring:gentle', 'Gentle spring'], ['spring:quick', 'Quick spring'], ['spring:bouncy', 'Bouncy spring'], ['spring:slow', 'Slow spring'], ['spring:snappy', 'Snappy spring'], ['spring:stiff', 'Stiff spring'], ['bezier', 'Custom Bezier']];
 function EasingField({ value, onChange }: {
     value: Easing;
     onChange: (next: Easing) => void;
 }) {
-    const [anchor, setAnchor] = useState<DOMRect | null>(null);
-    return <Field label="Easing"><div className="animate-field-action"><FigmaSelect aria-label="Easing" value={value.kind === 'bezier' ? 'bezier' : `${value.kind}:${value.name}`} onChange={event => { const next = easingFromSelection(event.target.value); if (next)
-        onChange(next); }}>{EASINGS.map(([key, label]) => <option key={key} value={key}>{label}</option>)}</FigmaSelect><IconButton label="Edit easing curve" icon={<SlidersHorizontal />} onClick={event => setAnchor(event.currentTarget.getBoundingClientRect())}/></div>{anchor && <EasingPopover easing={value} onChange={onChange} onClose={() => setAnchor(null)} anchorRect={anchor}/>}</Field>;
+    return <Field label="Easing"><EasingControl value={value} onChange={onChange} rowClassName="animate-field-action"/></Field>;
 }
 function Directions({ value, onChange, vertical = false }: {
     value: string;
     onChange: (direction: 'left' | 'right' | 'up' | 'down') => void;
     vertical?: boolean;
 }) {
-    return <div className="animate-directions" role="group" aria-label="Direction">{(['left', 'right', ...(vertical ? ['up', 'down'] : [])] as const).map(direction => <button key={direction} type="button" aria-label={direction} aria-pressed={value === direction} onClick={() => onChange(direction as 'left' | 'right' | 'up' | 'down')}>{direction === 'left' ? <ArrowLeft /> : direction === 'right' ? <ArrowRight /> : direction === 'up' ? <ArrowUp /> : <ArrowDown />}</button>)}</div>;
+    return <SegmentedControl
+        unstyled
+        selectionMode="pressed"
+        className="animate-directions"
+        ariaLabel="Direction"
+        value={value as 'left' | 'right' | 'up' | 'down'}
+        onChange={onChange}
+        buttonClassName=""
+        options={(['left', 'right', ...(vertical ? ['up', 'down'] as const : [])] as const).map(direction => ({
+            value: direction, ariaLabel: direction,
+            icon: direction === 'left' ? <ArrowLeft /> : direction === 'right' ? <ArrowRight /> : direction === 'up' ? <ArrowUp /> : <ArrowDown />,
+        }))}
+    />;
 }
 function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
     preset: Transitionish;
@@ -47,14 +59,14 @@ function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
     maxDuration: number;
     onChange: (patch: Partial<Transitionish>) => void;
 }) {
-    const blur = ['blur', 'focus', 'rack-focus'].includes(preset.type);
+    const blur = preset.type === 'blur';
     const move = preset.type.startsWith('slide') || preset.type === 'float-out';
     return <div className="animate-settings-fields">
         <Field label="Type"><FigmaSelect aria-label="Preset type" value={preset.type} onChange={event => onChange({ type: event.target.value as TransitionType })}>{availablePresets(layers).map(p => <option key={p.type} value={p.type}>{p.label}</option>)}</FigmaSelect></Field>
         <ScrubInput label="Duration" value={preset.durationMs} min={10} max={Math.max(10, maxDuration - preset.delayMs)} unit=" ms" onChange={durationMs => onChange({ durationMs })}/>
         {blur && <Field label="Blur"><ScrubInput aria-label="Blur amount" label={side === 'in' ? 'From' : 'To'} value={preset.blur ?? 40} min={0} max={200} unit=" px" onChange={value => onChange({ blur: value })}/></Field>}
         {move && <Field label="Distance"><ScrubInput label="Offset" value={preset.distance * 100} min={0} max={200} unit=" %" onChange={value => onChange({ distance: value / 100 })}/></Field>}
-        {(blur || move || preset.type === 'scale-out') && <div className="animate-toggle-row"><span>Fade</span><button type="button" role="switch" aria-label="Fade" aria-checked={preset.fade !== false} className="animate-switch" onClick={() => onChange({ fade: preset.fade === false })}><span /></button></div>}
+        {(blur || move || preset.type === 'scale-out') && <div className="animate-toggle-row"><span>Fade</span><Switch ariaLabel="Fade" checked={preset.fade !== false} className="animate-switch" onChange={fade => onChange({ fade })}/></div>}
         {layers.every(layer => layer.kind === 'text') && <Field label="Stagger"><FigmaSelect aria-label="Stagger" value={preset.stagger ?? 'none'} onChange={event => onChange({ stagger: event.target.value as Transitionish['stagger'] })}>{[['none', 'None'], ['letter', 'Letter'], ['word', 'Word'], ['line', 'Line']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</FigmaSelect></Field>}
         <EasingField value={preset.easing} onChange={easing => onChange({ easing })}/>
         <details className="animate-timing"><summary>Timing</summary><ScrubInput label="Delay" value={preset.delayMs} min={0} max={Math.max(0, maxDuration - preset.durationMs)} unit=" ms" onChange={delayMs => onChange({ delayMs })}/></details>
@@ -70,7 +82,10 @@ function BlockSettings({ block, shot, onChange }: {
     const vec: Vec3 = typeof block.amount === 'number' ? { x: block.amount, y: 0, z: 0 } : block.amount;
     const amount = typeof block.amount === 'number' ? block.amount : block.amount.x;
     const scalar = (label: string, unit: string, multiplier: number, min: number, max: number) => <ScrubInput label={label} value={amount * multiplier} min={min} max={max} step={multiplier === 1 ? .01 : 1} unit={unit} onChange={value => onChange({ amount: value / multiplier })}/>;
-    const vector = (axes: ('x' | 'y' | 'z')[], rotation = false) => <div className="animate-pair">{axes.map(axis => <ScrubInput key={axis} label={axis.toUpperCase()} value={rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? 1080 : 1920)} min={rotation ? -3600 : -10000} max={rotation ? 3600 : 10000} unit={rotation ? '°' : ' px'} onChange={value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? 1080 : 1920) } })}/>)}</div>;
+    const vector = (axes: ('x' | 'y' | 'z')[], rotation = false) => <AxisFields
+        className="animate-pair"
+        fields={axes.map(axis => ({"key": axis, "label": axis.toUpperCase(), "value": rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? 1080 : 1920), "min": rotation ? -3600 : -10000, "max": rotation ? 3600 : 10000, "unit": rotation ? '°' : ' px', "onChange": value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? 1080 : 1920) } })}))}
+    />;
     return <div className="animate-block-fields">
         {block.property === 'shimmer' ? <>
             <Field label="Color"><ColorPicker color={settings.color ?? '#ffffff'} label="Shimmer color" showGradientMode={false} onChange={color => patchSettings({ color })}/></Field>
@@ -85,10 +100,13 @@ function BlockSettings({ block, shot, onChange }: {
                                 : block.property === 'glow' ? <Field label="Glow"><div className="animate-pair"><ScrubInput label="Intensity" value={vec.x} min={-5} max={10} step={.1} onChange={x => onChange({ amount: { ...vec, x } })}/><ScrubInput label="Radius" value={vec.y * 100} min={-100} max={200} unit=" %" onChange={y => onChange({ amount: { ...vec, y: y / 100 } })}/></div></Field>
                                     : <Field label={block.property === 'counter' ? 'Count by' : block.property === 'layerBlur' ? 'Blur' : block.property === 'wiggle' ? 'Distance' : 'Amount'}>{block.property === 'counter' ? scalar('Δ', '', 1, -1000000, 1000000) : block.property === 'layerBlur' ? scalar('Blur', ' px', 100, -100, 200) : block.property === 'wiggle' ? scalar('Offset', ' px', 1920, 0, 500) : block.property === 'cornerRadius' ? scalar('Radius', ' %', 100, 0, 200) : scalar('Amount', ' %', 100, -100, 1000)}</Field>}
         <EasingField value={block.easing} onChange={easing => onChange({ easing })}/>
-        <details className="animate-timing"><summary>Timing</summary><div className="animate-pair"><ScrubInput label="Start" value={block.startMs} min={0} max={Math.max(0, shot.durationMs - block.durationMs)} unit=" ms" onChange={startMs => onChange({ startMs })}/><ScrubInput label="Duration" value={block.durationMs} min={10} max={Math.max(10, shot.durationMs - block.startMs)} unit=" ms" onChange={durationMs => onChange({ durationMs })}/></div></details>
+        <details className="animate-timing"><summary>Timing</summary><AnimationTimingFields
+            className="animate-pair"
+            start={{"label": "Start", "value": block.startMs, "min": 0, "max": Math.max(0, shot.durationMs - block.durationMs), "unit": " ms", "onChange": startMs => onChange({ startMs })}}
+            duration={{"label": "Duration", "value": block.durationMs, "min": 10, "max": Math.max(10, shot.durationMs - block.startMs), "unit": " ms", "onChange": durationMs => onChange({ durationMs })}}
+        /></details>
     </div>;
 }
-// eslint-disable-next-line react-refresh/only-export-components
 export function addLayerAnimation(shot: Shot, ids: string[], property: AnimationBlockProperty) {
     const localMs = usePlayheadStore.getState().currentTimeMs - shot.startMs;
     const next = addBlocksToShot(shot, ids, property, localMs);
@@ -131,14 +149,19 @@ export function LayerAnimateInspector({ activeShot, selectedLayer, selectedLayer
     const updateBlock = (id: string, patch: Partial<AnimationBlock>) => updateShot(activeShot.id, shot => ({ ...shot, layers: shot.layers.map(layer => layer.id === selectedLayer.id && !layer.locked ? { ...layer, blocks: layer.blocks.map(block => block.id === id ? { ...block, ...patch } : block) } : layer) }));
     const add = (property: AnimationBlockProperty) => { addLayerAnimation(activeShot, selectedLayerIds, property); close(); };
     const animations = availableAnimations(editable);
-    const menuItem = (label: string, icon: ReactNode, onClick: () => void, more = false) => <button key={label} type="button" role="menuitem" onClick={onClick}>{icon}<span>{label}</span>{more && <ChevronRight className="animate-menu-chevron"/>}</button>;
+    const menuItem = (label: string, icon: ReactNode, onClick: () => void, more = false) => <MenuItem
+        unstyled
+        key={label}
+        role="menuitem"
+        onClick={onClick}
+    >{icon}<span>{label}</span>{more && <ChevronRight className="animate-menu-chevron"/>}</MenuItem>;
     const presets = flyout?.side ? presetList(selectedLayer, flyout.side) : [];
     const preset = flyout?.index !== undefined ? presets[flyout.index] : undefined;
     return <div className="layer-animate-inspector flex-1 min-h-0 overflow-y-auto" data-testid="layer-animate-inspector">
         <section aria-label="Animations" className="animate-overview"><header><span>Animations</span><IconButton label="Add animation" disabled={!editable.length} icon={<Plus />} onClick={event => open('animation', event.currentTarget)}/></header></section>
         {(['in', 'out'] as const).map(side => <section key={side} aria-label={side === 'in' ? 'In' : 'Out'} className={`animate-overview animate-${side}`}><header><span>{side === 'in' ? 'In' : 'Out'}</span><IconButton label={`Add ${side} preset`} disabled={!editable.length} icon={<Plus />} onClick={event => open(side, event.currentTarget)}/></header>
             {presetList(selectedLayer, side).map((preset, index) => <div key={preset.id ?? `${preset.type}-${index}`} className="animate-preset-row" data-muted={preset.enabled === false}>
-                <button type="button" disabled={selectedLayer.locked} className="animate-preset-pill" aria-label={`Edit ${side} ${presetLabel(preset.type)}`} aria-expanded={flyout?.kind === 'settings' && flyout.side === side && flyout.index === index} onClick={event => { const anchor = event.currentTarget; setFlyout(old => old?.kind === 'settings' && old.side === side && old.index === index ? null : { kind: 'settings', anchor, side, index }); }}><AnimationIcon property={preset.type}/><span>{presetLabel(preset.type)}</span></button>
+                <button type="button" aria-label={`Edit ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} className="animate-preset-pill" aria-expanded={flyout?.kind === 'settings' && flyout.side === side && flyout.index === index} onClick={event => { const anchor = event.currentTarget; setFlyout(old => old?.kind === 'settings' && old.side === side && old.index === index ? null : { kind: 'settings', anchor, side, index }); }}><AnimationIcon property={preset.type}/><span>{presetLabel(preset.type)}</span></button>
                 <IconButton label={`${preset.enabled === false ? 'Enable' : 'Disable'} ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} icon={preset.enabled === false ? <EyeOff /> : <Eye />} onClick={() => updatePreset(side, index, { enabled: preset.enabled === false })}/>
                 <IconButton label={`Remove ${side} ${presetLabel(preset.type)}`} disabled={selectedLayer.locked} icon={<X />} onClick={() => { updateSelected(layer => replacePresets(layer, side, presetList(layer, side).filter((item, i) => i !== index || item.type !== preset.type))); close(); }}/>
             </div>)}

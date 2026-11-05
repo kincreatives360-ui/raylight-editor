@@ -1,4 +1,5 @@
-import type { LightRig, SceneLight, Vec3 } from '../model/types';
+import type { LightAnimationBlock, LightRig, SceneLight, Vec3 } from '../model/types';
+import { lerp } from './math';
 
 export const MAX_SHADOW_CASTERS = 3;
 export const DEFAULT_FILL_INTENSITY = 0.38;
@@ -25,13 +26,16 @@ export interface ResolvedSceneLight {
 }
 
 export interface ResolvedLighting {
-  key: Omit<ResolvedSceneLight, 'id' | 'type' | 'distance' | 'decay' | 'angle' | 'penumbra' | 'width' | 'height'> & {
+  key: Omit<ResolvedSceneLight, 'enabled' | 'id' | 'type' | 'distance' | 'decay' | 'angle' | 'penumbra' | 'width' | 'height'> & {
+    enabled: boolean;
     id: 'key';
     type: 'directional';
   };
   room: {
     intensity: number;
+    environmentIntensity: number;
     color: string;
+    environmentTint: string;
     environment: NonNullable<LightRig['environment']>;
   };
   fill: {
@@ -47,6 +51,10 @@ export interface ResolvedLighting {
 const FALLBACK_POSITION: Vec3 = { x: -0.28, y: 0.36, z: 0.9 };
 const FALLBACK_TARGET: Vec3 = { x: 0, y: 0, z: 0 };
 const SHADOW_CAPABLE_TYPES = new Set<SceneLight['type']>(['directional', 'point', 'spot']);
+const ENVIRONMENT_TINTS: Record<NonNullable<LightRig['environment']>, string> = {
+  studio: '#f8fafc', softbox: '#e8f1ff', 'strip-light': '#e6eeff', daylight: '#fff2d9',
+  'night-city': '#b8c9ff', warehouse: '#e9dfc8', custom: '#f8fafc',
+};
 
 function worldPosition(position: Vec3 | undefined, defaults: Vec3): Vector3Tuple {
   return [
@@ -54,10 +62,6 @@ function worldPosition(position: Vec3 | undefined, defaults: Vec3): Vector3Tuple
     (position?.y ?? defaults.y) * 6,
     (position?.z ?? defaults.z) * 5,
   ];
-}
-
-export function lerp(a: number, b: number, t: number): number {
-  return a + (b - a) * t;
 }
 
 function parseHex(hex: string): [number, number, number] {
@@ -100,7 +104,7 @@ export function lerpHex(a: string, b: string, t: number): string {
 return `#${mixed.map((channel) => channel.toString(16).padStart(2, '0')).join('')}`;
 }
 
-function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet<string>): ResolvedSceneLight {
+function resolveSource(source: SceneLight, rig: Partial<LightRig>, shadowIds: ReadonlySet<string>): ResolvedSceneLight {
   const temperature = source.temperature ?? rig.temperature ?? 6100;
   return {
     id: source.id,
@@ -108,7 +112,7 @@ function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet
     enabled: true,
     position: worldPosition(source.position, { x: 0, y: 0, z: 1 }),
     target: worldPosition(source.target, FALLBACK_TARGET),
-    intensity: (source.intensity ?? 1) * (rig.intensity ?? 1.2) * 2,
+    intensity: (source.intensity ?? 1) * 2,
     color: resolveKelvinColor(temperature, source.color || '#ffffff'),
     distance: Math.max(0, source.distance ?? (source.type === 'spot' ? 12 : 10)),
     decay: Math.max(0, source.decay ?? 2),
@@ -123,13 +127,15 @@ function resolveSource(source: SceneLight, rig: LightRig, shadowIds: ReadonlySet
 }
 
 /** Resolve saved/editor light data to a single renderer-ready lighting contract. */
-export function resolveLighting(rig?: LightRig): ResolvedLighting {
-  const light = rig ?? {
+export function resolveLighting(rig?: Partial<LightRig>): ResolvedLighting {
+  const light: Partial<LightRig> = rig ?? {
     position: FALLBACK_POSITION,
     intensity: 1.2,
     temperature: 6100,
     ambience: 0.45,
-  } satisfies LightRig;
+    keyLightEnabled: false,
+    fillEnabled: false,
+  };
   const keyEnabled = light.keyLightEnabled !== false;
   const keyIntensity = light.keyIntensity ?? light.intensity ?? 1.2;
   const shadowIds = new Set<string>();
@@ -144,13 +150,13 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
     remainingShadows -= 1;
   }
 
-  const keyColor = resolveKelvinColor(light.temperature ?? 6100);
+  const keyColor = resolveKelvinColor(light.temperature ?? 6100, light.keyColor);
   const position = worldPosition(light.position, FALLBACK_POSITION);
   const keyTarget = worldPosition(light.target, FALLBACK_TARGET);
   const key = {
     id: 'key' as const,
     type: 'directional' as const,
-    enabled: true as const,
+    enabled: keyEnabled,
     position,
     target: keyTarget,
     intensity: keyIntensity * 2.2,
@@ -169,15 +175,111 @@ export function resolveLighting(rig?: LightRig): ResolvedLighting {
   return {
     key,
     room: {
-      intensity: 0.15 + (light.ambience ?? 0.45) * 1.2,
+      intensity: Math.max(0, light.ambience ?? 0.45) * 1.2,
+      environmentIntensity: Math.max(0, light.ambience ?? 0.45) * 1.5,
       color: light.environment && light.environment !== 'custom' ? '#ffffff' : light.ambientColor || '#f8fafc',
+      environmentTint: light.environment === 'custom' ? light.ambientColor || '#f8fafc' : ENVIRONMENT_TINTS[light.environment ?? 'studio'],
       environment: light.environment ?? 'studio',
     },
     fill,
     sources: (light.sources ?? []).filter((source) => source.enabled).map((source) => resolveSource(source, light, shadowIds)),
-    showGizmos: light.showGizmos ?? false,
+    showGizmos: light.showGizmos ?? true,
   };
 }
+
+export function getKelvinPreviewColor(kelvin: number): string {
+  const [r, g, b] = kelvinRgb(kelvin);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+export interface LightMovementPreset {
+  id: string;
+  label: string;
+  description: string;
+  property: NonNullable<LightAnimationBlock['property']>;
+  apply: (base: LightAnimationBlock) => Partial<LightAnimationBlock>;
+}
+
+export const LIGHT_ANIMATION_PRESETS: LightMovementPreset[] = [
+  {
+    id: 'gleam-sweep',
+    label: 'Gleam Sweep',
+    description: 'Smooth diagonal highlight across device surface',
+    property: 'position',
+    apply: () => ({
+      label: 'Gleam Sweep',
+      property: 'position',
+      durationMs: 1400,
+      fromX: -0.6,
+      fromY: 0.4,
+      fromZ: 0.9,
+      toX: 0.6,
+      toY: -0.4,
+      toZ: 0.9,
+      easing: { kind: 'bezier', x1: 0.25, y1: 0.1, x2: 0.25, y2: 1 },
+    }),
+  },
+  {
+    id: 'rim-reveal',
+    label: 'Dramatic Rim',
+    description: 'Sweeps light from behind to highlight metallic edges',
+    property: 'position',
+    apply: () => ({
+      label: 'Dramatic Rim',
+      property: 'position',
+      durationMs: 1600,
+      fromX: 0.0,
+      fromY: 0.6,
+      fromZ: -0.6,
+      toX: -0.5,
+      toY: 0.2,
+      toZ: 0.8,
+      easing: { kind: 'preset', name: 'ease-out' },
+    }),
+  },
+  {
+    id: 'power-pulse',
+    label: 'Power Pulse',
+    description: 'Gradual cinematic rise and fall in light intensity',
+    property: 'intensity',
+    apply: () => ({
+      label: 'Power Pulse',
+      property: 'intensity',
+      durationMs: 1200,
+      fromIntensity: 0.4,
+      toIntensity: 2.2,
+      easing: { kind: 'bezier', x1: 0.33, y1: 1, x2: 0.68, y2: 1 },
+    }),
+  },
+  {
+    id: 'dawn-warmth',
+    label: 'Dawn Warmth',
+    description: 'Warm golden sunrise shift from cool sky blue to warm amber',
+    property: 'temperature',
+    apply: () => ({
+      label: 'Dawn Warmth',
+      property: 'temperature',
+      durationMs: 2000,
+      fromTemperature: 8500,
+      toTemperature: 3200,
+      easing: { kind: 'preset', name: 'ease-in-out' },
+    }),
+  },
+];
+
+export function applyLightAnimationPreset(
+  block: LightAnimationBlock,
+  presetId: string
+): LightAnimationBlock {
+  const preset = LIGHT_ANIMATION_PRESETS.find((p) => p.id === presetId);
+  if (!preset) return block;
+  return {
+    ...block,
+    ...preset.apply(block),
+  };
+}
+
+
 
 
 

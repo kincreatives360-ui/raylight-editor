@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeAll, afterAll } from 'vitest';
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
-import { ScrubInput } from './ScrubInput';
+import { ScrubInput, evaluateMathExpression } from './ScrubInput';
 
 interface MockDomElement {
     tagName: string;
@@ -114,6 +114,9 @@ describe('ScrubInput Component', () => {
                     querySelector: (sel: string): MockDomElement | null => {
                         const find = (node: MockDomElement): MockDomElement | null => {
                             if (sel === '[role="spinbutton"]' && node.attributes['role'] === 'spinbutton') {
+                                return node;
+                            }
+                            if (sel.startsWith('#') && node.attributes['id'] === sel.slice(1)) {
                                 return node;
                             }
                             for (const child of node.children) {
@@ -272,5 +275,41 @@ describe('ScrubInput Component', () => {
             root.unmount();
         });
     });
-});
 
+    it('accurately evaluates arithmetic expressions like 1920/2 and 100+48', () => {
+        expect(evaluateMathExpression('1920/2')).toBe(960);
+        expect(evaluateMathExpression('100+48')).toBe(148);
+        expect(evaluateMathExpression('50*1.5')).toBe(75);
+        expect(evaluateMathExpression('(100 - 20) / 2')).toBe(40);
+        expect(evaluateMathExpression('-10 + 5')).toBe(-5);
+        expect(evaluateMathExpression('invalid')).toBeNull();
+    });
+
+    it('associates JSX element label with input via aria-labelledby when ariaLabel is not provided', async () => {
+        const container = (document as unknown as { createElement: (tag: string) => unknown }).createElement('div') as HTMLElement;
+        const root = createRoot(container);
+        const onChange = vi.fn();
+
+        await act(async () => {
+            root.render(
+                <ScrubInput
+                    label={<span>Custom JSX Label</span>}
+                    value={10}
+                    onChange={onChange}
+                />
+            );
+        });
+
+        const spinbutton = container.querySelector('[role="spinbutton"]') as HTMLElement | null;
+        expect(spinbutton).not.toBeNull();
+        const labelledBy = spinbutton?.getAttribute('aria-labelledby');
+        expect(labelledBy).toBeTruthy();
+        const labelSpan = container.querySelector(`#${labelledBy}`);
+        expect(labelSpan).not.toBeNull();
+        expect(labelSpan?.textContent).toContain('Custom JSX Label');
+
+        await act(async () => {
+            root.unmount();
+        });
+    });
+});

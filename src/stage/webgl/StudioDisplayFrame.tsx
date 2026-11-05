@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -9,7 +13,6 @@ import {
   createScreenGeometry,
 } from './phoneGeometry';
 import { useDisposable } from './useDisposable';
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export function StudioDisplayFrame({
   metrics,
@@ -20,15 +23,9 @@ export function StudioDisplayFrame({
   settings: DeviceFrameSettings;
   rotation?: { x: number; y: number; z: number };
 }) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings);
   const depth = Math.max(0.006, metrics.bodyDepth * 0.8);
-
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
 
   const shellMaterial = useMemo(
     () =>
@@ -48,32 +45,6 @@ export function StudioDisplayFrame({
         color: '#08080a',
       }),
     []
-  );
-
-  const screenGlassMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: settings.glassTint,
-        transparent: true,
-        opacity: settings.glassOpacity,
-        roughness: settings.glassRoughness,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: settings.glassRoughness,
-        depthWrite: false,
-      }),
-    [settings.glassTint, settings.glassOpacity, settings.glassRoughness]
-  );
-
-  const reflectionMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: reflectionTexture,
-        transparent: true,
-        opacity: settings.reflection * 0.75,
-        depthWrite: false,
-      }),
-    [reflectionTexture, settings.reflection]
   );
 
   const cameraMaterial = useMemo(
@@ -96,18 +67,6 @@ export function StudioDisplayFrame({
         clearcoat: 1,
       }),
     [settings.frameColor]
-  );
-
-  const shadowMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture,
-        transparent: true,
-        opacity: effectiveShadowOpacity,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    [shadowTexture, effectiveShadowOpacity]
   );
 
   // Stand dimensions
@@ -177,8 +136,6 @@ export function StudioDisplayFrame({
     [metrics.bodyWidth, depth]
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-
   useDisposable(bodyGeometry);
   useDisposable(bezelGeometry);
   useDisposable(screenGeometry);
@@ -186,16 +143,10 @@ export function StudioDisplayFrame({
   useDisposable(standArmGeometry);
   useDisposable(footGeometry);
   useDisposable(markGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
   useDisposable(bezelMaterial);
-  useDisposable(screenGlassMaterial);
-  useDisposable(reflectionMaterial);
   useDisposable(cameraMaterial);
   useDisposable(appleMarkMaterial);
-  useDisposable(shadowMaterial);
 
   return (
     <group name="studio-display-frame">
@@ -237,17 +188,10 @@ export function StudioDisplayFrame({
         />
 
         {/* Screen Glass & Reflection */}
-        <mesh
-          name="display-screen-glass"
+        <DeviceScreenSurface
           geometry={screenGeometry}
-          material={screenGlassMaterial}
-          position={[0, 0, 0.0005]}
-        />
-        <mesh
-          name="display-screen-reflection"
-          geometry={screenGeometry}
-          material={reflectionMaterial}
-          position={[0, 0, 0.001]}
+          glass={{ name: 'display-screen-glass', material: glassMaterial, position: [0, 0, 0.0005] }}
+          reflection={{ name: 'display-screen-reflection', material: reflectionMaterial, position: [0, 0, 0.001] }}
         />
       </group>
 
@@ -275,17 +219,15 @@ export function StudioDisplayFrame({
         />
 
         {/* Contact Shadow Under Stand Foot */}
-        {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-          <mesh
-            name="display-foot-shadow"
-            geometry={shadowGeometry}
-            material={shadowMaterial}
-            position={[0, standBottomY - footDepth / 2 - 0.002, -depth * 0.4]}
-            scale={[footW * 0.75, footH * 0.75, 1]}
-            rotation={[-Math.PI / 2, 0, 0]}
-            renderOrder={-2}
-          />
-        )}
+        <DeviceContactShadow
+          visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+          opacity={effectiveShadowOpacity}
+          name="display-foot-shadow"
+          position={[0, standBottomY - footDepth / 2 - 0.002, -depth * 0.4]}
+          scale={[footW * 0.75, footH * 0.75, 1]}
+          rotation={[-Math.PI / 2, 0, 0]}
+          renderOrder={-2}
+        />
       </group>
     </group>
   );

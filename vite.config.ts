@@ -27,7 +27,9 @@ export default defineConfig({
     allowedHosts: true,
   },
   build: {
-    chunkSizeWarningLimit: 1000,
+    // First-party chunks should stay under ~500 KB raw. The vendor-three and
+    // vendor-r3f framework chunks legitimately exceed this; app chunks should not.
+    chunkSizeWarningLimit: 500,
     rollupOptions: {
       output: {
         manualChunks(id) {

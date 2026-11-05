@@ -1,8 +1,5 @@
-// src/engine/exportCapabilities.ts
-
 /**
- * Checks whether the modern WebCodecs API (VideoEncoder, VideoFrame) is available
- * in the current browser runtime for frame-by-frame deterministic hardware encoding.
+ * Checks whether WebCodecs is available for frame-by-frame encoding.
  */
 export function isWebCodecsSupported(): boolean {
     return (
@@ -13,8 +10,7 @@ export function isWebCodecsSupported(): boolean {
 }
 
 /**
- * Checks whether MediaRecorder supports native MP4 container encoding (H.264/AAC).
- * Returns false on Firefox and Linux distros that only support WebM (VP8/VP9/Opus).
+ * Checks whether MediaRecorder supports MP4 encoding.
  */
 export function isMediaRecorderMp4Supported(): boolean {
     if (typeof window === 'undefined' || typeof MediaRecorder === 'undefined') return false;

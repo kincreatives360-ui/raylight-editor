@@ -1,10 +1,9 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { RightSidebar } from './RightSidebar';
-import { createDefaultProject } from '../../model/defaults';
+import { createDefaultProject, createDefaultTextLayer } from '../../model/defaults';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import type { TextLayer } from '../../model/types';
 
 vi.mock('../../store/useProjectStore', async (importOriginal) => {
     const actual = await importOriginal<typeof import('../../store/useProjectStore')>();
@@ -54,7 +53,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
         expect(html).toContain('Project Settings');
         expect(html).toContain('Aspect Ratio');
         expect(html).toContain('Lens');
-        expect(html).not.toMatch(/>\s*Shot Settings\s*<\/button>/);
+        expect(html).not.toContain('aria-label="Inspector settings view"');
+        expect(html).not.toMatch(/>\s*Shot\s*<\/button>/);
         expect(html).not.toContain('<select');
         expect(html).toContain('role="combobox"');
 
@@ -93,7 +93,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
         expect(html).not.toContain('SCENE LIGHTS');
         expect(html).not.toContain('Shader pass order');
         expect(html).not.toContain('No scene effects added');
-        expect(html).not.toMatch(/>\s*Project Settings\s*<\/button>/);
+        expect(html).not.toContain('aria-label="Inspector settings view"');
+        expect(html).not.toMatch(/>\s*Project\s*<\/button>/);
         expect(html).toContain('aria-label="Use project background"');
 
         // DOES NOT contain Project Settings section
@@ -102,8 +103,8 @@ describe('Project Settings vs Shot Settings Separation & Figma-style Scene Effec
 
     it('keeps shot settings separate from the selected layer inspector', () => {
         const shot = useProjectStore.getState().project.shots[0];
-        const textLayer = shot.layers.find((l) => l.kind === 'text') as TextLayer;
-        expect(textLayer).toBeDefined();
+        const textLayer = createDefaultTextLayer();
+        shot.layers = [textLayer];
 
         useSelectionStore.setState({
             selectedLayerIds: [textLayer.id],

@@ -4,7 +4,22 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
-import { getSafeMsaaSampleCount } from './SceneEffectsPipeline';
+import { getSafeMsaaSampleCount, shouldRebuildPassList } from './SceneEffectsPipeline';
+
+describe('SceneEffectsPipeline pass initialization', () => {
+  it('rebuilds a recreated composer even when the enabled effects have not changed', () => {
+    expect(shouldRebuildPassList('', '', 0)).toBe(true);
+    expect(shouldRebuildPassList('bloom', 'bloom', 0)).toBe(true);
+    expect(shouldRebuildPassList('bloom', 'bloom', 4)).toBe(false);
+  });
+  it('builds the render chain on first render when no effects are enabled', () => {
+    expect(shouldRebuildPassList(null, '')).toBe(true);
+  });
+
+  it('does not rebuild an already initialized empty effect pass list', () => {
+    expect(shouldRebuildPassList('', '')).toBe(false);
+  });
+});
 
 describe('SceneEffectsPipeline anti-aliasing setup', () => {
   it('correctly creates FXAAPass with resolution uniform matching pixel dimensions', () => {
@@ -133,6 +148,12 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     pass.material.dispose();
   });
 
+  it('uses a negative horizontal ghost shift so preview matches Canvas output', () => {
+    const pass = createSceneEffectPass('ghost');
+    expect(pass.material.fragmentShader).toContain('vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y');
+    pass.material.dispose();
+  });
+
   it('provides an output encoding pass converting linear to display sRGB', () => {
     const encodingPass = createOutputEncodingPass();
     expect(encodingPass).toBeInstanceOf(ShaderPass);
@@ -198,5 +219,5 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
 
     composer.dispose();
   });
-});
 
+});

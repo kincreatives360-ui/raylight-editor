@@ -1,6 +1,7 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
 import { Environment, Lightformer } from '@react-three/drei';
+import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import type { LightRig, SceneLight } from '../../model/types';
 import { resolveLighting, type ResolvedLighting, type ResolvedSceneLight } from '../../engine/lightingSystem';
 
@@ -10,13 +11,15 @@ interface SceneLightingProps {
 
 type Vector3Tuple = [number, number, number];
 
+// RectAreaLight requires its LTC lookup textures before the first WebGL render.
+RectAreaLightUniformsLib.init();
+
 interface PanelProfile {
   position: Vector3Tuple;
   rotation: Vector3Tuple;
   scale: Vector3Tuple;
   intensity: number;
   color: string;
-  form?: 'rect' | 'ring';
 }
 
 const ENVIRONMENT_PANELS: Record<NonNullable<LightRig['environment']>, PanelProfile[]> = {
@@ -187,10 +190,7 @@ function LightGizmo({ source, position, color }: { source: SceneLight; position:
   );
 }
 
-type ResolvedSceneEmitter = ResolvedSceneLight & { sourceModel?: SceneLight };
-
-function SceneLightEmitter({ source, showGizmo }: { source: ResolvedSceneEmitter; showGizmo: boolean }) {
-  const sourceModel = source.sourceModel;
+function SceneLightEmitter({ source, sourceModel, showGizmo }: { source: ResolvedSceneLight; sourceModel?: SceneLight; showGizmo: boolean }) {
   const color = source.color;
   let emitter: React.ReactNode;
 
@@ -251,7 +251,7 @@ function RoomEnvironment({ light }: { light: LightRig }) {
       background={false}
       frames={1}
       resolution={128}
-      environmentIntensity={0.4 + (light.ambience ?? 0.45) * 0.6}
+      environmentIntensity={resolved.room.environmentIntensity}
     >
       {panels.map((panel, index) => <Lightformer key={`${environment}-${index}`} {...panel} />)}
     </Environment>
@@ -261,8 +261,8 @@ function RoomEnvironment({ light }: { light: LightRig }) {
 /** Three.js light emitters and a procedural PBR environment resolved from saved light controls. */
 export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
   const resolved = useMemo(() => resolveLighting(light), [light]);
-  const rig = light ?? {
-    position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45,
+  const rig: LightRig = light ?? {
+    position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45, sources: [],
   } satisfies LightRig;
   const sourceModels = new Map((rig.sources ?? []).map((source) => [source.id, source]));
 
@@ -283,13 +283,15 @@ export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
       {resolved.sources.map((source) => (
         <SceneLightEmitter
           key={source.id}
-          source={{ ...source, sourceModel: sourceModels.get(source.id) }}
+          source={source}
+          sourceModel={sourceModels.get(source.id)}
           showGizmo={resolved.showGizmos}
         />
       ))}
     </group>
   );
 };
+
 
 
 

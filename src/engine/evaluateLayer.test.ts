@@ -240,4 +240,68 @@ describe('evaluateLayerAtTime', () => {
     expect(res.opacity).toBe(0);
     expect(res.scale.x).toBe(1);
   });
+
+  it('8. Evaluates all 7 newly added transition presets (pop, spin, flip-x, flip-y, swing, wipe, scramble) & stagger (F-21)', () => {
+    const baseShape = createDefaultShapeLayer({
+      inMs: 0,
+      outMs: 2000,
+      scale: { x: 1, y: 1, z: 1 },
+      rotation: { x: 0, y: 0, z: 0 },
+    });
+
+    const popEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'pop', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      500
+    );
+    expect(popEval.scale.x).not.toBe(1);
+    expect(popEval.opacity).toBeGreaterThan(0.5);
+
+    const spinEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'spin', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      500
+    );
+    expect(spinEval.rotation.z).toBeLessThan(0);
+
+    const flipXEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'flip-x', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      500
+    );
+    expect(flipXEval.rotation.x).toBeGreaterThan(0);
+
+    const flipYEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'flip-y', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      500
+    );
+    expect(flipYEval.rotation.y).toBeGreaterThan(0);
+
+    const swingEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'swing', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      300
+    );
+    expect(Math.abs(swingEval.rotation.z)).toBeGreaterThan(0.01);
+
+    const wipeEval = evaluateLayerAtTime(
+      { ...baseShape, entrance: { type: 'wipe', durationMs: 1000, delayMs: 0, distance: 0, easing: { kind: 'preset', name: 'linear' } } },
+      400
+    );
+    expect(wipeEval.maskSweepProgress).toBeCloseTo(0.4, 3);
+
+    const scrambleText = createDefaultTextLayer({
+      inMs: 0,
+      outMs: 2000,
+      content: 'Raylight Studio Motion',
+      entrance: {
+        type: 'scramble',
+        durationMs: 1000,
+        delayMs: 0,
+        distance: 0,
+        stagger: 'word',
+        easing: { kind: 'preset', name: 'linear' },
+      },
+    });
+    const scrambleMid = evaluateLayerAtTime(scrambleText, 450);
+    expect(scrambleMid.textContentOverride).toBeDefined();
+    expect(scrambleMid.textContentOverride).toContain('Raylight ');
+    expect(scrambleMid.textContentOverride).not.toBe('Raylight Studio Motion');
+  });
 });

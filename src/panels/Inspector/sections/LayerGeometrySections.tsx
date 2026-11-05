@@ -1,3 +1,4 @@
+import { AxisFields } from '../../../ui/AxisFields';
 import { AlignHorizontalJustifyCenter, AlignHorizontalJustifyEnd, AlignHorizontalJustifyStart, AlignVerticalJustifyCenter, AlignVerticalJustifyEnd, AlignVerticalJustifyStart, CircleDot, Crosshair, FlipHorizontal, FlipVertical, Radius, Ratio, RotateCcw, RotateCw, Scan, Square } from 'lucide-react';
 
 import { isLayerEffectivelyLocked } from '../../../engine/evaluateShot';
@@ -22,6 +23,8 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
     const stageH = fixedFrame ? artboard.height : 1080;
     const size = layer.kind !== 'text' ? layer.size : undefined;
     const displaySize = size && fixedFrame ? getDevicePlacementSize(size, fixedFrame, projectAspect) : size;
+    const has3D = Math.abs(layer.rotation.x) > 0.001 || Math.abs(layer.rotation.y) > 0.001 || Math.abs(layer.position.z) > 0.001;
+
     const align = (axis: 'x' | 'y', value: number) => {
         const selected = new Set(selectedLayerIds);
         updateShot(shot.id, (s) => ({ ...s, layers: s.layers.map((l) => selected.has(l.id) && !isLayerEffectivelyLocked(l, s.groups) ? { ...l, position: { ...l.position, [axis]: value } } : l) }));
@@ -34,6 +37,7 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
         return { ...l, size: { width: axis === 'width' ? normalized : aspectLocked ? l.size.width * ratio : l.size.width, height: axis === 'height' ? normalized : aspectLocked ? l.size.height * ratio : l.size.height } };
     });
     const rotate = (axis: 'x' | 'y' | 'z', degrees: number) => update((l) => ({ ...l, rotation: { ...l.rotation, [axis]: degToRad(degrees) } }));
+
     return <>
         <DesignSection title="Position">
             <InspectorRow label="Alignment" stacked><div className="object-design-alignment">
@@ -43,7 +47,10 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
                 })}
             </div></InspectorRow>
             <InspectorRow label="Position" stacked><div className="object-design-field-action">
-                <div className="object-design-pair">{(['x', 'y'] as const).map((axis) => <ScrubInput key={axis} label={axis.toUpperCase()} value={Math.round(layer.position[axis] * (axis === 'x' ? 1920 : 1080))} step={1} onChange={(value) => update((l) => ({ ...l, position: { ...l.position, [axis]: value / (axis === 'x' ? 1920 : 1080) } }))} />)}</div>
+                <AxisFields
+                    className="object-design-pair"
+                    fields={(['x', 'y'] as const).map((axis) => ({"key": axis, "label": axis.toUpperCase(), "value": Math.round(layer.position[axis] * (axis === 'x' ? 1920 : 1080)), "step": 1, "onChange": (value) => update((l) => ({ ...l, position: { ...l.position, [axis]: value / (axis === 'x' ? 1920 : 1080) } }))}))}
+                />
                 <IconButton label="Center Position (0, 0)" icon={<Crosshair />} onClick={() => update((l) => ({ ...l, position: { ...l.position, x: 0, y: 0 } }))} />
             </div></InspectorRow>
             <InspectorRow label="Depth & rotation" stacked><div className="object-design-pair object-design-action-space">
@@ -56,8 +63,11 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
                 <IconButton label="Flip Vertically" icon={<FlipVertical />} onClick={() => update((l) => ({ ...l, scale: { ...l.scale, y: -l.scale.y } }))} />
             </div><IconButton label="Reset rotation" icon={<Scan />} onClick={() => rotate('z', 0)} /></div></InspectorRow>
         </DesignSection>
-        <DesignSection title="Tilt">
-            <InspectorRow label="Tilt" stacked><div className="object-design-pair object-design-action-space">{(['x', 'y'] as const).map((axis) => <ScrubInput key={axis} label={axis.toUpperCase()} value={radToDeg(layer.rotation[axis])} min={-360} max={360} step={1} unit="°" onChange={(value) => rotate(axis, value)} />)}</div></InspectorRow>
+        <DesignSection title="Tilt" collapsible defaultOpen={has3D}>
+            <InspectorRow label="Tilt" stacked><AxisFields
+                className="object-design-pair object-design-action-space"
+                fields={(['x', 'y'] as const).map((axis) => ({"key": axis, "label": axis.toUpperCase(), "value": radToDeg(layer.rotation[axis]), "min": -360, "max": 360, "step": 1, "unit": "°", "onChange": (value) => rotate(axis, value)}))}
+            /></InspectorRow>
             <InspectorRow label="Tilt" stacked><div className="object-design-action-strip object-design-action-space">
                 <IconButton label="Reset Tilt (0°)" icon={<RotateCcw />} onClick={() => update((l) => ({ ...l, rotation: { ...l.rotation, x: 0, y: 0 } }))} />
                 <IconButton label="Invert Yaw Angle" icon={<FlipHorizontal />} onClick={() => rotate('y', -radToDeg(layer.rotation.y))} />

@@ -46,11 +46,10 @@ export function cloneShotWithNewIds(source: Shot): Shot {
     shot.cameraBlocks = shot.cameraBlocks.map(block => ({
         ...block,
         id: generateId('cam-blk'),
-        fromFramingId: remap(block.fromFramingId)!,
-        toFramingId: remap(block.toFramingId)!,
+        fromFramingId: remap(block.fromFramingId) ?? block.fromFramingId ?? 'f1',
+        toFramingId: remap(block.toFramingId) ?? block.toFramingId ?? 'f2',
     }));
     shot.lightBlocks = shot.lightBlocks?.map(block => ({ ...block, id: generateId('light-blk') }));
     shot.effectBlocks = shot.effectBlocks?.map(block => ({ ...block, id: generateId('effect-blk') }));
-    shot.focusBlocks = shot.focusBlocks?.map(block => ({ ...block, id: generateId('focus-blk') }));
     return shot;
 }

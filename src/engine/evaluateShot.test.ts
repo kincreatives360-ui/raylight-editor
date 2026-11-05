@@ -1,16 +1,28 @@
 // src/engine/evaluateShot.test.ts
 import { describe, it, expect } from 'vitest';
-import { evaluateProjectAtTime } from './evaluateShot';
+import {
+  evaluateProjectAtTime,
+  getShotTransitionCompositeState,
+} from './evaluateShot';
 import {
   DEFAULT_PROJECT,
   createDefaultShot,
   createDefaultShapeLayer,
   createDefaultTextLayer,
   createDefaultImageLayer,
+  createMultiShotContractFixture,
 } from '../model/defaults';
+import { validateProject } from '../model/schema';
+import { useProjectStore } from '../store/useProjectStore';
 import type { Project, Shot } from '../model/types';
 
 describe('evaluateProjectAtTime', () => {
+  it('uses an empty render shot when a project has no shots', () => {
+    const frame = evaluateProjectAtTime({ ...DEFAULT_PROJECT, shots: [] }, 0);
+
+    expect(frame.activeShot.layers).toEqual([]);
+  });
+
   it('1. Computes active shot, local time, frame number, and progress across multi-shot project', () => {
     const shot1: Shot = createDefaultShot({
       id: 'shot-1',
@@ -112,7 +124,7 @@ describe('evaluateProjectAtTime', () => {
     expect(evalL3?.visible).toBe(true);
   });
 
-  it('3. Computes depth of field blur and total blur per layer', () => {
+  it('3. Computes authored layer blur per layer', () => {
     const layerSharp = createDefaultShapeLayer({
       id: 'l-sharp',
       position: { x: 0, y: 0, z: 0 },
@@ -131,17 +143,6 @@ describe('evaluateProjectAtTime', () => {
 
     const shot = createDefaultShot({
       layers: [layerSharp, layerBlurred],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.2,
-          aperture: 2.8,
-          bokehScale: 1.5,
-          bokehShape: 'spherical',
-        },
-      },
     });
 
     const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
@@ -150,13 +151,10 @@ describe('evaluateProjectAtTime', () => {
     const evalSharp = frame.layers.find((l) => l.id === 'l-sharp')!;
     const evalBlurred = frame.layers.find((l) => l.id === 'l-blurred')!;
 
-    // Sharp layer at z=0 is inside focus range -> 0 DoF blur, 0 total blur
-    expect(evalSharp.dofBlurPx).toBe(0);
+    // The sharp layer has no authored blur.
     expect(evalSharp.totalBlurPx).toBe(0);
 
-    // Blurred layer has both DoF blur and manual blur
-    expect(evalBlurred.dofBlurPx).toBeGreaterThan(0);
-    expect(evalBlurred.totalBlurPx).toBeGreaterThanOrEqual(evalBlurred.dofBlurPx + 5);
+    expect(evalBlurred.totalBlurPx).toBe(5);
   });
 
   it('4. Evaluates animated effect blocks (e.g. bloom, vignette) on the timeline', () => {
@@ -244,57 +242,139 @@ describe('evaluateProjectAtTime', () => {
     expect(Array.isArray(frame.layers)).toBe(true);
   });
 
-  it('7. Animated rack focus dynamically updates layer blur according to evaluated focus distance', () => {
-    const layerAt1 = createDefaultImageLayer({
-      id: 'l-target',
-      position: { x: 0, y: 0, z: 1.0 },
-      inMs: 0,
-      outMs: 2000,
-    });
+  it('8. Phase 0 Contract Fixture: validates multi-shot timebase, transition outgoingFrame, reused video assets, and future audio cues', () => {
+    const fixture = createMultiShotContractFixture();
+    const validation = validateProject(fixture);
+    expect(validation.success).toBe(true);
 
-    const shot = createDefaultShot({
-      durationMs: 2000,
-      layers: [layerAt1],
-      effects: {
-        ...DEFAULT_PROJECT.shots[0].effects,
-        depthOfField: {
-          enabled: true,
-          target: { x: 0, y: 0, z: 0 },
-          focusRange: 0.1,
-          aperture: 2.8,
-          bokehScale: 1.0,
-          bokehShape: 'spherical',
-        },
-      },
-      focusBlocks: [
-        {
-          id: 'focus-rack',
-          startMs: 0,
-          durationMs: 1000,
-          fromZ: 0,
-          toZ: 1.0,
-          easing: { kind: 'preset', name: 'linear' },
-        },
-      ],
-    });
+    // Verify fixture contains audio clips at t=0 and after initial playhead (t=1200ms, t=3200ms)
+    const audioStarts = fixture.audio?.clips.map((c) => c.startMs) ?? [];
+    expect(audioStarts).toEqual([0, 1200, 3200]);
 
-    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
+    // Verify Shot 1 evaluation at t=1500ms (shotLocalTimeMs = 1500ms)
+    const frameShot1 = evaluateProjectAtTime(fixture, 1500);
+    expect(frameShot1.activeShot.id).toBe('shot-1');
+    expect(frameShot1.shotLocalTimeMs).toBe(1500);
+    const vidShot1 = frameShot1.layers.find((l) => l.id === 'vid-shot1')!;
+    expect(vidShot1.visible).toBe(true);
 
-    // At t=0: focus is at z=0, layer is at z=1 -> layer is out of focus, has blur
-    const frameAt0 = evaluateProjectAtTime(project, 0);
-    const layerAt0 = frameAt0.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt0.dofBlurPx).toBeGreaterThan(0);
-    const initialBlur = layerAt0.dofBlurPx;
+    // Verify Transition Midpoint at t=3500ms (Shot 2 startMs=3000ms, shotLocalTimeMs=500ms, 50% through 1000ms crossfade)
+    const frameTransition = evaluateProjectAtTime(fixture, 3500);
+    expect(frameTransition.activeShot.id).toBe('shot-2');
+    expect(frameTransition.shotLocalTimeMs).toBe(500);
+    expect(frameTransition.shotTransition.isTransitioning).toBe(true);
+    expect(frameTransition.shotTransition.type).toBe('crossfade');
+    expect(frameTransition.shotTransition.progress).toBeCloseTo(0.5, 3);
+    expect(frameTransition.shotTransition.outgoingFrame).toBeDefined();
+    expect(frameTransition.shotTransition.outgoingFrame?.activeShot.id).toBe('shot-1');
+    expect(frameTransition.shotTransition.outgoingFrame?.layers.length).toBe(3);
 
-    // At t=500: focus is at z=0.5 -> layer is closer to focus, blur decreases
-    const frameAt500 = evaluateProjectAtTime(project, 500);
-    const layerAt500 = frameAt500.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt500.dofBlurPx).toBeLessThan(initialBlur);
-    expect(layerAt500.dofBlurPx).toBeGreaterThan(0);
+    // Verify Shot-Local Video Timebase Contract in Shot 2 at global t=3600ms:
+    // Shot 2 starts at 3000ms -> shotLocalTimeMs = 600ms.
+    // 'vid-shot2-shared' has inMs = 400ms (shot-local), so its media offset is (600 - 400) = 200ms (0.2s), NOT (3600 - 400) = 3200ms!
+    const frameShot2 = evaluateProjectAtTime(fixture, 3600);
+    const sharedVidInShot2 = frameShot2.layers.find((l) => l.id === 'vid-shot2-shared')!;
+    expect(sharedVidInShot2.visible).toBe(true);
+    const expectedShotLocalVideoSec = (frameShot2.shotLocalTimeMs - sharedVidInShot2.layer.inMs) / 1000;
+    const buggyGlobalVideoSec = (3600 - sharedVidInShot2.layer.inMs) / 1000;
+    expect(expectedShotLocalVideoSec).toBeCloseTo(0.2, 3);
+    expect(buggyGlobalVideoSec).toBeCloseTo(3.2, 3);
+  });
 
-    // At t=1000: focus is at z=1.0 -> layer is exactly in focus, blur is 0
-    const frameAt1000 = evaluateProjectAtTime(project, 1000);
-    const layerAt1000 = frameAt1000.layers.find((l) => l.id === 'l-target')!;
-    expect(layerAt1000.dofBlurPx).toBe(0);
+  it('9. Phase 0 End-to-End Lifecycle Route: create shot -> add media -> edit/animate -> drag transaction undo -> evaluate', () => {
+    const store = useProjectStore.getState();
+    store.resetProject();
+
+    // 1. Create Shot 1 (replaces blank placeholder) & Shot 2
+    const s1 = store.addShot();
+    const s2 = store.addShot();
+    expect(useProjectStore.getState().project.shots.map((s) => s.id)).toEqual([s1.id, s2.id]);
+
+    // 2. Add media & text layers to Shot 1
+    const vidLayer = store.addLayerToShot(s1.id, 'video', { name: 'Demo Recording' });
+    const txtLayer = store.addLayerToShot(s1.id, 'text', { name: 'Launch Title' });
+    expect(useProjectStore.getState().project.shots[0].layers).toHaveLength(2);
+
+    // 3. Perform a bracketed drag transaction on the text layer and verify single-step undo grouping
+    const historyBeforeDrag = useProjectStore.getState().past.length;
+    store.beginDragTransaction();
+    store.updateLayer(s1.id, txtLayer.id, (l) => ({ ...l, position: { x: 0.1, y: 0.1, z: 0 } }), { skipHistory: true });
+    store.updateLayer(s1.id, txtLayer.id, (l) => ({ ...l, position: { x: 0.25, y: 0.2, z: 0 } }), { skipHistory: true });
+    store.commitDragTransaction();
+    expect(useProjectStore.getState().past.length).toBe(historyBeforeDrag + 1);
+
+    // 4. Evaluate across both shots and verify Undo restores pre-drag position
+    const evalMoved = evaluateProjectAtTime(useProjectStore.getState().project, 500);
+    expect(evalMoved.layers.find((l) => l.id === txtLayer.id)?.position.x).toBeCloseTo(0.25, 3);
+
+    store.undo();
+    const evalUndone = evaluateProjectAtTime(useProjectStore.getState().project, 500);
+    expect(evalUndone.layers.find((l) => l.id === txtLayer.id)?.position.x).toBeCloseTo(0, 3);
+    expect(vidLayer.kind).toBe('video');
+  });
+
+  it('10. Phase 0 Baseline Scale Benchmarks: records repeatable evaluation and serialization timings at 10, 100, and 500 layers', () => {
+    const buildScaledProject = (shotCount: number, totalLayers: number): Project => {
+      const layersPerShot = Math.ceil(totalLayers / shotCount);
+      const shots: Shot[] = Array.from({ length: shotCount }, (_, sIdx) =>
+        createDefaultShot({
+          id: `scale-shot-${sIdx}`,
+          name: `Shot ${sIdx + 1}`,
+          startMs: sIdx * 3000,
+          durationMs: 3000,
+          layers: Array.from({ length: layersPerShot }, (__, lIdx) =>
+            createDefaultShapeLayer({
+              id: `layer-${sIdx}-${lIdx}`,
+              name: `Layer ${lIdx}`,
+              order: lIdx,
+              inMs: 0,
+              outMs: 3000,
+              position: { x: (lIdx % 10) * 0.05 - 0.25, y: Math.floor(lIdx / 10) * 0.05 - 0.25, z: lIdx * 0.001 },
+            })
+          ),
+        })
+      );
+      return { ...createMultiShotContractFixture(), shots };
+    };
+
+    const scales = [
+      { label: 'small-10', shots: 1, layers: 10, maxEvalMs: 25 },
+      { label: 'medium-100', shots: 3, layers: 100, maxEvalMs: 50 },
+      { label: 'large-500', shots: 5, layers: 500, maxEvalMs: 120 },
+    ];
+
+    for (const scale of scales) {
+      const proj = buildScaledProject(scale.shots, scale.layers);
+      const t0 = performance.now();
+      const frame = evaluateProjectAtTime(proj, 1500);
+      const evalMs = performance.now() - t0;
+
+      const s0 = performance.now();
+      const json = JSON.stringify(proj);
+      const serializeMs = performance.now() - s0;
+
+      expect(frame.layers.length).toBeGreaterThan(0);
+      expect(json.length).toBeGreaterThan(100);
+      expect(evalMs).toBeLessThan(scale.maxEvalMs);
+      expect(serializeMs).toBeLessThan(250);
+    }
+  });
+
+  it('11. Phase 1 Parity: shot transition composition and motionVector', () => {
+    const project = createMultiShotContractFixture();
+    // At t=3300ms (halfway through Shot 2's 600ms crossfade transition)
+    const transFrame = evaluateProjectAtTime(project, 3300);
+    const comp = getShotTransitionCompositeState(transFrame);
+    expect(comp.isActive).toBe(true);
+    expect(comp.outgoingLayers.length).toBeGreaterThan(0);
+    expect(comp.incomingLayers.length).toBeGreaterThan(0);
+    expect(comp.outgoingOpacity + comp.incomingOpacity).toBeCloseTo(1, 2);
+    expect(comp.outgoingShotStartMs).toBe(0);
+
+    // Scene motionBlur populates effects.motionVector when camera/layers move
+    project.shots[0].effects.motionBlur.enabled = true;
+    const motionFrame = evaluateProjectAtTime(project, 300);
+    expect(motionFrame.effects.motionVector).toBeDefined();
+    expect(Math.hypot(motionFrame.effects.motionVector!.x, motionFrame.effects.motionVector!.y)).toBeGreaterThan(0);
   });
 });

@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import React, { useMemo } from 'react';
 import * as THREE from 'three';
 import { roundedRect, createBodyGeometry, createBezelGeometry, createScreenGeometry } from './phoneGeometry';
@@ -12,8 +16,6 @@ import { SamsungGalaxyFrame } from './SamsungGalaxyFrame';
 import { StudioDisplayFrame } from './StudioDisplayFrame';
 import { BrowserFrame } from './BrowserFrame';
 import { AndroidFlagshipFrame } from './AndroidFlagshipFrame';
-
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export interface PhoneDeviceFrameProps {
   metrics: DeviceFrameMetrics;
@@ -49,8 +51,16 @@ export const PhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = props => {
 };
 
 const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, settings, rotation }) => {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings, {
+    color: '#000000',
+    opacity: Math.min(0.2, settings.glassOpacity * 0.4),
+    roughness: Math.max(0.02, settings.glassRoughness),
+    clearcoatRoughness: Math.max(0.02, settings.glassRoughness),
+    reflectionOpacity: Math.min(0.5, settings.reflection * 0.6),
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
   const { fixed, safeWidth, safeHeight, depth, shortSide, proud, bezelDepth, bodyZ,
     bezelZ, glassZ, reflectionZ, cutoutZ, screenOverlap, cameraX, cameraY, cameraZ,
     lensRadius, buttonWidth, buttonHeight, buttonDepth, buttonZ } = getPhoneLayout(metrics, settings);
@@ -92,11 +102,6 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     const radius = settings.cutoutStyle === 'notch' ? notchHeight * 0.23 : cutoutRadius;
     return new THREE.ShapeGeometry(roundedRect(notchWidth, notchHeight, radius), 48);
   }, [settings.cutoutStyle, cutoutWidth, cutoutHeight, cutoutRadius, shortSide, safeWidth]);
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
   const shellMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
     color: settings.frameColor,
     metalness: settings.frameMetalness,
@@ -105,18 +110,6 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     clearcoatRoughness: 0.16,
     side: THREE.DoubleSide,
   }), [settings.frameColor, settings.frameMetalness, settings.frameRoughness]);
-  const glassMaterial = useMemo(() => new THREE.MeshPhysicalMaterial({
-    color: '#000000',
-    transparent: true,
-    opacity: Math.min(0.2, settings.glassOpacity * 0.4),
-    roughness: Math.max(0.02, settings.glassRoughness),
-    metalness: 0,
-    clearcoat: 1,
-    clearcoatRoughness: Math.max(0.02, settings.glassRoughness),
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  }), [settings.glassOpacity, settings.glassRoughness]);
   const cutoutMaterial = useMemo(() => new THREE.MeshBasicMaterial({
     color: '#050507',
     transparent: true,
@@ -124,21 +117,6 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     depthWrite: false,
     side: THREE.DoubleSide,
   }), []);
-  const reflectionMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    map: reflectionTexture,
-    transparent: true,
-    opacity: Math.min(0.5, settings.reflection * 0.6),
-    blending: THREE.AdditiveBlending,
-    depthWrite: false,
-    side: THREE.DoubleSide,
-  }), [reflectionTexture, settings.reflection]);
-  const shadowMaterial = useMemo(() => new THREE.MeshBasicMaterial({
-    map: shadowTexture,
-    transparent: true,
-    opacity: effectiveShadowOpacity,
-    depthWrite: false,
-    side: THREE.FrontSide,
-  }), [shadowTexture, effectiveShadowOpacity]);
   const cameraBumpGeometry = useMemo(
     () => new THREE.ShapeGeometry(roundedRect(safeWidth * 0.3, safeWidth * 0.3, safeWidth * 0.055), 48),
     [safeWidth]
@@ -159,10 +137,6 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
     side: THREE.DoubleSide,
   }), []);
   const buttonMaterial = shellMaterial;
-  const shadowGeometry = useMemo(
-    () => new THREE.CircleGeometry(1, 64),
-    []
-  );
   const buttonGeometry = useMemo(
     () => new THREE.BoxGeometry(buttonWidth, buttonHeight, buttonDepth),
     [buttonWidth, buttonHeight, buttonDepth]
@@ -172,18 +146,12 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
   useDisposable(bezelGeometry);
   useDisposable(screenGlassGeometry);
   useDisposable(cutoutGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
-  useDisposable(glassMaterial);
   useDisposable(cutoutMaterial);
-  useDisposable(reflectionMaterial);
-  useDisposable(shadowMaterial);
   useDisposable(cameraBumpGeometry);
   useDisposable(lensGeometry);
   useDisposable(lensMaterial);
   useDisposable(lensGlassMaterial);
-  useDisposable(shadowGeometry);
   useDisposable(buttonGeometry);
 
   const allCameraPositions: [number, number][] = [
@@ -196,15 +164,14 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
 
   return (
     <group name="iphone-device-frame">
-      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-        <mesh
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[metrics.bodyWidth * 0.025, -metrics.bodyHeight * settings.shadowOffset, bodyZ - depth * 0.08 - proud]}
-          scale={[metrics.bodyWidth * (1.18 + settings.shadowBlur * 0.55), metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16), 1]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+        opacity={effectiveShadowOpacity}
+        segments={64}
+        position={[metrics.bodyWidth * 0.025, -metrics.bodyHeight * settings.shadowOffset, bodyZ - depth * 0.08 - proud]}
+        scale={[metrics.bodyWidth * (1.18 + settings.shadowBlur * 0.55), metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.16), 1]}
+        renderOrder={-2}
+      />
 
       <mesh geometry={bodyGeometry} material={shellMaterial} position={[0, 0, bodyZ]} castShadow receiveShadow />
       <mesh geometry={bezelGeometry} material={shellMaterial} position={[0, 0, bezelZ]} castShadow receiveShadow />
@@ -217,8 +184,11 @@ const LegacyPhoneDeviceFrame: React.FC<PhoneDeviceFrameProps> = ({ metrics, sett
         />
       )}
 
-      <mesh geometry={screenGlassGeometry} material={glassMaterial} position={[0, 0, glassZ]} />
-      <mesh geometry={screenGlassGeometry} material={reflectionMaterial} position={[0, 0, reflectionZ]} />
+      <DeviceScreenSurface
+        geometry={screenGlassGeometry}
+        glass={{ material: glassMaterial, position: [0, 0, glassZ] }}
+        reflection={{ material: reflectionMaterial, position: [0, 0, reflectionZ] }}
+      />
 
       {settings.showSideButtons && (
         <group>

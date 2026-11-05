@@ -3,17 +3,21 @@ import type { AudioClip, ProjectAudio } from '../model/types';
 
 // Audio Context Singleton
 let audioCtx: AudioContext | null = null;
+let lastAudioContextClass: unknown = null;
 const audioBufferCache = new Map<string, AudioBuffer>();
+const MAX_AUDIO_BUFFER_CACHE_ENTRIES = 32;
 const inFlightDecodes = new Set<string>();
 
 function getAudioContext(): AudioContext | null {
   if (typeof window === 'undefined') return null;
-  if (!audioCtx) {
-    const AudioContextClass =
-      window.AudioContext ||
-      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  const AudioContextClass =
+    window.AudioContext ||
+    (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+  if (!audioCtx || (AudioContextClass && AudioContextClass !== lastAudioContextClass)) {
     if (AudioContextClass) {
       audioCtx = new AudioContextClass();
+      lastAudioContextClass = AudioContextClass;
+      masterGainNode = null;
     }
   }
   if (audioCtx && audioCtx.state === 'suspended') {
@@ -31,6 +35,7 @@ let activeSources: ActivePlaybackSource[] = [];
 let masterGainNode: GainNode | null = null;
 let lastSyncedTimeMs = -1;
 let isCurrentlyPlaying = false;
+let lastAudioStateKey = '';
 
 // Waveform Peak Amplitudes LRU Cache
 const waveformPeakCache = new Map<string, number[]>();
@@ -38,13 +43,38 @@ const MAX_WAVEFORM_CACHE_ENTRIES = 512;
 
 // Compact identity mapping for data URLs to avoid embedding massive base64 strings into cache keys
 const urlIdMap = new Map<string, number>();
+const MAX_URL_ID_CACHE_ENTRIES = 512;
 let nextUrlId = 1;
+
+function getCachedAudioBuffer(url: string): AudioBuffer | undefined {
+  const buffer = audioBufferCache.get(url);
+  if (!buffer) return undefined;
+  audioBufferCache.delete(url);
+  audioBufferCache.set(url, buffer);
+  return buffer;
+}
+
+function cacheAudioBuffer(url: string, buffer: AudioBuffer): void {
+  audioBufferCache.delete(url);
+  audioBufferCache.set(url, buffer);
+  if (audioBufferCache.size > MAX_AUDIO_BUFFER_CACHE_ENTRIES) {
+    const oldestUrl = audioBufferCache.keys().next().value;
+    if (oldestUrl !== undefined) audioBufferCache.delete(oldestUrl);
+  }
+}
 
 function getUrlCompactId(url: string | undefined): string {
   if (!url) return '';
   let id = urlIdMap.get(url);
-  if (!id) {
+  if (id === undefined) {
     id = nextUrlId++;
+    urlIdMap.set(url, id);
+    if (urlIdMap.size > MAX_URL_ID_CACHE_ENTRIES) {
+      const oldestUrl = urlIdMap.keys().next().value;
+      if (oldestUrl !== undefined) urlIdMap.delete(oldestUrl);
+    }
+  } else {
+    urlIdMap.delete(url);
     urlIdMap.set(url, id);
   }
   return `u${id}`;
@@ -63,7 +93,7 @@ export function clearWaveformCache(): void {
  */
 export function generateWaveformPeaks(clip: AudioClip, count: number): number[] {
   const barsCount = Math.max(16, count);
-  const cachedBuffer = clip.dataUrl ? audioBufferCache.get(clip.dataUrl) : null;
+  const cachedBuffer = clip.dataUrl ? getCachedAudioBuffer(clip.dataUrl) : null;
   const hasBuffer = Boolean(cachedBuffer);
   const urlId = getUrlCompactId(clip.dataUrl);
   const cacheKey = `${clip.id}:${clip.name}:${clip.offsetMs}:${clip.durationMs}:${urlId}:${hasBuffer ? 'buf' : 'proc'}:${barsCount}`;
@@ -129,9 +159,8 @@ export function generateWaveformPeaks(clip: AudioClip, count: number): number[] 
  * Loads and decodes an audio file into an AudioBuffer
  */
 export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuffer | null> {
-  if (audioBufferCache.has(dataUrl)) {
-    return audioBufferCache.get(dataUrl)!;
-  }
+  const cachedBuffer = getCachedAudioBuffer(dataUrl);
+  if (cachedBuffer) return cachedBuffer;
   const ctx = getAudioContext();
   if (!ctx) return null;
 
@@ -142,7 +171,7 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
     }
     const arrayBuffer = await response.arrayBuffer();
     const audioBuffer = await ctx.decodeAudioData(arrayBuffer);
-    audioBufferCache.set(dataUrl, audioBuffer);
+    cacheAudioBuffer(dataUrl, audioBuffer);
     // Invalidate any procedural peak entries for this dataUrl so the newly decoded buffer is used
     const compactId = urlIdMap.get(dataUrl);
     if (compactId) {
@@ -160,8 +189,19 @@ export async function decodeAudioFromDataUrl(dataUrl: string): Promise<AudioBuff
   }
 }
 
+function computeAudioStateKey(audio: ProjectAudio): string {
+  const clipsKey = audio.clips
+    .map((c) => {
+      const ready = c.dataUrl && getCachedAudioBuffer(c.dataUrl) ? '1' : '0';
+      return `${c.id}:${c.startMs}:${c.durationMs}:${c.offsetMs}:${c.volume}:${c.muted ? 1 : 0}:${getUrlCompactId(c.dataUrl)}:${ready}`;
+    })
+    .join('|');
+  return `${audio.muted ? 1 : 0}:${audio.masterVolume}:${clipsKey}`;
+}
+
 /**
- * Synchronizes audio playback with current timeline time and play state
+ * Synchronizes audio playback with current timeline time and play state.
+ * Schedules both currently overlapping clips and future lookahead clips via Web Audio timestamps.
  */
 export function syncAudioPlayback(
   audio: ProjectAudio | undefined,
@@ -172,15 +212,21 @@ export function syncAudioPlayback(
     stopAudioPlayback();
     isCurrentlyPlaying = isPlaying;
     lastSyncedTimeMs = currentTimeMs;
+    lastAudioStateKey = '';
     return;
   }
 
   const ctx = getAudioContext();
   if (!ctx) return;
 
-  // Check if play state changed or playhead jumped significantly (> 180ms)
+  const audioStateKey = computeAudioStateKey(audio);
+  const audioStateChanged = audioStateKey !== lastAudioStateKey;
   const playStateChanged = isCurrentlyPlaying !== isPlaying;
-  const playheadJumped = Math.abs(currentTimeMs - lastSyncedTimeMs) > 180;
+  // Detect timeline seeks, loops (currentTimeMs < lastSyncedTimeMs), or jumps (> 180ms)
+  const playheadJumped =
+    lastSyncedTimeMs < 0 ||
+    currentTimeMs < lastSyncedTimeMs - 5 ||
+    Math.abs(currentTimeMs - lastSyncedTimeMs) > 180;
 
   if (!isPlaying) {
     if (isCurrentlyPlaying) {
@@ -188,10 +234,11 @@ export function syncAudioPlayback(
     }
     isCurrentlyPlaying = false;
     lastSyncedTimeMs = currentTimeMs;
+    lastAudioStateKey = audioStateKey;
     return;
   }
 
-  if (!playStateChanged && !playheadJumped) {
+  if (!playStateChanged && !playheadJumped && !audioStateChanged) {
     lastSyncedTimeMs = currentTimeMs;
     return;
   }
@@ -200,62 +247,80 @@ export function syncAudioPlayback(
   stopAudioPlayback();
   isCurrentlyPlaying = true;
   lastSyncedTimeMs = currentTimeMs;
+  lastAudioStateKey = audioStateKey;
 
   // Set up Master Gain
   if (!masterGainNode) {
     masterGainNode = ctx.createGain();
     masterGainNode.connect(ctx.destination);
   }
-  masterGainNode.gain.setValueAtTime(audio.muted ? 0 : audio.masterVolume, ctx.currentTime);
+  const nowSec = ctx.currentTime ?? 0;
+  if (typeof masterGainNode.gain.setValueAtTime === 'function') {
+    masterGainNode.gain.setValueAtTime(audio.muted ? 0 : audio.masterVolume, nowSec);
+  } else {
+    masterGainNode.gain.value = audio.muted ? 0 : audio.masterVolume;
+  }
 
-  // Schedule each eligible clip
+  // Schedule each eligible clip (active now OR starting in the future)
   for (const clip of audio.clips) {
-    if (clip.muted || clip.volume <= 0) continue;
+    if (clip.muted || clip.volume <= 0 || clip.durationMs <= 0) continue;
 
     const clipStart = clip.startMs;
     const clipEnd = clip.startMs + clip.durationMs;
 
-    // Clip is active if playhead is within clip or ahead of clip start
-    if (currentTimeMs >= clipStart && currentTimeMs < clipEnd) {
-      const clipOffsetSec = (clip.offsetMs + (currentTimeMs - clipStart)) / 1000;
-      const remainingDurationSec = (clipEnd - currentTimeMs) / 1000;
+    // Skip clips that have already finished before the current playhead
+    if (clipEnd <= currentTimeMs) continue;
 
-      if (clip.dataUrl) {
-        if (!audioBufferCache.has(clip.dataUrl)) {
-          // Preload into cache so it will be ready to play on upcoming playback ticks
-          if (!inFlightDecodes.has(clip.dataUrl)) {
-            inFlightDecodes.add(clip.dataUrl);
-            void decodeAudioFromDataUrl(clip.dataUrl).finally(() => {
-              inFlightDecodes.delete(clip.dataUrl!);
-              lastSyncedTimeMs = -1;
-            });
-          }
-        } else {
-          // Play decoded user audio
-          const buffer = audioBufferCache.get(clip.dataUrl)!;
-          if (clipOffsetSec < buffer.duration) {
-            const source = ctx.createBufferSource();
-            source.buffer = buffer;
-            const gain = ctx.createGain();
-            gain.gain.value = clip.volume;
-            source.connect(gain);
-            gain.connect(masterGainNode);
+    if (!clip.dataUrl) continue;
 
-            source.start(ctx.currentTime, clipOffsetSec, remainingDurationSec);
-            activeSources.push({
-              stop: () => {
-                try {
-                  source.stop();
-                  source.disconnect();
-                  gain.disconnect();
-                } catch {
-                  // Source might already be stopped or disconnected
-                }
-              },
-            });
-          }
-        }
+    const cachedBuffer = getCachedAudioBuffer(clip.dataUrl);
+    if (!cachedBuffer) {
+      // Preload into cache so it will be ready to schedule as soon as decoding completes
+      if (!inFlightDecodes.has(clip.dataUrl)) {
+        inFlightDecodes.add(clip.dataUrl);
+        void decodeAudioFromDataUrl(clip.dataUrl).finally(() => {
+          inFlightDecodes.delete(clip.dataUrl!);
+          lastSyncedTimeMs = -1;
+        });
       }
+      continue;
+    }
+
+    const buffer = cachedBuffer;
+    const isFutureClip = clipStart > currentTimeMs;
+    const startWhenSec = isFutureClip
+      ? nowSec + (clipStart - currentTimeMs) / 1000
+      : nowSec;
+    const clipOffsetSec = isFutureClip
+      ? Math.max(0, clip.offsetMs / 1000)
+      : Math.max(0, (clip.offsetMs + (currentTimeMs - clipStart)) / 1000);
+    const requestedDurationSec = isFutureClip
+      ? clip.durationMs / 1000
+      : (clipEnd - currentTimeMs) / 1000;
+
+    if (clipOffsetSec < buffer.duration && requestedDurationSec > 0) {
+      const playDurationSec = Math.min(requestedDurationSec, buffer.duration - clipOffsetSec);
+      if (playDurationSec <= 0) continue;
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      const gain = ctx.createGain();
+      gain.gain.value = clip.volume;
+      source.connect(gain);
+      gain.connect(masterGainNode);
+
+      source.start(startWhenSec, clipOffsetSec, playDurationSec);
+      activeSources.push({
+        stop: () => {
+          try {
+            source.stop();
+            source.disconnect();
+            gain.disconnect();
+          } catch {
+            // Source might already be stopped or disconnected
+          }
+        },
+      });
     }
   }
 }

@@ -1,11 +1,14 @@
+import { MenuSurface, MenuItem } from '../../../ui/Menu';
+import { IconButton } from '../../../ui/primitives';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { useState, useMemo } from 'react';
 import type { Shot, EffectKey } from '../../../model/types';
-import { DEFAULT_EFFECTS_ORDER } from '../../../model/defaults';
+import type { GradientStop } from '../../../model/types';
+import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
+import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import {
-  Aperture,
   Sun,
   Triangle,
   Circle,
@@ -21,10 +24,16 @@ import {
   Eye,
   EyeOff,
   ChevronDown,
+  Waves,
+  Image as ImageIcon,
+  Fish,
+  ScanSearch,
+  Settings2,
+  X,
 } from 'lucide-react';
+import { ColorPicker } from '../ColorPicker';
 
 const EFFECT_NAMES: Record<EffectKey, string> = {
-  depthOfField: 'Depth of field',
   bloom: 'Bloom',
   chromaticAberration: 'Color split',
   vignette: 'Vignette',
@@ -34,25 +43,14 @@ const EFFECT_NAMES: Record<EffectKey, string> = {
   colorGrade: 'Color grade',
   edgeFade: 'Edge fade',
   glitch: 'Glitch',
-};
-
-const EFFECT_DEFAULTS: Record<EffectKey, Record<string, number>> = {
-  bloom: { intensity: 0.35, threshold: 0.75 },
-  vignette: { intensity: 0.42 },
-  motionBlur: { shutterAngle: 180, samples: 8 },
-  chromaticAberration: { offset: 0.002 },
-  filmGrain: { intensity: 0.025, size: 1.2 },
-  ghost: { opacity: 0.25, offset: 0.02, blur: 4 },
-  colorGrade: { exposure: 1.0, contrast: 1.0, saturation: 1.0, temperature: 0, tint: 0 },
-  edgeFade: { top: 0.1, bottom: 0.1, left: 0, right: 0 },
-  glitch: { intensity: 0.15 },
-  depthOfField: { aperture: 2.8, focusRange: 0.35, bokehScale: 4.5, focalLength: 50 },
+  atmosphere: 'Atmosphere',
+  gradientMap: 'Gradient map',
+  fishEye: 'Fish eye',
+  lensDistortion: 'Lens distortion',
 };
 
 function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: EffectKey; className?: string }) {
   switch (effectKey) {
-    case 'depthOfField':
-      return <Aperture className={className} />;
     case 'bloom':
       return <Sun className={className} />;
     case 'chromaticAberration':
@@ -71,17 +69,52 @@ function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: Effec
       return <Square className={className} />;
     case 'glitch':
       return <Zap className={className} />;
+    case 'atmosphere': return <Waves className={className} />;
+    case 'gradientMap': return <ImageIcon className={className} />;
+    case 'fishEye': return <Fish className={className} />;
+    case 'lensDistortion': return <ScanSearch className={className} />;
     default:
       return <Sparkles className={className} />;
   }
 }
 
 const label = (key: string) => key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase());
+const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
+  chromaticAberration: ['edgeStrength', 'centerX', 'centerY', 'channelRed', 'channelGreen', 'channelBlue', 'fringeColorAngle'],
+  filmGrain: ['softness', 'colorAmount', 'aspect', 'seed', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'blendMode', 'motion'],
+  lensDistortion: ['centerX', 'centerY', 'edgeMode', 'measure'],
+};
+
+const FIELD_RANGES: Record<string, [number, number, number]> = {
+  intensity: [0, 1, 0.01], threshold: [0, 4, 0.01], radius: [0, 4, 0.01], softness: [0, 1, 0.01],
+  shutterAngle: [0, 360, 1], samples: [2, 32, 1], angle: [-180, 180, 1], amount: [-1, 1, 0.01],
+  offset: [0, 100, 1], verticalOffset: [-100, 100, 1], edgeStrength: [0, 4, 0.01], size: [0.1, 32, 0.01],
+  opacity: [0, 1, 0.01], blur: [0, 100, 0.1], spread: [0, 4, 0.01], exposure: [-4, 4, 0.01], contrast: [0, 4, 0.01],
+  saturation: [0, 4, 0.01], temperature: [-4, 4, 0.01], tint: [-4, 4, 0.01], highlights: [-1, 1, 0.01], shadows: [-1, 1, 0.01],
+  lift: [-1, 1, 0.01], gamma: [0.1, 4, 0.01], vibrance: [-1, 1, 0.01], blackPoint: [0, 1, 0.01], whitePoint: [0, 1, 0.01],
+  top: [0, 1, 0.01], bottom: [0, 1, 0.01], left: [0, 1, 0.01], right: [0, 1, 0.01], bandSize: [2, 200, 1], colorShift: [0, 2, 0.01],
+  fog: [0, 1, 0.01], mist: [0, 1, 0.01], haze: [0, 1, 0.01], start: [0, 1, 0.01], reach: [0.01, 1, 0.01], mistHeight: [0, 1, 0.01],
+  blend: [0, 1, 0.01], shift: [-1, 1, 0.01], scale: [0.1, 2, 0.01], strength: [-1, 1, 0.01], centerX: [-1, 1, 0.01], centerY: [-1, 1, 0.01],
+  aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
+  colorAmount: [0, 1, 0.01],
+  x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
+};
+
+const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
+  bloom: { blendMode: ['screen', 'add', 'softLight'] },
+  motionBlur: { direction: ['camera', 'angle'] },
+  filmGrain: { stock: ['Tungsten 500', 'Kodak 5219', 'Fuji 400', 'Custom'], blendMode: ['film', 'overlay', 'softLight', 'multiply'], motion: ['frame', '12fps', 'static'] },
+  glitch: { mode: ['digital', 'analog', 'datamosh'] },
+  gradientMap: { blendMode: ['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn'] },
+  fishEye: { edgeMode: ['fill', 'balanced', 'none'] },
+  lensDistortion: { mode: ['pinch', 'barrel'], edgeMode: ['fill', 'balanced', 'none'], measure: ['width', 'height', 'diagonal'] },
+};
 
 export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const updateShot = useProjectStore((s) => s.updateShot);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState<EffectKey | null>(null);
+  const [settingsKey, setSettingsKey] = useState<EffectKey | null>(null);
 
   const order = useMemo(
     () => [...new Set([...(shot.effectsOrder || []), ...DEFAULT_EFFECTS_ORDER])],
@@ -98,7 +131,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     return enabled;
   }, [shot.appliedEffects, shot.effects, order]);
 
-  const setValue = (key: EffectKey, field: string, value: number | string | boolean) => {
+  const setValue = (key: EffectKey, field: string, value: number | string | boolean | GradientStop[]) => {
     updateShot(shot.id, (s) => ({
       ...s,
       effects: {
@@ -120,12 +153,13 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
       effects: {
         ...s.effects,
         [key]: {
-          ...(s.effects?.[key] || EFFECT_DEFAULTS[key] || {}),
+          ...(s.effects?.[key] || DEFAULT_SCENE_EFFECTS[key]),
           enabled: true,
         },
       },
     }));
     setExpandedKey(key);
+    setSettingsKey(null);
     setAddMenuOpen(false);
   };
 
@@ -146,6 +180,53 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     if (expandedKey === key) setExpandedKey(null);
   };
 
+  const renderNumber = (key: EffectKey, field: string, rawValue: number) => {
+    const percentFields = new Set([
+      'intensity', 'threshold', 'softness', 'fog', 'mist', 'haze',
+      'start', 'reach', 'mistHeight', 'blend', 'amount', 'colorAmount',
+      'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint',
+      'highlightThreshold', 'highlightIntensity', 'top', 'bottom', 'left', 'right', 'opacity'
+    ]);
+    const isPercent = (key === 'fishEye' && field === 'amount') || percentFields.has(field);
+    const scaledPixels = (key === 'chromaticAberration' && ['offset', 'verticalOffset'].includes(field)) || (key === 'ghost' && field === 'offset');
+    const scale = scaledPixels ? 1920 : key === 'lensDistortion' && field === 'strength' ? 90 : isPercent ? 100 : 1;
+    const [rangeMin, rangeMax, rangeStep] = FIELD_RANGES[field] ?? [0, 1, 0.01];
+    const rawStep = rangeStep;
+    let rawMin = rangeMin;
+    let rawMax = rangeMax;
+
+    if (key === 'bloom' && field === 'threshold') [rawMin, rawMax] = [0, 1];
+    if (key === 'bloom' && field === 'intensity') [rawMin, rawMax] = [0, 5];
+    if (key === 'motionBlur' && field === 'amount') [rawMin, rawMax] = [0, 10];
+    if (key === 'lensDistortion' && field === 'strength') [rawMin, rawMax] = [-1, 1];
+
+    const isLensDistortionStrength = key === 'lensDistortion' && field === 'strength';
+    const min = isPercent ? rawMin * 100 : isLensDistortionStrength ? rawMin * scale : rawMin;
+    const max = isPercent ? rawMax * 100 : isLensDistortionStrength ? rawMax * scale : rawMax;
+    const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : isLensDistortionStrength ? rawStep * scale : rawStep;
+    const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength' ? 'Edges' : label(field);
+    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneSize' ? ' cm' : '';
+
+    return (
+      <ScrubInput
+        key={field}
+        label={fieldLabel}
+        value={Number((rawValue * scale).toFixed(2))}
+        min={min}
+        max={max}
+        step={step}
+        unit={unit}
+        onChange={(value) => setValue(key, field, value / scale)}
+      />
+    );
+  };
+
+  const renderSelect = (key: EffectKey, field: string, value: string) => {
+    const options=SELECT_OPTIONS[key]?.[field];
+    if(!options) return null;
+    return <div key={field} className="flex flex-col gap-1"><label className="text-[10px] text-muted-foreground font-medium">{label(field)}</label><FigmaSelect aria-label={label(field)} className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer" value={value} onChange={event=>setValue(key,field,event.target.value)}>{options.map(option=><option key={option} value={option}>{option}</option>)}</FigmaSelect></div>;
+  };
+
 
   return (
     <section className="space-y-2.5" aria-label="Scene effects" data-testid="scene-effects-section">
@@ -161,43 +242,49 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
           </span>
         </div>
         <div className="flex items-center gap-1 relative">
-          <button
-            type="button"
-            title="Add scene effect"
-            onClick={() => setAddMenuOpen((v) => !v)}
-            className={`w-6 h-6 rounded flex items-center justify-center transition cursor-pointer ${
-              addMenuOpen ? 'bg-white/20 text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/10'
-            }`}
-          >
-            <Plus className="w-3.5 h-3.5" />
-          </button>
+          <IconButton
+              unstyled
+              tooltip={false}
+              label="Add scene effect"
+              icon={<>
+                <Plus className="w-3.5 h-3.5" />
+              </>}
+              title="Add scene effect"
+              onClick={() => setAddMenuOpen((v) => !v)}
+              className={`w-6 h-6 rounded flex items-center justify-center transition cursor-pointer ${
+                addMenuOpen ? 'bg-white/20 text-white' : 'text-[#8e8e93] hover:text-white hover:bg-white/10'
+              }`}
+          />
 
           {/* Add Effect Flyout Menu */}
           {addMenuOpen && (
-            <div className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-[#18181b] border border-white/15 p-1 shadow-2xl z-30 space-y-0.5">
-              <div className="px-2 py-1 text-[10px] font-semibold text-[#71717a] uppercase tracking-wider">
+            <MenuSurface
+                className="absolute right-0 top-full mt-1.5 w-44 rounded-xl bg-surface/85 backdrop-blur-xl saturate-180 border border-subtle p-1 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] z-30 space-y-0.5 origin-top-right"
+            >
+              <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-[.06em]">
                 Add Effect
               </div>
               {order.map((key) => {
                 const isAlreadyAdded = appliedKeys.includes(key);
                 return (
-                  <button
-                    key={key}
-                    type="button"
-                    onClick={() => addEffect(key)}
-                    className="w-full h-7 px-2 rounded-lg flex items-center gap-2 hover:bg-white/10 text-left transition cursor-pointer group"
+                  <MenuItem
+                      unstyled
+                      key={key}
+                      type="button"
+                      onClick={() => addEffect(key)}
+                      className="w-full h-7 px-2 rounded-lg flex items-center gap-2 hover:bg-white/10 text-left transition cursor-pointer group"
                   >
                     <div className="text-[#a1a1aa] group-hover:text-white">
                       <EffectIcon effectKey={key} className="w-3.5 h-3.5" />
                     </div>
                     <span className="text-[11px] text-white flex-1">{EFFECT_NAMES[key]}</span>
                     {isAlreadyAdded && (
-                      <span className="text-[9px] text-[#71717a] font-medium">Added</span>
+                      <span className="text-[10px] text-muted-foreground font-medium">Added</span>
                     )}
-                  </button>
+                  </MenuItem>
                 );
               })}
-            </div>
+            </MenuSurface>
           )}
         </div>
       </div>
@@ -207,7 +294,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
         {
           appliedKeys.map((key) => {
             const effect = shot.effects?.[key] || { enabled: false };
-            const mergedFields = { ...EFFECT_DEFAULTS[key], ...effect };
+            const mergedFields = { ...DEFAULT_SCENE_EFFECTS[key], ...effect } as Record<string, unknown>;
             const isExpanded = expandedKey === key;
             const isEnabled = Boolean(effect.enabled);
 
@@ -217,147 +304,168 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                 <div className="flex items-center gap-1.5">
                   {/* Left Icon Badge */}
                   <div
-                    className="w-7 h-7 rounded-lg bg-[#18181b] border border-white/[0.08] flex items-center justify-center text-[#a1a1aa] shrink-0"
+                    className="w-7 h-7 rounded-lg bg-surface border border-subtle flex items-center justify-center text-muted-foreground shrink-0"
                     title={EFFECT_NAMES[key]}
                   >
                     <EffectIcon effectKey={key} className="w-3.5 h-3.5" />
                   </div>
 
                   {/* Center Pill Button */}
-                  <button
-                    type="button"
-                    onClick={() => setExpandedKey(isExpanded ? null : key)}
-                    className={`flex-1 h-7 px-3 rounded-full border border-white/[0.08] flex items-center justify-between text-[11px] transition cursor-pointer ${
+                  <button type="button"  onClick={() => setExpandedKey(isExpanded ? null : key)} className={`flex-1 h-7 px-3 rounded-full border border-white/[0.08] flex items-center justify-between text-[11px] transition cursor-pointer ${
                       isExpanded
-                        ? 'bg-[#222226] text-white shadow-xs border-white/20'
-                        : 'bg-[#18181b] hover:bg-[#222226] text-white'
-                    }`}
-                  >
+                        ? 'bg-surface text-foreground hover:bg-surface-active text-white shadow-xs border-white/20'
+                        : 'bg-[#18181b] hover:bg-surface text-foreground hover:bg-surface-active text-white'
+                    }`}>
                     <span className="font-medium truncate">{EFFECT_NAMES[key]}</span>
                     <ChevronDown
-                      className={`w-3 h-3 text-[#71717a] transition-transform ${
+                      className={`w-3 h-3 text-muted-foreground transition-transform ${
                         isExpanded ? 'rotate-180 text-white' : ''
                       }`}
                     />
                   </button>
 
                   {/* Visibility Eye Button */}
-                  <button
-                    type="button"
-                    onClick={() => setValue(key, 'enabled', !isEnabled)}
-                    title={isEnabled ? 'Mute effect' : 'Enable effect'}
-                    className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
-                      isEnabled
-                        ? 'text-white hover:bg-white/10'
-                        : 'text-[#52525b] hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    {isEnabled ? (
-                      <Eye className="w-3.5 h-3.5 text-white" />
-                    ) : (
-                      <EyeOff className="w-3.5 h-3.5 text-[#71717a]" />
-                    )}
-                  </button>
+                  <IconButton
+                      unstyled
+                      tooltip={false}
+                      label={isEnabled ? 'Mute effect' : 'Enable effect'}
+                      icon={<>
+                        {isEnabled ? (
+                          <Eye className="w-3.5 h-3.5 text-white" />
+                        ) : (
+                          <EyeOff className="w-3.5 h-3.5 text-muted-foreground" />
+                        )}
+                      </>}
+                      onClick={() => setValue(key, 'enabled', !isEnabled)}
+                      title={isEnabled ? 'Mute effect' : 'Enable effect'}
+                      className={`w-7 h-7 rounded-lg flex items-center justify-center transition cursor-pointer ${
+                        isEnabled
+                          ? 'text-white hover:bg-white/10'
+                          : 'text-muted-foreground hover:text-white hover:bg-white/10'
+                      }`}
+                  />
 
                   {/* Minus (Remove) Button */}
-                  <button
-                    type="button"
-                    onClick={() => removeEffect(key)}
-                    title={`Remove ${EFFECT_NAMES[key]}`}
-                    className="w-7 h-7 rounded-lg flex items-center justify-center text-[#71717a] hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
-                  >
-                    <Minus className="w-3.5 h-3.5" />
-                  </button>
+                  <IconButton
+                      unstyled
+                      tooltip={false}
+                      label={`Remove ${EFFECT_NAMES[key]}`}
+                      icon={<>
+                        <Minus className="w-3.5 h-3.5" />
+                      </>}
+                      onClick={() => removeEffect(key)}
+                      title={`Remove ${EFFECT_NAMES[key]}`}
+                      className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-rose-400 hover:bg-rose-500/10 transition cursor-pointer"
+                  />
                 </div>
 
                 {/* Expanded Parameter Inputs Card */}
                 {isExpanded && (
-                  <div className="p-2.5 rounded-xl bg-[#141416] border border-white/[0.06] space-y-2 mt-1">
+                  <div className="relative p-2.5 rounded-xl bg-surface-elevated border border-border/60 space-y-2 mt-1">
+                    {['chromaticAberration'].includes(key) && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','lens')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='lens'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Lens</button><button type="button" onClick={()=>setValue(key,'mode','split')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='split'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Split</button></div>}
+                    {key === 'lensDistortion' && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','pinch')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='pinch'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Pinch</button><button type="button" onClick={()=>setValue(key,'mode','barrel')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='barrel'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Barrel</button></div>}
+                    {['chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
                     <div className="grid grid-cols-2 gap-2">
                       {Object.entries(mergedFields)
-                        .filter(([field, value]) => field !== 'enabled' && typeof value === 'number')
-                        .map(([field, rawVal]) => {
-                          const normalizedPixels =
-                            (key === 'chromaticAberration' && field === 'offset') ||
-                            (key === 'ghost' && field === 'offset');
-                          const scale = normalizedPixels ? 1920 : key === 'ghost' && field === 'blur' ? 2 : 1;
-                          const signed = ['exposure', 'temperature', 'tint'].includes(field);
-                          const max =
-                            field === 'aperture'
-                              ? 32
-                              : field === 'focalLength'
-                              ? 300
-                              : field === 'samples'
-                              ? 32
-                              : field === 'shutterAngle'
-                              ? 360
-                              : normalizedPixels
-                              ? 100
-                              : ['contrast', 'saturation', 'exposure', 'intensity', 'bokehScale'].includes(field)
-                              ? 4
-                              : field === 'focusRange'
-                              ? 20
-                              : field === 'size'
-                              ? 10
-                              : 1;
+                        .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key]??[]).includes(field) && !(key==='atmosphere'&&['start','reach','mistHeight'].includes(field)))
+                        .map(([field, rawVal]) => renderNumber(key,field,Number(rawVal)))}
+                      {Object.entries(mergedFields).filter(([field,value])=>typeof value==='string'&&SELECT_OPTIONS[key]?.[field]&&!(SETTINGS_FIELDS[key]??[]).includes(field)&&!((key==='lensDistortion')&&field==='mode')).map(([field,value])=>renderSelect(key,field,String(value)))}
 
-                          return (
-                            <ScrubInput
-                              key={field}
-                              label={label(field)}
-                              value={Number(rawVal) * scale}
-                              min={signed ? -4 : field === 'aperture' ? 0.1 : 0}
-                              max={max}
-                              step={
-                                normalizedPixels || field === 'samples' || field === 'shutterAngle'
-                                  ? 1
-                                  : 0.01
-                              }
-                              unit={scale !== 1 ? ' px' : field === 'aperture' ? ' f' : ''}
-                              onChange={(v) => setValue(key, field, v / scale)}
-                            />
-                          );
-                        })}
-
-                      {key === 'depthOfField' && (
-                        <>
-                          <ScrubInput
-                            label="Focus Z"
-                            value={shot.effects?.depthOfField?.target?.z ?? 0}
-                            min={-20}
-                            max={20}
-                            step={0.01}
-                            onChange={(z) =>
-                              updateShot(shot.id, (s) => ({
-                                ...s,
-                                effects: {
-                                  ...s.effects,
-                                  depthOfField: {
-                                    ...s.effects?.depthOfField,
-                                    target: { ...(s.effects?.depthOfField?.target || { x: 0, y: 0, z: 0 }), z },
-                                  },
-                                },
-                              }))
-                            }
-                          />
-                          <div className="flex flex-col gap-1">
-                            <label className="text-[10px] text-zinc-400 font-medium">Bokeh Shape</label>
-                            <FigmaSelect
-                              aria-label="Bokeh shape"
-                              className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer"
-                              value={shot.effects?.depthOfField?.bokehShape || 'anamorphic'}
-                              onChange={(e) => setValue(key, 'bokehShape', e.target.value)}
-                            >
-                              {['spherical', 'anamorphic', 'vintage', 'portrait'].map((v) => (
-                                <option key={v} value={v}>
-                                  {v.charAt(0).toUpperCase() + v.slice(1)}
-                                </option>
-                              ))}
-                            </FigmaSelect>
-                          </div>
-                        </>
-                      )}
+                      {key==='atmosphere'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
+                      {key==='edgeFade'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
                     </div>
+                    {key==='atmosphere'&&<details className="rounded-lg border border-border/60 px-2 py-1.5"><summary className="text-[11px] text-foreground/90 cursor-pointer">Depth</summary><div className="grid grid-cols-2 gap-2 pt-2">{['start','reach','mistHeight'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}<label className="flex items-center gap-2 text-[10px] text-foreground/90"><input type="checkbox" checked={Boolean(mergedFields['depthEnabled'])} onChange={e=>setValue(key,'depthEnabled',e.target.checked)}/>Use scene depth</label></div></details>}
+                    {key==='gradientMap'&&<div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground">Stops</span><button type="button" aria-label="Add gradient stop" onClick={()=>{const stops=mergedFields['stops'] as GradientStop[];setValue(key,'stops',[...stops,{at:.5,color:'#ffffff',opacity:1}].sort((a,b)=>a.at-b.at).slice(0,8));}} className="w-6 h-6 rounded text-foreground/90 hover:bg-white/10"><Plus className="w-3.5 h-3.5"/></button></div>{(mergedFields['stops'] as GradientStop[]).map((stop,index)=><div key={`${stop.at}-${index}`} className="grid grid-cols-[.8fr_1fr_1fr_24px] gap-1.5 items-center"><ScrubInput label="%" value={stop.at*100} min={0} max={100} step={1} onChange={at=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,at:at/100}:item))}/><ColorPicker label={`Stop ${index+1}`} color={stop.color} onChange={color=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,color}:item))} compact/><ScrubInput label="Opacity" value={(stop.opacity??1)*100} min={0} max={100} step={1} onChange={opacity=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,opacity:opacity/100}:item))}/><button type="button" disabled={(mergedFields['stops'] as GradientStop[]).length<=2} aria-label={`Remove gradient stop ${index+1}`} onClick={()=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).filter((_,i)=>i!==index))} className="text-zinc-500 hover:text-rose-400 disabled:opacity-30"><Minus className="w-3 h-3"/></button></div>)}</div>}
+                    {settingsKey === key && (
+                      <div
+                        role="region"
+                        aria-label={`${EFFECT_NAMES[key]} settings`}
+                        className="mt-3 pt-3 border-t border-white/[0.08] space-y-3 bg-white/[0.02] -mx-3 -mb-3 p-3 rounded-b-xl"
+                      >
+                        <div className="flex items-center justify-between pb-1">
+                          <h4 className="text-[11px] font-medium text-white/90">
+                            {key === 'chromaticAberration'
+                              ? 'Fringe settings'
+                              : key === 'filmGrain'
+                              ? 'Grain settings'
+                              : 'Lens settings'}
+                          </h4>
+                          <button
+                            type="button"
+                            aria-label="Close settings"
+                            onClick={() => setSettingsKey(null)}
+                            className="w-5 h-5 rounded flex items-center justify-center text-muted-foreground hover:bg-white/10 hover:text-white transition"
+                          >
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                        {key === 'chromaticAberration' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Edges</div>
+                            {renderNumber(key, 'edgeStrength', Number(mergedFields['edgeStrength']))}
+                            <div className="text-[10px] text-muted-foreground">Center</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'centerX', Number(mergedFields['centerX']))}
+                              {renderNumber(key, 'centerY', Number(mergedFields['centerY']))}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Color</div>
+                            {renderNumber(key, 'fringeColorAngle', Number(mergedFields['fringeColorAngle']))}
+                            <div className="text-[10px] text-muted-foreground">Channels</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {['channelRed', 'channelGreen', 'channelBlue'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                          </>
+                        )}
+                        {key === 'filmGrain' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Texture</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {['softness', 'colorAmount', 'aspect', 'seed'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Tone</div>
+                            <div className="grid grid-cols-3 gap-2">
+                              {['shadowStrength', 'midStrength', 'highlightStrength'].map((field) =>
+                                renderNumber(key, field, Number(mergedFields[field]))
+                              )}
+                            </div>
+                            {renderNumber(key, 'midpoint', Number(mergedFields['midpoint']))}
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderSelect(key, 'blendMode', String(mergedFields['blendMode']))}
+                              {renderSelect(key, 'motion', String(mergedFields['motion']))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {(['protectBlacks', 'smooth', 'perChannel'] as const).map((field) => (
+                                <label key={field} className="flex items-center gap-2 text-[10px] text-foreground/90">
+                                  <input
+                                    type="checkbox"
+                                    checked={Boolean(mergedFields[field])}
+                                    onChange={(event) => setValue(key, field, event.target.checked)}
+                                  />
+                                  {label(field)}
+                                </label>
+                              ))}
+                            </div>
+                          </>
+                        )}
+                        {key === 'lensDistortion' && (
+                          <>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderSelect(key, 'edgeMode', String(mergedFields['edgeMode']))}
+                              {renderSelect(key, 'measure', String(mergedFields['measure']))}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Center</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'centerX', Number(mergedFields['centerX']))}
+                              {renderNumber(key, 'centerY', Number(mergedFields['centerY']))}
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

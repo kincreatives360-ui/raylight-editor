@@ -1,3 +1,5 @@
+import { IconButton } from './primitives';
+import { ShortcutKey } from './ShortcutKey';
 // src/ui/UndoToast.tsx
 import React, { useEffect, useRef } from 'react';
 import { Undo2, X } from 'lucide-react';
@@ -58,18 +60,20 @@ export const UndoToast: React.FC<UndoToastProps> = ({
         >
           <Undo2 className="w-3.5 h-3.5" />
           <span>Undo</span>
-          <kbd className="text-[11px] font-mono text-white/90 bg-black/25 px-1 py-0.5 rounded">
+          <ShortcutKey className="text-[11px] font-mono text-white/90 bg-black/25 px-1 py-0.5 rounded">
             {getModifierKey()}Z
-          </kbd>
+          </ShortcutKey>
         </button>
-        <button
-          type="button"
-          aria-label="Dismiss toast"
-          onClick={onDismiss}
-          className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
-        >
-          <X className="w-3.5 h-3.5" />
-        </button>
+        <IconButton
+            unstyled
+            tooltip={false}
+            label="Dismiss toast"
+            icon={<>
+              <X className="w-3.5 h-3.5" />
+            </>}
+            onClick={onDismiss}
+            className="p-1 rounded-lg hover:bg-white/10 text-zinc-400 hover:text-white transition cursor-pointer"
+        />
       </div>
     </div>
   );

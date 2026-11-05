@@ -1,7 +1,9 @@
 // src/storage/projectIO.ts
+import { useState, useEffect } from 'react';
 import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
-import { DEFAULT_PROJECT } from '../model/defaults';
+import { DEFAULT_PROJECT, createDefaultShot, CURRENT_SCHEMA_VERSION } from '../model/defaults';
+import { generateId } from '../model/id';
 import {
     saveMediaToOPFS,
     loadMediaBlobFromOPFS,
@@ -52,13 +54,25 @@ function openIndexedDb(): Promise<IDBDatabase | null> {
  * serializing saves to prevent overlapping writes/pruning races.
  */
 let saveQueue: Promise<boolean> = Promise.resolve(true);
+const opfsSavedDataUrls = new WeakMap<AssetRecord, string>();
+const indexedDbSavedDataUrls = new WeakMap<AssetRecord, string>();
+
+export function stripAssetDataUrls(assets: Record<string, AssetRecord> = {}): Record<string, AssetRecord> {
+  const lightweight: Record<string, AssetRecord> = {};
+  for (const [id, asset] of Object.entries(assets)) {
+    if (!asset) continue;
+    const { dataUrl: _drop, ...meta } = asset;
+    lightweight[id] = { ...meta, dataUrl: '' } as AssetRecord;
+  }
+  return lightweight;
+}
 
 export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
     const execute = async (): Promise<boolean> => {
         const db = await openIndexedDb();
         if (!db) return false;
 
-        const lightweightAssets: Record<string, AssetRecord> = {};
+        const lightweightAssets = stripAssetDataUrls(project.assets);
         const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
         // Media absent from the in-memory document is NOT evidence of deletion.
@@ -66,13 +80,12 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
         await Promise.allSettled(
             Object.entries(project.assets || {}).map(async ([id, asset]) => {
                 if (!asset) return;
-                const { dataUrl: _drop, ...meta } = asset;
-                lightweightAssets[id] = { ...meta, dataUrl: '' } as AssetRecord;
-                if (asset.dataUrl) {
+                if (asset.dataUrl && opfsSavedDataUrls.get(asset) !== asset.dataUrl) {
                     try {
                         // OPFS is a supplementary copy; IDB stores the full asset in the
                         // same transaction as the project metadata below.
                         const written = await saveMediaToOPFS(id, asset.dataUrl);
+                        if (written) opfsSavedDataUrls.set(asset, asset.dataUrl);
                         if (!written && isOpfsSupported()) {
                             console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
                         }
@@ -101,10 +114,12 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                     }
                 };
 
+                const assetsWritten: AssetRecord[] = [];
                 for (const asset of Object.values(project.assets || {})) {
                     if (asset) {
-                        if (asset.dataUrl) {
+                        if (asset.dataUrl && indexedDbSavedDataUrls.get(asset) !== asset.dataUrl) {
                             assetStore.put(asset);
+                            assetsWritten.push(asset);
                         }
                     }
                 }
@@ -121,6 +136,9 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 projectStore.put(record);
 
                 tx.oncomplete = () => {
+                    for (const asset of assetsWritten) {
+                        indexedDbSavedDataUrls.set(asset, asset.dataUrl);
+                    }
                     db.close();
                     resolve(true);
                 };
@@ -242,17 +260,54 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
     });
 }
 
+export type StoragePersistenceStatus = 'saved' | 'saving' | 'warning' | 'error';
+
+export interface StorageStatusState {
+    status: StoragePersistenceStatus;
+    message: string;
+    lastSavedAt?: Date;
+}
+
+type StatusListener = (state: StorageStatusState) => void;
+const statusListeners = new Set<StatusListener>();
+let currentStorageState: StorageStatusState = {
+    status: 'saved',
+    message: 'All changes saved locally',
+    lastSavedAt: new Date(),
+};
+
+export function getStorageStatus(): StorageStatusState {
+    return currentStorageState;
+}
+
+export function subscribeStorageStatus(listener: StatusListener): () => void {
+    statusListeners.add(listener);
+    listener(currentStorageState);
+    return () => statusListeners.delete(listener);
+}
+
+function updateStorageStatus(status: StoragePersistenceStatus, message: string) {
+    currentStorageState = {
+        status,
+        message,
+        lastSavedAt: status === 'saved' || status === 'warning' ? new Date() : currentStorageState.lastSavedAt,
+    };
+    statusListeners.forEach((fn) => fn(currentStorageState));
+}
+
+export function useStorageStatus(): StorageStatusState {
+    const [state, setState] = useState<StorageStatusState>(getStorageStatus);
+    useEffect(() => subscribeStorageStatus(setState), []);
+    return state;
+}
+
 // Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
 export function saveProjectToBrowser(project: Project): void {
     if (typeof window === 'undefined' || typeof localStorage === 'undefined') return;
-    // 1. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
-    void saveProjectToIndexedDB(project).then(saved => {
-        if (!saved && window.indexedDB) {
-            console.error('[Raylight Storage] IndexedDB project save failed. Local backup may not contain media.');
-        }
-    });
+    updateStorageStatus('saving', 'Saving changes...');
 
-    // 2. Synchronous LocalStorage save with payload truncation guard
+    let localStorageFailed = false;
+    // 1. Synchronous LocalStorage save with payload truncation guard
     try {
         const payload = JSON.stringify({
             ...project,
@@ -260,25 +315,12 @@ export function saveProjectToBrowser(project: Project): void {
         });
         localStorage.setItem(AUTO_SAVE_KEY, payload);
     } catch {
+        localStorageFailed = true;
         // If localStorage throws QuotaExceededError, fallback to saving without heavy asset base64s
         try {
-            const lightweightAssets: Record<string, AssetRecord> = {};
-            for (const [id, a] of Object.entries(project.assets || {})) {
-                if (a) {
-                    lightweightAssets[id] = {
-                        id: a.id,
-                        name: a.name,
-                        mimeType: a.mimeType,
-                        dataUrl: '',
-                        thumbUrl: a.thumbUrl,
-                        width: a.width,
-                        height: a.height,
-                    };
-                }
-            }
             const fallbackPayload = JSON.stringify({
                 ...project,
-                assets: lightweightAssets,
+                assets: stripAssetDataUrls(project.assets),
                 updatedAt: new Date().toISOString(),
             });
             localStorage.setItem(AUTO_SAVE_KEY, fallbackPayload);
@@ -286,6 +328,28 @@ export function saveProjectToBrowser(project: Project): void {
             console.warn('[Raylight Storage] LocalStorage fallback also exceeded quota, relying on IndexedDB:', fallbackErr);
         }
     }
+
+    // 2. Dual-write to IndexedDB for unlimited asset quota (asynchronous)
+    void saveProjectToIndexedDB(project).then((saved) => {
+        if (saved) {
+            if (localStorageFailed) {
+                updateStorageStatus('warning', 'Media saved to IndexedDB (localStorage quota exceeded)');
+            } else {
+                updateStorageStatus('saved', 'All changes saved locally');
+            }
+        } else {
+            if (window.indexedDB) {
+                console.error('[Raylight Storage] IndexedDB project save failed. Local backup may not contain media.');
+                updateStorageStatus('error', 'IndexedDB save failed; media may not persist');
+            } else if (!localStorageFailed) {
+                updateStorageStatus('saved', 'Saved to localStorage');
+            } else {
+                updateStorageStatus('error', 'Storage quota exceeded');
+            }
+        }
+    }).catch((err) => {
+        updateStorageStatus('error', `Save error: ${err instanceof Error ? err.message : 'Unknown'}`);
+    });
 }
 
 // Load auto-saved project from browser local storage (synchronous initial load)
@@ -299,33 +363,140 @@ export function loadProjectFromBrowser(): Project | null {
         if (result.success) {
             const project = result.data;
 
+            // Normalize project structure before migration checks to ensure
+            // required arrays exist and have safe defaults
+            const normalizedProject = normalizeProjectStructure(project);
+
             // Migrate older blank projects that still contain the previous default
             // background. Do not overwrite the background of projects with layers.
             const isUntouchedBlankProject =
-                project.name === 'Untitled project' &&
-                project.aspectRatio === '16:9' &&
-                project.fps === 60 &&
-                Object.keys(project.assets ?? {}).length === 0 &&
-                (project.audio?.clips?.length ?? 0) === 0 &&
-                project.shots.length === 1 &&
-                project.shots[0].layers.length === 0 &&
-                (project.shots[0].cameraBlocks?.length ?? 0) === 0 &&
-                (project.shots[0].lightBlocks?.length ?? 0) === 0 &&
-                (project.shots[0].effectBlocks?.length ?? 0) === 0 &&
-                project.background.kind === 'solid' &&
-                project.background.color.toUpperCase() ===
+                normalizedProject.name === 'Untitled project' &&
+                normalizedProject.aspectRatio === '16:9' &&
+                normalizedProject.fps === 60 &&
+                Object.keys(normalizedProject.assets ?? {}).length === 0 &&
+                (normalizedProject.audio?.clips?.length ?? 0) === 0 &&
+                normalizedProject.shots.length === 1 &&
+                normalizedProject.shots[0].layers.length === 0 &&
+                (normalizedProject.shots[0].cameraBlocks?.length ?? 0) === 0 &&
+                (normalizedProject.shots[0].lightBlocks?.length ?? 0) === 0 &&
+                (normalizedProject.shots[0].effectBlocks?.length ?? 0) === 0 &&
+                normalizedProject.background.kind === 'solid' &&
+                normalizedProject.background.color.toUpperCase() ===
                 LEGACY_DEFAULT_CANVAS_BACKGROUND;
 
             if (isUntouchedBlankProject) {
                 return DEFAULT_PROJECT;
             }
 
-            return project;
+            // Ensure the project has all required structural properties
+            // that the app's components assume exist
+            return ensureProjectStructure(normalizedProject);
         }
     } catch (err) {
         console.error('Failed to load project from browser storage:', err);
     }
     return null;
+}
+
+/**
+ * Lightweight structure normalization to ensure required arrays exist
+ * before migration checks. Does not fill in full defaults - that's done
+ * by ensureProjectStructure after migration checks.
+ */
+function normalizeProjectStructure(project: Project): Project {
+    try {
+        const shots = Array.isArray(project.shots) && project.shots.length > 0
+            ? project.shots
+            : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
+
+        return {
+            ...project,
+            shots,
+            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
+            audio: project.audio || { clips: [], muted: false, masterVolume: 1.0 },
+            background: project.background || { kind: 'solid', color: '#0c0e17' },
+        };
+    } catch {
+        return DEFAULT_PROJECT;
+    }
+}
+
+/**
+ * Ensures a validated project has all structural properties that the app assumes exist.
+ * This is a safety net for projects that pass Zod validation but are missing
+ * nested properties that components directly access.
+ */
+function ensureProjectStructure(project: Project): Project {
+    try {
+        // Ensure shots array exists and has at least one shot
+        const shots = Array.isArray(project.shots) && project.shots.length > 0
+            ? project.shots
+            : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
+
+        // Ensure each shot has all required properties
+        const safeShots = shots.map((shot) => {
+            // Only default isPlaceholder to true for the fallback shot (no layers, no blocks)
+            // If shot has user content (layers, cameraBlocks, etc.), don't force isPlaceholder=true
+            const hasUserContent =
+                (shot.layers?.length ?? 0) > 0 ||
+                (shot.cameraBlocks?.length ?? 0) > 0 ||
+                (shot.lightBlocks?.length ?? 0) > 0 ||
+                (shot.effectBlocks?.length ?? 0) > 0;
+            const defaultIsPlaceholder = hasUserContent ? false : true;
+
+            return {
+                ...shot,
+                id: shot.id || generateId('shot'),
+                name: shot.name || 'Shot',
+                isPlaceholder: shot.isPlaceholder ?? defaultIsPlaceholder,
+                startMs: typeof shot.startMs === 'number' ? shot.startMs : 0,
+                durationMs: typeof shot.durationMs === 'number' && shot.durationMs > 0 ? shot.durationMs : 4000,
+                lane: typeof shot.lane === 'number' ? shot.lane : 0,
+                layers: Array.isArray(shot.layers) ? shot.layers : [],
+                cameraBlocks: Array.isArray(shot.cameraBlocks) ? shot.cameraBlocks : [],
+                lightBlocks: Array.isArray(shot.lightBlocks) ? shot.lightBlocks : [],
+                effectBlocks: Array.isArray(shot.effectBlocks) ? shot.effectBlocks : [],
+                groups: Array.isArray(shot.groups) ? shot.groups : [],
+                useProjectBackground: shot.useProjectBackground ?? true,
+                background: shot.background || { kind: 'solid', color: '#0c0e17' },
+                transition: shot.transition || { type: 'cut', durationMs: 0, easing: { kind: 'preset', name: 'ease-out-expo' } },
+            };
+        });
+
+        // Ensure assets object exists
+        const assets = project.assets && typeof project.assets === 'object' ? project.assets : {};
+
+        // Ensure audio object exists with all required fields
+        const audio = project.audio
+            ? {
+                clips: Array.isArray(project.audio.clips) ? project.audio.clips : [],
+                muted: typeof project.audio.muted === 'boolean' ? project.audio.muted : false,
+                masterVolume: typeof project.audio.masterVolume === 'number' ? project.audio.masterVolume : 1.0,
+            }
+            : { clips: [], muted: false, masterVolume: 1.0 };
+
+        // Ensure project background exists
+        const background = project.background || { kind: 'solid', color: '#0c0e17' };
+
+        return {
+            ...project,
+            id: project.id || generateId('project'),
+            name: project.name || 'Untitled project',
+            version: project.version || CURRENT_SCHEMA_VERSION,
+            schemaVersion: project.schemaVersion || CURRENT_SCHEMA_VERSION,
+            updatedAt: project.updatedAt || new Date().toISOString(),
+            createdAt: project.createdAt || new Date().toISOString(),
+            aspectRatio: project.aspectRatio || '16:9',
+            fps: typeof project.fps === 'number' && project.fps > 0 ? project.fps : 60,
+            background,
+            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
+            audio,
+            shots: safeShots,
+        };
+    } catch {
+        // If anything goes wrong, return a fresh default project
+        return DEFAULT_PROJECT;
+    }
 }
 
 // Trigger browser download of .raylight.json project recipe file

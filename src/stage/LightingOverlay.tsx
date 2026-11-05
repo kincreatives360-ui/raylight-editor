@@ -1,7 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Sun, Flashlight, Lightbulb, Square } from 'lucide-react';
+import { LightTypeIcon } from '../ui/LightTypeIcon';
+import { SelectedLightGizmo, type UnifiedLight } from './SelectedLightGizmo';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
-import type { SceneLight, LightSourceType } from '../model/types';
+import type { LightRig, SceneLight } from '../model/types';
+import { generateId } from '../model/id';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
 import {
@@ -12,14 +14,13 @@ import {
 import {
     projectLightToScreen,
     unprojectScreenDeltaToLightDelta,
-    calculateSpotConeOverlay,
-    calculateAreaRectOverlay,
-    calculatePointReachOverlay,
-    calculateLightGroundProjection,
+    unprojectScreenToWorldPlane,
     calculateDepthDeltaFromScreen,
     lightToWorld,
+    worldToLight,
     type Vec3Like,
 } from './lightingMath';
+import { createVirtualCamera } from './lightingMath';
 
 interface LightingOverlayProps {
     frame: EvaluatedProjectFrame;
@@ -27,396 +28,13 @@ interface LightingOverlayProps {
     frameHeight: number;
 }
 
-interface UnifiedLight {
-    id: string;
-    name: string;
-    type: LightSourceType;
-    position: Vec3Like;
-    target?: Vec3Like;
-    intensity: number;
-    color: string;
-    temperature?: number;
-    angle?: number;
-    penumbra?: number;
-    width?: number;
-    height?: number;
-    distance?: number;
-}
-
-const LightIcon: React.FC<{ type: LightSourceType }> = ({ type }) => {
-    switch (type) {
-        case 'directional':
-            return <Sun className="w-3.5 h-3.5 text-white" />;
-        case 'spot':
-            return <Flashlight className="w-3.5 h-3.5 text-white" />;
-        case 'point':
-            return <Lightbulb className="w-3.5 h-3.5 text-white" />;
-        case 'area':
-            return <Square className="w-3.5 h-3.5 text-white" />;
-        default:
-            return <Sun className="w-3.5 h-3.5 text-white" />;
-    }
-};
-
-interface SelectedLightGizmoProps {
-    selectedLight: UnifiedLight;
-    cameraPose: ReturnType<typeof evaluateCameraPose>;
-    frameWidth: number;
-    frameHeight: number;
-    aspect: number;
-    activeDepthDrag: number | null;
-    onTargetDragStart: (e: React.PointerEvent) => void;
-    onSpotConeDragStart: (
-        e: React.PointerEvent,
-        targetScreenX: number,
-        targetScreenY: number,
-        handleScreenX?: number,
-        handleScreenY?: number
-    ) => void;
-    onAreaResizeDragStart: (e: React.PointerEvent) => void;
-    onPointReachDragStart: (e: React.PointerEvent) => void;
-    onDepthDragStart: (e: React.PointerEvent) => void;
-    onSourceDragStart: (e: React.PointerEvent) => void;
-}
-
-const SelectedLightGizmo: React.FC<SelectedLightGizmoProps> = ({
-    selectedLight,
-    cameraPose,
-    frameWidth,
-    frameHeight,
-    aspect,
-    activeDepthDrag,
-    onTargetDragStart,
-    onSpotConeDragStart,
-    onAreaResizeDragStart,
-    onPointReachDragStart,
-    onDepthDragStart,
-    onSourceDragStart,
-}) => {
-    const srcScreen = projectLightToScreen(
-        selectedLight.position,
-        cameraPose,
-        frameWidth,
-        frameHeight,
-        aspect
-    );
-
-    const hasTarget = selectedLight.type === 'spot' || selectedLight.type === 'directional' || selectedLight.type === 'area';
-    const targetPos = selectedLight.target || { x: 0, y: 0, z: 0 };
-    const tgtScreen = hasTarget
-        ? projectLightToScreen(targetPos, cameraPose, frameWidth, frameHeight, aspect)
-        : null;
-
-    const ground = calculateLightGroundProjection(
-        selectedLight.position,
-        cameraPose,
-        frameWidth,
-        frameHeight,
-        aspect
-    );
-
-    const spotCone = selectedLight.type === 'spot'
-        ? calculateSpotConeOverlay(
-            selectedLight.position,
-            targetPos,
-            selectedLight.angle || Math.PI / 6,
-            cameraPose,
-            frameWidth,
-            frameHeight,
-            aspect
-        )
-        : null;
-
-    const areaRect = selectedLight.type === 'area'
-        ? calculateAreaRectOverlay(
-            selectedLight.position,
-            selectedLight.target,
-            selectedLight.width || 3,
-            selectedLight.height || 3,
-            cameraPose,
-            frameWidth,
-            frameHeight,
-            aspect
-        )
-        : null;
-
-    const pointReach = selectedLight.type === 'point'
-        ? calculatePointReachOverlay(
-            selectedLight.position,
-            selectedLight.distance || 5,
-            cameraPose,
-            frameWidth,
-            frameHeight,
-            aspect
-        )
-        : null;
-
-    return (
-        <g key="selected-light-gizmo">
-            {/* Ground Plane Projection Drop-line and Shadow Ellipse */}
-            <g key="ground-projection" data-testid="selected-light-ground-projection">
-                <line
-                    x1={srcScreen.x}
-                    y1={srcScreen.y}
-                    x2={ground.groundScreen.x}
-                    y2={ground.groundScreen.y}
-                    stroke="#f97316"
-                    strokeWidth="1.5"
-                    strokeDasharray="3,3"
-                    strokeOpacity="0.45"
-                />
-                <ellipse
-                    cx={ground.groundScreen.x}
-                    cy={ground.groundScreen.y}
-                    rx={ground.radiusX}
-                    ry={ground.radiusY}
-                    fill="rgba(249, 115, 22, 0.08)"
-                    stroke="#f97316"
-                    strokeWidth="1.5"
-                    strokeDasharray="2,2"
-                    strokeOpacity="0.5"
-                />
-            </g>
-            {/* Aim Target Dashed Line */}
-            {tgtScreen && (
-                <>
-                    <line
-                        x1={srcScreen.x}
-                        y1={srcScreen.y}
-                        x2={tgtScreen.x}
-                        y2={tgtScreen.y}
-                        stroke="#f97316"
-                        strokeWidth="2"
-                        strokeDasharray="5,4"
-                        strokeOpacity="0.85"
-                    />
-
-                    {/* Aim At Target Handle */}
-                    <g
-                        data-testid="selected-light-target-handle"
-                        className="pointer-events-auto cursor-grab active:cursor-grabbing group"
-                        onPointerDown={onTargetDragStart}
-                        transform={`translate(${tgtScreen.x}, ${tgtScreen.y})`}
-                    >
-                        <circle
-                            r="11"
-                            className="fill-[#161619] stroke-[#f97316] group-hover:scale-125 transition-transform"
-                            strokeWidth="2"
-                        />
-                        <circle r="4" className="fill-[#f97316]" />
-                    </g>
-                </>
-            )}
-
-            {/* Spot Light Cone Overlay */}
-            {spotCone && (
-                <g key="spot-cone">
-                    {/* Cone rim polygon */}
-                    <polygon
-                        points={spotCone.rimPoints.map((p) => `${p.x},${p.y}`).join(' ')}
-                        fill="rgba(249, 115, 22, 0.08)"
-                        stroke="#f97316"
-                        strokeWidth="1.5"
-                        strokeDasharray="4,4"
-                        strokeOpacity="0.7"
-                    />
-
-                    {/* Tangent boundary lines */}
-                    {spotCone.rimPoints.length > 4 && (
-                        <>
-                            <line
-                                x1={srcScreen.x}
-                                y1={srcScreen.y}
-                                x2={spotCone.rimPoints[0].x}
-                                y2={spotCone.rimPoints[0].y}
-                                stroke="#f97316"
-                                strokeWidth="1.5"
-                                strokeOpacity="0.5"
-                            />
-                            <line
-                                x1={srcScreen.x}
-                                y1={srcScreen.y}
-                                x2={spotCone.rimPoints[Math.floor(spotCone.rimPoints.length / 2)].x}
-                                y2={spotCone.rimPoints[Math.floor(spotCone.rimPoints.length / 2)].y}
-                                stroke="#f97316"
-                                strokeWidth="1.5"
-                                strokeOpacity="0.5"
-                            />
-                        </>
-                    )}
-
-                    {/* Spot Cone Angle Resize Handle on Rim */}
-                    {spotCone.rimPoints.length > 0 && (
-                        <g
-                            data-testid="spot-cone-handle"
-                            className="pointer-events-auto cursor-ew-resize group"
-                            onPointerDown={(e) =>
-                                onSpotConeDragStart(
-                                    e,
-                                    tgtScreen?.x || 0,
-                                    tgtScreen?.y || 0,
-                                    spotCone.rimPoints[0].x,
-                                    spotCone.rimPoints[0].y
-                                )
-                            }
-                            transform={`translate(${spotCone.rimPoints[0].x}, ${spotCone.rimPoints[0].y})`}
-                        >
-                            <circle
-                                r="7"
-                                className="fill-[#f97316] stroke-white group-hover:scale-125 transition-transform"
-                                strokeWidth="2"
-                            />
-                        </g>
-                    )}
-                </g>
-            )}
-
-            {/* Area Light Rectangular Wireframe */}
-            {areaRect && (
-                <g key="area-wireframe">
-                    <polygon
-                        points={`${areaRect.corners[0].x},${areaRect.corners[0].y} ${areaRect.corners[1].x},${areaRect.corners[1].y} ${areaRect.corners[2].x},${areaRect.corners[2].y} ${areaRect.corners[3].x},${areaRect.corners[3].y}`}
-                        fill="rgba(249, 115, 22, 0.12)"
-                        stroke="#f97316"
-                        strokeWidth="2"
-                    />
-
-                    {/* Area Corner Resize Handle */}
-                    <g
-                        data-testid="area-resize-handle"
-                        className="pointer-events-auto cursor-nwse-resize group"
-                        onPointerDown={onAreaResizeDragStart}
-                        transform={`translate(${areaRect.corners[1].x}, ${areaRect.corners[1].y})`}
-                    >
-                        <rect
-                            x="-5"
-                            y="-5"
-                            width="10"
-                            height="10"
-                            className="fill-[#f97316] stroke-white group-hover:scale-125 transition-transform"
-                            strokeWidth="2"
-                        />
-                    </g>
-                </g>
-            )}
-
-            {/* Point Light Reach Circle */}
-            {pointReach && (
-                <g key="point-reach">
-                    <circle
-                        cx={pointReach.centerScreen.x}
-                        cy={pointReach.centerScreen.y}
-                        r={pointReach.radiusScreen}
-                        fill="rgba(249, 115, 22, 0.05)"
-                        stroke="#f97316"
-                        strokeWidth="1.5"
-                        strokeDasharray="4,4"
-                        strokeOpacity="0.75"
-                    />
-
-                    {/* Point Reach Perimeter Handle */}
-                    <g
-                        data-testid="point-reach-handle"
-                        className="pointer-events-auto cursor-ew-resize group"
-                        onPointerDown={onPointReachDragStart}
-                        transform={`translate(${pointReach.edgeScreen.x}, ${pointReach.edgeScreen.y})`}
-                    >
-                        <circle
-                            r="7"
-                            className="fill-[#f97316] stroke-white group-hover:scale-125 transition-transform"
-                            strokeWidth="2"
-                        />
-                    </g>
-                </g>
-            )}
-
-            {/* Dedicated Depth (Z) Handle */}
-            <g
-                data-testid="selected-light-depth-handle"
-                className="pointer-events-auto cursor-ns-resize group"
-                onPointerDown={onDepthDragStart}
-                transform={`translate(${srcScreen.x}, ${srcScreen.y - 32})`}
-            >
-                <line
-                    x1="0"
-                    y1="14"
-                    x2="0"
-                    y2="0"
-                    stroke="#0088ff"
-                    strokeWidth="1.5"
-                    strokeDasharray="2,2"
-                />
-                <rect
-                    x="-12"
-                    y="-10"
-                    width="24"
-                    height="18"
-                    rx="5"
-                    className="fill-[#18181b] stroke-[#0088ff] group-hover:stroke-white group-hover:scale-110 shadow-md transition-all"
-                    strokeWidth="1.5"
-                />
-                <text
-                    x="0"
-                    y="3"
-                    textAnchor="middle"
-                    className="fill-[#0088ff] group-hover:fill-white text-[10px] font-bold pointer-events-none select-none transition-colors"
-                >
-                    ↕Z
-                </text>
-                {activeDepthDrag !== null && (
-                    <g transform="translate(18, -2)">
-                        <rect
-                            x="-4"
-                            y="-10"
-                            width="48"
-                            height="18"
-                            rx="4"
-                            className="fill-[#0088ff] text-white shadow-lg"
-                        />
-                        <text
-                            x="20"
-                            y="3"
-                            textAnchor="middle"
-                            className="fill-white text-[10px] font-semibold select-none"
-                        >
-                            {`${activeDepthDrag.toFixed(2)}m`}
-                        </text>
-                    </g>
-                )}
-            </g>
-
-            {/* Prominent Selected Light Source Handle */}
-            <g
-                data-testid="selected-light-source-handle"
-                className="pointer-events-auto cursor-grab active:cursor-grabbing group"
-                onPointerDown={onSourceDragStart}
-                transform={`translate(${srcScreen.x}, ${srcScreen.y})`}
-            >
-                <circle
-                    r="18"
-                    className="fill-[#f97316] stroke-white shadow-xl group-hover:scale-110 transition-transform"
-                    strokeWidth="2.5"
-                    style={{
-                        filter: 'drop-shadow(0 0 10px rgba(249, 115, 22, 0.7))',
-                    }}
-                />
-                <foreignObject x="-9" y="-9" width="18" height="18" className="pointer-events-none">
-                    <div className="w-full h-full flex items-center justify-center">
-                        <LightIcon type={selectedLight.type} />
-                    </div>
-                </foreignObject>
-            </g>
-        </g>
-    );
-};
-
 export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     frame,
     frameWidth,
     frameHeight,
 }) => {
     const { project, updateShot, beginDragTransaction, commitDragTransaction } = useProjectStore();
-    const { selectedLightId, selectLight, canvasZoom } = useSelectionStore();
+    const { selectedLightId, selectLight, canvasZoom, activeLightTool, setActiveLightTool } = useSelectionStore();
 
     const activeShot = frame.activeShot;
     const shotLight = activeShot.light;
@@ -445,8 +63,8 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             type: 'directional',
             position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
             target: (shotLight as unknown as { target?: Vec3Like })?.target || { x: 0, y: 0, z: 0 },
-            intensity: shotLight?.intensity ?? 1.2,
-            color: '#ffffff',
+            intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
+            color: shotLight?.keyColor ?? '#ffffff',
             temperature: shotLight?.temperature ?? 6100,
         };
 
@@ -466,7 +84,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             distance: s.distance ?? 5,
         }));
 
-        return [keyLight, ...sources];
+        return [...(shotLight?.keyLightEnabled === false ? [] : [keyLight]), ...sources];
     }, [shotLight]);
 
     const selectedLight = useMemo(
@@ -476,15 +94,58 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
 
     const [activeDepthDrag, setActiveDepthDrag] = useState<number | null>(null);
 
+    const placeLight = useCallback((event: React.PointerEvent<SVGRectElement>) => {
+        if (!activeLightTool) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const bounds = event.currentTarget.ownerSVGElement?.getBoundingClientRect();
+        if (!bounds || bounds.width <= 0 || bounds.height <= 0) return;
+        const screenX = (event.clientX - bounds.left) * frameWidth / bounds.width;
+        const screenY = (event.clientY - bounds.top) * frameHeight / bounds.height;
+        const camera = createVirtualCamera(cameraPose, aspect);
+        const world = unprojectScreenToWorldPlane(screenX, screenY, 5, camera, frameWidth, frameHeight);
+        const position = worldToLight(world);
+        const rig: LightRig = activeShot.light || {
+            position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45, sources: [],
+        };
+
+        if (activeLightTool === 'directional') {
+            updateShot(activeShot.id, { light: { ...rig, position, keyLightEnabled: true } });
+            selectLight('sun-key');
+        } else {
+            const source: SceneLight = {
+                id: generateId(activeLightTool),
+                name: `${activeLightTool === 'area' ? 'Area' : activeLightTool[0].toUpperCase() + activeLightTool.slice(1)} Light`,
+                type: activeLightTool,
+                enabled: true,
+                position,
+                target: { x: 0, y: 0, z: 0 },
+                intensity: 1.2,
+                color: '#ffffff',
+                temperature: 6500,
+                distance: activeLightTool === 'point' || activeLightTool === 'spot' ? 6 : undefined,
+                angle: activeLightTool === 'spot' ? Math.PI / 6 : undefined,
+                penumbra: activeLightTool === 'spot' ? 0.2 : undefined,
+                width: activeLightTool === 'area' ? 3 : undefined,
+                height: activeLightTool === 'area' ? 3 : undefined,
+                castShadow: true,
+            };
+            updateShot(activeShot.id, { light: { ...rig, sources: [...(rig.sources ?? []), source] } });
+            selectLight(source.id);
+        }
+        setActiveLightTool(null);
+    }, [activeLightTool, activeShot.id, activeShot.light, aspect, cameraPose, frameHeight, frameWidth, selectLight, setActiveLightTool, updateShot]);
+
     // Update light helper
     const updateLight = useCallback((patch: Partial<SceneLight>) => {
         if (!selectedLightId) return;
 
-        const currentRig = activeShot.light || {
+        const currentRig: LightRig = activeShot.light || {
             position: { x: -0.28, y: 0.36, z: 0.9 },
             intensity: 1.2,
             temperature: 6100,
             ambience: 0.45,
+            sources: [],
         };
 
         if (selectedLightId === 'sun-key' || selectedLightId === 'key' || selectedLightId === 'sun') {
@@ -757,20 +418,22 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         startDrag(onPointerMove);
     }, [selectedLight, canvasZoom, startDrag, updateLight]);
 
-    if (!showGizmos && !selectedLightId) {
+    if (!showGizmos && !selectedLightId && !activeLightTool) {
         return null;
     }
 
     return (
         <div
             data-testid="lighting-overlay"
-            className="absolute inset-0 pointer-events-none select-none z-30"
+            className={`absolute inset-0 pointer-events-none select-none z-30 ${activeLightTool ? 'cursor-crosshair' : ''}`}
             style={{ width: `${frameWidth}px`, height: `${frameHeight}px` }}
+            onMouseDown={(e) => e.stopPropagation()}
         >
             <svg
                 className="w-full h-full pointer-events-none overflow-visible"
                 viewBox={`0 0 ${frameWidth} ${frameHeight}`}
             >
+                {activeLightTool && <rect x={0} y={0} width={frameWidth} height={frameHeight} fill="transparent" pointerEvents="all" onPointerDown={placeLight} />}
                 {/* 1. Unselected Light Badges */}
                 {allLights.map((l) => {
                     if (l.id === selectedLightId) return null;
@@ -795,7 +458,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                             />
                             <foreignObject x="-7" y="-7" width="14" height="14" className="pointer-events-none">
                                 <div className="w-full h-full flex items-center justify-center opacity-80 group-hover:opacity-100">
-                                    <LightIcon type={l.type} />
+                                    <LightTypeIcon type={l.type} className="w-3.5 h-3.5 text-white" />
                                 </div>
                             </foreignObject>
                             <text

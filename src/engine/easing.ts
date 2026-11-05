@@ -74,18 +74,19 @@ export function evaluateSpring(
 
     const presets: Record<
         SpringEasingName,
-        { damping: number; frequency: number }
+        { damping: number; frequency: number; criticallyDamped?: boolean }
     > = {
-        gentle: { damping: 7.5, frequency: 5.5 },
+        gentle: { damping: 6.5, frequency: 4.5, criticallyDamped: true },
         quick: { damping: 10.5, frequency: 8.5 },
         bouncy: { damping: 4.8, frequency: 11.5 },
-        slow: { damping: 5.5, frequency: 3.8 },
+        slow: { damping: 5.5, frequency: 3.8, criticallyDamped: true },
         snappy: { damping: 12.0, frequency: 10.0 },
-        stiff: { damping: 14.0, frequency: 12.0 },
+        stiff: { damping: 9.0, frequency: 12.0, criticallyDamped: true },
     };
 
     let damping = presets[name]?.damping ?? 8;
     let frequency = presets[name]?.frequency ?? 7;
+    let isCriticallyDamped = Boolean(presets[name]?.criticallyDamped);
 
     if (config && (config.stiffness !== undefined || config.damping !== undefined || config.mass !== undefined)) {
         const mass = Math.max(0.1, config.mass ?? 1);
@@ -95,16 +96,35 @@ export function evaluateSpring(
         const w0 = Math.sqrt(stiffness / mass);
         const zeta = cDamping / (2 * Math.sqrt(stiffness * mass));
 
-        damping = zeta * w0 * 0.7;
-        frequency = (w0 * Math.sqrt(Math.max(0.01, 1 - zeta * zeta))) / (2 * Math.PI) * 4;
+        isCriticallyDamped = zeta >= 1;
+        damping = Math.min(zeta, 1.5) * w0 * 0.7;
+        frequency = isCriticallyDamped
+            ? 0
+            : ((w0 * Math.sqrt(Math.max(0.01, 1 - zeta * zeta))) / (2 * Math.PI)) * 4;
     }
 
+    const omegaD = Math.max(0.01, frequency * Math.PI);
     const rawAt = (time: number) =>
-        1 - Math.exp(-damping * time) * Math.cos(frequency * time * Math.PI);
+        isCriticallyDamped
+            ? 1 - (1 + damping * time) * Math.exp(-damping * time)
+            : 1 -
+              Math.exp(-damping * time) *
+                  (Math.cos(omegaD * time) + (damping / omegaD) * Math.sin(omegaD * time));
 
     const endValue = rawAt(1);
     if (Math.abs(endValue) < 1e-6) return 1;
-    return Number((rawAt(t) / endValue).toFixed(6));
+    if (isCriticallyDamped) {
+        return Number((rawAt(t) / endValue).toFixed(6));
+    }
+    // For underdamped (bouncy) springs, preserve physical oscillation peaks over [0, 0.85]
+    // and smoothly blend any residual tail displacement into 1.0 over [0.85, 1.0]
+    const raw = rawAt(t);
+    if (t <= 0.85) {
+        return Number(raw.toFixed(6));
+    }
+    const s = (t - 0.85) / 0.15;
+    const smooth = s * s * (3 - 2 * s);
+    return Number((raw * (1 - smooth) + 1 * smooth).toFixed(6));
 }
 
 // 3. The 11 Standard Presets
@@ -265,7 +285,7 @@ export const ALL_18_EASINGS: EasingCatalogItem[] = [
         easing: { kind: 'bezier', x1: 0.85, y1: 0, x2: 0.15, y2: 1 },
     },
     {
-        id: 'bezier: whip',
+        id: 'bezier:whip',
         label: 'Bezier: Anticipate Whip (0.6, -0.28, 0.74, 0.05)',
         category: 'Custom Bezier',
         easing: { kind: 'bezier', x1: 0.6, y1: -0.28, x2: 0.74, y2: 0.05 },

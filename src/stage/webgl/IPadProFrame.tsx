@@ -1,3 +1,7 @@
+import { useDeviceScreenMaterials } from './useDeviceScreenMaterials';
+import { getDeviceShadowOpacity } from './deviceShadowOpacity';
+import { DeviceScreenSurface } from './DeviceScreenSurface';
+import { DeviceContactShadow } from './DeviceContactShadow';
 import { useMemo } from 'react';
 import * as THREE from 'three';
 import { SCREEN_PLANE_Z, type DeviceFrameMetrics } from '../../model/deviceFrame';
@@ -10,7 +14,6 @@ import {
   roundedRect,
 } from './phoneGeometry';
 import { useDisposable } from './useDisposable';
-import { createReflectionTexture, createShadowTexture } from './deviceTextures';
 
 export function IPadProFrame({
   metrics,
@@ -21,15 +24,9 @@ export function IPadProFrame({
   settings: DeviceFrameSettings;
   rotation?: { x: number; y: number; z: number };
 }) {
-  const facingCamera = Math.max(0, Math.cos(rotation?.x ?? 0) * Math.cos(rotation?.y ?? 0));
-  const effectiveShadowOpacity = Math.max(0, Math.min(1, settings.shadowOpacity * facingCamera));
+  const effectiveShadowOpacity = getDeviceShadowOpacity(settings.shadowOpacity, rotation);
+  const { glassMaterial, reflectionMaterial } = useDeviceScreenMaterials(settings);
   const depth = Math.max(0.004, metrics.bodyDepth * 0.7);
-
-  const reflectionTexture = useMemo(
-    () => createReflectionTexture(settings.gloss, settings.reflection, settings.glassTint),
-    [settings.gloss, settings.reflection, settings.glassTint]
-  );
-  const shadowTexture = useMemo(() => createShadowTexture(), []);
 
   const shellMaterial = useMemo(
     () =>
@@ -49,32 +46,6 @@ export function IPadProFrame({
         color: '#08080a',
       }),
     []
-  );
-
-  const screenGlassMaterial = useMemo(
-    () =>
-      new THREE.MeshPhysicalMaterial({
-        color: settings.glassTint,
-        transparent: true,
-        opacity: settings.glassOpacity,
-        roughness: settings.glassRoughness,
-        metalness: 0,
-        clearcoat: 1,
-        clearcoatRoughness: settings.glassRoughness,
-        depthWrite: false,
-      }),
-    [settings.glassTint, settings.glassOpacity, settings.glassRoughness]
-  );
-
-  const reflectionMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: reflectionTexture,
-        transparent: true,
-        opacity: settings.reflection * 0.75,
-        depthWrite: false,
-      }),
-    [reflectionTexture, settings.reflection]
   );
 
   const cameraMaterial = useMemo(
@@ -97,18 +68,6 @@ export function IPadProFrame({
         clearcoat: 1,
       }),
     [settings.frameColor]
-  );
-
-  const shadowMaterial = useMemo(
-    () =>
-      new THREE.MeshBasicMaterial({
-        map: shadowTexture,
-        transparent: true,
-        opacity: effectiveShadowOpacity,
-        depthWrite: false,
-        side: THREE.FrontSide,
-      }),
-    [shadowTexture, effectiveShadowOpacity]
   );
 
   // Geometries
@@ -170,8 +129,6 @@ export function IPadProFrame({
     [metrics.bodyWidth, depth]
   );
 
-  const shadowGeometry = useMemo(() => new THREE.CircleGeometry(1, 48), []);
-
   useDisposable(bodyGeometry);
   useDisposable(bezelGeometry);
   useDisposable(screenGeometry);
@@ -179,16 +136,10 @@ export function IPadProFrame({
   useDisposable(cameraBumpGeometry);
   useDisposable(lensGeometry);
   useDisposable(markGeometry);
-  useDisposable(shadowGeometry);
-  useDisposable(reflectionTexture);
-  useDisposable(shadowTexture);
   useDisposable(shellMaterial);
   useDisposable(bezelMaterial);
-  useDisposable(screenGlassMaterial);
-  useDisposable(reflectionMaterial);
   useDisposable(cameraMaterial);
   useDisposable(appleMarkMaterial);
-  useDisposable(shadowMaterial);
 
   const cameraBumpX = -metrics.bodyWidth * 0.36;
   const cameraBumpY = metrics.bodyHeight * 0.38;
@@ -196,20 +147,18 @@ export function IPadProFrame({
   return (
     <group name="ipad-pro-frame">
       {/* Contact Studio Shadow */}
-      {settings.shadowEnabled && effectiveShadowOpacity > 0.001 && (
-        <mesh
-          name="ipad-device-shadow"
-          geometry={shadowGeometry}
-          material={shadowMaterial}
-          position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
-          scale={[
-            metrics.bodyWidth * (1.12 + settings.shadowBlur * 0.4),
-            metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.15),
-            1,
-          ]}
-          renderOrder={-2}
-        />
-      )}
+      <DeviceContactShadow
+        visible={settings.shadowEnabled && effectiveShadowOpacity > 0.001}
+        opacity={effectiveShadowOpacity}
+        name="ipad-device-shadow"
+        position={[0, -metrics.bodyHeight * settings.shadowOffset, -depth * 0.8]}
+        scale={[
+          metrics.bodyWidth * (1.12 + settings.shadowBlur * 0.4),
+          metrics.bodyHeight * (0.32 + settings.shadowBlur * 0.15),
+          1,
+        ]}
+        renderOrder={-2}
+      />
 
       {/* Aluminum Unibody Shell */}
       <mesh
@@ -259,17 +208,10 @@ export function IPadProFrame({
       />
 
       {/* Screen Glass & Reflection */}
-      <mesh
-        name="ipad-screen-glass"
+      <DeviceScreenSurface
         geometry={screenGeometry}
-        material={screenGlassMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.0005]}
-      />
-      <mesh
-        name="ipad-screen-reflection"
-        geometry={screenGeometry}
-        material={reflectionMaterial}
-        position={[0, 0, SCREEN_PLANE_Z + 0.001]}
+        glass={{ name: 'ipad-screen-glass', material: glassMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.0005] }}
+        reflection={{ name: 'ipad-screen-reflection', material: reflectionMaterial, position: [0, 0, SCREEN_PLANE_Z + 0.001] }}
       />
     </group>
   );

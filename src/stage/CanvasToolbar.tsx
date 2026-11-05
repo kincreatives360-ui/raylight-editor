@@ -1,38 +1,17 @@
+import { LIGHT_TYPE_META } from '../ui/lightTypes';
+import { IconButton } from '../ui/primitives';
+import { useFloatingPanel } from '../ui/useFloatingPanel';
+import { DropdownMenu, MenuItem } from '../ui/Menu';
 // src/stage/CanvasToolbar.tsx
-import React, { useState, useRef, useEffect } from 'react';
-import {
-    MousePointer,
-    Move,
-    Rotate3d,
-    Circle,
-    Square,
-    Minus,
-    Type,
-    Sun,
-    ChevronDown,
-    Hand,
-    Pentagon,
-    ArrowRight,
-    Camera,
-    Spline,
-    Shapes,
-    Scissors,
-    Tag,
-    LayoutGrid,
-    Volume2,
-    Image as ImageIcon,
-    Check,
-    Crop,
-    Sparkles,
-    Activity,
-    Flashlight,
-    Lightbulb,
-} from 'lucide-react';
-import type { Layer, SceneLight } from '../model/types';
-import { generateId } from '../model/id';
+import React, { useState, useRef } from 'react';
+import { MousePointer, Move, Rotate3d, Circle, Square, Minus, Type, Sun, ChevronDown, Hand, Pentagon, ArrowRight, Camera, Spline, Shapes, Scissors, LayoutGrid, Volume2, Image as ImageIcon, Check, Crop, Sparkles, Activity, Focus, Feather } from 'lucide-react';
+import type { Layer } from '../model/types';
 import { useSelectionStore, type CanvasTool } from '../store/useSelectionStore';
 import { usePlayheadStore } from '../store/usePlayheadStore';
 import { useProjectStore } from '../store/useProjectStore';
+import { CAMERA_TOOL_SHORTCUT, SCISSORS_SHORTCUT } from '../utils/cameraShortcuts';
+import { SHAPE_TOOL_ITEMS } from './canvasToolItems';
+import type { CanvasToolbarPlacement } from './canvasToolbarLayout';
 
 interface CanvasToolbarProps {
     selectedLayer: Layer | undefined;
@@ -43,6 +22,8 @@ interface CanvasToolbarProps {
     onToggleSafeArea?: () => void;
     onOpenShortcuts?: () => void;
     onSelectAudioClick?: () => void;
+    onFrameSelection?: () => void;
+    placement?: CanvasToolbarPlacement;
 }
 
 type MenuKey = 'pointer' | 'shape' | 'light' | 'components' | null;
@@ -63,44 +44,15 @@ const ShapeIcon: React.FC<{ activeTool: CanvasTool }> = ({ activeTool }) => {
         case 'line': return <Minus className="w-3.5 h-3.5" />;
         case 'arrow': return <ArrowRight className="w-3.5 h-3.5" />;
         case 'polygon': return <Pentagon className="w-3.5 h-3.5" />;
+        case 'pen': return <Feather className="w-3.5 h-3.5" />;
         case 'image': return <ImageIcon className="w-3.5 h-3.5" />;
         default: return <Square className="w-3.5 h-3.5" />;
     }
 };
 
-const DropdownMenu: React.FC<{
-    children: React.ReactNode;
-    align?: 'left' | 'right';
-    className?: string;
-}> = ({ children, align = 'left', className = '' }) => (
-    <div
-        className={`absolute bottom-full mb-2 ${align === 'right' ? 'right-0' : 'left-0'} min-w-[10rem] rounded-xl bg-[#1e1e22]/95 border border-white/[0.08] shadow-2xl p-1 text-xs z-50 ${className}`}
-        style={{ backdropFilter: 'blur(20px)' }}
-    >
-        {children}
-    </div>
-);
 
-const MenuItem: React.FC<{
-    icon: React.FC<{ className?: string }>;
-    label: string;
-    shortcut?: string;
-    active?: boolean;
-    accent?: string;
-    onClick: () => void;
-}> = ({ icon: Icon, label, shortcut, active, accent, onClick }) => (
-    <button
-        type="button"
-        onClick={onClick}
-        className={`w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left cursor-pointer transition ${active ? 'bg-[var(--accent-primary,#0088ff)] text-white' : 'text-[#d4d4d8] hover:bg-white/5 hover:text-white'}`}
-    >
-        <div className="flex items-center gap-2">
-            <Icon className={`w-3.5 h-3.5 ${accent ?? 'opacity-80'}`} />
-            <span>{label}</span>
-        </div>
-        {shortcut && <span className="text-[11px] font-mono opacity-70">{shortcut}</span>}
-    </button>
-);
+
+
 
 export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     selectedLayer,
@@ -111,6 +63,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     onToggleSafeArea,
     onOpenShortcuts: _onOpenShortcuts,
     onSelectAudioClick,
+    onFrameSelection,
+    placement = 'bottom',
 }) => {
     const {
         activeTool,
@@ -118,7 +72,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         isCropping,
         selectedShotId,
         selectedLightId,
+        activeLightTool,
         selectLight,
+        setActiveLightTool,
         setActiveTool,
         toggleAnimateMode,
         setIsCropping,
@@ -135,15 +91,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const activeShot = project.shots.find((s) => s.id === selectedShotId) || project.shots[0];
 
     // Close menus on outside click
-    useEffect(() => {
-        const handler = (e: MouseEvent) => {
-            if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-                setOpenMenu(null);
-            }
-        };
-        if (openMenu) document.addEventListener('mousedown', handler);
-        return () => document.removeEventListener('mousedown', handler);
-    }, [openMenu]);
+    useFloatingPanel({ open: !!openMenu, surfaceRef: menuRef, onClose: () => setOpenMenu(null), outsideEvent: 'mousedown', escape: true });
 
     const showToast = (msg: string) => {
         setToastMessage(msg);
@@ -164,6 +112,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         activeTool === 'line' ||
         activeTool === 'arrow' ||
         activeTool === 'polygon' ||
+        activeTool === 'pen' ||
         activeTool === 'image';
 
     /* ── helpers ── */
@@ -294,6 +243,12 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
         if (selectedLightId) {
             selectLight(null);
         } else {
+            if (activeShot?.light?.keyLightEnabled === false && activeShot) {
+                updateShot(activeShot.id, (shot) => ({
+                    ...shot,
+                    light: { ...shot.light, keyLightEnabled: true },
+                }));
+            }
             selectLight('sun-key');
         }
         if (onToggleLightRig) onToggleLightRig();
@@ -301,59 +256,9 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
     const handleSelectOrCreateLight = (type: 'directional' | 'spot' | 'point' | 'area') => {
         if (!activeShot) return;
-        if (type === 'directional') {
-            selectLight('sun-key');
-            setOpenMenu(null);
-            return;
-        }
-
-        const currentRig = activeShot.light || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-            sources: [],
-        };
-
-        const existing = (currentRig.sources || []).find((s) => s.type === type);
-        if (existing) {
-            selectLight(existing.id);
-            setOpenMenu(null);
-            return;
-        }
-
-        const newId = generateId(type);
-        const newSource: SceneLight = {
-            id: newId,
-            name: type === 'spot' ? 'Spot Light' : type === 'point' ? 'Point Light' : 'Area Light',
-            type,
-            enabled: true,
-            position:
-                type === 'spot'
-                    ? { x: 0.2, y: 0.5, z: 1.2 }
-                    : type === 'area'
-                    ? { x: -0.4, y: 0.3, z: 0.8 }
-                    : { x: 0, y: 0.3, z: 0.6 },
-            target: { x: 0, y: 0, z: 0 },
-            intensity: 1.2,
-            color: '#ffffff',
-            temperature: 6500,
-            angle: Math.PI / 5,
-            penumbra: 0.25,
-            width: 3.0,
-            height: 2.5,
-            distance: 6.0,
-            castShadow: true,
-        };
-
-        updateShot(activeShot.id, {
-            light: {
-                ...currentRig,
-                sources: [...(currentRig.sources || []), newSource],
-            },
-        });
-
-        selectLight(newId);
+        selectLight(null);
+        setActiveTool('select');
+        setActiveLightTool(type);
         setOpenMenu(null);
     };
 
@@ -411,30 +316,22 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
     /* ── Shared button style ── */
     const toolBtn = (active: boolean) =>
-        `w-7 h-7 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none ${
+        `w-9 h-9 rounded-lg flex items-center justify-center transition-colors duration-100 cursor-pointer focus-visible:outline-none ${
             active
-                ? 'bg-[var(--accent-primary,#0088ff)] text-white shadow-sm'
-                : 'text-[#a1a1aa] hover:text-white hover:bg-white/5'
+                ? 'bg-brand-blue text-white shadow-xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-white/5'
         }`;
 
     const chevronBtn =
-        'px-0.5 py-1 text-[#a1a1aa] hover:text-white cursor-pointer rounded transition-colors';
+        'px-1 py-2 text-muted-foreground hover:text-foreground cursor-pointer rounded transition-colors';
 
     /* ── Dropdown menu items ── */
     const pointerItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
         { id: 'select', label: 'Select', key: 'V', icon: MousePointer },
         { id: 'hand', label: 'Hand', key: 'H', icon: Hand },
-        { id: 'camera', label: 'Orbit', key: '⇧F', icon: Camera },
+        { id: 'camera', label: 'Orbit', key: CAMERA_TOOL_SHORTCUT.label, icon: Camera },
         { id: 'tilt', label: 'Tilt', key: 'Y', icon: Rotate3d },
         { id: 'move', label: 'Move', key: 'G', icon: Move },
-    ];
-
-    const shapeItems: { id: CanvasTool; label: string; key: string; icon: React.FC<{ className?: string }> }[] = [
-        { id: 'rectangle', label: 'Rectangle', key: 'R', icon: Square },
-        { id: 'ellipse', label: 'Ellipse', key: 'O', icon: Circle },
-        { id: 'polygon', label: 'Polygon', key: '', icon: Pentagon },
-        { id: 'line', label: 'Line', key: 'L', icon: Minus },
-        { id: 'arrow', label: 'Arrow', key: '⇧L', icon: ArrowRight },
     ];
 
     return (
@@ -442,7 +339,8 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
             ref={menuRef}
             onMouseDown={(e) => e.stopPropagation()}
             onClick={(e) => e.stopPropagation()}
-            className="absolute bottom-3 left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none"
+            data-canvas-toolbar-positioner=""
+            className={`absolute ${placement === 'top' ? 'top-3' : 'bottom-3'} left-1/2 -translate-x-1/2 z-40 flex flex-col items-center gap-2 select-none max-w-[calc(100%-24px)]`}
         >
             {/* Transient Toast Notification */}
             {toastMessage && (
@@ -451,53 +349,62 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </div>
             )}
 
-            {/* Floating Crop Pill (visible when Image/Video layer selected) */}
-            {(selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
-                <button
-                    onClick={() => setIsCropping(!isCropping)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium border shadow-xl cursor-pointer transition-colors duration-100 ${
-                        isCropping
-                            ? 'bg-[var(--accent-primary,#0088ff)] text-white border-[#0077e6]'
-                            : 'bg-[#161619]/95 hover:bg-[#242428] text-[#f4f4f5] border-white/[0.07]'
-                    }`}
+            {/* Contextual Floating Toolbar (Image / Video Layer Actions: Crop) */}
+            {activeTool !== 'camera' && (selectedLayer?.kind === 'image' || selectedLayer?.kind === 'video') && (
+                <div
+                    id="raylight-context-toolbar"
+                    className="flex items-center gap-1.5 px-2 py-1.5 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs shrink-0 animate-fade-in"
                 >
-                    {isCropping ? (
-                        <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Done</span>
-                        </>
-                    ) : (
-                        <>
-                            <Crop className="w-3.5 h-3.5 text-[#a1a1aa]" />
-                            <span>Crop</span>
-                        </>
-                    )}
-                </button>
+                    <button
+                        onClick={() => setIsCropping(!isCropping)}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer transition-colors duration-150 ${
+                            isCropping
+                                ? 'bg-brand-blue text-white shadow-xs'
+                                : 'hover:bg-subtle text-foreground'
+                        }`}
+                        title="Crop Image / Video"
+                    >
+                        {isCropping ? (
+                            <>
+                                <Check className="w-3.5 h-3.5" />
+                                <span>Done</span>
+                            </>
+                        ) : (
+                            <>
+                                <Crop className="w-3.5 h-3.5 text-muted-foreground" />
+                                <span>Crop</span>
+                            </>
+                        )}
+                    </button>
+                </div>
             )}
 
             {/* ═══ Main Floating Toolbar ═══ */}
-            <div className="relative flex items-center gap-0.5 px-1.5 py-1 rounded-xl bg-[#161619]/95 backdrop-blur-xl border border-white/[0.08] shadow-2xl text-xs">
-
+            <div id="raylight-canvas-toolbar" className="raylight-floating-toolbar relative flex flex-wrap items-center justify-center gap-2 px-3 py-2 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl text-xs max-w-full shrink-0">
                 {/* 1 ─ Select / Pointer ▼ */}
                 <div className="relative flex items-center">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Select Tool (V)"
+                        icon={<>
+                            <PointerIcon activeTool={activeTool} />
+                        </>}
                         onClick={() => setActiveTool('select')}
-                        aria-label="Select Tool (V)"
                         title="Select Tool (V)"
                         className={toolBtn(isPointerActive)}
-                    >
-                        <PointerIcon activeTool={activeTool} />
-                    </button>
-                    <button
-                        type="button"
-                        aria-label="Pointer tools"
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Pointer tools"
+                        icon={<>
+                            <ChevronDown className="w-3 h-3" />
+                        </>}
                         aria-expanded={openMenu === 'pointer'}
                         onClick={() => toggleMenu('pointer')}
                         className={chevronBtn}
-                    >
-                        <ChevronDown className="w-3 h-3" />
-                    </button>
+                    />
 
                     {openMenu === 'pointer' && (
                         <DropdownMenu>
@@ -517,53 +424,70 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             <MenuItem
                                 icon={Scissors}
                                 label="Scissors"
-                                shortcut="C"
+                                shortcut={SCISSORS_SHORTCUT.label}
                                 accent="text-amber-300"
                                 onClick={handleSplitShot}
                             />
+                            {onFrameSelection && (
+                                <MenuItem
+                                    icon={Focus}
+                                    label="Frame Selection"
+                                    shortcut="F"
+                                    onClick={() => {
+                                        onFrameSelection();
+                                        setOpenMenu(null);
+                                    }}
+                                />
+                            )}
                         </DropdownMenu>
                     )}
                 </div>
 
                 {/* 2 ─ Animate (Spline) */}
-                <button
-                    type="button"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Animate Mode (Shift+A)"
+                    icon={<>
+                        <Spline className="w-3.5 h-3.5" />
+                    </>}
                     onClick={handleToggleAnimate}
-                    aria-label="Animate Mode (Shift+A)"
                     title="Animate (Shift+A)"
                     className={toolBtn(isAnimateMode)}
-                >
-                    <Spline className="w-3.5 h-3.5" />
-                </button>
+                />
 
                 {/* 3 ─ Shape ▼ */}
                 <div className="relative flex items-center">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Shape Tool"
+                        icon={<>
+                            <ShapeIcon activeTool={activeTool} />
+                        </>}
                         onClick={() =>
                             setActiveTool(
                                 isShapeActive ? activeTool : 'rectangle'
                             )
                         }
-                        aria-label="Shape Tool"
-                        title="Shape Tool (R / O / L)"
+                        title="Shape tools (R / O / P / L / A)"
                         className={toolBtn(isShapeActive)}
-                    >
-                        <ShapeIcon activeTool={activeTool} />
-                    </button>
-                    <button
-                        type="button"
-                        aria-label="Shape options"
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Shape options"
+                        icon={<>
+                            <ChevronDown className="w-3 h-3" />
+                        </>}
                         aria-expanded={openMenu === 'shape'}
                         onClick={() => toggleMenu('shape')}
                         className={chevronBtn}
-                    >
-                        <ChevronDown className="w-3 h-3" />
-                    </button>
+                    />
 
                     {openMenu === 'shape' && (
                         <DropdownMenu>
-                            {shapeItems.map((item) => (
+                            {SHAPE_TOOL_ITEMS.map((item) => (
                                 <MenuItem
                                     key={item.id}
                                     icon={item.icon}
@@ -603,30 +527,28 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                 </div>
 
                 {/* 4 ─ Text (T) */}
-                <button
-                    type="button"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Text Tool (T)"
+                    icon={<>
+                        <Type className="w-3.5 h-3.5" />
+                    </>}
                     onClick={() => setActiveTool('text')}
-                    aria-label="Text Tool (T)"
                     title="Text Tool (T)"
                     className={toolBtn(activeTool === 'text')}
-                >
-                    <Type className="w-3.5 h-3.5" />
-                </button>
+                />
 
-                {/* 5 ─ Tag / Label */}
-                <button
-                    type="button"
-                    onClick={() => showToast('Tag tool — coming soon')}
-                    aria-label="Tag Tool"
-                    title="Tag / Label annotations"
-                    className={toolBtn(false)}
-                >
-                    <Tag className="w-3.5 h-3.5" />
-                </button>
+
 
                 {/* 6 ─ Grid / Alignment */}
-                <button
-                    type="button"
+                <IconButton
+                    unstyled
+                    tooltip={false}
+                    label="Alignment Grid"
+                    icon={<>
+                        <LayoutGrid className="w-3.5 h-3.5" />
+                    </>}
                     onClick={() => {
                         if (onToggleSafeArea) {
                             onToggleSafeArea();
@@ -634,57 +556,58 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                             showToast('Alignment grid toggled');
                         }
                     }}
-                    aria-label="Alignment Grid"
                     aria-pressed={showSafeArea}
                     title="Snap Grid & Alignment Guides ( ' )"
                     className={toolBtn(showSafeArea)}
-                >
-                    <LayoutGrid className="w-3.5 h-3.5" />
-                </button>
+                />
 
                 {/* 7 ─ Lighting ▼ */}
                 <div className="relative flex items-center">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Lighting Rig"
+                        icon={<>
+                            <Sun className="w-3.5 h-3.5" />
+                        </>}
                         onClick={handleToggleLightButton}
-                        aria-label="Lighting Rig"
                         title="Scene Lighting Rig & Reflections"
-                        className={toolBtn(selectedLightId !== null || openMenu === 'light')}
-                    >
-                        <Sun className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                        type="button"
-                        aria-label="Lighting options"
+                        className={toolBtn(selectedLightId !== null || activeLightTool !== null || openMenu === 'light')}
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Lighting options"
+                        icon={<>
+                            <ChevronDown className="w-3 h-3" />
+                        </>}
                         aria-expanded={openMenu === 'light'}
                         onClick={() => toggleMenu('light')}
                         className={chevronBtn}
-                    >
-                        <ChevronDown className="w-3 h-3" />
-                    </button>
+                    />
 
                     {openMenu === 'light' && (
                         <DropdownMenu>
                             <MenuItem
-                                icon={Sun}
+                                icon={LIGHT_TYPE_META.directional.icon}
                                 label="Sun Light"
                                 active={selectedLightId === 'sun-key'}
                                 onClick={() => handleSelectOrCreateLight('directional')}
                             />
                             <MenuItem
-                                icon={Flashlight}
+                                icon={LIGHT_TYPE_META.spot.icon}
                                 label="Spot Light"
                                 active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'spot'))}
                                 onClick={() => handleSelectOrCreateLight('spot')}
                             />
                             <MenuItem
-                                icon={Lightbulb}
+                                icon={LIGHT_TYPE_META.point.icon}
                                 label="Point Light"
                                 active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'point'))}
                                 onClick={() => handleSelectOrCreateLight('point')}
                             />
                             <MenuItem
-                                icon={Square}
+                                icon={LIGHT_TYPE_META.area.icon}
                                 label="Area Light"
                                 active={Boolean(selectedLightId && activeShot?.light?.sources?.some(s => s.id === selectedLightId && s.type === 'area'))}
                                 onClick={() => handleSelectOrCreateLight('area')}
@@ -695,37 +618,41 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
 
                 {/* 8 ─ Components & Motion Presets ▼ */}
                 <div className="relative flex items-center">
-                    <button
-                        type="button"
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Components and Motion Presets Library"
+                        icon={<>
+                            <Shapes className="w-3.5 h-3.5" />
+                        </>}
                         onClick={() => toggleMenu('components')}
-                        aria-label="Components and Motion Presets Library"
                         aria-expanded={openMenu === 'components'}
                         title="Component & Motion Presets Library"
                         className={toolBtn(openMenu === 'components')}
-                    >
-                        <Shapes className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                        type="button"
-                        aria-label="Component options"
+                    />
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Component options"
+                        icon={<>
+                            <ChevronDown className="w-3 h-3" />
+                        </>}
                         aria-expanded={openMenu === 'components'}
                         onClick={() => toggleMenu('components')}
                         className={chevronBtn}
-                    >
-                        <ChevronDown className="w-3 h-3" />
-                    </button>
+                    />
 
                     {openMenu === 'components' && (
                         <DropdownMenu align="right" className="w-80 p-2.5">
-                            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-white/[0.08]">
-                                <div className="flex items-center gap-1.5 font-semibold text-white text-[12px]">
-                                    <Shapes className="w-4 h-4 text-[var(--accent-primary,#0088ff)]" />
+                            <div className="flex items-center justify-between mb-2 pb-1.5 border-b border-subtle">
+                                <div className="flex items-center gap-1.5 font-semibold text-foreground text-[12px]">
+                                    <Shapes className="w-4 h-4 text-brand-blue" />
                                     <span>Library &amp; Presets</span>
                                 </div>
                             </div>
 
                             <div className="space-y-1 max-h-72 overflow-y-auto pr-0.5">
-                                    <div className="text-[11px] uppercase font-mono tracking-wider text-[#a1a1aa] px-1 py-0.5">
+                                    <div className="text-[11px] uppercase font-mono tracking-wider text-muted-foreground px-1 py-0.5">
                                         Active Layer Presets
                                     </div>
                                     {motionPresets.map((preset) => {
@@ -738,22 +665,22 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                                                     handleApplyPreset(preset.name);
                                                     setOpenMenu(null);
                                                 }}
-                                                className="w-full p-2 rounded-lg flex items-center justify-between text-left cursor-pointer hover:bg-white/[0.07] transition group border border-transparent hover:border-white/[0.06]"
+                                                className="w-full p-2 rounded-lg flex items-center justify-between text-left cursor-pointer hover:bg-subtle transition group border border-transparent hover:border-subtle"
                                             >
                                                 <div className="flex items-center gap-2.5">
-                                                    <div className={`w-7 h-7 rounded-lg flex items-center justify-center border ${preset.bg} shrink-0`}>
+                                                    <div className={`w-9 h-9 rounded-lg flex items-center justify-center border ${preset.bg} shrink-0`}>
                                                         <Icon className={`w-3.5 h-3.5 ${preset.color}`} />
                                                     </div>
                                                     <div>
-                                                        <div className="font-medium text-white text-[11px] group-hover:text-[var(--accent-primary,#0088ff)] transition-colors">
+                                                        <div className="font-medium text-foreground text-[11px] group-hover:text-brand-blue transition-colors">
                                                             {preset.label}
                                                         </div>
-                                                        <div className="text-[11px] text-[#a1a1aa] leading-tight">
+                                                        <div className="text-[11px] text-muted-foreground leading-tight">
                                                             {preset.desc}
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <span className="text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-white/[0.06] text-[#a1a1aa] group-hover:text-white group-hover:bg-[var(--accent-primary,#0070e0)] transition">
+                                                <span className="text-[11px] font-mono tabular-nums px-1.5 py-0.5 rounded bg-surface text-muted-foreground group-hover:text-white group-hover:bg-brand-blue transition">
                                                     Apply
                                                 </span>
                                             </button>
@@ -764,15 +691,7 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
                     )}
                 </div>
 
-                {/* 9 ─ Upgrade CTA */}
-                <button
-                    type="button"
-                    onClick={() => showToast('Upgrade to Pro: 4K 60fps exports & premium assets')}
-                    aria-label="Upgrade to Pro"
-                    className="ml-1 px-3 py-1 rounded-lg text-sky-400 text-[11px] font-semibold hover:bg-sky-400/10 transition cursor-pointer"
-                >
-                    Upgrade
-                </button>
+
             </div>
         </div>
     );

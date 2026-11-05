@@ -184,11 +184,10 @@ describe('Split Clip & Split Shot Store Methods', () => {
   });
 });
 
-it('preserves eased scene effects, focus and light across splits', () => {
+it('preserves eased scene effects and light across splits', () => {
  const store=useProjectStore.getState();store.resetProject();const id=useProjectStore.getState().project.shots[0].id;
- store.updateShot(id,s=>({...s,durationMs:4000,effects:{...s.effects,depthOfField:{...s.effects.depthOfField,enabled:true}},
+ store.updateShot(id,s=>({...s,durationMs:4000,
  effectBlocks:[{id:'e',label:'Bloom',effectKey:'bloom',startMs:0,durationMs:4000,fromValue:0,toValue:4,easing:{kind:'preset',name:'ease'}}],
- focusBlocks:[{id:'f',startMs:0,durationMs:4000,fromZ:0,toZ:4,easing:{kind:'preset',name:'ease'}}],
  lightBlocks:[{id:'l',label:'Light',startMs:0,durationMs:4000,fromX:0,fromY:0,toX:1,toY:1,fromIntensity:1,toIntensity:4,easing:{kind:'preset',name:'ease'}}]}));
  const before=useProjectStore.getState().project;store.splitShotAtPlayhead(id,2000);const after=useProjectStore.getState().project;
  for(const t of [0,1000,1999,2000,2500,3999]){const a=evaluateProjectAtTime(before,t),b=evaluateProjectAtTime(after,t);expect(b.effects.state).toEqual(a.effects.state);expect(b.activeShot.light).toEqual(a.activeShot.light);}

@@ -1,0 +1,328 @@
+import React from 'react';
+import { Crop, Lock } from 'lucide-react';
+import type { Layer, TextLayer } from '../model/types';
+import type { EvaluatedLayerWithEffects } from '../engine/evaluateShot';
+import { getLayerProjectedCorners } from './webgl/cameraMath';
+
+export type ResizeHandleDir = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
+type ProjectedLayer = ReturnType<typeof getLayerProjectedCorners>;
+type HandleItem = { dir: ResizeHandleDir; pos: { x: number; y: number }; cursor: string };
+
+interface SelectionOverlayVisualsProps {
+    selectedEvalLayers: EvaluatedLayerWithEffects[];
+    projectCorners: (layer: EvaluatedLayerWithEffects) => ProjectedLayer;
+    primaryProj: ProjectedLayer;
+    layer: Layer;
+    activeShotId: string;
+    frameWidth: number;
+    isLocked: boolean;
+    isCropping: boolean;
+    isAnimateMode: boolean;
+    isEditingInlineText: boolean;
+    setIsEditingInlineText: (editing: boolean) => void;
+    activeTool: string;
+    borderColor: string;
+    isMotionBlock: boolean;
+    motionStartPoint: { x: number; y: number };
+    motionEndPoint: { x: number; y: number };
+    motionMidControl: { x: number; y: number };
+    motionAmount: { x: number; y: number };
+    handleItems: HandleItem[];
+    onMoveStart: (event: React.PointerEvent | React.MouseEvent) => void;
+    onMotionEndStart: (event: React.PointerEvent) => void;
+    onRotateStart: (event: React.PointerEvent | React.MouseEvent) => void;
+    onResizeStart: (event: React.PointerEvent | React.MouseEvent, direction: ResizeHandleDir) => void;
+    onSelectLayer: (layerId: string, multiSelect?: boolean) => void;
+    updateLayer: (shotId: string, layerId: string, updater: (layer: Layer) => Layer) => void;
+}
+
+export const SelectionOverlayVisuals: React.FC<SelectionOverlayVisualsProps> = ({
+    selectedEvalLayers, projectCorners, primaryProj, layer, activeShotId, frameWidth,
+    isLocked, isCropping, isAnimateMode, isEditingInlineText, setIsEditingInlineText,
+    activeTool, borderColor, isMotionBlock, motionStartPoint, motionEndPoint,
+    motionMidControl, motionAmount, handleItems, onMoveStart, onMotionEndStart,
+    onRotateStart, onResizeStart, onSelectLayer, updateLayer,
+}) => {
+    return (
+    <>            <svg className="absolute inset-0 w-full h-full overflow-visible pointer-events-none">
+                {selectedEvalLayers.slice(1).map((sec) => {
+                    const secProj = projectCorners(sec);
+                    const pts = secProj.corners.map((point) => `${point.x},${point.y}`).join(' ');
+                    return (
+                        <g key={sec.id}>
+                            <polygon
+                                points={pts}
+                                fill="var(--accent-primary, #0088ff)"
+                                fillOpacity="0.04"
+                                stroke="var(--accent-primary, #0088ff)"
+                                strokeWidth="1.5"
+                                strokeDasharray="5 3"
+                                className="cursor-move pointer-events-auto"
+                                onPointerDown={onMoveStart}
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    onSelectLayer(sec.id, e.shiftKey || e.metaKey || e.ctrlKey);
+                                }}
+                            />
+                        </g>
+                    );
+                })}
+
+                {!isEditingInlineText && (
+                    <g>
+                        {primaryProj.corners.length > 4 && (
+                            <polygon
+                                points={`${primaryProj.pNW.x},${primaryProj.pNW.y} ${primaryProj.pNE.x},${primaryProj.pNE.y} ${primaryProj.pSE.x},${primaryProj.pSE.y} ${primaryProj.pSW.x},${primaryProj.pSW.y}`}
+                                fill="none"
+                                stroke={borderColor}
+                                strokeWidth="1"
+                                strokeDasharray="3 3"
+                                strokeOpacity="0.45"
+                            />
+                        )}
+
+                        <polygon
+                            points={primaryProj.corners.map((point) => `${point.x},${point.y}`).join(' ')}
+                            fill="var(--accent-primary, #0088ff)"
+                            fillOpacity="0.02"
+                            stroke={borderColor}
+                            strokeWidth="1.75"
+                            strokeDasharray={isLocked || isCropping ? '6 4' : 'none'}
+                            className={`pointer-events-auto ${isLocked
+                                    ? 'cursor-not-allowed'
+                                    : activeTool === 'tilt'
+                                        ? 'cursor-grab'
+                                        : 'cursor-move'
+                                }`}
+                            onPointerDown={onMoveStart}
+                            onDoubleClick={(e) => {
+                                if (layer.kind === 'text') {
+                                    e.stopPropagation();
+                                    setIsEditingInlineText(true);
+                                }
+                            }}
+                        />
+
+                        {isMotionBlock && (
+                            <g className="motion-path-gizmo pointer-events-auto">
+                                <path
+                                    d={`M ${motionStartPoint.x} ${motionStartPoint.y} Q ${motionMidControl.x} ${motionMidControl.y} ${motionEndPoint.x} ${motionEndPoint.y}`}
+                                    stroke="var(--accent-primary, #0088ff)"
+                                    strokeWidth="2.5"
+                                    strokeDasharray="5 4"
+                                    fill="none"
+                                />
+                                <circle
+                                    cx={motionStartPoint.x}
+                                    cy={motionStartPoint.y}
+                                    r="5"
+                                    fill="var(--accent-primary, #0088ff)"
+                                    stroke="#ffffff"
+                                    strokeWidth="2"
+                                />
+                                <g
+                                    transform={`translate(${motionEndPoint.x}, ${motionEndPoint.y})`}
+                                    onPointerDown={onMotionEndStart}
+                                    className="cursor-move"
+                                >
+                                    <circle
+                                        r="7"
+                                        fill="var(--accent-danger, #f43f5e)"
+                                        stroke="#ffffff"
+                                        strokeWidth="2.5"
+                                        className="hover:scale-125 transition-transform"
+                                    />
+                                    <text
+                                        x="12"
+                                        y="4"
+                                        fill="#ffffff"
+                                        fontSize="10"
+                                        fontWeight="bold"
+                                        className="pointer-events-none select-none font-mono"
+                                        paintOrder="stroke"
+                                        stroke="#000000"
+                                        strokeWidth="3"
+                                    >
+                                        To ({Math.round(motionAmount.x * 1920)}px, {Math.round(motionAmount.y * 1080)}px)
+                                    </text>
+                                </g>
+                            </g>
+                        )}
+                    </g>
+                )}
+
+            </svg>
+
+            {/* FIGMA-STYLE CORNER ROUNDING NODES (Rectangles & Images) */}
+            {!isLocked && !isCropping && !isEditingInlineText && (layer.kind === 'image' || (layer.kind === 'shape' && (layer.shape === 'rectangle' || !layer.shape))) && (
+                (() => {
+                    // Image and shape layers both expose cornerRadius; re-narrow
+                    // here so the visual needs no unsafe casts.
+                    const itemL = layer.kind === 'image' || layer.kind === 'shape' ? layer : null;
+                    const center = primaryProj.pCenter;
+                    const corners = [
+                        { id: 'nw', pt: primaryProj.pNW },
+                        { id: 'ne', pt: primaryProj.pNE },
+                        { id: 'se', pt: primaryProj.pSE },
+                        { id: 'sw', pt: primaryProj.pSW },
+                    ];
+                    const currentRadius = itemL?.cornerRadius ?? 0;
+
+                    return corners.map((c) => {
+                        const vx = center.x - c.pt.x;
+                        const vy = center.y - c.pt.y;
+                        const dist = Math.hypot(vx, vy);
+                        if (dist < 18) return null;
+                        const nx = vx / dist;
+                        const ny = vy / dist;
+                        const offset = Math.min(dist * 0.45, Math.max(14, 14 + currentRadius * 80));
+                        const posX = c.pt.x + nx * offset;
+                        const posY = c.pt.y + ny * offset;
+
+                        return (
+                            <div
+                                key={c.id}
+                                data-testid={`corner-radius-${c.id}`}
+                                style={{
+                                    left: `${posX}px`,
+                                    top: `${posY}px`,
+                                    transform: 'translate(-50%, -50%)',
+                                    touchAction: 'none',
+                                }}
+                                title="Drag to adjust corner rounding"
+                                className="w-2.5 h-2.5 rounded-full bg-white border border-[var(--accent-primary,#0088ff)] shadow-md absolute pointer-events-auto cursor-crosshair hover:scale-125 transition-transform duration-75 ease-out z-20 hover:bg-sky-50 touch-none"
+                                onPointerDown={(e) => {
+                                    e.stopPropagation();
+                                    e.preventDefault();
+                                    const pointerId = e.pointerId;
+                                    const startX = e.clientX;
+                                    const startY = e.clientY;
+                                    const initialRadius = itemL?.cornerRadius ?? 0;
+
+                                    const onMove = (moveEv: PointerEvent) => {
+                                        if (moveEv.pointerId !== pointerId) return;
+                                        const dx = moveEv.clientX - startX;
+                                        const dy = moveEv.clientY - startY;
+                                        const dot = dx * nx + dy * ny;
+                                        const deltaRadius = dot / 120;
+                                        const nextRadius = Math.max(0, Math.min(0.5, Number((initialRadius + deltaRadius).toFixed(3))));
+                                        updateLayer(activeShotId, layer.id, (l) =>
+                                            l.kind !== 'text' ? { ...l, cornerRadius: nextRadius } : l
+                                        );
+                                    };
+
+                                    const onUp = (upEv: PointerEvent) => {
+                                        if (upEv.pointerId !== pointerId) return;
+                                        window.removeEventListener('pointermove', onMove);
+                                        window.removeEventListener('pointerup', onUp);
+                                        window.removeEventListener('pointercancel', onUp);
+                                    };
+
+                                    window.addEventListener('pointermove', onMove);
+                                    window.addEventListener('pointerup', onUp);
+                                    window.addEventListener('pointercancel', onUp);
+                                }}
+                            />
+                        );
+                    });
+                })()
+            )}
+
+            {/* CORNER ROTATION ZONES (Figma / Illustrator style) */}
+            {!isLocked && !isCropping && !isEditingInlineText && (
+                [
+                    { id: 'rot-nw', pt: primaryProj.pNW, ox: -10, oy: -10 },
+                    { id: 'rot-ne', pt: primaryProj.pNE, ox: 10, oy: -10 },
+                    { id: 'rot-se', pt: primaryProj.pSE, ox: 10, oy: 10 },
+                    { id: 'rot-sw', pt: primaryProj.pSW, ox: -10, oy: 10 },
+                ].map((rot) => (
+                    <div
+                        key={rot.id}
+                        data-selection-handle={rot.id}
+                        style={{
+                            left: `${rot.pt.x + rot.ox}px`,
+                            top: `${rot.pt.y + rot.oy}px`,
+                            transform: 'translate(-50%, -50%)',
+                            cursor: 'grab',
+                            touchAction: 'none',
+                        }}
+                        onPointerDown={onRotateStart}
+                        title="Drag to rotate"
+                        className="w-5 h-5 rounded-full absolute pointer-events-auto z-10 opacity-0 hover:opacity-100 hover:bg-sky-400/20 transition-opacity"
+                    />
+                ))
+            )}
+
+            {/* 8 RESIZE / CROP HANDLES */}
+            {!isLocked &&
+                !isEditingInlineText &&
+                handleItems.map((h) => (
+                        <div
+                            key={h.dir}
+                            data-selection-handle={h.dir}
+                            onPointerDown={(e) => onResizeStart(e, h.dir)}
+                            style={{
+                                left: `${h.pos.x}px`,
+                                top: `${h.pos.y}px`,
+                                transform: 'translate(-50%, -50%)',
+                                cursor: h.cursor,
+                            }}
+                            className={`w-2.5 h-2.5 rounded-[1px] border-[1.5px] shadow-xs absolute pointer-events-auto select-none ${isCropping
+                                    ? 'bg-[var(--accent-warning,#f59e0b)] border-black'
+                                    : isAnimateMode
+                                        ? 'bg-[var(--accent-danger,#f43f5e)] border-white'
+                                        : 'bg-white border-[var(--accent-primary,#0088ff)]'
+                                } hover:scale-125 transition-transform duration-75 ease-out`}
+                        />
+                ))}
+
+            {/* INLINE TEXT EDITOR OR STATUS BADGES (unobstructed interior) */}
+            {((isEditingInlineText && layer.kind === 'text') || isLocked || isCropping) && (
+                <div
+                    style={{
+                        left: `${primaryProj.pCenter.x}px`,
+                        top: `${primaryProj.pCenter.y}px`,
+                        transform: 'translate(-50%, -50%)',
+                    }}
+                    className="absolute flex items-center justify-center pointer-events-auto"
+                >
+                    {isEditingInlineText && layer.kind === 'text' ? (
+                        <div
+                            className="p-1 z-40"
+                            style={{ width: `${Math.max(220, frameWidth * 0.42)}px` }}
+                        >
+                            <textarea
+                                autoFocus
+                                value={(layer as TextLayer).content}
+                                onChange={(e) =>
+                                    updateLayer(activeShotId, layer.id, (l) =>
+                                        l.kind === 'text' ? { ...l, content: e.target.value } : l
+                                    )
+                                }
+                                onKeyDown={(e) => {
+                                    e.stopPropagation();
+                                    if (
+                                        e.key === 'Escape' ||
+                                        (e.key === 'Enter' && (e.metaKey || e.ctrlKey))
+                                    ) {
+                                        setIsEditingInlineText(false);
+                                    }
+                                }}
+                                onBlur={() => setIsEditingInlineText(false)}
+                                className="w-full bg-black/90 border-2 border-[var(--accent-primary,#0088ff)] rounded-lg p-2.5 text-white resize-none outline-none shadow-2xl leading-normal text-sm"
+                            />
+                        </div>
+                    ) : isLocked ? (
+                        <div className="px-2 py-1 rounded-full bg-amber-950/90 border border-amber-400/50 text-amber-300 text-[11px] font-mono flex items-center gap-1 shadow-lg">
+                            <Lock className="w-3 h-3" /> Locked
+                        </div>
+                    ) : isCropping ? (
+                        <div className="px-2.5 py-1 rounded-full bg-[var(--accent-warning,#f59e0b)] text-black text-[11px] font-semibold flex items-center gap-1 shadow-lg">
+                            <Crop className="w-3 h-3" /> Drag Corners to Crop
+                        </div>
+                    ) : null}
+                </div>
+            )}
+        </>
+    );
+};

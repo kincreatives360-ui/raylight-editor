@@ -18,7 +18,6 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
   it('renders Scene effects header with add (+) button even with undefined effectsOrder', () => {
     const shot = createDefaultShot();
     // Simulate legacy project with no effectsOrder
-    // @ts-expect-error Testing legacy undefined
     shot.effectsOrder = undefined;
 
     const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
@@ -32,18 +31,15 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
 
   it('renders applied effects list in Figma style with icons, pill labels, eye toggle, and remove (-) buttons', () => {
     const shot = createDefaultShot();
-    shot.appliedEffects = ['depthOfField', 'bloom', 'chromaticAberration'];
-    shot.effects.depthOfField.enabled = true;
+    shot.appliedEffects = ['bloom', 'chromaticAberration'];
     shot.effects.bloom.enabled = true;
     shot.effects.chromaticAberration.enabled = true;
 
     const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
 
-    expect(html).toContain('Depth of field');
     expect(html).toContain('Bloom');
     expect(html).toContain('Color split');
     expect(html).toContain('Mute effect');
-    expect(html).toContain('Remove Depth of field');
     expect(html).toContain('Remove Bloom');
     expect(html).toContain('Remove Color split');
   });
@@ -59,14 +55,4 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
     expect(html).toContain('Remove Color grade');
   });
 
-  it('safely handles legacy shots with partial or missing depthOfField properties', () => {
-    const shot = createDefaultShot();
-    // @ts-expect-error Simulating legacy shot with missing target & bokehShape
-    shot.effects.depthOfField = { enabled: true };
-    shot.appliedEffects = ['depthOfField'];
-
-    const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
-    expect(html).toContain('Depth of field');
-    expect(html).toContain('Remove Depth of field');
-  });
 });

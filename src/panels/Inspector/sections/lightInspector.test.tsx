@@ -127,6 +127,17 @@ describe('LightInspector Component', () => {
         expect(html).toContain('Reach');
     });
 
+    it('falls back to the light name when its type has no metadata', () => {
+        const shot = useProjectStore.getState().project.shots[0];
+        Object.assign(shot.light.sources![0], { type: 'unknown' });
+
+        const html = renderToStaticMarkup(
+            <LightInspector activeShot={shot} selectedLightId="spot-1" onClose={() => {}} />
+        );
+
+        expect(html).toContain('>Spot 1</span>');
+    });
+
     it('renders inside RightSidebar when selectedLightId is set and no layer is selected', () => {
         const shot = useProjectStore.getState().project.shots[0];
         useSelectionStore.getState().selectLight('sun-key');
@@ -145,7 +156,7 @@ describe('LightInspector Component', () => {
         expect(html).toContain('Cast shadows');
     });
 
-    it('disables Type and Color controls when selected light is Sun', () => {
+    it('keeps Sun type fixed while allowing color editing', () => {
         const shot = useProjectStore.getState().project.shots[0];
         const html = renderToStaticMarkup(
             <LightInspector activeShot={shot} selectedLightId="sun-key" onClose={() => {}} />
@@ -153,8 +164,9 @@ describe('LightInspector Component', () => {
 
         // Type select should have disabled attribute and not allow changing light type for Sun
         expect(html).toMatch(/<button[^>]*role="combobox"[^>]*disabled|<button[^>]*disabled[^>]*role="combobox"/);
-        // ColorPicker trigger button should have disabled attribute for Sun
-        expect(html).toMatch(/<button[^>]*aria-label="Color: #ffffff"[^>]*disabled/);
+        // The key light tint is editable.
+        expect(html).toMatch(/<button[^>]*aria-label="Color: #ffffff"/);
+        expect(html).not.toMatch(/<button[^>]*aria-label="Color: #ffffff"[^>]*disabled/);
     });
 
     it('renders Strength and Soft controls in Shadows section', () => {

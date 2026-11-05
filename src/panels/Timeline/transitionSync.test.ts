@@ -14,7 +14,7 @@ describe('timeline transition synchronization',()=>{
   expect(evaluateLayerAtTime(updated,1500).extraLayerBlur).toBeCloseTo(52.5);
  });
  it('supports exit easing and explicit secondary id without replacing first mirror',()=>{
-  const l=createDefaultTextLayer(); const a={...l.exit,id:'a',type:'focus' as const,enabled:false,blur:60}; const b={...a,id:'b'};
+  const l=createDefaultTextLayer(); const a={...l.exit,id:'a',type:'blur' as const,enabled:false,blur:60}; const b={...a,id:'b'};
   const updated=updateTimelineTransition({...l,exits:[a,b]},'exit',{easing},'b');
   expect(updated.exit).toBe(a); expect(updated.exits?.[0]).toBe(a); expect(updated.exits?.[1]).toEqual({...b,easing});
  });
