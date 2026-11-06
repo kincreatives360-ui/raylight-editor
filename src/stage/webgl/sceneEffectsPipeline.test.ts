@@ -150,7 +150,7 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
 
   it('uses a negative horizontal ghost shift so preview matches Canvas output', () => {
     const pass = createSceneEffectPass('ghost');
-    expect(pass.material.fragmentShader).toContain('vec2 shift = -vec2(cos(gAngle), sin(gAngle)) * uParams.y');
+    expect(pass.material.fragmentShader).toContain('vec2 shift=-vec2(cos(gAngle),sin(gAngle))*uParams.y;');
     pass.material.dispose();
   });
 

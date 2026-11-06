@@ -22,7 +22,7 @@ def load(path):
             out.append({
                 "url": req.get("url"),
                 "method": req.get("method"),
-                "type": e.get("_resourceType") or req.get("headers", [{}])[0],
+                "type": e.get("_resourceType") or "",
                 "status": res.get("status"),
                 "contentType": next((h["value"] for h in res.get("headers", []) if h["name"].lower() == "content-type"), ""),
                 "postData": (req.get("postData") or {}).get("text"),

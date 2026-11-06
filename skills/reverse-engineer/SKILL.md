@@ -90,7 +90,7 @@ Follow section 3 of doc 10: resolve the boundary and root selector, list depende
 
 ## Workspace
 
-Run `bash scripts/scaffold_workspace.sh <slug> [out-dir] --tier impl|full [--feature "<name>"]`.
+Run `node scripts/scaffold_workspace.js <slug> [out-dir] --tier impl|full [--feature "<name>"]` (or `bash scripts/scaffold_workspace.sh` in environments with Bash).
 
 T2 (default) creates only `STATE.md`, `UNKNOWNS.md`, `IMPLEMENTATION.md`, `01-recon/`, `02-evidence/`, `06-parity/`.
 T1 adds `03-docs/` (PRD, TRD, flows, ADRs...), `04-components/`, `05-features/`, `feature-matrix.csv`, `00-INDEX.md`.

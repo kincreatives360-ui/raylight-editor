@@ -293,10 +293,11 @@ async function drawLayerContentOnCanvas(
     {
       const radius = imageLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
       // One soft shadow instead of stacked hard-edged copies, which read as boxy steps.
+      const shadowScale = canvasW / 1920;
       ctx.shadowColor = '#334155';
-      ctx.shadowBlur = 8;
-      ctx.shadowOffsetX = -2.8;
-      ctx.shadowOffsetY = 2.8;
+      ctx.shadowBlur = 8 * shadowScale;
+      ctx.shadowOffsetX = -2.8 * shadowScale;
+      ctx.shadowOffsetY = 2.8 * shadowScale;
       ctx.fillStyle = '#05070d';
       drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
       ctx.fill();

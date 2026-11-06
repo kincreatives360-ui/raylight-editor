@@ -373,8 +373,12 @@ export interface SceneEffects {
     highlightThreshold?: number;
     /** Extra boost for highlights above the threshold. */
     highlightIntensity?: number;
-    /** Focus mode: manual distance, track target, or selected layer. */
-    focusMode: 'manual' | 'target' | 'selection';
+    /** Focus mode: manual distance, track target, selected layer, or pick. */
+    focusMode: 'manual' | 'target' | 'selection' | 'pick';
+    /** Optional target id when tracking a specific object. */
+    focusTargetId?: string | null;
+    /** Optional autofocus toggle. */
+    autofocus?: boolean;
     /** Optional layer id when focusMode is selection. */
     focusLayerId?: string;
     /** Quality preset hint for the renderer. */

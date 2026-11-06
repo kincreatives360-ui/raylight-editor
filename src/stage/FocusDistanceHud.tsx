@@ -12,9 +12,11 @@ export interface FocusDistanceHudProps {
   /** Lens focal length in mm */
   focalLength: number;
   /** Optional focus mode label */
-  focusMode?: 'manual' | 'target' | 'selection';
+  focusMode?: 'manual' | 'target' | 'selection' | 'pick';
   /** Called when user scrubs focus distance from the HUD */
   onFocusDistanceChange?: (value: number) => void;
+  onDragStart?: () => void;
+  onDragEnd?: () => void;
   /** Enter focus-pick mode */
   onBeginFocusPick?: () => void;
   /** Visible only while editing – never in export */
@@ -34,6 +36,8 @@ export const FocusDistanceHud: React.FC<FocusDistanceHudProps> = ({
   focalLength,
   focusMode = 'manual',
   onFocusDistanceChange,
+  onDragStart,
+  onDragEnd,
   onBeginFocusPick,
   visible = true,
 }) => {
@@ -46,6 +50,7 @@ export const FocusDistanceHud: React.FC<FocusDistanceHudProps> = ({
     if (!onFocusDistanceChange) return;
     e.preventDefault();
     e.stopPropagation();
+    onDragStart?.();
     const startY = e.clientY;
     const startVal = focusDistance;
     const onMove = (ev: PointerEvent) => {
@@ -56,6 +61,7 @@ export const FocusDistanceHud: React.FC<FocusDistanceHudProps> = ({
     const onUp = () => {
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
+      onDragEnd?.();
     };
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);

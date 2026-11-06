@@ -10,6 +10,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { runSteps } = require('./lib/steps.cjs');
 let chromium;
 try { ({ chromium } = require('playwright')); }
 catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) {
@@ -22,23 +23,6 @@ const opt = (n, d) => { const i = args.indexOf('--' + n); return i > -1 ? args[i
 const max = +opt('max', 400);
 const stepsFile = opt('steps', null);
 fs.mkdirSync(outDir, { recursive: true });
-
-async function runSteps(page, steps) {
-  for (const s of steps) {
-    const action = (s.action || s.type || '').toLowerCase();
-    const sel = s.selector || s.sel;
-    const val = s.value ?? s.text ?? s.key ?? '';
-    const ms = s.ms || s.wait || 500;
-    try {
-      if (action === 'wait') await page.waitForTimeout(+ms);
-      else if (action === 'click') await page.click(sel, { timeout: 10000 });
-      else if (action === 'type' || action === 'fill') await page.fill(sel, String(val));
-      else if (action === 'press' || action === 'key') await page.keyboard.press(String(val || s.key));
-      else if (action === 'hover') await page.hover(sel);
-      else if (action === 'goto') await page.goto(val || s.url, { waitUntil: 'networkidle', timeout: 45000 });
-    } catch (e) { console.warn('step failed', action, e.message); }
-  }
-}
 
 (async () => {
   const browser = await chromium.launch();
@@ -53,9 +37,23 @@ async function runSteps(page, steps) {
     await page.waitForTimeout(500);
   }
 
-  // Accessibility snapshot via Playwright
-  const snap = await page.accessibility.snapshot({ interestingOnly: false }).catch(() => null);
-  fs.writeFileSync(path.join(outDir, 'a11y-tree.json'), JSON.stringify(snap, null, 2));
+  // Accessibility snapshot via supported Playwright representation
+  let snap = null;
+  let ariaSnapshotYaml = null;
+  try {
+    if (typeof page.locator === 'function') {
+      ariaSnapshotYaml = await page.locator(':root').ariaSnapshot().catch(() => null);
+      if (ariaSnapshotYaml) {
+        snap = { ariaSnapshot: ariaSnapshotYaml };
+      }
+    }
+    if (!snap && page.accessibility && typeof page.accessibility.snapshot === 'function') {
+      snap = await page.accessibility.snapshot({ interestingOnly: false }).catch(() => null);
+    }
+  } catch (e) {
+    snap = null;
+  }
+  fs.writeFileSync(path.join(outDir, 'a11y-tree.json'), JSON.stringify(snap || {}, null, 2));
 
   // Tab order by walking focus
   const tabOrder = await page.evaluate(async (maxN) => {
@@ -138,13 +136,21 @@ async function runSteps(page, steps) {
 
   // Digest
   const roles = {};
-  function walk(n) {
-    if (!n) return;
-    const r = n.role || 'none';
-    roles[r] = (roles[r] || 0) + 1;
-    (n.children || []).forEach(walk);
+  if (ariaSnapshotYaml) {
+    const roleMatches = ariaSnapshotYaml.matchAll(/^\s*-\s+([a-zA-Z0-9_-]+)/gm);
+    for (const m of roleMatches) {
+      const r = m[1];
+      roles[r] = (roles[r] || 0) + 1;
+    }
+  } else {
+    function walk(n) {
+      if (!n) return;
+      const r = n.role || 'none';
+      roles[r] = (roles[r] || 0) + 1;
+      (n.children || []).forEach(walk);
+    }
+    walk(snap);
   }
-  walk(snap);
   const md = [
     `# A11y walk: ${url}`,
     ``,

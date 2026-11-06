@@ -18,19 +18,30 @@ if (isDiff) {
   const before = args[1], after = args[2];
   const out = (() => { const i = args.indexOf('--out'); return i > -1 ? args[i+1] : 'diff.png'; })();
   const thr = (() => { const i = args.indexOf('--threshold'); return i > -1 ? +args[i+1] : 0.1; })();
+  let PNG, pixelmatch;
   try {
-    const PNG = require('pngjs').PNG;
-    const pixelmatch = require('pixelmatch');
+    PNG = require('pngjs').PNG;
+    pixelmatch = require('pixelmatch');
+  } catch (e) {
+    console.error('pixelmatch/pngjs not installed. Run: npm i pixelmatch pngjs');
+    console.error(e.message);
+    process.exit(1);
+  }
+
+  try {
     const img1 = PNG.sync.read(fs.readFileSync(before));
     const img2 = PNG.sync.read(fs.readFileSync(after));
+    if (img1.width !== img2.width || img1.height !== img2.height) {
+      console.error(`Image dimension mismatch: ${before} is ${img1.width}x${img1.height}, but ${after} is ${img2.width}x${img2.height}`);
+      process.exit(1);
+    }
     const { width, height } = img1;
     const diff = new PNG({ width, height });
     const n = pixelmatch(img1.data, img2.data, diff.data, width, height, { threshold: thr });
     fs.writeFileSync(out, PNG.sync.write(diff));
     console.log(`Diff pixels: ${n} / ${width*height} (${(100*n/(width*height)).toFixed(2)}%) → ${out}`);
   } catch (e) {
-    console.error('pixelmatch/pngjs not installed. Run: npm i pixelmatch pngjs');
-    console.error(e.message);
+    console.error('Diff error:', e.message);
     process.exit(1);
   }
   process.exit(0);

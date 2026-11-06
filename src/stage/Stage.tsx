@@ -456,43 +456,66 @@ const StageComponent: React.FC<StageProps> = ({
                 </div>
             </div>
 
-            <StageCameraHud
-                active={activeTool === 'camera'}
-                rightSidebarOpen={rightSidebarOpen}
-                pinned={Boolean(currentShotCameraBookmark)}
-                zoom={canvasZoom}
-                rotation={effectiveViewportFrame.camera.rotation}
-                hasSelection={selectedLayerIds.length > 0}
-                onSetOrientation={handleSetOrientation}
-                onDragStart={beginDragTransaction}
-                onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
-                onDragEnd={commitDragTransaction}
-                onReset={handleResetCamera}
-                onFrameSelection={handleFrameSelectedLayers}
-                onPin={handlePinCameraView}
-                onBack={handleBackFromOrbitCamera}
-                onZoom={setCanvasZoom}
-                focalLengthMm={effectiveViewportFrame.camera.focalLength}
-                dofEnabled={Boolean(frame.activeShot?.effects?.depthOfField?.enabled)}
-                focusDistance={frame.activeShot?.effects?.depthOfField?.focusDistance}
-                focusRange={frame.activeShot?.effects?.depthOfField?.focusRange}
-                aperture={frame.activeShot?.effects?.depthOfField?.aperture}
-                focusMode={frame.activeShot?.effects?.depthOfField?.focusMode}
-                onFocusDistanceChange={(value) => {
-                    if (!frame.activeShot) return;
-                    updateShot(frame.activeShot.id, (s) => ({
-                        ...s,
-                        effects: {
-                            ...s.effects,
-                            depthOfField: {
-                                ...(s.effects?.depthOfField ?? {}),
-                                focusDistance: value,
-                                focusMode: 'manual',
-                            },
-                        },
-                    }));
-                }}
-            />
+            {(() => {
+                const dof = frame.activeShot?.effects?.depthOfField;
+                let effectiveFocusDistance = dof?.focusDistance;
+                if ((dof?.focusMode === 'target' || dof?.focusMode === 'selection') && dof?.target) {
+                    const target = dof.target;
+                    const camera = cameraRef.current;
+                    if (camera) {
+                        const v = new THREE.Vector3();
+                        camera.getWorldDirection(v);
+                        const alongView = (target.x - camera.position.x) * v.x + (target.y - camera.position.y) * v.y + (target.z - camera.position.z) * v.z;
+                        if (Number.isFinite(alongView) && alongView > 0.05) effectiveFocusDistance = alongView;
+                    } else {
+                        const tz = Number(target.z);
+                        if (Number.isFinite(tz)) effectiveFocusDistance = Math.max(0.05, Math.abs(2.65 - tz));
+                    }
+                }
+                return (
+                    <StageCameraHud
+                        active={activeTool === 'camera'}
+                        rightSidebarOpen={rightSidebarOpen}
+                        pinned={Boolean(currentShotCameraBookmark)}
+                        zoom={canvasZoom}
+                        rotation={effectiveViewportFrame.camera.rotation}
+                        hasSelection={selectedLayerIds.length > 0}
+                        onSetOrientation={handleSetOrientation}
+                        onDragStart={beginDragTransaction}
+                        onDragOrientation={(orbit, tilt) => updateActiveShotCamera({ orbit, tilt })}
+                        onDragEnd={commitDragTransaction}
+                        onReset={handleResetCamera}
+                        onFrameSelection={handleFrameSelectedLayers}
+                        onPin={handlePinCameraView}
+                        onBack={handleBackFromOrbitCamera}
+                        onZoom={setCanvasZoom}
+                        focalLengthMm={effectiveViewportFrame.camera.focalLength}
+                        dofEnabled={Boolean(dof?.enabled)}
+                        focusDistance={effectiveFocusDistance}
+                        focusRange={dof?.focusRange}
+                        aperture={dof?.aperture}
+                        focusMode={dof?.focusMode}
+                        onFocusDistanceChange={(value) => {
+                            if (!frame.activeShot) return;
+                            updateShot(
+                                frame.activeShot.id,
+                                (s) => ({
+                                    ...s,
+                                    effects: {
+                                        ...s.effects,
+                                        depthOfField: {
+                                            ...(s.effects?.depthOfField ?? {}),
+                                            focusDistance: value,
+                                            focusMode: 'manual',
+                                        },
+                                    },
+                                }),
+                                { skipHistory: true }
+                            );
+                        }}
+                    />
+                );
+            })()}
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (
                 <div className="absolute top-3 left-1/2 -translate-x-1/2 px-3 py-1 rounded-full bg-rose-600/90 backdrop-blur-md border border-rose-400/40 text-[11px] font-medium text-white flex items-center gap-2 shadow-lg animate-pulse motion-reduce:animate-none pointer-events-none z-30">

@@ -60,7 +60,7 @@ def main():
     ap.add_argument("--depth", type=int, default=5); ap.add_argument("--max-lines", type=int, default=250)
     ap.add_argument("--node")
     a = ap.parse_args()
-    inv = json.load(open(a.inventory)); table = inv["styleTable"]; root = inv["tree"]
+    inv = json.load(open(a.inventory, encoding="utf-8")); table = inv["styleTable"]; root = inv["tree"]
     if a.node:
         root = find(root, a.node)
         if not root: print("node not found"); return
@@ -110,7 +110,7 @@ def main():
     L.append("")
     if a.interactions:
         try:
-            rs = json.load(open(a.interactions)); sw = [r for r in rs if r["status"] == "swept"]
+            rs = json.load(open(a.interactions, encoding="utf-8")); sw = [r for r in rs if r["status"] == "swept"]
             L.append(f"## Sweep results ({len(sw)} swept of {len(rs)})")
             for r in sw[:50]:
                 bits = []
@@ -141,7 +141,7 @@ def main():
     mpath = os.path.join(base, "motion.json")
     if os.path.isfile(gpath):
         try:
-            g = json.load(open(gpath))
+            g = json.load(open(gpath, encoding="utf-8"))
             gl = g.get("globals") or {}
             if gl:
                 L.append("## Detected globals / libraries")
@@ -156,7 +156,7 @@ def main():
             pass
     if os.path.isfile(mpath):
         try:
-            m = json.load(open(mpath))
+            m = json.load(open(mpath, encoding="utf-8"))
             L.append("## Motion tokens")
             if m.get("keyframes"):
                 L.append("keyframes: " + ", ".join(k.get("name","?") for k in m["keyframes"][:20]))
@@ -175,7 +175,7 @@ def main():
     if len(L) > a.max_lines:
         L = L[:a.max_lines - 1] + [f"... digest cut at {a.max_lines} lines. Use --depth lower, --node <path>, or capture with --root."]
     text = "\n".join(L)
-    if a.out: open(a.out, "w").write(text); print(f"wrote {a.out} ({len(L)} lines)")
+    if a.out: open(a.out, "w", encoding="utf-8").write(text); print(f"wrote {a.out} ({len(L)} lines)")
     else: print(text)
 
 if __name__ == "__main__":

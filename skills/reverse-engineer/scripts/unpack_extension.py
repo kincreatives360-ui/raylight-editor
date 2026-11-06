@@ -38,13 +38,14 @@ def main():
         man_path = out / "files" / "manifest.json"
         summary = {"source": str(src), "files": []}
         if man_path.exists():
-            man = json.loads(man_path.read_text(encoding="utf-8", errors="replace"))
+            man = json.loads(man_path.read_text(encoding="utf-8-sig", errors="replace"))
             summary["manifest"] = {
                 "name": man.get("name"),
                 "version": man.get("version"),
                 "manifest_version": man.get("manifest_version"),
                 "description": man.get("description"),
-                "permissions": man.get("permissions") or man.get("host_permissions"),
+                "permissions": man.get("permissions"),
+                "host_permissions": man.get("host_permissions"),
                 "background": man.get("background"),
                 "content_scripts": man.get("content_scripts"),
                 "action": man.get("action") or man.get("browser_action"),

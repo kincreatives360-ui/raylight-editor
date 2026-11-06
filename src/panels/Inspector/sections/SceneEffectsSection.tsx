@@ -101,7 +101,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
   colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
-  focusDistance: [0.2, 80, 0.1], aperture: [0.5, 16, 0.1], maxBlur: [1, 96, 1], samples: [4, 32, 1], highlightGain: [1, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [12, 200, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [0, 180, 1],
+  focusDistance: [0.2, 80, 0.1], aperture: [0.5, 16, 0.1], maxBlur: [1, 96, 1], highlightGain: [1, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [12, 200, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [0, 180, 1],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
@@ -206,6 +206,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     if (key === 'bloom' && field === 'intensity') [rawMin, rawMax] = [0, 5];
     if (key === 'motionBlur' && field === 'amount') [rawMin, rawMax] = [0, 10];
     if (key === 'lensDistortion' && field === 'strength') [rawMin, rawMax] = [-1, 1];
+    if (key === 'depthOfField' && field === 'samples') [rawMin, rawMax] = [4, 32];
 
     const isLensDistortionStrength = key === 'lensDistortion' && field === 'strength';
     const min = isPercent ? rawMin * 100 : isLensDistortionStrength ? rawMin * scale : rawMin;

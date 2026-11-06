@@ -147,13 +147,18 @@ def main():
                 probes[path] = {"status": st, "head": snippet[:300]}
         # source map discovery on first few same-origin scripts
         maps = []
+        final_parsed = urlparse(final_url)
         for s in scripts[:10]:
             su = urljoin(final_url, s)
+            su_parsed = urlparse(su)
+            if su_parsed.scheme != final_parsed.scheme or su_parsed.netloc != final_parsed.netloc:
+                continue
             try:
-                st, body = head_ok(su)
+                st, _, _, full = fetch(su)
             except Exception:
                 continue
-            _, _, _, full = fetch(su) if st and st < 400 else (None, None, None, "")
+            if not st or st >= 400 or not full:
+                continue
             m = re.search(r"sourceMappingURL=([^\s*]+)", full[-2500:] if full else "")
             if m:
                 map_url = urljoin(su, m.group(1).strip())

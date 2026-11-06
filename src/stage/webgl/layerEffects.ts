@@ -163,14 +163,10 @@ export function applyMotionBlur(
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
-    // Accumulate into an offscreen buffer with equal weights, then copy back.
-    // Drawing with alpha=1/N on source-over under-weights later samples; we use
-    // a two-pass approach: draw all samples at full opacity into a linear sum
-    // via intermediate, or simply use source-over with carefully ordered alpha.
-    // Simplest correct average: draw first at 1, subsequent with alpha 1/(i+1)
-    // using source-over (online mean). That is numerically stable and smooth.
+    // Temporal average via source-over online mean: first sample at full opacity,
+    // subsequent samples at alpha 1/(i+1) for an unweighted running mean.
     for (let i = 0; i < count; i++) {
-        const t = count === 1 ? 0 : (i / (count - 1)) - 0.5;
+        const t = (i / (count - 1)) - 0.5;
         const alpha = 1 / (i + 1);
         ctx.globalAlpha = alpha;
         if (hasAngular || hasScale) {
@@ -538,11 +534,11 @@ vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float 
 vec3 layerSampleScene(vec2 uv, float radius, vec4 shape) {
     if (radius <= .001) return texture2D(layerScene, uv).rgb;
     vec3 accum = vec3(0.); float totalW = 0.;
-    float baseCount = max(16., min(shape.w, 32.));
-    float count = min(48., baseCount + clamp(radius * .35, 0., 16.));
+    float baseCount = max(12., min(shape.w, 24.));
+    float count = min(32., baseCount + clamp(radius * .35, 0., 12.));
     // The captured backdrop has no mip chain, so per-pixel jitter turns tap gaps into fine grain.
     float jitter = layerNoise(gl_FragCoord.xy);
-    for (int i = 0; i < 48; i++) {
+    for (int i = 0; i < 32; i++) {
         if (float(i) >= count) break;
         float phase = (float(i) + .5) / count;
         float w = exp(-2.5 * phase);

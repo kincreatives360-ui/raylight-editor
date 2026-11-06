@@ -23,7 +23,10 @@ def load(path):
         parts = re.split(r"^(?=###\s+F-\d+)", t, flags=re.M)
         for p in parts:
             m = re.match(r"###\s+(F-\d+)\s*(.*)", p)
-            if m: cards.append((m.group(1), m.group(2).strip(), p, path))
+            if m:
+                end_m = re.search(r"\n(?=#{1,2}\s+)", p)
+                card_text = p[:end_m.start() + 1] if end_m else p
+                cards.append((m.group(1), m.group(2).strip(), card_text, path))
     return cards
 
 def main():

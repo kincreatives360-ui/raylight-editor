@@ -35,7 +35,8 @@ def flatten(inv):
     return out
 
 def fnum(v):
-    m = re.match(r"^(-?[\d.]+)", str(v)); return float(m.group(1)) if m else None
+    m = re.fullmatch(r"^(-?[\d.]+)px$", str(v).strip())
+    return float(m.group(1)) if m else None
 
 def main():
     ap = argparse.ArgumentParser()

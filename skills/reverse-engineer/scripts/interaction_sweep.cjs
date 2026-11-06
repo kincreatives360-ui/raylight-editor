@@ -19,6 +19,7 @@
  */
 const fs = require('fs');
 const path = require('path');
+const { runSteps } = require('./lib/steps.cjs');
 let chromium;
 try { ({ chromium } = require('playwright')); }
 catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) { console.error('Playwright not found. npm i playwright && npx playwright install chromium'); process.exit(1); } }
@@ -32,31 +33,6 @@ const width = +opt('width', 1440), height = +opt('height', 900), limit = +opt('l
 const scopeSel = opt('scope', null);
 const stepsFile = opt('steps', null);
 const shots = flag('shots'), noReload = flag('no-reload'), fuzz = flag('fuzz-inputs'), allowDestructive = flag('allow-destructive');
-
-async function runSteps(page, steps) {
-  for (const s of steps) {
-    const action = (s.action || s.type || '').toLowerCase();
-    const sel = s.selector || s.sel;
-    const val = s.value ?? s.text ?? s.key ?? '';
-    const ms = s.ms || s.wait || 500;
-    try {
-      if (action === 'wait' || action === 'timeout') await page.waitForTimeout(+ms);
-      else if (action === 'click') await page.click(sel, { timeout: 10000 });
-      else if (action === 'dblclick') await page.dblclick(sel, { timeout: 10000 });
-      else if (action === 'type' || action === 'fill') await page.fill(sel, String(val));
-      else if (action === 'press' || action === 'key') await page.keyboard.press(String(val || s.key));
-      else if (action === 'hover') await page.hover(sel);
-      else if (action === 'select') await page.selectOption(sel, val);
-      else if (action === 'goto') await page.goto(val || s.url, { waitUntil: 'networkidle', timeout: 45000 });
-      else if (action === 'scroll') await page.evaluate((y) => window.scrollBy(0, y || 800), +val || 800);
-      else console.warn('unknown step action:', action);
-      if (s.pause) await page.waitForTimeout(+s.pause);
-    } catch (e) {
-      console.warn('step failed:', action, sel || val, e.message);
-      if (s.required) throw e;
-    }
-  }
-}
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -108,14 +84,16 @@ async function collect(page) {
   let downloads = []; page.on('download', (d) => downloads.push(d.suggestedFilename()));
   let popups = []; context.on('page', (p) => { if (p !== page) { popups.push(p.url()); p.close().catch(() => {}); } });
 
-  const load = async () => { await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {}); await page.waitForTimeout(500); };
+  const preSteps = stepsFile ? JSON.parse(fs.readFileSync(stepsFile, 'utf8')) : null;
+  const load = async () => {
+    await page.goto(url, { waitUntil: 'networkidle', timeout: 45000 }).catch(() => {});
+    await page.waitForTimeout(500);
+    if (preSteps && preSteps.length > 0) {
+      await runSteps(page, preSteps);
+      await page.waitForTimeout(600);
+    }
+  };
   await load();
-  if (stepsFile) {
-    const steps = JSON.parse(fs.readFileSync(stepsFile, 'utf8'));
-    console.log('Running', steps.length, 'pre-steps from', stepsFile);
-    await runSteps(page, steps);
-    await page.waitForTimeout(600);
-  }
   const controls = await collect(page);
   console.log(`found ${controls.length} candidate controls (${controls.filter(c => c.visible).length} visible)`);
 

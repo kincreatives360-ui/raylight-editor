@@ -37,8 +37,17 @@ const homeDir = path.join(out, '02-evidence', 'home');
 fs.mkdirSync(reconDir, { recursive: true });
 fs.mkdirSync(homeDir, { recursive: true });
 
+let pyCmd = null;
+for (const c of ['python3', 'python', 'py']) {
+  try {
+    const r = spawnSync(c, ['--version'], { stdio: 'ignore' });
+    if (r.status === 0) { pyCmd = c; break; }
+  } catch (e) {}
+}
+if (!pyCmd) pyCmd = 'python3';
+
 // 1. Fingerprint
-run('python3', [path.join(scriptDir, 'fingerprint_stack.py'), url, '--out', path.join(reconDir, 'stack.json')], 'fingerprint_stack');
+run(pyCmd, [path.join(scriptDir, 'fingerprint_stack.py'), url, '--out', path.join(reconDir, 'stack.json')], 'fingerprint_stack');
 
 // 2. DOM inventory
 run('node', [path.join(scriptDir, 'dom_inventory.cjs'), url, homeDir, ...extra], 'dom_inventory');
@@ -46,14 +55,14 @@ run('node', [path.join(scriptDir, 'dom_inventory.cjs'), url, homeDir, ...extra],
 // 3. Summarize
 const inv = path.join(homeDir, 'inventory.json');
 if (fs.existsSync(inv)) {
-  run('python3', [path.join(scriptDir, 'summarize_inventory.py'), inv, '--out', path.join(homeDir, 'digest.md')], 'summarize_inventory');
+  run(pyCmd, [path.join(scriptDir, 'summarize_inventory.py'), inv, '--out', path.join(homeDir, 'digest.md')], 'summarize_inventory');
 }
 
 // 4. Tokens (optional)
 if (!extra.includes('--skip-tokens') && fs.existsSync(inv)) {
   const tokensOut = path.join(out, '03-docs');
   fs.mkdirSync(tokensOut, { recursive: true });
-  run('python3', [path.join(scriptDir, 'extract_tokens.py'), inv, '--out', path.join(tokensOut, 'design-tokens.json')], 'extract_tokens');
+  run(pyCmd, [path.join(scriptDir, 'extract_tokens.py'), inv, '--out', path.join(tokensOut, 'design-tokens.json')], 'extract_tokens');
 }
 
 

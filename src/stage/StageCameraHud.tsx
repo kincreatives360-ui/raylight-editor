@@ -26,7 +26,7 @@ interface StageCameraHudProps {
     focusDistance?: number;
     focusRange?: number;
     aperture?: number;
-    focusMode?: 'manual' | 'target' | 'selection';
+    focusMode?: 'manual' | 'target' | 'selection' | 'pick';
     onFocusDistanceChange?: (value: number) => void;
     onBeginFocusPick?: () => void;
 }
@@ -91,6 +91,8 @@ export const StageCameraHud: React.FC<StageCameraHudProps> = ({
                 focalLength={focalLengthMm ?? 50}
                 focusMode={focusMode}
                 onFocusDistanceChange={onFocusDistanceChange}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
                 onBeginFocusPick={onBeginFocusPick}
             />
         )}
