@@ -12,10 +12,11 @@ export function cloneShotWithNewIds(source: Shot): Shot {
     };
 
     shot.id = generateId('shot');
-    // Allocate IDs before fixing references: group and mask targets can be later in the array.
+    // Allocate IDs before fixing references: group, layer, framing, and light targets can be later in the array.
     for (const group of shot.groups) allocate(group.id, 'grp');
     for (const layer of shot.layers) allocate(layer.id, `layer-${layer.kind}`);
     for (const framing of shot.framings) allocate(framing.id, 'framing');
+    for (const source of shot.light?.sources || []) allocate(source.id, 'light-src');
     const remap = (id: string | undefined): string | undefined =>
         id === undefined ? undefined : (ids.get(id) ?? id);
 
@@ -49,7 +50,29 @@ export function cloneShotWithNewIds(source: Shot): Shot {
         fromFramingId: remap(block.fromFramingId) ?? block.fromFramingId ?? 'f1',
         toFramingId: remap(block.toFramingId) ?? block.toFramingId ?? 'f2',
     }));
-    shot.lightBlocks = shot.lightBlocks?.map(block => ({ ...block, id: generateId('light-blk') }));
+
+    if (shot.light?.sources) {
+        shot.light.sources = shot.light.sources.map(source => ({
+            ...source,
+            id: ids.get(source.id) ?? source.id,
+        }));
+    }
+
+    shot.lightBlocks = shot.lightBlocks?.map(block => ({
+        ...block,
+        id: generateId('light-blk'),
+        targetLightId: remap(block.targetLightId),
+    }));
     shot.effectBlocks = shot.effectBlocks?.map(block => ({ ...block, id: generateId('effect-blk') }));
+
+    if (shot.effects?.depthOfField) {
+        const currentFocusLayerId = shot.effects.depthOfField.focusLayerId ?? undefined;
+        const remappedFocusLayerId = remap(currentFocusLayerId);
+        shot.effects.depthOfField = {
+            ...shot.effects.depthOfField,
+            focusLayerId: remappedFocusLayerId ?? shot.effects.depthOfField.focusLayerId,
+        };
+    }
+
     return shot;
 }

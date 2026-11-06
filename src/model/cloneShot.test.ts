@@ -19,4 +19,54 @@ describe('cloneShotWithNewIds', () => {
         expect(copied.layers[0].id).not.toBe('mask');
         expect(shot.layers[1].maskLayerId).toBe('mask');
     });
+
+    it('regenerates light source IDs, remaps targetLightId in lightBlocks, and remaps DoF focusLayerId', () => {
+        const shot = createDefaultShot();
+        const layer = createDefaultShapeLayer({ id: 'focal-layer' });
+        shot.layers = [layer];
+        shot.light = {
+            ...shot.light,
+            sources: [
+                {
+                    id: 'src-1',
+                    name: 'Key Light',
+                    type: 'spot',
+                    enabled: true,
+                    position: { x: 1, y: 2, z: 3 },
+                    intensity: 1.5,
+                    color: '#ffffff',
+                },
+            ],
+        };
+        shot.lightBlocks = [
+            {
+                id: 'lb-1',
+                label: 'Light Move',
+                targetLightId: 'src-1',
+                startMs: 0,
+                durationMs: 1000,
+                fromX: 0,
+                fromY: 0,
+                toX: 1,
+                toY: 1,
+                fromIntensity: 1,
+                toIntensity: 2,
+                easing: { kind: 'preset', name: 'linear' },
+            },
+        ];
+        shot.effects = {
+            ...shot.effects,
+            depthOfField: {
+                ...shot.effects.depthOfField,
+                focusLayerId: 'focal-layer',
+            },
+        };
+
+        const cloned = cloneShotWithNewIds(shot);
+
+        expect(cloned.light?.sources?.[0].id).not.toBe('src-1');
+        expect(cloned.lightBlocks?.[0].targetLightId).toBe(cloned.light?.sources?.[0].id);
+        expect(cloned.effects.depthOfField.focusLayerId).not.toBe('focal-layer');
+        expect(cloned.effects.depthOfField.focusLayerId).toBe(cloned.layers[0].id);
+    });
 });

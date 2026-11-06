@@ -451,6 +451,11 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
       kind: 'solid',
       color: '#0c0e17',
     },
+    defaultCamera: {
+      position: { x: -1.9, y: 0.7, z: 2.65 },
+      rotation: { x: 0, y: 0, z: 0 },
+      focalLength: 50,
+    },
     assets: {},
     audio: createDefaultAudio(),
     shots: [

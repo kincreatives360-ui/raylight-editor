@@ -64,11 +64,17 @@ export function migrateLegacyProject(raw: unknown): unknown {
       if (typeof shot.durationMs === 'number') {
         shot.durationMs = Math.max(200, shot.durationMs);
       }
+      if (typeof shot.startMs === 'number') {
+        shot.startMs = Math.max(0, shot.startMs);
+      }
 
       if (Array.isArray(shot.cameraBlocks)) {
         for (const cb of shot.cameraBlocks) {
           if (typeof cb.durationMs === 'number') {
             cb.durationMs = Math.max(50, cb.durationMs);
+          }
+          if (typeof cb.startMs === 'number') {
+            cb.startMs = Math.max(0, cb.startMs);
           }
         }
       }
@@ -78,6 +84,9 @@ export function migrateLegacyProject(raw: unknown): unknown {
           if (typeof eb.durationMs === 'number') {
             eb.durationMs = Math.max(50, eb.durationMs);
           }
+          if (typeof eb.startMs === 'number') {
+            eb.startMs = Math.max(0, eb.startMs);
+          }
         }
       }
 
@@ -86,11 +95,20 @@ export function migrateLegacyProject(raw: unknown): unknown {
           if (typeof lb.durationMs === 'number') {
             lb.durationMs = Math.max(50, lb.durationMs);
           }
+          if (typeof lb.startMs === 'number') {
+            lb.startMs = Math.max(0, lb.startMs);
+          }
         }
       }
 
       if (Array.isArray(shot.layers)) {
         for (const layer of shot.layers) {
+          if (typeof layer.inMs === 'number') {
+            layer.inMs = Math.max(0, layer.inMs);
+          }
+          if (typeof layer.outMs === 'number') {
+            layer.outMs = Math.max((layer.inMs ?? 0) + 10, layer.outMs);
+          }
           if (layer.entrance && layer.entrance.type === 'slide') {
             layer.entrance.type = 'slide-up';
           }
@@ -117,8 +135,33 @@ export function migrateLegacyProject(raw: unknown): unknown {
               if (typeof blk.durationMs === 'number') {
                 blk.durationMs = Math.max(10, blk.durationMs);
               }
+              if (typeof blk.startMs === 'number') {
+                blk.startMs = Math.max(0, blk.startMs);
+              }
             }
           }
+        }
+      }
+    }
+  }
+
+  if (project.audio && typeof project.audio === 'object') {
+    if (typeof project.audio.masterVolume === 'number') {
+      project.audio.masterVolume = Math.max(0, Math.min(1, project.audio.masterVolume));
+    }
+    if (Array.isArray(project.audio.clips)) {
+      for (const clip of project.audio.clips) {
+        if (typeof clip.startMs === 'number') {
+          clip.startMs = Math.max(0, clip.startMs);
+        }
+        if (typeof clip.durationMs === 'number') {
+          clip.durationMs = Math.max(0, clip.durationMs);
+        }
+        if (typeof clip.offsetMs === 'number') {
+          clip.offsetMs = Math.max(0, clip.offsetMs);
+        }
+        if (typeof clip.volume === 'number') {
+          clip.volume = Math.max(0, Math.min(1, clip.volume));
         }
       }
     }
@@ -136,6 +179,14 @@ export function migrateLegacyProject(raw: unknown): unknown {
         }
       }
     }
+  }
+
+  if (!project.defaultCamera) {
+    project.defaultCamera = {
+      position: { x: -1.9, y: 0.7, z: 2.65 },
+      rotation: { x: 0, y: 0, z: 0 },
+      focalLength: 50,
+    };
   }
 
   project.schemaVersion = 2;
