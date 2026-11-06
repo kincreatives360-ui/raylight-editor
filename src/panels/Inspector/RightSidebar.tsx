@@ -1,6 +1,7 @@
 import { IconButton } from '../../ui/primitives';
-import { PanelRightClose, SlidersHorizontal, Sparkles } from 'lucide-react';
+import { PanelRightClose, Sparkles } from 'lucide-react';
 import React,{ useEffect,useRef,useState } from 'react';
+import { DisplaySettingsMenu } from '../../ui/DisplaySettingsMenu';
 import type {
 AnimationBlockProperty,
 CameraBlock,
@@ -33,6 +34,10 @@ interface RightSidebarProps {
     onSwapImageClick: () => void;
     onOpenExportModal: () => void;
     onOpenShortcuts?: () => void;
+    showSafeArea?: boolean;
+    onToggleSafeArea?: () => void;
+    leftPanelOpen?: boolean;
+    timelineOpen?: boolean;
 }
 
 export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
@@ -42,6 +47,10 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
     onSwapImageClick,
     onOpenExportModal,
     onOpenShortcuts,
+    showSafeArea,
+    onToggleSafeArea,
+    leftPanelOpen,
+    timelineOpen,
 }) => {
     const {
         project,
@@ -151,19 +160,12 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                 </div>
 
                 <div className="flex items-center gap-2">
-                    <IconButton
-                        unstyled
-                        tooltip={false}
-                        label="Project Settings"
-                        icon={<>
-                            <SlidersHorizontal className="w-3.5 h-3.5" />
-                        </>}
-                        onClick={() => {
-                            clearLayerSelection();
-                            setInspectorTab('project');
-                        }}
-                        title="Project Settings"
-                        className="p-1.5 rounded-lg hover:bg-subtle text-muted-foreground/70 hover:text-foreground cursor-pointer transition"
+                    <DisplaySettingsMenu
+                        showSafeArea={showSafeArea}
+                        onToggleSafeArea={onToggleSafeArea}
+                        leftPanelOpen={leftPanelOpen}
+                        rightSidebarOpen={true}
+                        timelineOpen={timelineOpen}
                     />
 
                     <button

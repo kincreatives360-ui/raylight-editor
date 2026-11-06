@@ -30,10 +30,13 @@ export function useAppCommandList({
 
   const leftPanelOpen = useSelectionStore((s) => s.leftPanelOpen);
   const rightSidebarOpen = useSelectionStore((s) => s.rightSidebarOpen);
+  const timelineOpen = useSelectionStore((s) => s.timelineOpen);
   const setLeftPanelOpen = useSelectionStore((s) => s.setLeftPanelOpen);
   const setRightSidebarOpen = useSelectionStore((s) => s.setRightSidebarOpen);
+  const setTimelineOpen = useSelectionStore((s) => s.setTimelineOpen);
   const toggleLeftPanel = useSelectionStore((s) => s.toggleLeftPanel);
   const toggleRightSidebar = useSelectionStore((s) => s.toggleRightSidebar);
+  const toggleTimeline = useSelectionStore((s) => s.toggleTimeline);
   const setActiveTool = useSelectionStore((s) => s.setActiveTool);
 
   const {
@@ -135,15 +138,26 @@ export function useAppCommandList({
       shortcut: ['\\'],
       action: () => {
         withViewTransition(() => {
-          if (leftPanelOpen || rightSidebarOpen) {
+          if (leftPanelOpen || rightSidebarOpen || timelineOpen) {
             setLeftPanelOpen(false);
             setRightSidebarOpen(false);
+            setTimelineOpen(false);
           } else {
             setLeftPanelOpen(true);
             setRightSidebarOpen(true);
+            setTimelineOpen(true);
           }
         });
       },
+    },
+    {
+      id: 'toggle-timeline',
+      title: 'Toggle Timeline',
+      subtitle: 'Show/hide bottom animation timeline and tracks',
+      category: 'View',
+      icon: Sparkles,
+      shortcut: ['Mod', 'J'],
+      action: toggleTimeline,
     },
     {
       id: 'toggle-left-panel',

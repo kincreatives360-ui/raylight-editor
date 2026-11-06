@@ -8,7 +8,8 @@ import {
   MAX_RIGHT_SIDEBAR_WIDTH,
 } from './ui/workspaceLayout';
 import React, { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PanelLeftOpen, PanelRightOpen } from 'lucide-react';
+import { PanelLeftOpen, PanelRightOpen, Plus } from 'lucide-react';
+import { DisplaySettingsMenu } from './ui/DisplaySettingsMenu';
 import type { Layer } from './model/types';
 import { useProjectStore } from './store/useProjectStore';
 import { usePlayheadStore } from './store/usePlayheadStore';
@@ -96,6 +97,7 @@ export default function App() {
     setIsCropping,
     leftPanelOpen,
     rightSidebarOpen,
+    timelineOpen,
     toggleLeftPanel,
     toggleRightSidebar,
     setLeftPanelOpen,
@@ -393,6 +395,7 @@ export default function App() {
               onUploadClick={handleUploadClick}
               audioLabel={audioLabel}
               onSelectAudioClick={handleSelectAudioClick}
+              onImportProjectClick={() => projectFileInputRef.current?.click()}
             />
             {/* Draggable vertical splitter for Left Panel */}
             <SidebarResizeHandle
@@ -404,7 +407,8 @@ export default function App() {
             />
           </>
         ) : (
-          <IconButton
+          <div className="absolute left-3 top-3 z-30 flex items-center gap-1 p-1 rounded-xl bg-surface/90 hover:bg-subtle/90 border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150">
+            <IconButton
               unstyled
               tooltip={false}
               label="Expand Left Panel"
@@ -417,12 +421,22 @@ export default function App() {
                 }
               }}
               title="Expand Left Panel ( [ )"
-              className="absolute left-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted-foreground hover:text-foreground border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
               icon={<>
                 <PanelLeftOpen className="w-3.5 h-3.5 text-brand-blue" />
                 <span className="hidden sm:inline">Panels</span>
               </>}
-          />
+            />
+            <button
+              type="button"
+              onClick={handleUploadClick}
+              title="Upload media or assets"
+              aria-label="Upload media or assets"
+              className="p-1 rounded-lg text-muted-foreground hover:text-foreground hover:bg-subtle cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
+            >
+              <Plus className="w-3.5 h-3.5" />
+            </button>
+          </div>
         )}
 
         {/* COLUMN 2: CENTER 3D WEBGL STAGE + FLOATING TOOLBAR + BOTTOM TIMELINE */}
@@ -441,7 +455,7 @@ export default function App() {
             </Suspense>
           </StageErrorBoundary>
 
-          <Timeline totalDurationMs={totalDurationMs} />
+          {timelineOpen && <Timeline totalDurationMs={totalDurationMs} />}
         </main>
 
         {/* COLUMN 3: FULL-HEIGHT RIGHT SIDEBAR (Design / Animate) OR FLOATING RESTORE TAB */}
@@ -462,22 +476,45 @@ export default function App() {
               onSwapImageClick={handleUploadClick}
               onOpenExportModal={handleOpenExportModal}
               onOpenShortcuts={handleOpenShortcuts}
+              showSafeArea={showSafeArea}
+              onToggleSafeArea={handleToggleSafeArea}
+              leftPanelOpen={panelLayout.showLeft}
+              timelineOpen={timelineOpen}
             />
           </>
         ) : (
-          <IconButton
+          <div className="absolute right-3 top-3 z-30 flex items-center gap-1.5 p-1 rounded-xl bg-surface/90 hover:bg-subtle/90 border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150">
+            <DisplaySettingsMenu
+              showSafeArea={showSafeArea}
+              onToggleSafeArea={handleToggleSafeArea}
+              leftPanelOpen={panelLayout.showLeft}
+              rightSidebarOpen={panelLayout.showRight}
+              timelineOpen={timelineOpen}
+              align="right"
+            />
+            <button
+              type="button"
+              onClick={handleOpenExportModal}
+              title="Export project"
+              aria-label="Export project"
+              className="px-2.5 py-1 rounded-lg bg-brand-blue hover:bg-brand-blue-hover text-white font-medium text-[11px] cursor-pointer transition shadow-xs"
+            >
+              Export
+            </button>
+            <IconButton
               unstyled
               tooltip={false}
               label="Expand Inspector"
               type="button"
               onClick={toggleRightSidebar}
               title="Expand Inspector ( ] )"
-              className="absolute right-3 top-3 z-30 flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-surface/90 hover:bg-subtle text-muted-foreground hover:text-foreground border border-subtle shadow-xl backdrop-blur-md transition-colors duration-150 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue text-xs font-medium"
+              className="flex items-center gap-1.5 px-2 py-1 rounded-lg text-muted-foreground hover:text-foreground cursor-pointer transition-colors text-xs font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-brand-blue"
               icon={<>
                 <PanelRightOpen className="w-3.5 h-3.5 text-brand-blue" />
                 <span className="hidden sm:inline">Inspector</span>
               </>}
-          />
+            />
+          </div>
         )}
 
       </div>

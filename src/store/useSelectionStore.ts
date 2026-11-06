@@ -72,12 +72,15 @@ interface SelectionStore {
 
     leftPanelOpen: boolean;
     rightSidebarOpen: boolean;
+    timelineOpen: boolean;
     leftPanelWidth: number;
     rightSidebarWidth: number;
     toggleLeftPanel: () => void;
     toggleRightSidebar: () => void;
+    toggleTimeline: () => void;
     setLeftPanelOpen: (open: boolean) => void;
     setRightSidebarOpen: (open: boolean) => void;
+    setTimelineOpen: (open: boolean) => void;
     setLeftPanelWidth: (width: number) => void;
     setRightSidebarWidth: (width: number) => void;
     resetPanelWidths: () => void;
@@ -176,6 +179,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
 
     leftPanelOpen: true,
     rightSidebarOpen: true,
+    timelineOpen: true,
     leftPanelWidth: getSavedPanelWidth('raylight_left_panel_width', DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH),
     rightSidebarWidth: getSavedPanelWidth('raylight_right_sidebar_width', DEFAULT_RIGHT_SIDEBAR_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH),
 
@@ -452,6 +456,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         }),
     setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
     setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
+    toggleTimeline: () => set((state) => ({ timelineOpen: !state.timelineOpen })),
+    setTimelineOpen: (timelineOpen) => set({ timelineOpen }),
 
     setLeftPanelWidth: (width) => {
         const clamped = Math.max(MIN_LEFT_PANEL_WIDTH, Math.min(MAX_LEFT_PANEL_WIDTH, Math.round(width)));

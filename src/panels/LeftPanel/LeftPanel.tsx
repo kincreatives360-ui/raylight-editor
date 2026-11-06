@@ -10,7 +10,7 @@ import { Search, Plus, ChevronDown, Activity, PanelLeftClose, Download, FolderOp
 import type { Shot } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
-import { exportProjectToFile, importProjectFromFile, useStorageStatus } from '../../storage/projectIO';
+import { exportProjectToFile, useStorageStatus } from '../../storage/projectIO';
 import { createDefaultProject } from '../../model/defaults';
 
 interface LeftPanelProps {
@@ -18,6 +18,7 @@ interface LeftPanelProps {
     onUploadClick: () => void;
     audioLabel: string;
     onSelectAudioClick: () => void;
+    onImportProjectClick?: () => void;
 }
 
 export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
@@ -25,6 +26,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     onUploadClick,
     audioLabel,
     onSelectAudioClick,
+    onImportProjectClick,
 }) => {
     const {
         project,
@@ -52,25 +54,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
     const [soundSearchQuery, setSoundSearchQuery] = useState('');
     const [playingSfxId, setPlayingSfxId] = useState<string | null>(null);
     const activeAudioRef = useRef<HTMLAudioElement | null>(null);
-    const projectFileInputRef = useRef<HTMLInputElement | null>(null);
     const storage = useStorageStatus();
-
-    const handleImportProjectFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-        e.target.value = '';
-        try {
-            const result = await importProjectFromFile(file);
-            if ('errors' in result) {
-                alert(`Could not load project: ${result.errors[0] || 'Invalid file format'}`);
-            } else {
-                updateProject(() => result.data);
-                setProjectMenuOpen(false);
-            }
-        } catch (err) {
-            alert(`Error reading project file: ${err instanceof Error ? err.message : 'Unknown error'}`);
-        }
-    };
 
     useEffect(() => {
         return () => {
@@ -172,15 +156,6 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         >
             {/* 1. TOP HEADER: [R Canvas v] + [+] */}
             <div className="h-11 px-3 flex items-center justify-between shrink-0 relative">
-                {/* Hidden Project JSON File Input */}
-                <input
-                    ref={projectFileInputRef}
-                    type="file"
-                    accept=".json,.raylight.json,application/json"
-                    onChange={handleImportProjectFile}
-                    className="hidden"
-                    aria-hidden="true"
-                />
 
                 <button
                     onClick={() => setProjectMenuOpen((v) => !v)}
@@ -239,7 +214,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         <MenuItem
                             unstyled
                             onClick={() => {
-                                projectFileInputRef.current?.click();
+                                onImportProjectClick?.();
                                 setProjectMenuOpen(false);
                             }}
                             className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-muted-foreground hover:bg-subtle cursor-pointer"

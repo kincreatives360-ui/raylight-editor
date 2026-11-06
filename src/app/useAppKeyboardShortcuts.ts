@@ -346,16 +346,26 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         }
       }
 
-      // \: Zen Mode (Distraction-free 3D & Timeline stage) with View Transition (Detail 9)
+      // Cmd/Ctrl + J: Toggle Timeline
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === 'j') {
+        e.preventDefault();
+        useSelectionStore.getState().toggleTimeline();
+        return;
+      }
+
+      // \: Zen Mode (Distraction-free 3D stage) with View Transition (Detail 9)
       if (!e.metaKey && !e.ctrlKey && !e.altKey && e.key === '\\') {
         e.preventDefault();
+        const { timelineOpen, setTimelineOpen } = useSelectionStore.getState();
         withViewTransition(() => {
-          if (leftPanelOpen || rightSidebarOpen) {
+          if (leftPanelOpen || rightSidebarOpen || timelineOpen) {
             setLeftPanelOpen(false);
             setRightSidebarOpen(false);
+            setTimelineOpen(false);
           } else {
             setLeftPanelOpen(true);
             setRightSidebarOpen(true);
+            setTimelineOpen(true);
           }
         });
         return;
@@ -496,6 +506,11 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
 
       // Arrow Keys: Nudge Layer (or Record Block if Shift+A Animate Mode is ON)
       if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key) && activeShot) {
+        if (selectedCameraBlockId || selectedLightBlockId) {
+          // Handled by timeline block nudging in useTimelinePlayback
+          return;
+        }
+        if (!selectedLayer) return;
         e.preventDefault();
         const step = e.shiftKey ? 0.025 : 0.005;
         const dx =
