@@ -154,7 +154,7 @@ def main():
             if su_parsed.scheme != final_parsed.scheme or su_parsed.netloc != final_parsed.netloc:
                 continue
             try:
-                st, _, _, full = fetch(su)
+                _, st, _, full = fetch(su)
             except Exception:
                 continue
             if not st or st >= 400 or not full:
