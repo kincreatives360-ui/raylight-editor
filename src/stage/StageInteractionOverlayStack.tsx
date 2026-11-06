@@ -8,6 +8,7 @@ import { OrbitCameraFrustum } from './OrbitCameraOverlay';
 import { CameraFramingOverlay } from './CameraFramingOverlay';
 import { SelectionOverlay } from './SelectionOverlay';
 import { LightingOverlay } from './LightingOverlay';
+import { FocusZoneOverlay } from './FocusZoneOverlay';
 
 interface OverlayBox {
     x: number;
@@ -128,6 +129,12 @@ export function StageInteractionOverlayStack({
             />
 
             <LightingOverlay
+                frame={effectiveViewportFrame}
+                frameWidth={frameWidth}
+                frameHeight={frameHeight}
+            />
+
+            <FocusZoneOverlay
                 frame={effectiveViewportFrame}
                 frameWidth={frameWidth}
                 frameHeight={frameHeight}

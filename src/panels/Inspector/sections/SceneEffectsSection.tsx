@@ -7,6 +7,7 @@ import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
+import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
 import {
   Sun,
@@ -86,6 +87,7 @@ const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
   chromaticAberration: ['edgeStrength', 'centerX', 'centerY', 'channelRed', 'channelGreen', 'channelBlue', 'fringeColorAngle'],
   filmGrain: ['softness', 'colorAmount', 'aspect', 'seed', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'blendMode', 'motion'],
   lensDistortion: ['centerX', 'centerY', 'edgeMode', 'measure'],
+  depthOfField: ['highlightIntensity', 'highlightThreshold', 'sceneScale', 'sensorHeightMm', 'focalLength', 'focusRange', 'maxBlur', 'samples', 'highlightGain', 'focusSoftness', 'apertureBlades', 'bokehRotation', 'focusMode', 'focusTargetId', 'focusLayerId', 'autofocus', 'target', 'focusAssetId'],
 };
 
 const FIELD_RANGES: Record<string, [number, number, number]> = {
@@ -101,7 +103,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
   colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
-  focusDistance: [0.2, 80, 0.1], aperture: [0.5, 16, 0.1], maxBlur: [1, 96, 1], highlightGain: [1, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [12, 200, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [0, 180, 1],
+  focusDistance: [0.05, 80, 0.05], aperture: [0.7, 22, 0.1], maxBlur: [1, 128, 1], highlightGain: [0, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [4, 720, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [-180, 180, 1], sceneScale: [10, 1000, 1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 2, 0.01],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
@@ -112,11 +114,13 @@ const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
   gradientMap: { blendMode: ['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn'] },
   fishEye: { edgeMode: ['fill', 'balanced', 'none'] },
   lensDistortion: { mode: ['pinch', 'barrel'], edgeMode: ['fill', 'balanced', 'none'], measure: ['width', 'height', 'diagonal'] },
-  depthOfField: { focusMode: ['manual', 'target', 'selection'], quality: ['draft', 'balanced', 'high'], bokehShape: ['spherical', 'hexagonal', 'octagonal'], model: ['physical', 'artistic'] },
+  depthOfField: { bokehShape: ['spherical', 'anamorphic', 'vintage', 'portrait'], model: ['physical', 'classic', 'artistic'], quality: ['draft', 'balanced', 'high'] },
 };
 
 export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const updateShot = useProjectStore((s) => s.updateShot);
+  const setFocusZonePreview = useSelectionStore((s) => s.setFocusZonePreview);
+  const selectedLayerIds = useSelectionStore((s) => s.selectedLayerIds);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [expandedKey, setExpandedKey] = useState<EffectKey | null>(null);
   const [settingsKey, setSettingsKey] = useState<EffectKey | null>(null);
@@ -307,7 +311,12 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
             const isEnabled = Boolean(effect.enabled);
 
             return (
-              <div key={key} className="space-y-1">
+              <div
+                key={key}
+                className="space-y-1"
+                onMouseEnter={() => { if (key === 'depthOfField') setFocusZonePreview(true); }}
+                onMouseLeave={() => { if (key === 'depthOfField') setFocusZonePreview(false); }}
+              >
                 {/* Effect Row Matching Mockup */}
                 <div className="flex items-center gap-1.5">
                   {/* Left Icon Badge */}
@@ -372,16 +381,101 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                   <div className="relative p-2.5 rounded-xl bg-surface-elevated border border-border/60 space-y-2 mt-1">
                     {['chromaticAberration'].includes(key) && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','lens')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='lens'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Lens</button><button type="button" onClick={()=>setValue(key,'mode','split')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='split'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Split</button></div>}
                     {key === 'lensDistortion' && <div className="grid grid-cols-2 gap-1 rounded-lg bg-surface p-1"><button type="button" onClick={()=>setValue(key,'mode','pinch')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='pinch'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Pinch</button><button type="button" onClick={()=>setValue(key,'mode','barrel')} className={`h-7 rounded-md text-[11px] ${mergedFields['mode']==='barrel'?'bg-muted text-foreground text-white':'text-muted-foreground'}`}>Barrel</button></div>}
-                    {['chromaticAberration','filmGrain','lensDistortion'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
-                    <div className="grid grid-cols-2 gap-2">
-                      {Object.entries(mergedFields)
-                        .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key]??[]).includes(field) && !(key==='atmosphere'&&['start','reach','mistHeight'].includes(field)))
-                        .map(([field, rawVal]) => renderNumber(key,field,Number(rawVal)))}
-                      {Object.entries(mergedFields).filter(([field,value])=>typeof value==='string'&&SELECT_OPTIONS[key]?.[field]&&!(SETTINGS_FIELDS[key]??[]).includes(field)&&!((key==='lensDistortion')&&field==='mode')).map(([field,value])=>renderSelect(key,field,String(value)))}
+                    {['chromaticAberration','filmGrain','lensDistortion','depthOfField'].includes(key) && <div className="flex justify-end"><button type="button" aria-label={`${key==='chromaticAberration'?'Fringe':key==='filmGrain'?'Grain':key==='depthOfField'?'Blur':'Lens'} settings`} title="Settings" onClick={()=>setSettingsKey(settingsKey===key?null:key)} className={`w-7 h-7 rounded-md flex items-center justify-center ${settingsKey===key?'bg-sky-500 text-white':'text-muted-foreground hover:bg-white/10 hover:text-white'}`}><Settings2 className="w-3.5 h-3.5"/></button></div>}
+                    {key === 'depthOfField' ? (
+                      <div className="space-y-2">
+                        <div>
+                          <span className="text-[10px] text-muted-foreground block mb-1">Focus on</span>
+                          <FigmaSelect
+                            value={String(mergedFields['focusAssetId'] || '')}
+                            options={[
+                              { value: '', label: 'A point' },
+                              ...(shot.layers || []).map((l) => ({ value: l.id, label: l.name || `Layer ${l.id}` })),
+                            ]}
+                            onChange={(val) => {
+                              setValue(key, 'focusAssetId', val || undefined);
+                              setValue(key, 'focusMode', val ? 'selection' : 'target');
+                            }}
+                          />
+                        </div>
 
-                      {key==='atmosphere'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
-                      {key==='edgeFade'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
-                    </div>
+                        {!mergedFields['focusAssetId'] && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Position</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <ScrubInput
+                                label="X"
+                                value={Number((mergedFields.target as any)?.x ?? 0)}
+                                min={-20}
+                                max={20}
+                                step={0.01}
+                                onChange={(val) => {
+                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
+                                  setValue(key, 'target', { ...cur, x: val });
+                                }}
+                              />
+                              <ScrubInput
+                                label="Y"
+                                value={Number((mergedFields.target as any)?.y ?? 0)}
+                                min={-20}
+                                max={20}
+                                step={0.01}
+                                onChange={(val) => {
+                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
+                                  setValue(key, 'target', { ...cur, y: val });
+                                }}
+                              />
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Depth</div>
+                            <div className="grid grid-cols-2 gap-2 items-center">
+                              <ScrubInput
+                                label="D"
+                                value={Number((mergedFields.target as any)?.z ?? 0)}
+                                min={-20}
+                                max={20}
+                                step={0.01}
+                                onChange={(val) => {
+                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
+                                  setValue(key, 'target', { ...cur, z: val });
+                                }}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const targetLayer = shot.layers.find((l) => selectedLayerIds.includes(l.id)) || shot.layers[0];
+                                  if (targetLayer) {
+                                    setValue(key, 'target', {
+                                      x: Number(targetLayer.position.x ?? 0),
+                                      y: Number(targetLayer.position.y ?? 0),
+                                      z: Number(targetLayer.position.z ?? 0),
+                                    });
+                                  }
+                                }}
+                                className="h-7 px-2 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/90 font-medium transition cursor-pointer"
+                                title="Snap focus depth to selected subject"
+                              >
+                                Snap to subject
+                              </button>
+                            </div>
+                          </>
+                        )}
+
+                        <div className="grid grid-cols-2 gap-2">
+                          {renderNumber(key, 'aperture', Number(mergedFields['aperture'] ?? 2.8))}
+                          {renderSelect(key, 'bokehShape', String(mergedFields['bokehShape'] ?? 'spherical'))}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-2">
+                        {Object.entries(mergedFields)
+                          .filter(([field, value]) => field !== 'enabled' && typeof value === 'number' && !(SETTINGS_FIELDS[key]??[]).includes(field) && !(key==='atmosphere'&&['start','reach','mistHeight'].includes(field)))
+                          .map(([field, rawVal]) => renderNumber(key,field,Number(rawVal)))}
+                        {Object.entries(mergedFields).filter(([field,value])=>typeof value==='string'&&SELECT_OPTIONS[key]?.[field]&&!(SETTINGS_FIELDS[key]??[]).includes(field)&&!((key==='lensDistortion')&&field==='mode')).map(([field,value])=>renderSelect(key,field,String(value)))}
+
+                        {key==='atmosphere'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
+                        {key==='edgeFade'&&<ColorPicker label="Color" color={String(mergedFields['color'])} onChange={color=>setValue(key,'color',color)} compact />}
+                      </div>
+                    )}
                     {key==='atmosphere'&&<details className="rounded-lg border border-border/60 px-2 py-1.5"><summary className="text-[11px] text-foreground/90 cursor-pointer">Depth</summary><div className="grid grid-cols-2 gap-2 pt-2">{['start','reach','mistHeight'].map(field=>renderNumber(key,field,Number(mergedFields[field])))}<label className="flex items-center gap-2 text-[10px] text-foreground/90"><input type="checkbox" checked={Boolean(mergedFields['depthEnabled'])} onChange={e=>setValue(key,'depthEnabled',e.target.checked)}/>Use scene depth</label></div></details>}
                     {key==='gradientMap'&&<div className="space-y-2"><div className="flex items-center justify-between"><span className="text-[10px] text-muted-foreground">Stops</span><button type="button" aria-label="Add gradient stop" onClick={()=>{const stops=mergedFields['stops'] as GradientStop[];setValue(key,'stops',[...stops,{at:.5,color:'#ffffff',opacity:1}].sort((a,b)=>a.at-b.at).slice(0,8));}} className="w-6 h-6 rounded text-foreground/90 hover:bg-white/10"><Plus className="w-3.5 h-3.5"/></button></div>{(mergedFields['stops'] as GradientStop[]).map((stop,index)=><div key={`${stop.at}-${index}`} className="grid grid-cols-[.8fr_1fr_1fr_24px] gap-1.5 items-center"><ScrubInput label="%" value={stop.at*100} min={0} max={100} step={1} onChange={at=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,at:at/100}:item))}/><ColorPicker label={`Stop ${index+1}`} color={stop.color} onChange={color=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,color}:item))} compact/><ScrubInput label="Opacity" value={(stop.opacity??1)*100} min={0} max={100} step={1} onChange={opacity=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).map((item,i)=>i===index?{...item,opacity:opacity/100}:item))}/><button type="button" disabled={(mergedFields['stops'] as GradientStop[]).length<=2} aria-label={`Remove gradient stop ${index+1}`} onClick={()=>setValue(key,'stops',(mergedFields['stops'] as GradientStop[]).filter((_,i)=>i!==index))} className="text-zinc-500 hover:text-rose-400 disabled:opacity-30"><Minus className="w-3 h-3"/></button></div>)}</div>}
                     {settingsKey === key && (
@@ -396,6 +490,8 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                               ? 'Fringe settings'
                               : key === 'filmGrain'
                               ? 'Grain settings'
+                              : key === 'depthOfField'
+                              ? 'Blur settings'
                               : 'Lens settings'}
                           </h4>
                           <button
@@ -469,6 +565,24 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                             <div className="grid grid-cols-2 gap-2">
                               {renderNumber(key, 'centerX', Number(mergedFields['centerX']))}
                               {renderNumber(key, 'centerY', Number(mergedFields['centerY']))}
+                            </div>
+                          </>
+                        )}
+                        {key === 'depthOfField' && (
+                          <>
+                            <div className="text-[10px] text-muted-foreground">Highlights</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'highlightIntensity', Number(mergedFields['highlightIntensity'] ?? 0))}
+                              {renderNumber(key, 'highlightThreshold', Number(mergedFields['highlightThreshold'] ?? 0.7))}
+                            </div>
+                            <div className="text-[10px] text-muted-foreground">Scene size & Focal length</div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'sceneScale', Number(mergedFields['sceneScale'] ?? 250))}
+                              {renderNumber(key, 'focalLength', Number(mergedFields['focalLength'] ?? 50))}
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              {renderNumber(key, 'bokehScale', Number(mergedFields['bokehScale'] ?? 1))}
+                              {renderSelect(key, 'model', String(mergedFields['model'] ?? 'physical'))}
                             </div>
                           </>
                         )}

@@ -55,4 +55,13 @@ describe('SceneEffectsSection Inspector UI (Figma style)', () => {
     expect(html).toContain('Remove Color grade');
   });
 
+  it('renders depth of field row with aperture and bokeh controls', () => {
+    const shot = createDefaultShot();
+    shot.appliedEffects = ['depthOfField'];
+    shot.effects.depthOfField.enabled = true;
+
+    const html = renderToStaticMarkup(<SceneEffectsSection shot={shot} />);
+    expect(html).toContain('Depth of field');
+    expect(html).toContain('Remove Depth of field');
+  });
 });

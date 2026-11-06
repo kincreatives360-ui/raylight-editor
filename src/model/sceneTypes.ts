@@ -347,9 +347,13 @@ export interface SceneEffects {
     /** Bokeh shape rotation in degrees. */
     bokehRotation: number;
     /** Named aperture shape; an explicit apertureBlades count (3+) takes priority. */
-    bokehShape?: 'spherical' | 'hexagonal' | 'octagonal';
-    /** physical = flat-disc bokeh, artistic = soft-edged bokeh. */
-    model?: 'physical' | 'artistic';
+    bokehShape?: 'spherical' | 'anamorphic' | 'vintage' | 'portrait' | 'hexagonal' | 'octagonal';
+    /** physical = true thin-lens optics, classic = artistic DoF. */
+    model?: 'physical' | 'classic' | 'artistic';
+    /** Scale in mm per 3D unit for physical lens math (default 250). */
+    sceneScale?: number;
+    /** Optional asset ID to track with focus plane in 3D scene. */
+    focusAssetId?: string;
     /** Brightness (0-1) above which highlights are boosted. */
     highlightThreshold?: number;
     /** Extra boost for highlights above the threshold. */

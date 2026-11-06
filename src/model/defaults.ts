@@ -200,6 +200,7 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     bokehRotation: 0,
     bokehShape: 'spherical',
     model: 'physical',
+    sceneScale: 250,
     focusMode: 'manual',
     quality: 'balanced',
   },

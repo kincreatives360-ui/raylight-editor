@@ -49,4 +49,50 @@ describe('depth of field shader', () => {
     expect(source).toContain('col = accum / wSum;');
     expect(source).not.toContain('col.rgb = accum / wSum;');
   });
+
+  it('configures optical bokeh presets into uniforms', () => {
+    const shot = createDefaultShot();
+    shot.effects.depthOfField = {
+      ...shot.effects.depthOfField,
+      enabled: true,
+      bokehShape: 'anamorphic',
+      highlightThreshold: 0.8,
+      highlightIntensity: 1.2,
+      model: 'physical',
+    };
+    const pass = createSceneEffectPass('depthOfField');
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+
+    const stretch = pass.uniforms.uMotion.value as THREE.Vector2;
+    expect(stretch.x).toBeCloseTo(0.6, 2);
+    expect(stretch.y).toBeCloseTo(1.5, 2);
+
+    const fringe = pass.uniforms.uFringe.value as THREE.Vector4;
+    expect(fringe.x).toBeCloseTo(0.8, 2); // highlightThreshold
+    expect(fringe.y).toBeCloseTo(1.2, 2); // highlightIntensity
+    expect(fringe.w).toBeCloseTo(0.35, 2); // rim
+
+    const color = pass.uniforms.uColor.value as THREE.Color;
+    expect(color.g).toBe(1.0); // physical model
+  });
+
+  it('configures vintage cat-eye and portrait softness presets', () => {
+    const shot = createDefaultShot();
+    shot.effects.depthOfField = {
+      ...shot.effects.depthOfField,
+      enabled: true,
+      bokehShape: 'vintage',
+      model: 'physical',
+    };
+    const pass = createSceneEffectPass('depthOfField');
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+    const fringe = pass.uniforms.uFringe.value as THREE.Vector4;
+    expect(fringe.z).toBeCloseTo(0.85, 2); // catEye
+    expect(fringe.w).toBeCloseTo(1.0, 2); // rim
+
+    shot.effects.depthOfField.bokehShape = 'portrait';
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+    const color = pass.uniforms.uColor.value as THREE.Color;
+    expect(color.r).toBeCloseTo(1.0, 2); // softness
+  });
 });

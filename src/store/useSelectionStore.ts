@@ -118,6 +118,8 @@ interface SelectionStore {
     setGradientEditor: (active: boolean, angle?: number, layerId?: string | null) => void;
     setGradientEditorAngle: (angle: number) => void;
     setCameraBookmark: (shotId: string, bookmark: CameraViewBookmark | null) => void;
+    focusZonePreview: boolean;
+    setFocusZonePreview: (preview: boolean) => void;
 }
 
 export { DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
@@ -168,6 +170,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     gradientEditorActive: false,
     gradientEditorAngle: 0,
     gradientEditorLayerId: null,
+    focusZonePreview: false,
+    setFocusZonePreview: (preview) => set({ focusZonePreview: preview }),
     cameraBookmarks: {},
 
     leftPanelOpen: true,

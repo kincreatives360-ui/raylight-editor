@@ -3,6 +3,12 @@ import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
+import {
+  computePhysicalCocGain,
+  calculateFocusDistanceToPoint,
+  getBokehShapeConfig,
+  DEFAULT_SCENE_SCALE,
+} from '../../engine/cameraOptics';
 
 export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion', 'depthOfField'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
@@ -60,13 +66,52 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
       }
       // Signed blur size in pixels: negative in front of the focus plane, positive behind it.
       float dofCoc(float linearDepth) {
-        float signedDist = linearDepth - max(0.05, uParams.x);
-        float focusRange = max(0.02, uExtra.x);
-        float outside = max(0.0, abs(signedDist) - focusRange * 0.5);
-        float coc = outside * (2.8 / max(0.5, uParams.y)) * max(0.05, uExtra.z) * max(0.2, uExtra.w) * 8.0;
-        coc = min(coc, max(0.5, uParams.z));
-        coc *= smoothstep(0.0, max(0.02, focusRange * mix(0.15, 0.8, clamp(uFringe.w, 0.0, 1.0))), outside);
+        float focusDist = max(0.001, uParams.x);
+        float signedDist = linearDepth - focusDist;
+        float maxBlurPx = max(0.5, uParams.z);
+        float isPhysical = uColor.g;
+        float coc;
+        if (isPhysical > 0.5) {
+          float lensRatio = abs(signedDist) / max(linearDepth, 1e-4);
+          float magnitude = clamp(lensRatio * uExtra.y, 0.0, 1.0);
+          coc = magnitude * maxBlurPx;
+        } else {
+          float focusRange = max(0.02, uExtra.x);
+          float outside = max(0.0, abs(signedDist) - focusRange * 0.5);
+          coc = outside * (2.8 / max(0.5, uParams.y)) * max(0.05, uExtra.z) * max(0.2, uExtra.w) * 8.0;
+          coc = min(coc, maxBlurPx);
+          coc *= smoothstep(0.0, max(0.02, focusRange * 0.3), outside);
+        }
         return signedDist < 0.0 ? -coc : coc;
+      }
+      vec2 shapeBokehTap(vec2 tap, vec2 uv) {
+        vec2 stretch = uMotion.xy;
+        vec2 shaped = tap * (length(stretch) > 0.01 ? stretch : vec2(1.0, 1.0));
+        float catEye = uFringe.z;
+        if (catEye > 0.0) {
+          vec2 centered = (uv - 0.5) * 2.0;
+          float dist = length(centered);
+          if (dist > 0.001) {
+            vec2 dir = centered / dist;
+            vec2 perp = vec2(-dir.y, dir.x);
+            float shear = catEye * clamp(dist * dist, 0.0, 1.0);
+            float rComp = dot(shaped, dir);
+            float tComp = dot(shaped, perp) * (1.0 - 0.5 * shear);
+            shaped = dir * rComp + perp * tComp;
+          }
+        }
+        return shaped;
+      }
+      float bokehRimWeight(float normalizedRadius) {
+        float rim = uFringe.w;
+        if (rim <= 0.0) return 1.0;
+        float rimDist = abs(normalizedRadius - 1.0);
+        return 1.0 + smoothstep(0.35, 0.0, rimDist) * rim * 1.8;
+      }
+      float bokehSoftnessWeight(float normalizedRadius) {
+        float softness = uColor.r;
+        if (softness <= 0.0) return 1.0;
+        return mix(1.0, exp(-2.5 * normalizedRadius * normalizedRadius), softness);
       }
       // Aperture-shaped sample on the unit disc; z compensates the sample density of polygon shapes.
       vec3 dofTap(float index, float count, float jitter, float blades, float rotation) {
@@ -266,16 +311,16 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           else col=sampleAt(warped);
 
         #elif EFFECT == 13
-          // Camera-style depth of field, built so a defocused shape is blurred itself rather than feathered:
+          // Camera-style optical depth of field with physical thin-lens optics:
           //  - every sample carries its own blur size, so a sharp subject never takes colour from a blurry background
           //  - blurry foreground spreads over sharper areas behind it
-          //  - each tap is weighted by 1 / (its blur disc area): a sample spreads a fixed amount of light over its own
-          //    disc, so a shape blurred less than its surroundings still reaches them with the right strength. Weighting
-          //    taps equally under-counts it, which left a crisp silhouette with a glow around it
-          //  - alpha is gathered with the same weights, so transparent renders blur their silhouette too
+          //  - each tap is weighted by 1 / (its blur disc area)
+          //  - support for optical bokeh shapes (spherical, anamorphic stretch, cat-eye vignetting, portrait softness, rim)
+          //  - specular highlight boosting via smooth hermite curve
           float jitter = interleavedNoise();
           float linearDepth = dofLinearDepth(textureLod(tDepth, vUv, 0.0).r);
-          float ownCoc = abs(dofCoc(linearDepth));
+          float signedCoc = dofCoc(linearDepth);
+          float ownCoc = abs(signedCoc);
           float maxBlurPx = max(0.5, uParams.z);
 
           // Blurrier, nearer neighbours reach over this pixel even when it is sharp itself.
@@ -285,28 +330,28 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
             float angle = (fi + jitter) * 2.39996323;
             vec2 offsetPx = vec2(cos(angle), sin(angle)) * sqrt((fi + 0.5) / 16.0) * maxBlurPx;
             vec2 neighbourUv = clamp(vUv + offsetPx / uResolution, vec2(0.001), vec2(0.999));
-            float neighbourCoc = dofCoc(dofLinearDepth(textureLod(tDepth, neighbourUv, 0.0).r));
-            if (neighbourCoc < 0.0 && -neighbourCoc >= length(offsetPx) * 0.5) reach = max(reach, -neighbourCoc);
+            float neighbourSignedCoc = dofCoc(dofLinearDepth(textureLod(tDepth, neighbourUv, 0.0).r));
+            if (neighbourSignedCoc < 0.0 && -neighbourSignedCoc >= length(offsetPx) * 0.5) reach = max(reach, -neighbourSignedCoc);
           }
 
           if (reach >= 0.4) {
             float count = floor(min(48.0, clamp(uParams.w, 4.0, 32.0) + clamp(reach * 0.5, 0.0, 16.0)) + 0.5);
             float lod = blurLod(reach * sqrt(3.14159265 / count) * 0.9);
-            float highlightBoost = max(0.0, max(1.0, uExtra.y) - 1.0) + uFringe.y;
-            float artistic = uFringe.z;
+            float highlightGain = uFringe.y;
+            float highlightThreshold = uFringe.x;
             // Depth gap over which "behind" fades in, so the in-front / behind decision never flips on a single pixel.
             float depthTolerance = max(0.02, uExtra.x * 0.25);
             // Smallest disc a tap is normalised by: keeps a nearly sharp tap from dominating a wide gather.
             float minDisc = max(1.0, reach * 0.5);
-            // A pixel that is itself in focus keeps its own colour; a blurred pixel is rebuilt from its taps only,
-            // so no sharp copy of the shape survives underneath the blur.
+            // A pixel that is itself in focus keeps its own colour; a blurred pixel is rebuilt from its taps only.
             float selfWeight = clamp(1.0 - ownCoc, 0.0, 1.0);
             vec4 accum = col * selfWeight;
             float wSum = selfWeight;
             for (int i = 0; i < 48; i++) {
               if (float(i) >= count) break;
               vec3 tap = dofTap(float(i), count, jitter, uExtra2.z, uExtra2.w);
-              vec2 offsetPx = tap.xy * reach;
+              vec2 shapedTap = shapeBokehTap(tap.xy, vUv);
+              vec2 offsetPx = shapedTap * reach;
               float dist = length(offsetPx);
               vec2 rawUv = vUv + offsetPx / uResolution;
               vec2 inside = step(vec2(0.0), rawUv) * step(rawUv, vec2(1.0));
@@ -319,11 +364,17 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
               // Soft rim: a wide ramp instead of a hard cut-off, so the disc edge never reads as a crisp outline.
               float cover = clamp((effective - dist) / max(1.0, effective * 0.25) + 1.0, 0.0, 1.0);
               float disc = minDisc / max(effective, minDisc);
-              float shape = artistic > 0.5 ? exp(-2.0 * pow(dist / max(reach, 1.0), 2.0)) : 1.0;
+              float normRadius = clamp(dist / max(effective, 1e-4), 0.0, 1.0);
+              float rimW = bokehRimWeight(normRadius);
+              float softW = bokehSoftnessWeight(normRadius);
               vec4 sampleTexel = sampleLod(sampleUv, lod);
               float lum = dot(sampleTexel.rgb, vec3(0.2126, 0.7152, 0.0722));
-              float highlight = 1.0 + max(0.0, lum - uFringe.x) * highlightBoost * 2.0;
-              float w = cover * disc * disc * shape * tap.z * highlight * inside.x * inside.y;
+              float highlight = 1.0;
+              if (highlightGain > 0.0 && lum > highlightThreshold) {
+                float normLum = clamp((lum - highlightThreshold) / max(1.0 - highlightThreshold, 1e-4), 0.0, 1.0);
+                highlight += highlightGain * normLum * normLum * (3.0 - 2.0 * normLum) * 3.5;
+              }
+              float w = cover * disc * disc * rimW * softW * tap.z * highlight * inside.x * inside.y;
               accum += sampleTexel * w;
               wSum += w;
             }
@@ -433,12 +484,12 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       // Object-aware: when focusMode is target/selection and a target is set, focus on that point's depth.
       // Depth is measured along the camera's view direction, matching the depth buffer, so focus stays
       // correct when the camera moves, orbits or zooms.
-      if ((dof.focusMode === 'target' || dof.focusMode === 'selection') && dof.target) {
+      if (dof.target) {
         const target = dof.target;
         const { position, forward } = cameraClip;
         if (position && forward) {
-          const alongView = (target.x - position.x) * forward.x + (target.y - position.y) * forward.y + (target.z - position.z) * forward.z;
-          if (Number.isFinite(alongView) && alongView > 0.05) focusDist = alongView;
+          const alongView = calculateFocusDistanceToPoint(target, position, forward);
+          if (Number.isFinite(alongView) && alongView > 0.001) focusDist = alongView;
         } else {
           const tz = Number(target.z);
           if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
@@ -449,36 +500,46 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       let samples = Number(dof.samples);
       // Quality presets override sample count when present
       if (dof.quality === 'draft') samples = Math.min(samples || 8, 10);
-      else if (dof.quality === 'high') samples = Math.max(samples || 20, 24);
+      else if (dof.quality === 'high') samples = Math.max(samples || 24, 28);
       else if (!Number.isFinite(samples)) samples = 16;
 
       const focusRange = Math.max(0.02, Number(dof.focusRange) || 0.85);
       const bokehScale = Math.max(0.05, Number(dof.bokehScale) || 1);
-      const highlightGain = Number(dof.highlightGain);
-      const highlightThreshold = Number(dof.highlightThreshold);
-      const highlightIntensity = Number(dof.highlightIntensity);
-      const focusSoftness = Number(dof.focusSoftness);
-      const focalLength = Number(dof.focalLength);
-      const sensor = Number(dof.sensorHeightMm);
-      // focalScale: longer lenses + smaller sensors → stronger relative CoC
+      const focalLength = Number.isFinite(Number(dof.focalLength)) ? Number(dof.focalLength) : 50;
+      const sensor = Number.isFinite(Number(dof.sensorHeightMm)) ? Number(dof.sensorHeightMm) : 24;
+      const sceneScale = Number.isFinite(Number(dof.sceneScale)) ? Number(dof.sceneScale) : DEFAULT_SCENE_SCALE;
       const resolutionScale = dofResolutionScale(height);
-      const focalScale = ((Number.isFinite(focalLength) ? focalLength : 50) / 50) * (24 / (Number.isFinite(sensor) ? sensor : 24)) * resolutionScale;
 
-      // Aperture shape: an explicit blade count wins, otherwise the named shape decides (0 = round).
+      // Compute physical CoC gain using thin-lens optics
+      const optics = computePhysicalCocGain({
+        focalLengthMm: focalLength,
+        fNumber: Number.isFinite(aperture) ? aperture : 2.8,
+        sceneScale,
+        focusDistance: focusDist,
+        viewportHeight: height,
+      });
+
+      // Bokeh shape configuration
+      const shapeConfig = getBokehShapeConfig(dof.bokehShape);
       const bladeCount = Number(dof.apertureBlades);
       const blades = bladeCount >= 3 ? Math.min(12, Math.round(bladeCount)) : dof.bokehShape === 'hexagonal' ? 6 : dof.bokehShape === 'octagonal' ? 8 : 0;
+
+      // Max blur in render pixels
+      const effectiveMaxBlur = Number.isFinite(maxBlur) ? maxBlur : optics.bokehScale;
+      const maxBlurPx = Math.max(1, effectiveMaxBlur) * resolutionScale;
 
       // uParams: focusDistance, f-stop, maxBlurPx (render pixels), samples
       p.set(
         focusDist,
         Number.isFinite(aperture) ? aperture : 2.8,
-        Math.max(1, Number.isFinite(maxBlur) ? maxBlur : 36) * resolutionScale,
-        Math.max(4, Math.min(32, Math.round(samples)))
+        maxBlurPx,
+        Math.max(4, Math.min(48, Math.round(samples)))
       );
-      // uExtra: focusRange, highlightGain, bokehScale, focalScale (includes the resolution scale)
+      // uExtra: focusRange, cocGain, bokehScale, focalScale (includes the resolution scale)
+      const focalScale = (focalLength / 50) * (24 / sensor) * resolutionScale;
       pass.uniforms.uExtra.value.set(
         focusRange,
-        Number.isFinite(highlightGain) ? highlightGain : 1.5,
+        optics.cocGain * bokehScale,
         bokehScale,
         focalScale
       );
@@ -489,13 +550,24 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
         blades,
         THREE.MathUtils.degToRad(Number.isFinite(Number(dof.bokehRotation)) ? Number(dof.bokehRotation) : 0)
       );
-      // uFringe: highlight threshold, highlight intensity, artistic model flag, focus softness
+      // uFringe: highlight threshold, highlight intensity, catEye, rim
+      const highlightThreshold = Number.isFinite(Number(dof.highlightThreshold)) ? Number(dof.highlightThreshold) : 0.7;
+      const highlightIntensity = Number.isFinite(Number(dof.highlightIntensity)) ? Number(dof.highlightIntensity) : (Number(dof.highlightGain) || 0);
       pass.uniforms.uFringe.value.set(
-        Number.isFinite(highlightThreshold) ? highlightThreshold : 0.7,
-        Number.isFinite(highlightIntensity) ? highlightIntensity : 0,
-        dof.model === 'artistic' ? 1 : 0,
-        Number.isFinite(focusSoftness) ? focusSoftness : 0.3
+        highlightThreshold,
+        highlightIntensity,
+        shapeConfig.catEye,
+        shapeConfig.rim
       );
+      // uMotion: bokehStretch.x, bokehStretch.y
+      pass.uniforms.uMotion.value.set(shapeConfig.stretch.x, shapeConfig.stretch.y);
+      // uColor: r = softness, g = isPhysical (1.0 for physical/classic, 0.0 for artistic), b = 0
+      (pass.uniforms.uColor.value as THREE.Color).setRGB(
+        shapeConfig.softness,
+        dof.model === 'artistic' ? 0.0 : 1.0,
+        0
+      );
+
       pass.uniforms.uSeed.value = effects.deterministicSeed;
       pass.uniforms.uDebug.value = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dofDebug') === '1' ? 1 : 0;
       break;

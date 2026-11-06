@@ -303,6 +303,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     return (
         <group
+            name={layer.id}
             position={[worldX, worldY, worldZ]}
             rotation={[-rot.x, rot.y, -rot.z]}
             scale={[scale.x, scale.y, scale.z || 1]}
