@@ -40,7 +40,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
 }
 
 export function getBlurSettings(effects: LayerEffects, key: BlurEffectKey): BlurSettings {
-  return effects[`${key}Settings`] ?? { type: 'gaussian', centerX: .5, centerY: .5, quality: 24, mode: 'uniform', start: 0, end: (effects[key] ?? 0) * 100, angle: 270 };
+  return effects[`${key}Settings`] ?? { type: 'gaussian', centerX: .5, centerY: .5, quality: 16, mode: 'uniform', start: 0, end: (effects[key] ?? 0) * 100, angle: 270 };
 }
 
 export function blurAtPoint(settings: BlurSettings, x: number, y: number): number {
