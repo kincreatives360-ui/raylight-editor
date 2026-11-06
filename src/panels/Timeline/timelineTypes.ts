@@ -15,7 +15,7 @@ export interface TimelineContextMenuState {
 
 export interface TimelineGhostDragPreview {
     id: string;
-    type: 'block' | 'entrance' | 'exit' | 'layer' | 'camera' | 'light';
+    type: 'block' | 'entrance' | 'exit' | 'layer' | 'camera' | 'light' | 'animation' | 'effect';
     startMs: number;
     durationMs: number;
     label?: string;

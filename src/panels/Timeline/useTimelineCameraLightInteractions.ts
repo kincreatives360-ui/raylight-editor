@@ -343,7 +343,7 @@ export function useTimelineCameraLightInteractions({
                 nextDur = origStart + origDur - nextStart;
                 setGhostDragPreview({
                     id: effectBlock.id,
-                    type: 'animation',
+                    type: 'block',
                     startMs: nextStart,
                     durationMs: nextDur,
                     label: effectBlock.label,
@@ -356,7 +356,7 @@ export function useTimelineCameraLightInteractions({
                 nextDur = nextEnd - origStart;
                 setGhostDragPreview({
                     id: effectBlock.id,
-                    type: 'animation',
+                    type: 'block',
                     startMs: origStart,
                     durationMs: nextDur,
                     label: effectBlock.label,
@@ -379,7 +379,7 @@ export function useTimelineCameraLightInteractions({
                 }
                 setGhostDragPreview({
                     id: effectBlock.id,
-                    type: 'animation',
+                    type: 'block',
                     startMs: nextStart,
                     durationMs: origDur,
                     label: effectBlock.label,
