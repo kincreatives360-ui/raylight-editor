@@ -14,6 +14,16 @@ const path = require('path');
 const args = process.argv.slice(2);
 const isDiff = args[0] === '--diff';
 
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage:');
+  console.log('  node visual_diff.js <url> <outDir> [--widths 375,768,1440] [--storage-state auth.json] [--headless new|false]');
+  console.log('  node visual_diff.js --diff before.png after.png [--threshold 0.1] [--out diff.png]');
+  console.log('');
+  console.log('For real pixelmatch you need: npm i pixelmatch pngjs');
+  console.log('Without it, only captures screenshots.');
+  process.exit(0);
+}
+
 if (isDiff) {
   const before = args[1], after = args[2];
   const out = (() => { const i = args.indexOf('--out'); return i > -1 ? args[i+1] : 'diff.png'; })();
@@ -53,9 +63,11 @@ if (!url || !outDir) {
   process.exit(1);
 }
 const opt = (n, d) => { const i = args.indexOf('--' + n); return i > -1 ? args[i+1] : d; };
+const flag = (n) => args.includes('--' + n);
 const widths = (opt('widths', '375,768,1440')).split(',').map(Number);
 const ss = opt('storage-state');
 const height = +opt('height', 900);
+const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
 
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -63,7 +75,7 @@ catch { console.error('Playwright required'); process.exit(1); }
 
 (async () => {
   fs.mkdirSync(outDir, { recursive: true });
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless });
   for (const w of widths) {
     const ctxOpts = { viewport: { width: w, height }, deviceScaleFactor: 1 };
     if (ss) ctxOpts.storageState = ss;

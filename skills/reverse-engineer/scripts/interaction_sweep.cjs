@@ -25,6 +25,23 @@ try { ({ chromium } = require('playwright')); }
 catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) { console.error('Playwright not found. npm i playwright && npx playwright install chromium'); process.exit(1); } }
 
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node interaction_sweep.cjs <url> <outDir> [--width 1440] [--height 900] [--limit 300]');
+  console.log('       [--scope "<css selector>"] [--shots] [--no-reload] [--fuzz-inputs] [--allow-destructive] [--storage-state auth.json]');
+  console.log('       [--steps steps.json]   run pre-actions before the sweep (reach a specific app state)');
+  console.log('       [--headless new|false]');
+  console.log('');
+  console.log('For each interactive element (visible, enabled):');
+  console.log('  - captures resting style, then hover style diff, focus-visible diff, tooltip appearance');
+  console.log('  - clicks (or types for inputs), waits, and records: URL change, DOM mutations (added/removed,');
+  console.log('    dialogs/menus/popovers), network requests, focus move, console errors, downloads, popups');
+  console.log('  - resets (Escape, then reload if state changed) so each control is tested from the same start');
+  console.log('');
+  console.log('Output: interactions.json, coverage.json (and C-###.png when --shots).');
+  console.log('Destructive-looking controls (delete, pay, sign out...) are skipped unless --allow-destructive.');
+  console.log('This does NOT replace manual testing of drag, resize, canvas, right-click and multi-step flows.');
+  process.exit(0);
+}
 const url = args[0], outDir = args[1];
 if (!url || !outDir) { console.error('usage: node interaction_sweep.cjs <url> <outDir> [options]'); process.exit(1); }
 const opt = (n, d) => { const i = args.indexOf('--' + n); return i > -1 ? args[i + 1] : d; };
@@ -33,6 +50,7 @@ const width = +opt('width', 1440), height = +opt('height', 900), limit = +opt('l
 const scopeSel = opt('scope', null);
 const stepsFile = opt('steps', null);
 const shots = flag('shots'), noReload = flag('no-reload'), fuzz = flag('fuzz-inputs'), allowDestructive = flag('allow-destructive');
+const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -72,7 +90,7 @@ async function collect(page) {
 }
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless });
   const ctxOpts = { viewport: { width, height }, acceptDownloads: true };
   if (opt('storage-state')) ctxOpts.storageState = opt('storage-state');
   const context = await browser.newContext(ctxOpts);

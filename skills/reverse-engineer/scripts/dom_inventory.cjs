@@ -31,6 +31,28 @@ catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) {
   console.error('Playwright not found. Run: npm i playwright && npx playwright install chromium'); process.exit(1); } }
 
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node dom_inventory.cjs <url> <outDir> [--width 1440] [--height 900] [--wait 1500]');
+  console.log('       [--max-nodes 6000] [--scroll] [--storage-state auth.json] [--dark]');
+  console.log('       [--root "<css selector>"] [--max-depth N]   (scope the walk to one feature subtree)');
+  console.log('       [--steps steps.json]   run pre-actions before inventory (click/type/wait/key/select/hover)');
+  console.log('       [--shot-at <ms>]       extra full-page screenshot after N ms (for motion apps)');
+  console.log('       [--headless new|false]');
+  console.log('');
+  console.log('Writes to <outDir>:');
+  console.log('  inventory.json   tree of nodes (path, tag, role, text, bbox, style ids, interactive flag, listeners),');
+  console.log('                   deduped computed-style table, pseudo elements, shadow roots, iframes');
+  console.log('  interactive.json flat list of interactive elements with selectors');
+  console.log('  network.json     every request (url, method, type, status, content-type, size)');
+  console.log('  console.json     console messages and page errors');
+  console.log('  css-vars.json    custom properties found in stylesheets');
+  console.log('  fonts.json       document.fonts and font file requests');
+  console.log('  globals.json     detected framework/library globals and storage keys');
+  console.log('  rendered.html    serialized DOM after load');
+  console.log('  screenshot.png   viewport + full-page screenshot');
+  console.log('  css/             raw stylesheet bodies');
+  process.exit(0);
+}
 const url = args[0];
 const outDir = args[1];
 if (!url || !outDir) { console.error('usage: node dom_inventory.cjs <url> <outDir> [options]'); process.exit(1); }
@@ -41,6 +63,7 @@ const waitMs = +opt('wait', 1500), maxNodes = +opt('max-nodes', 6000);
 const rootSel = opt('root', null), maxDepth = +opt('max-depth', 999);
 const stepsFile = opt('steps', null);
 const shotAt = opt('shot-at', null);
+const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
 fs.mkdirSync(path.join(outDir, 'css'), { recursive: true });
 
 const STYLE_PROPS = [
@@ -63,7 +86,7 @@ const STYLE_PROPS = [
 ];
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless });
   const ctxOpts = { viewport: { width, height }, deviceScaleFactor: 1 };
   const ss = opt('storage-state');
   if (ss) ctxOpts.storageState = ss;

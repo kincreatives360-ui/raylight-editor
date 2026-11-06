@@ -30,6 +30,19 @@ const tpl = path.join(skillDir, 'assets', 'templates');
 function cpNew(src, dest) {
   if (!fs.existsSync(dest)) fs.copyFileSync(src, dest);
 }
+function cpDir(src, dest) {
+  if (!fs.existsSync(src)) return;
+  fs.mkdirSync(dest, { recursive: true });
+  for (const entry of fs.readdirSync(src, { withFileTypes: true })) {
+    const srcPath = path.join(src, entry.name);
+    const destPath = path.join(dest, entry.name);
+    if (entry.isDirectory()) {
+      cpDir(srcPath, destPath);
+    } else {
+      if (!fs.existsSync(destPath)) fs.copyFileSync(srcPath, destPath);
+    }
+  }
+}
 function ensureDir(d) { fs.mkdirSync(d, { recursive: true }); }
 function writeIfMissing(p, content) {
   if (!fs.existsSync(p)) fs.writeFileSync(p, content);
@@ -40,6 +53,9 @@ ensureDir(path.join(root, '02-evidence', 'screens'));
 ensureDir(path.join(root, '02-evidence', 'controls'));
 ensureDir(path.join(root, '02-evidence', 'sweep'));
 ensureDir(path.join(root, '06-parity'));
+
+// Copy CI template
+cpDir(path.join(tpl, '.github'), path.join(root, '.github'));
 
 cpNew(path.join(tpl, 'state.md'), path.join(root, 'STATE.md'));
 writeIfMissing(path.join(root, 'UNKNOWNS.md'), `# Unknowns, assumptions, risks

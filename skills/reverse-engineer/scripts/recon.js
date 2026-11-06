@@ -3,7 +3,7 @@
  * One-command recon: fingerprint + inventory + summarize + tokens.
  * Usage:
  *   node recon.js <url> <workspace-or-outDir> [--root "selector"] [--steps steps.json] [--width 1440]
- *                 [--storage-state auth.json] [--dark] [--skip-tokens]
+ *                 [--storage-state auth.json] [--dark] [--skip-tokens] [--format json|markdown] [--json-out <file>]
  *
  * Writes under <out>/01-recon/ and <out>/02-evidence/home/ (or the path you give).
  * Prefer pointing at an already-scaffolded re-<slug> directory.
@@ -22,6 +22,9 @@ if (!url || !out) {
 
 const scriptDir = __dirname;
 const extra = args.slice(2);
+
+const format = extra.includes('--format') ? extra[extra.indexOf('--format') + 1] : 'markdown';
+const jsonOut = extra.includes('--json-out') ? extra[extra.indexOf('--json-out') + 1] : null;
 
 function run(cmd, cargs, label) {
   console.log('\n→', label);
@@ -47,22 +50,28 @@ for (const c of ['python3', 'python', 'py']) {
 if (!pyCmd) pyCmd = 'python3';
 
 // 1. Fingerprint
-run(pyCmd, [path.join(scriptDir, 'fingerprint_stack.py'), url, '--out', path.join(reconDir, 'stack.json')], 'fingerprint_stack');
+const stackOut = path.join(reconDir, 'stack.json');
+run(pyCmd, [path.join(scriptDir, 'fingerprint_stack.py'), url, '--out', stackOut], 'fingerprint_stack');
 
 // 2. DOM inventory
 run('node', [path.join(scriptDir, 'dom_inventory.cjs'), url, homeDir, ...extra], 'dom_inventory');
 
 // 3. Summarize
 const inv = path.join(homeDir, 'inventory.json');
+const digestOut = path.join(homeDir, 'digest.md');
 if (fs.existsSync(inv)) {
-  run(pyCmd, [path.join(scriptDir, 'summarize_inventory.py'), inv, '--out', path.join(homeDir, 'digest.md')], 'summarize_inventory');
+  const summarizeArgs = [path.join(scriptDir, 'summarize_inventory.py'), inv, '--out', digestOut];
+  if (format === 'json') summarizeArgs.push('--format', 'json');
+  run(pyCmd, summarizeArgs, 'summarize_inventory');
 }
 
 // 4. Tokens (optional)
 if (!extra.includes('--skip-tokens') && fs.existsSync(inv)) {
   const tokensOut = path.join(out, '03-docs');
   fs.mkdirSync(tokensOut, { recursive: true });
-  run(pyCmd, [path.join(scriptDir, 'extract_tokens.py'), inv, '--out', path.join(tokensOut, 'design-tokens.json')], 'extract_tokens');
+  const tokensArgs = [path.join(scriptDir, 'extract_tokens.py'), inv, '--out', path.join(tokensOut, 'design-tokens.json')];
+  if (format === 'json') tokensArgs.push('--format', 'json');
+  run(pyCmd, tokensArgs, 'extract_tokens');
 }
 
 
@@ -80,6 +89,18 @@ if (!extra.includes('--no-a11y')) {
 }
 
 console.log('\nRecon complete.');
-console.log('  stack:   ', path.join(reconDir, 'stack.json'));
-console.log('  digest:  ', path.join(homeDir, 'digest.md'));
+console.log('  stack:   ', stackOut);
+console.log('  digest:  ', digestOut);
 console.log('  inventory + screenshots under', homeDir);
+
+if (jsonOut) {
+  const summary = {
+    stack: stackOut,
+    digest: digestOut,
+    inventory: inv,
+    homeDir,
+    timestamp: new Date().toISOString(),
+  };
+  fs.writeFileSync(jsonOut, JSON.stringify(summary, null, 2));
+  console.log('  summary: ', jsonOut);
+}

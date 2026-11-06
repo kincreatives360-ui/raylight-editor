@@ -2,12 +2,13 @@
 """
 Lint build cards before handoff.
 
-Usage: python lint_cards.py <IMPLEMENTATION.md | directory of F-###-*.md cards>
+Usage: python lint_cards.py <IMPLEMENTATION.md | directory of F-###-*.md cards> [--fix]
 
 Checks per card: has Goal, Spec (or Scope + Spec), acceptance checks, Done when, a not-in-scope line;
 title does not bundle features ("and", "+", "&", "/"-joined controls); depends_on IDs exist;
 dependency graph has no cycles. Prints problems and a summary. Exit code 1 if errors.
-Supports lite cards (### F-001 title | depends: F-000 | files: ...) and full card files.
+Supports lite cards (### F-### title | depends: ... | files: ...) and full card files.
+With --fix: adds missing checkbox items, out-of-scope line, and done-when line where absent.
 """
 import sys, re, os, glob
 
@@ -29,12 +30,57 @@ def load(path):
                 cards.append((m.group(1), m.group(2).strip(), card_text, path))
     return cards
 
+def fix_card(body):
+    """Add missing required sections to a card body."""
+    low = body.lower()
+    lines = body.splitlines()
+    
+    # Find insertion point (after title/header)
+    insert_idx = 0
+    for i, line in enumerate(lines):
+        if line.strip().startswith("###") or line.strip().startswith("##"):
+            insert_idx = i + 1
+            break
+    
+    additions = []
+    if not re.search(r"\bgoal\b", low):
+        additions.append(("\n## Goal\n\nOne-sentence user-visible outcome.\n", "goal"))
+    if not re.search(r"\bspec\b|## spec|### structure", low):
+        additions.append(("\n## Spec\n\nStructure, styles, behavior, keyboard, a11y, responsive, content.\n", "spec"))
+    if not re.search(r"\baccept|acceptance tests", low):
+        additions.append(("\n## Acceptance Tests\n\n- [ ] Observable check 1\n- [ ] Observable check 2\n", "acceptance"))
+    if not re.search(r"done when", low):
+        additions.append(("\n## Done When\n\nExplicit completion criteria.\n", "done-when"))
+    if not re.search(r"not in scope|out of scope|do not touch", low):
+        additions.append(("\n## Out of Scope\n\nWhat this card must not do.\n", "out-of-scope"))
+    
+    # Insert additions before the next header or at end
+    for addition, _ in additions:
+        lines.insert(insert_idx, addition)
+        insert_idx += len(addition.splitlines())
+    
+    return "\n".join(lines)
+
 def main():
-    if len(sys.argv) < 2: print(__doc__); sys.exit(2)
-    cards = load(sys.argv[1]); errs, warns = [], []
+    if len(sys.argv) < 2:
+        print(__doc__)
+        sys.exit(2)
+    
+    fix_mode = "--fix" in sys.argv
+    target = sys.argv[1] if sys.argv[1] != "--fix" else (sys.argv[2] if len(sys.argv) > 2 else None)
+    
+    if not target:
+        print("Missing target path")
+        sys.exit(2)
+    
+    cards = load(target)
+    errs, warns = [], []
     ids = {c[0] for c in cards}
-    if not cards: print("no cards found (expected '### F-001 ...' blocks or F-###-*.md files)"); sys.exit(1)
+    if not cards:
+        print("no cards found (expected '### F-001 ...' blocks or F-###-*.md files)")
+        sys.exit(1)
     deps = {}
+    
     for cid, title, body, f in cards:
         low = body.lower()
         def need(label, rx):
@@ -54,6 +100,7 @@ def main():
         deps[cid] = d
         for x in d:
             if x not in ids: errs.append(f"{cid}: depends on unknown {x}")
+    
     # cycle check
     state = {}
     def dfs(n, stack):
@@ -64,6 +111,28 @@ def main():
             if x in deps: dfs(x, stack + [n])
         state[n] = 2
     for n in deps: dfs(n, [])
+    
+    if fix_mode and (errs or warns):
+        # Apply fixes
+        if os.path.isdir(target):
+            for cid, title, body, f in cards:
+                fixed = fix_card(body)
+                if fixed != body:
+                    with open(f, "w", encoding="utf-8") as fp:
+                        fp.write(fixed)
+                    print(f"fixed {cid} in {f}")
+        else:
+            # Single file with multiple cards - rebuild
+            new_parts = []
+            for cid, title, body, f in cards:
+                fixed = fix_card(body)
+                new_parts.append(fixed)
+            new_content = "\n".join(new_parts)
+            if new_content != open(target, encoding="utf-8").read():
+                with open(target, "w", encoding="utf-8") as fp:
+                    fp.write(new_content)
+                print(f"fixed {len(cards)} cards in {target}")
+    
     for e in errs: print("ERROR", e)
     for w in warns: print("warn ", w)
     print(f"\n{len(cards)} cards, {len(errs)} errors, {len(warns)} warnings")

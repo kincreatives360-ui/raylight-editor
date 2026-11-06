@@ -17,15 +17,26 @@ catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) {
   console.error('Playwright required'); process.exit(1); } }
 
 const args = process.argv.slice(2);
+if (args.includes('--help') || args.includes('-h')) {
+  console.log('Usage: node a11y_walk.cjs <url> <outDir> [--storage-state auth.json] [--steps steps.json] [--max 400] [--headless new|false]');
+  console.log('');
+  console.log('Writes:');
+  console.log('  a11y-tree.json   simplified accessibility snapshot (role, name, value, states)');
+  console.log('  tab-order.json   sequential tab stops with selectors and roles');
+  console.log('  a11y-digest.md   human-readable summary');
+  process.exit(0);
+}
 const url = args[0], outDir = args[1];
 if (!url || !outDir) { console.error('usage: node a11y_walk.cjs <url> <outDir> [options]'); process.exit(1); }
 const opt = (n, d) => { const i = args.indexOf('--' + n); return i > -1 ? args[i + 1] : d; };
+const flag = (n) => args.includes('--' + n);
 const max = +opt('max', 400);
 const stepsFile = opt('steps', null);
+const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
 fs.mkdirSync(outDir, { recursive: true });
 
 (async () => {
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ headless });
   const ctxOpts = { viewport: { width: 1440, height: 900 } };
   if (opt('storage-state')) ctxOpts.storageState = opt('storage-state');
   const context = await browser.newContext(ctxOpts);
