@@ -7,6 +7,7 @@ import {
   BOKEH_SHAPES,
   DEFAULT_SCENE_SCALE,
 } from './cameraOptics';
+import { solveOptimalSceneScale } from './depthOfFieldOptics';
 
 describe('cameraOptics module', () => {
   it('computes physical circle of confusion with standard 50mm f/2.8 lens', () => {
@@ -57,6 +58,23 @@ describe('cameraOptics module', () => {
     expect(getBokehShapeConfig('vintage')).toEqual(BOKEH_SHAPES.vintage);
     expect(getBokehShapeConfig('portrait')).toEqual(BOKEH_SHAPES.portrait);
     expect(getBokehShapeConfig('unknown' as any)).toEqual(BOKEH_SHAPES.spherical);
+  });
+
+  it('calibrates optimal sceneScale for physical depth of field using bisection', () => {
+    const samples = [
+      { focalLengthMm: 50, aperture: 2.8, focusDistance: 2.65 },
+      { focalLengthMm: 85, aperture: 2.0, focusDistance: 3.5 },
+    ];
+
+    const optimalScale = solveOptimalSceneScale({
+      samples,
+      focusRange: 0.85,
+      viewportHeight: 1080,
+    });
+
+    expect(optimalScale).toBeGreaterThan(0.01);
+    expect(optimalScale).toBeLessThan(100);
+    expect(Number.isFinite(optimalScale)).toBe(true);
   });
 });
 

@@ -6,6 +6,7 @@ import { evaluateLayerAtTime, type EvaluatedLayer } from './evaluateLayer';
 import { evaluateShotCameraAtTime, type EvaluatedCamera } from './evaluateCamera';
 import {
     evaluateEffectsAtTime,
+    evaluateDepthOfFieldAtTime,
     type EvaluatedEffects,
 } from './evaluateEffects';
 import { lerp } from './math';
@@ -36,6 +37,7 @@ const EFFECT_BLOCK_HANDLERS: Record<string, EffectBlockHandler> = {
     gradientMap: (config, val) => { config.gradientMap.enabled = true; config.gradientMap.blend = Math.max(0, Math.min(1, val)); },
     fishEye: (config, val) => { config.fishEye.enabled = true; config.fishEye.amount = Math.max(-1, Math.min(1, val)); },
     lensDistortion: (config, val) => { config.lensDistortion.enabled = true; config.lensDistortion.strength = Math.max(-1, Math.min(1, val)); },
+    depthOfField: (config, val) => { config.depthOfField.enabled = true; config.depthOfField.aperture = Math.max(0.7, val); },
 };
 
 export interface ShotTransitionCompositeState {
@@ -366,6 +368,15 @@ export function evaluateProjectAtTime(
                     handler(evaluatedEffectsConfig, val);
                 }
             }
+
+            // Dedicated depth-of-field rack focus & aperture pulling
+            if (evaluatedEffectsConfig.depthOfField) {
+                evaluatedEffectsConfig.depthOfField = evaluateDepthOfFieldAtTime(
+                    evaluatedEffectsConfig.depthOfField,
+                    effectBlocks,
+                    shotLocalTimeMs
+                );
+            }
         }
     }
 
@@ -378,8 +389,8 @@ export function evaluateProjectAtTime(
     // 3. Evaluate Camera Rig
     const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs, frameNumber);
 
-    // 4. Evaluate Scene Effects Rack
-    const effects = evaluateEffectsAtTime(activeShot, frameNumber);
+    // 4. Evaluate Scene Effects Rack (with local time for timeline rack focus)
+    const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
 
     // Populate scene-level motionVector when motionBlur is enabled so Canvas 2D fallback matches WebGL
     const fps = project.fps && project.fps > 0 ? project.fps : 60;

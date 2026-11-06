@@ -34,6 +34,16 @@ describe('Easing & Spring Engine', () => {
     expect(evaluateEasing(1, { kind: 'preset', name: 'linear' })).toBe(1);
     expect(evaluateEasing(0, { kind: 'preset', name: 'ease-in-out' })).toBe(0);
     expect(evaluateEasing(1, { kind: 'preset', name: 'ease-in-out' })).toBe(1);
+    expect(evaluateEasing(0, { kind: 'preset', name: 'ease-in-expo' })).toBe(0);
+    expect(evaluateEasing(1, { kind: 'preset', name: 'ease-in-expo' })).toBe(1);
+    expect(evaluateEasing(0, { kind: 'preset', name: 'ease-out-expo' })).toBe(0);
+    expect(evaluateEasing(1, { kind: 'preset', name: 'ease-out-expo' })).toBe(1);
+    expect(evaluateEasing(0, { kind: 'preset', name: 'snap' })).toBe(0);
+    expect(evaluateEasing(1, { kind: 'preset', name: 'snap' })).toBe(1);
+    expect(evaluateEasing(0, { kind: 'preset', name: 'snap-in' })).toBe(0);
+    expect(evaluateEasing(1, { kind: 'preset', name: 'snap-in' })).toBe(1);
+    expect(evaluateEasing(0, { kind: 'preset', name: 'snap-out' })).toBe(0);
+    expect(evaluateEasing(1, { kind: 'preset', name: 'snap-out' })).toBe(1);
   });
 
   it('evaluates spring physics accurately', () => {

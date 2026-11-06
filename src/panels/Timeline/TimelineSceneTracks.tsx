@@ -1,6 +1,6 @@
 import React from 'react';
 import { IconButton } from '../../ui/primitives';
-import type { AnimationBlock, CameraBlock, Easing, Layer, LightAnimationBlock, Shot } from '../../model/types';
+import type { AnimationBlock, CameraBlock, Easing, Layer, LightAnimationBlock, SceneEffectAnimationBlock, Shot } from '../../model/types';
 import { generateId } from '../../model/id';
 import { copyTimelineBlock } from '../../utils/editorClipboard';
 import { TimelineDragPreview } from './TimelineDragPreview';
@@ -36,6 +36,8 @@ interface TimelineSceneTracksProps {
     selectedLightBlockId: string | null;
     selectLightBlock: (id: string | null) => void;
     startLightBlockDrag: (event: React.PointerEvent, shot: Shot, block: LightAnimationBlock, mode: 'move' | 'left' | 'right') => void;
+    hasEffectBlocks?: boolean;
+    startEffectBlockDrag?: (event: React.PointerEvent, shot: Shot, block: SceneEffectAnimationBlock, mode: 'move' | 'left' | 'right') => void;
     selectedLayerSet: ReadonlySet<string>;
     expandedTimelineLayerSet: ReadonlySet<string>;
     startLayerBarDrag: (event: React.PointerEvent, shot: Shot, layer: Layer, mode: 'move' | 'in' | 'out') => void;
@@ -57,7 +59,7 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
         clientXToLocalMs, addCameraBlockAtTime, selectedCameraBlockId, selectCameraBlock,
         updateShot, setContextMenu, setEasingPopoverTarget, startCameraBlockDrag,
         ghostDragPreview, hasLightBlocks, selectedLightBlockId, selectLightBlock,
-        startLightBlockDrag, selectedLayerSet, expandedTimelineLayerSet,
+        startLightBlockDrag, hasEffectBlocks, startEffectBlockDrag, selectedLayerSet, expandedTimelineLayerSet,
         startLayerBarDrag, updateLayer, selectPreset,
         selectedPresetType, suppressPillClickRef, startPresetDrag,
         selectedBlockId, selectBlock, startBlockDrag, setTimelineView,
@@ -325,6 +327,118 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         className="w-2.5 bg-white/20 hover:bg-amber-300 rounded-r-full z-10" />
                                 </TimelineRangeBar>
                                 {ghostDragPreview && ghostDragPreview.id === lb.id && (
+                                    <TimelineDragPreview
+                                        startMs={ghostDragPreview.startMs}
+                                        durationMs={ghostDragPreview.durationMs}
+                                        snapped={ghostDragPreview.snapped}
+                                        pxPerMs={pxPerMs}
+                                        minWidth={36}
+                                        variant="pill"
+                                    />
+                                )}
+                            </React.Fragment>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* 2.5 Scene Effects & Rack Focus Track Row (h-10 = 40px, rendered when Effect blocks exist) */}
+            {hasEffectBlocks && (
+                <div style={{ order: 25 }} className="h-10 relative flex items-center">
+                    {(activeShot.effectBlocks || []).map((eb) => {
+                        const left = eb.startMs * pxPerMs;
+                        const width = Math.max(36, eb.durationMs * pxPerMs);
+                        const isRackFocus = eb.effectKey === 'depthOfField';
+                        const label = eb.label || (isRackFocus ? 'Rack Focus' : eb.effectKey);
+                        return (
+                            <React.Fragment key={eb.id}>
+                                <TimelineRangeBar
+                                    data-effect-pill="true"
+                                    tone="effect"
+                                    onContextMenu={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        const targetRect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+                                        setContextMenu({
+                                            x: e.clientX,
+                                            y: e.clientY,
+                                            items: createTimelineBlockContextMenu({
+                                                title: label,
+                                                onEditEasing: () => {
+                                                    setEasingPopoverTarget({
+                                                        easing: eb.easing,
+                                                        onChange: (easing) => updateShot(activeShot.id, (s) => ({
+                                                            ...s,
+                                                            effectBlocks: (s.effectBlocks || []).map((b) =>
+                                                                b.id === eb.id ? { ...b, easing } : b
+                                                            ),
+                                                        })),
+                                                        anchorRect: targetRect,
+                                                    });
+                                                },
+                                                onCopy: () => copyTimelineBlock({ type: 'animation', block: { ...eb, property: 'position', amount: 1 } as any }),
+                                                onDuplicate: () => updateShot(activeShot.id, (s) => ({
+                                                    ...s,
+                                                    effectBlocks: [...(s.effectBlocks || []), {
+                                                        ...eb,
+                                                        id: generateId('fx-blk'),
+                                                        startMs: Math.min(s.durationMs - eb.durationMs, eb.startMs + 50),
+                                                    }],
+                                                })),
+                                                onRemove: () => {
+                                                    updateShot(activeShot.id, (s) => ({
+                                                        ...s,
+                                                        effectBlocks: (s.effectBlocks || []).filter((b) => b.id !== eb.id),
+                                                    }));
+                                                },
+                                            }),
+                                        });
+                                    }}
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        setInspectorTab('shot');
+                                    }}
+                                    onPointerDown={(e) =>
+                                        startEffectBlockDrag?.(e, activeShot, eb, 'move')
+                                    }
+                                    left={left}
+                                    width={width}
+                                    title={`${label} · ${(eb.durationMs / 1000).toFixed(2)}s`}
+                                    className={`group/fx absolute top-0.5 bottom-0.5 px-2.5 flex items-center justify-between text-[10px] font-medium cursor-grab active:cursor-grabbing ${
+                                        ghostDragPreview?.id === eb.id ? 'opacity-40' : ''
+                                    }`}
+                                >
+                                    <TimelineEasingCurve easing={eb.easing} tone="effect" />
+                                    <span className="relative z-10 pointer-events-none drop-shadow-sm truncate max-w-[calc(100%-30px)]">
+                                        {label}
+                                    </span>
+                                    <IconButton
+                                        unstyled
+                                        tooltip={false}
+                                        label="Delete effect block"
+                                        onClick={(e) => {
+                                            e.stopPropagation();
+                                            updateShot(activeShot.id, (s) => ({
+                                                ...s,
+                                                effectBlocks: (s.effectBlocks || []).filter((b) => b.id !== eb.id),
+                                            }));
+                                        }}
+                                        title="Delete effect block"
+                                        className="w-3.5 h-3.5 rounded-full hover:bg-rose-500/80 hover:text-white flex items-center justify-center text-[10px] opacity-0 group-hover/fx:opacity-100 transition cursor-pointer ml-1 z-10"
+                                        icon={<>&times;</>}
+                                    />
+                                    <TrimHandle
+                                        side="left"
+                                        onPointerDown={(e) => startEffectBlockDrag?.(e, activeShot, eb, 'left')}
+                                        className="w-2.5 bg-white/20 hover:bg-purple-300 rounded-l-full z-10"
+                                    />
+                                    <TrimHandle
+                                        side="right"
+                                        onPointerDown={(e) => startEffectBlockDrag?.(e, activeShot, eb, 'right')}
+                                        className="w-2.5 bg-white/20 hover:bg-purple-300 rounded-r-full z-10"
+                                    />
+                                </TimelineRangeBar>
+                                {ghostDragPreview && ghostDragPreview.id === eb.id && (
                                     <TimelineDragPreview
                                         startMs={ghostDragPreview.startMs}
                                         durationMs={ghostDragPreview.durationMs}

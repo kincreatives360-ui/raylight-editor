@@ -81,11 +81,16 @@ export interface SceneEffectAnimationBlock {
   id: string;
   label: string;
   effectKey: EffectKey;
+  property?: string;
   startMs: number;
   durationMs: number;
   fromValue: number;
   toValue: number;
+  fromTarget?: Vec3;
+  toTarget?: Vec3;
+  amount?: Vec3 | number;
   easing: Easing;
+  direction?: 'forward' | 'reverse';
 }
 
 export type LightSourceType = 'directional' | 'point' | 'spot' | 'area' | 'ambient';

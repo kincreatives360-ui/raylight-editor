@@ -6,6 +6,7 @@ import type { Shot, EffectKey, DepthOfField } from '../../../model/types';
 import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
+import { generateId } from '../../../model/id';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
 import { ScrubInput } from '../../../ui/ScrubInput';
@@ -405,7 +406,38 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                     {key === 'depthOfField' ? (
                       <div className="space-y-2">
                         <div>
-                          <span className="text-[10px] text-muted-foreground block mb-1">Focus on</span>
+                          <div className="flex items-center justify-between mb-1">
+                            <span className="text-[10px] text-muted-foreground block">Focus on</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const currentTarget: DepthOfField['target'] = (mergedFields.target as DepthOfField['target'] | undefined) ?? { x: 0, y: 0, z: 0 };
+                                updateShot(shot.id, (s) => ({
+                                  ...s,
+                                  effectBlocks: [
+                                    ...(s.effectBlocks || []),
+                                    {
+                                      id: generateId('fx-dof'),
+                                      label: 'Rack Focus',
+                                      effectKey: 'depthOfField',
+                                      property: 'target',
+                                      startMs: 0,
+                                      durationMs: 1000,
+                                      fromValue: 0,
+                                      toValue: 1,
+                                      fromTarget: { ...currentTarget },
+                                      toTarget: { ...currentTarget, z: currentTarget.z - 2 },
+                                      easing: { kind: 'preset', name: 'ease-in-out' },
+                                    },
+                                  ],
+                                }));
+                              }}
+                              title="Add a rack-focus transition block to the timeline"
+                              className="text-[10px] text-sky-400 hover:text-sky-300 font-medium cursor-pointer"
+                            >
+                              + Rack focus
+                            </button>
+                          </div>
                           <FigmaSelect
                             aria-label="Focus on"
                             className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer"

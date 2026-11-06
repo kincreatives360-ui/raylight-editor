@@ -47,6 +47,31 @@ export function getSnapTargets(shot: Shot, excludeId?: string): number[] {
             }
         }
     }
+
+    // Camera move blocks
+    for (const block of shot.cameraBlocks || []) {
+        if (block.id !== excludeId) {
+            targets.add(block.startMs);
+            targets.add(block.startMs + block.durationMs);
+        }
+    }
+
+    // Light animation blocks
+    for (const block of shot.lightBlocks || []) {
+        if (block.id !== excludeId) {
+            targets.add(block.startMs);
+            targets.add(block.startMs + block.durationMs);
+        }
+    }
+
+    // Scene effect & rack focus blocks
+    for (const block of shot.effectBlocks || []) {
+        if (block.id !== excludeId) {
+            targets.add(block.startMs);
+            targets.add(block.startMs + block.durationMs);
+        }
+    }
+
     return Array.from(targets);
 }
 

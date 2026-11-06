@@ -1,6 +1,6 @@
 import React from 'react';
 import type { Dispatch, SetStateAction } from 'react';
-import type { CameraBlock, LightAnimationBlock, Shot } from '../../model/types';
+import type { CameraBlock, LightAnimationBlock, SceneEffectAnimationBlock, Shot } from '../../model/types';
 import { snapTime } from './timelineSnapping';
 import type { TimelineGhostDragPreview } from './timelineTypes';
 
@@ -294,5 +294,129 @@ export function useTimelineCameraLightInteractions({
         window.addEventListener('pointercancel', onEnd);
     };
 
-    return { startCameraBlockDrag, startLightBlockDrag };
+    // 6. Drag / Trim Scene Effect & Rack Focus Block
+    const startEffectBlockDrag = (
+        e: React.PointerEvent,
+        shot: Shot,
+        effectBlock: SceneEffectAnimationBlock,
+        mode: 'move' | 'left' | 'right'
+    ) => {
+        if (e.button !== 0 && e.pointerType === 'mouse') return;
+        e.preventDefault();
+        e.stopPropagation();
+        const startX = e.clientX;
+        const origStart = effectBlock.startMs;
+        const origDur = effectBlock.durationMs;
+        const pointerId = e.pointerId;
+        let hasMoved = false;
+
+        try {
+            e.currentTarget.setPointerCapture(pointerId);
+        } catch {
+            // Ignore capture error
+        }
+
+        const onMove = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            if (!hasMoved) {
+                if (Math.abs(ev.clientX - startX) < 4) return;
+                hasMoved = true;
+                beginDragTransaction();
+                setDragging(true);
+            }
+
+            const deltaMs = Math.round((ev.clientX - startX) / pxPerMs / 10) * 10;
+            let nextStart = origStart;
+            let nextDur = origDur;
+
+            const snapThresholdMs = Math.round(10 / pxPerMs);
+            const snapTargets = [0, shot.durationMs];
+            (shot.effectBlocks || []).forEach((b) => {
+                if (b.id !== effectBlock.id) {
+                    snapTargets.push(b.startMs, b.startMs + b.durationMs);
+                }
+            });
+
+            if (mode === 'left') {
+                const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
+                nextStart = Math.max(0, Math.min(origStart + origDur - 100, snap.time));
+                nextDur = origStart + origDur - nextStart;
+                setGhostDragPreview({
+                    id: effectBlock.id,
+                    type: 'animation',
+                    startMs: nextStart,
+                    durationMs: nextDur,
+                    label: effectBlock.label,
+                    trimEdge: 'left',
+                    snapped: snap.snapped,
+                });
+            } else if (mode === 'right') {
+                const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                const nextEnd = Math.max(origStart + 100, Math.min(shot.durationMs, snap.time));
+                nextDur = nextEnd - origStart;
+                setGhostDragPreview({
+                    id: effectBlock.id,
+                    type: 'animation',
+                    startMs: origStart,
+                    durationMs: nextDur,
+                    label: effectBlock.label,
+                    trimEdge: 'right',
+                    snapped: snap.snapped,
+                });
+            } else {
+                const dur = origDur;
+                const snapStart = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
+                const snapEnd = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
+                let snapped = false;
+                if (snapStart.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
+                    snapped = true;
+                } else if (snapEnd.snapped) {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
+                    snapped = true;
+                } else {
+                    nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                }
+                setGhostDragPreview({
+                    id: effectBlock.id,
+                    type: 'animation',
+                    startMs: nextStart,
+                    durationMs: origDur,
+                    label: effectBlock.label,
+                    snapped,
+                });
+            }
+
+            updateShot(
+                shot.id,
+                (s) => ({
+                    ...s,
+                    effectBlocks: (s.effectBlocks || []).map((b) =>
+                        b.id === effectBlock.id
+                            ? { ...b, startMs: nextStart, durationMs: nextDur }
+                            : b
+                    ),
+                }),
+                { skipHistory: true }
+            );
+        };
+
+        const onEnd = (ev: PointerEvent) => {
+            if (ev.pointerId !== pointerId) return;
+            setGhostDragPreview(null);
+            if (hasMoved) {
+                commitDragTransaction();
+                setDragging(false);
+            }
+            window.removeEventListener('pointermove', onMove);
+            window.removeEventListener('pointerup', onEnd);
+            window.removeEventListener('pointercancel', onEnd);
+        };
+
+        window.addEventListener('pointermove', onMove);
+        window.addEventListener('pointerup', onEnd);
+        window.addEventListener('pointercancel', onEnd);
+    };
+
+    return { startCameraBlockDrag, startLightBlockDrag, startEffectBlockDrag };
 }

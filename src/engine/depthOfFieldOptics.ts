@@ -137,3 +137,85 @@ export const DOF_QUALITY_SAMPLES: Record<DofQuality, number> = {
   balanced: 16,
   high: 28,
 };
+
+export interface SceneScaleSample {
+  focalLengthMm: number;
+  aperture: number;
+  focusDistance: number;
+}
+
+export interface SolveSceneScaleOptions {
+  samples: SceneScaleSample[];
+  focusRange?: number;
+  viewportHeight?: number;
+  minScale?: number;
+  maxScale?: number;
+  defaultScale?: number;
+}
+
+/**
+ * Automatically calibrates the physical sceneScale for depth of field.
+ * Uses a 60-step bisection in log-scale across sampled timeline points
+ * to align the physical circle-of-confusion with the reference camera framing.
+ */
+export function solveOptimalSceneScale(options: SolveSceneScaleOptions): number {
+  const {
+    samples,
+    focusRange = 0.85,
+    viewportHeight = 1080,
+    minScale = 0.01,
+    maxScale = 100,
+    defaultScale = 1.0,
+  } = options;
+
+  if (!samples || samples.length === 0) return defaultScale;
+
+  const validSamples = samples.filter(s => s.focusDistance > 1e-4);
+  if (validSamples.length === 0) return defaultScale;
+
+  const targets = validSamples.map((s) => {
+    const fRatio = s.focalLengthMm / 50;
+    const apRatio = 12 / Math.max(s.aperture, 0.7);
+    const artisticBlur = Math.min(Math.max(fRatio * apRatio, 0), 16) * (viewportHeight / 1080);
+    const targetCoC = (artisticBlur * Math.max(s.focusDistance, 0)) / Math.max(focusRange, 1e-4);
+    return {
+      ...s,
+      logTarget: Math.log(Math.max(targetCoC, 1e-9)),
+    };
+  });
+
+  const residualAtScale = (scale: number): number => {
+    let maxRes = Number.NEGATIVE_INFINITY;
+    let minRes = Number.POSITIVE_INFINITY;
+    for (const sample of targets) {
+      const f = Math.max(sample.focalLengthMm, 0.001);
+      const S = Math.max(sample.focusDistance, 0) * scale;
+      const subject = Math.max(S - 1.0, 0.001);
+      const denom = Math.max(sample.aperture, 0.001) * Math.max(S - f, 0.001);
+      const cocMm = (Math.abs(subject - S) / subject) * ((f * f) / denom);
+      const cocPx = (cocMm / 24) * viewportHeight;
+      const diff = Math.log(Math.max(cocPx, 1e-9)) - sample.logTarget;
+      maxRes = Math.max(maxRes, diff);
+      minRes = Math.min(minRes, diff);
+    }
+    return maxRes + minRes;
+  };
+
+  if (residualAtScale(minScale) <= 0) return minScale;
+  if (residualAtScale(maxScale) >= 0) return maxScale;
+
+  let logMin = Math.log(minScale);
+  let logMax = Math.log(maxScale);
+
+  for (let i = 0; i < 60; i++) {
+    const mid = (logMin + logMax) / 2;
+    if (residualAtScale(Math.exp(mid)) > 0) {
+      logMin = mid;
+    } else {
+      logMax = mid;
+    }
+  }
+
+  const result = Math.exp((logMin + logMax) / 2);
+  return Number.isFinite(result) ? Number(result.toFixed(4)) : defaultScale;
+}

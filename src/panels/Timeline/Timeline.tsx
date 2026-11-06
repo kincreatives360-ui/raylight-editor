@@ -208,7 +208,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectPreset,
         selectBlock,
     });
-    const { startCameraBlockDrag, startLightBlockDrag } = useTimelineCameraLightInteractions({
+    const { startCameraBlockDrag, startLightBlockDrag, startEffectBlockDrag } = useTimelineCameraLightInteractions({
         pxPerMs,
         setGhostDragPreview,
         setDragging,
@@ -252,6 +252,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             : hoverTimeMs;
 
     const hasLightBlocks = (activeShot?.lightBlocks?.length || 0) > 0;
+    const hasEffectBlocks = (activeShot?.effectBlocks?.length || 0) > 0;
 
     const addCameraBlockAtTime = (timeMs: number) => {
         if (!activeShot) return;
@@ -462,6 +463,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             selectedLightBlockId={selectedLightBlockId}
                             selectLightBlock={selectLightBlock}
                             startLightBlockDrag={startLightBlockDrag}
+                            hasEffectBlocks={hasEffectBlocks}
+                            startEffectBlockDrag={startEffectBlockDrag}
                             selectedLayerSet={selectedLayerSet}
                             expandedTimelineLayerSet={expandedTimelineLayerSet}
                             startLayerBarDrag={startLayerBarDrag}

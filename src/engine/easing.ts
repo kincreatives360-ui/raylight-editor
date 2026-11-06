@@ -176,10 +176,21 @@ export function evaluatePreset(name: PresetEasingName, t: number): number {
                 : 1 - Math.pow(-2 * t + 2, 3) / 2;
 
         case 'ease-in-expo':
-            return Math.pow(2, 10 * t - 10);
+            return (Math.pow(2, 10 * t) - 1) / 1023;
 
-        case 'ease-out-expo':
-            return 1 - Math.pow(2, -10 * t);
+        case 'ease-out-expo': {
+            const xb = Math.pow(2, -10);
+            return 1 - (Math.pow(2, -10 * t) - xb) / (1 - xb);
+        }
+
+        case 'snap':
+            return solveCubicBezier(0.89, 0, 0.1, 1, t);
+
+        case 'snap-in':
+            return solveCubicBezier(0.9, 0, 1, 1, t);
+
+        case 'snap-out':
+            return solveCubicBezier(0, 0, 0.1, 1, t);
 
         case 'ease-in-back': {
             const c1 = 1.70158;
@@ -262,6 +273,9 @@ export const ALL_18_EASINGS: EasingCatalogItem[] = [
     { id: 'preset:ease-in-out-back', label: 'Ease In-Out Back', category: 'Preset', easing: { kind: 'preset', name: 'ease-in-out-back' } },
     { id: 'preset:hold', label: 'Hold (Step)', category: 'Preset', easing: { kind: 'preset', name: 'hold' } },
     { id: 'preset:bounce', label: 'Bounce', category: 'Preset', easing: { kind: 'preset', name: 'bounce' } },
+    { id: 'preset:snap', label: 'Snap (0.89, 0, 0.1, 1)', category: 'Preset', easing: { kind: 'preset', name: 'snap' } },
+    { id: 'preset:snap-in', label: 'Snap In (0.9, 0, 1, 1)', category: 'Preset', easing: { kind: 'preset', name: 'snap-in' } },
+    { id: 'preset:snap-out', label: 'Snap Out (0, 0, 0.1, 1)', category: 'Preset', easing: { kind: 'preset', name: 'snap-out' } },
 
     // 6 Physics Springs
     { id: 'spring:gentle', label: 'Spring: Gentle', category: 'Spring', easing: { kind: 'spring', name: 'gentle' } },

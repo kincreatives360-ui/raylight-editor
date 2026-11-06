@@ -206,7 +206,10 @@ export type PresetEasingName =
   | 'ease-in-expo'
   | 'ease-out-expo'
   | 'bounce'
-  | 'hold';
+  | 'hold'
+  | 'snap'
+  | 'snap-in'
+  | 'snap-out';
 
 export type Easing =
   | { kind: 'preset'; name: PresetEasingName }
