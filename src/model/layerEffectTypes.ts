@@ -207,6 +207,17 @@ export interface RgbSplitEffect {
   blue: number;
 }
 
+export interface AgentGlowEffect {
+  enabled: boolean;
+  color: string;
+  intensity: number;
+  spread: number;
+  ringWidth: number;
+  speed: number;
+  sweep: number;
+  target?: 'device' | 'screen';
+}
+
 export interface LayerEffects {
   rgbSplit?: RgbSplitEffect;
   outline?: OutlineEffect;
@@ -220,6 +231,7 @@ export interface LayerEffects {
   dropShadow?: DropShadowEffect;
   shadows?: DropShadowEffect[];
   glow?: GlowEffect;
+  agentGlow?: AgentGlowEffect;
   layerBlur?: number;
   backdropBlur?: number;
   layerBlurSettings?: BlurSettings;

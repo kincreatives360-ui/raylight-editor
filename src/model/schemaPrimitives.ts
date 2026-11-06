@@ -380,5 +380,15 @@ export const LayerEffectsSchema = z.object({
     speed: z.number().min(0).max(20), offAxis: z.number().min(0).max(1),
     snapToPixels: z.boolean(),
   }).optional(),
+  agentGlow: z.object({
+    enabled: z.boolean(),
+    color: z.string(),
+    intensity: z.number().min(0).max(10),
+    spread: z.number().min(0).max(200),
+    ringWidth: z.number().min(0).max(100),
+    speed: z.number().min(0).max(20),
+    sweep: z.number().min(0).max(1),
+    target: z.enum(['device', 'screen']).optional(),
+  }).optional(),
 });
 

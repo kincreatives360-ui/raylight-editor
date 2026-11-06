@@ -260,4 +260,53 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     expect(params.x).toBeCloseTo(7.65, 2);
     pass.material.dispose();
   });
+
+  it('matches Raylight canonical scene effects order (yh sequence)', async () => {
+    const { DEFAULT_EFFECTS_ORDER } = await import('../../model/enums');
+    expect(DEFAULT_EFFECTS_ORDER).toEqual([
+      'depthOfField',
+      'bloom',
+      'atmosphere',
+      'vignette',
+      'motionBlur',
+      'chromaticAberration',
+      'filmGrain',
+      'ghost',
+      'colorGrade',
+      'gradientMap',
+      'edgeFade',
+      'glitch',
+      'fishEye',
+      'lensDistortion',
+    ]);
+  });
+
+  it('configures filmGrain with measured stock tints and atmosphere with range', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.filmGrain.enabled = true;
+    effectsState.filmGrain.stock = 'fine-daylight';
+    effectsState.atmosphere.enabled = true;
+    effectsState.atmosphere.range = 0.85;
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'filmGrain', orderIndex: 0, summary: 'Film Grain' },
+        { key: 'atmosphere', orderIndex: 1, summary: 'Atmosphere' },
+      ],
+      deterministicSeed: 0.1,
+    };
+
+    const grainPass = createSceneEffectPass('filmGrain');
+    configureSceneEffectPass(grainPass, 'filmGrain', evaluated, 1920, 1080);
+    const grainColor = grainPass.uniforms.uColor.value as THREE.Color;
+    expect(grainColor.getHexString()).toBe('a8c0ff');
+    grainPass.material.dispose();
+
+    const atmoPass = createSceneEffectPass('atmosphere');
+    configureSceneEffectPass(atmoPass, 'atmosphere', evaluated, 1920, 1080);
+    const atmoExtra = atmoPass.uniforms.uExtra.value as THREE.Vector4;
+    expect(atmoExtra.x).toBeCloseTo(0.85, 2);
+    atmoPass.material.dispose();
+  });
 });

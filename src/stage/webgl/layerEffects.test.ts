@@ -221,4 +221,22 @@ describe('layer effect rendering', () => {
     expect(mockCtx.scale).toHaveBeenCalled();
     expect(mockCtx.drawImage).toHaveBeenCalledTimes(7); // 1 copy + 6 samples
   });
+
+  it('reserves halo padding and calculates layout for agentGlow', () => {
+    const layout = getLayerHaloLayout({
+      agentGlow: {
+        enabled: true,
+        color: '#3b82f6',
+        intensity: 1.5,
+        spread: 24,
+        ringWidth: 6,
+        speed: 1,
+        sweep: 0.25,
+      },
+    }, 200, 200);
+
+    expect(layout.padding).toBeGreaterThanOrEqual(54); // 6 + 24 * 2
+    expect(layout.agentGlow).toBeDefined();
+    expect(layout.width).toBe(200 + layout.padding * 2);
+  });
 });

@@ -3,11 +3,11 @@ import { turbulentWarpPoint } from './proceduralNoise';
 
 export const EFFECT_STAGE = { width: 1920, height: 1080 };
 export type BlurEffectKey = 'layerBlur' | 'backdropBlur';
-export type AddableLayerEffect = 'dropShadow' | 'glow' | BlurEffectKey | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit';
+export type AddableLayerEffect = 'dropShadow' | 'glow' | BlurEffectKey | 'liquidGlass' | 'warp' | 'screen' | 'agentGlow' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit';
 export const LAYER_EFFECT_NAMES: Record<AddableLayerEffect, string> = {
   rgbSplit: 'RGB split', dropShadow: 'Shadow', glow: 'Glow', backdropBlur: 'Backdrop blur', layerBlur: 'Layer blur',
   outline: 'Alpha outline', colorCorrection: 'Color correction', noise: 'Noise', bevel: 'Bevel and emboss', halftone: 'Halftone', roughen: 'Roughen edges', colorKey: 'Color key', pixelate: 'Pixelate',
-  liquidGlass: 'Liquid glass', warp: 'Wrap', screen: 'Screen',
+  liquidGlass: 'Liquid glass', warp: 'Wrap', screen: 'Screen', agentGlow: 'Agent glow',
 };
 
 export function defaultShadow(): DropShadowEffect {
@@ -36,6 +36,7 @@ export function addLayerEffect(effects: LayerEffects, key: AddableLayerEffect): 
     case 'liquidGlass': return { ...effects, liquidGlass: { enabled: true, refraction: .6, ior: 1.52, bevelWidth: 24, doubleBevel: .4, roughness: .05, dispersion: .45, chromaBoost: .8, shine: .7, fresnel: .6, lightAngle: 45, tint: '#ffffff', rimColor: '#cce4ff' } };
     case 'warp': return { ...effects, warp: { enabled: true, mode: 'bulge', strength: .5, size: 183, centerX: 0, centerY: 0, angle: 0, width: 61, travel: .5 } };
     case 'screen': return { ...effects, screen: { enabled: true, mode: 'lcd', pixelSize: 8, grid: 0.85, moire: 0, bands: 0, focus: 0, glow: 0, flicker: 0, speed: 0.5, offAxis: 0, snapToPixels: false } };
+    case 'agentGlow': return { ...effects, agentGlow: { enabled: true, color: '#3b82f6', intensity: 1, spread: 20, ringWidth: 4, speed: 1, sweep: 0.25, target: 'device' } };
   }
 }
 

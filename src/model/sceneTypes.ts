@@ -184,6 +184,7 @@ export interface SceneEffects {
     depthEnabled: boolean;
     start: number;
     reach: number;
+    range?: number;
     mistHeight: number;
   };
   gradientMap: {
@@ -258,7 +259,16 @@ export interface SceneEffects {
     colorAmount?: number;
     aspect?: number;
     seed?: number;
-    stock?: 'Tungsten 500' | 'Kodak 5219' | 'Fuji 400' | 'Custom';
+    stock?:
+      | 'fine-daylight'
+      | 'daylight'
+      | 'tungsten-500'
+      | 'night-800'
+      | 'soft-100'
+      | 'Tungsten 500'
+      | 'Kodak 5219'
+      | 'Fuji 400'
+      | 'Custom';
     shadowStrength?: number;
     midStrength?: number;
     highlightStrength?: number;

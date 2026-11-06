@@ -103,7 +103,7 @@ export const DEFAULT_LIGHT_RIG: LightRig = {
 };
 
 export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
-  atmosphere: { enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 },
+  atmosphere: { enabled: false, fog: 0.5, mist: 0.2, haze: 0.25, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, range: 1, mistHeight: 0.35 },
   gradientMap: {
     enabled: false,
     stops: [{ at: 0, color: '#171a45' }, { at: 0.45, color: '#f05a9d' }, { at: 1, color: '#ffbc62' }],
@@ -146,7 +146,7 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     size: 1.2,
     softness: 0,
     colorAmount: 0.4, aspect: 1, seed: 0, shadowStrength: 0.7, midStrength: 1, highlightStrength: 0.45, midpoint: 0.4,
-    stock: 'Tungsten 500', protectBlacks: true, blendMode: 'film', motion: 'frame', smooth: false, perChannel: false,
+    stock: 'tungsten-500', protectBlacks: true, blendMode: 'film', motion: 'frame', smooth: false, perChannel: false,
   },
   ghost: {
     enabled: false,

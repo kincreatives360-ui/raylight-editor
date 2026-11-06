@@ -441,7 +441,18 @@ export function configureSceneEffectPass(
       pass.uniforms.uExtra.value.set(grain.aspect ?? 1, grain.midpoint ?? 0.4, grain.protectBlacks ? 1 : 0, ({ film: 0, overlay: 1, softLight: 2, multiply: 3 } as const)[(grain.blendMode ?? 'film') as 'film' | 'overlay' | 'softLight' | 'multiply']);
       pass.uniforms.uExtra2.value.set(grain.shadowStrength ?? 0.7, grain.midStrength ?? 1, grain.highlightStrength ?? 0.45, grain.smooth ? 1 : 0);
       pass.uniforms.uFringe.value.set(grain.perChannel ? 1 : 0, grain.smooth ? 1 : 0, grain.protectBlacks ? 1 : 0, grain.colorAmount ?? 0.4);
-      (pass.uniforms.uColor.value as THREE.Color).set(({ 'Tungsten 500': '#c4d9ff', 'Kodak 5219': '#ffd5a1', 'Fuji 400': '#d3ffd9', Custom: '#ffffff' } as const)[(grain.stock ?? 'Tungsten 500') as 'Tungsten 500' | 'Kodak 5219' | 'Fuji 400' | 'Custom']);
+      const stockTints: Record<string, string> = {
+        'fine-daylight': '#a8c0ff',
+        'daylight': '#ffd5a1',
+        'tungsten-500': '#c4d9ff',
+        'night-800': '#99b3ff',
+        'soft-100': '#ffffff',
+        'Tungsten 500': '#c4d9ff',
+        'Kodak 5219': '#ffd5a1',
+        'Fuji 400': '#d3ffd9',
+        Custom: '#ffffff',
+      };
+      (pass.uniforms.uColor.value as THREE.Color).set(stockTints[grain.stock ?? 'tungsten-500'] ?? '#c4d9ff');
       pass.uniforms.uSeed.value = grain.motion === 'static' ? (grain.seed ?? 0) : grain.motion === '12fps' ? Math.floor(effects.deterministicSeed * 5) / 5 + (grain.seed ?? 0) : effects.deterministicSeed + (grain.seed ?? 0);
       break;
     }
@@ -452,7 +463,8 @@ export function configureSceneEffectPass(
     case 'atmosphere': {
       const atmosphere=e.atmosphere;
       p.set(atmosphere.fog, atmosphere.mist, atmosphere.haze, atmosphere.start);
-      pass.uniforms.uExtra.value.set(atmosphere.reach, atmosphere.mistHeight, 0.1, atmosphere.depthEnabled ? 1 : 0);
+      const reach = atmosphere.range ?? atmosphere.reach;
+      pass.uniforms.uExtra.value.set(reach, atmosphere.mistHeight, 0.1, atmosphere.depthEnabled ? 1 : 0);
       pass.uniforms.uExtra2.value.set(Math.max(0.001, cameraClip.near), Math.max(0.01, cameraClip.far), 0, 0);
       (pass.uniforms.uColor.value as THREE.Color).set(atmosphere.color);
       break;

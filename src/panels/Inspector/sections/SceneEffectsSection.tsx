@@ -110,7 +110,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
   bloom: { blendMode: ['screen', 'add', 'softLight'] },
   motionBlur: { direction: ['camera', 'angle'] },
-  filmGrain: { stock: ['Tungsten 500', 'Kodak 5219', 'Fuji 400', 'Custom'], blendMode: ['film', 'overlay', 'softLight', 'multiply'], motion: ['frame', '12fps', 'static'] },
+  filmGrain: { stock: ['fine-daylight', 'daylight', 'tungsten-500', 'night-800', 'soft-100', 'Custom'], blendMode: ['film', 'overlay', 'softLight', 'multiply'], motion: ['frame', '12fps', 'static'] },
   glitch: { mode: ['digital', 'analog', 'datamosh'] },
   gradientMap: { blendMode: ['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn'] },
   fishEye: { edgeMode: ['fill', 'balanced', 'none'] },

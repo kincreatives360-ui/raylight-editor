@@ -48,6 +48,28 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
             ctx.restore();
         }
     }
+    const agentGlow = effects.agentGlow;
+    if (agentGlow?.enabled && agentGlow.ringWidth > 0) {
+        const ctx = source.getContext('2d');
+        if (ctx) {
+            ctx.save();
+            ctx.resetTransform();
+            ctx.globalCompositeOperation = 'source-over';
+            const ratio = source.width / Math.max(1, authoredWidth);
+            drawAlphaOutline(ctx, source, {
+                x: 0,
+                y: 0,
+                width: source.width,
+                height: source.height,
+                radius: agentGlow.ringWidth * ratio,
+                softness: (agentGlow.spread * 0.5) * ratio,
+                placement: 'inside',
+                color: agentGlow.color,
+                opacity: Math.max(0, Math.min(1, agentGlow.intensity * 0.9)),
+            });
+            ctx.restore();
+        }
+    }
     const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode === 'inner');
     // Inner glow: rendered on the surface canvas when placement === 'inner'
     const glow = effects.glow?.enabled && (effects.glow.placement === 'inner' || (!effects.glow.placement && effects.glow.mode)) ? effects.glow : undefined;
@@ -195,10 +217,13 @@ export function getLayerHaloLayout(effects: LayerEffects, width: number, height:
     const glowIntensity = Math.max(0, (effects.glow?.enabled && isOuterGlow ? effects.glow.intensity : 0) + intensityOffset);
     const glowRadius = Math.max(0, (effects.glow?.enabled ? effects.glow.radius : .05) + radiusOffset) * Math.max(width, height);
     const shadow = effects.dropShadow?.enabled && effects.dropShadow.mode !== 'inner' ? effects.dropShadow : undefined;
+    const agentGlow = effects.agentGlow?.enabled ? effects.agentGlow : undefined;
+    const agentGlowPadding = agentGlow ? (agentGlow.ringWidth + agentGlow.spread * 2) : 0;
     const padding = Math.ceil(Math.max(glowIntensity > 0 ? glowRadius * 3 + Math.abs(effects.glow?.depth ?? 0) : 0,
         effects.outline?.enabled && effects.outline.placement === 'outside' ? effects.outline.width + effects.outline.softness * 3 : 0,
+        agentGlowPadding,
         ...[effects.dropShadow, ...(effects.shadows ?? [])].map(s => s?.enabled && s.mode !== 'inner' ? s.blur * Math.max(width, height) * 3 + Math.abs(s.spread ?? 0) + (s.mode === 'long' ? s.length ?? 120 : 0) + Math.max(Math.abs(s.offsetX * width), Math.abs(s.offsetY * height)) : 0)));
-    return { padding, width: width + padding * 2, height: height + padding * 2, glowIntensity, glowRadius, shadow };
+    return { padding, width: width + padding * 2, height: height + padding * 2, glowIntensity, glowRadius, shadow, agentGlow };
 }
 
 export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number, authoredWidth = source.width, authoredHeight = source.height) {
@@ -208,7 +233,8 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
     const layout = getLayerHaloLayout(effects, source.width, source.height, intensityOffset, radiusOffset);
     const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode !== 'inner');
     const outline = effects.outline?.enabled && effects.outline.placement === 'outside' ? effects.outline : undefined;
-    if (!shadows.length && layout.glowIntensity <= 0 && !outline) return null;
+    const agentGlow = effects.agentGlow?.enabled ? effects.agentGlow : undefined;
+    if (!shadows.length && layout.glowIntensity <= 0 && !outline && !agentGlow) return null;
     const canvas = acquireCanvas(
         Math.max(1, Math.ceil(layout.width * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height)))),
         Math.max(1, Math.ceil(layout.height * Math.min(1, maxTextureSize / Math.max(layout.width, layout.height))))
@@ -254,6 +280,20 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
     }
     ctx.globalAlpha = 1; ctx.globalCompositeOperation = 'source-over';
     if (outline) drawAlphaOutline(ctx, source, { x: layout.padding * ratio, y: layout.padding * ratio, width: source.width * ratio, height: source.height * ratio, radius: outline.width * ratio, softness: outline.softness * ratio, placement: 'outside', color: outline.color, opacity: outline.opacity });
+    if (agentGlow) {
+        const glowRad = (agentGlow.ringWidth + agentGlow.spread) * ratio;
+        drawAlphaOutline(ctx, source, {
+            x: layout.padding * ratio,
+            y: layout.padding * ratio,
+            width: source.width * ratio,
+            height: source.height * ratio,
+            radius: glowRad,
+            softness: Math.max(1, agentGlow.spread * ratio),
+            placement: 'outside',
+            color: agentGlow.color,
+            opacity: Math.max(0, Math.min(1, agentGlow.intensity)),
+        });
+    }
     releaseCanvas(mask);
     return { canvas, widthScale: layout.width / source.width, heightScale: layout.height / source.height };
 }

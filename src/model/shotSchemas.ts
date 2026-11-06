@@ -156,8 +156,8 @@ export const ShotSchema = z.object({
   effects: z.object({
     atmosphere: z.object({
       enabled: z.boolean(), fog: z.number().min(0).max(1), mist: z.number().min(0).max(1), haze: z.number().min(0).max(1),
-      color: z.string(), depthEnabled: z.boolean(), start: z.number().min(0).max(1), reach: z.number().min(0.01).max(1), mistHeight: z.number().min(0).max(1),
-    }).default({ enabled: false, fog: 0.6, mist: 0.07, haze: 0, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, mistHeight: 0.35 }),
+      color: z.string(), depthEnabled: z.boolean(), start: z.number().min(0).max(1), reach: z.number().min(0.01).max(1), range: z.number().min(0.01).max(1).optional(), mistHeight: z.number().min(0).max(1),
+    }).default({ enabled: false, fog: 0.5, mist: 0.2, haze: 0.25, color: '#dce8f2', depthEnabled: true, start: 0, reach: 1, range: 1, mistHeight: 0.35 }),
     gradientMap: z.object({
       enabled: z.boolean(), stops: z.array(z.object({ at: z.number().min(0).max(1), color: z.string(), opacity: z.number().min(0).max(1).optional() })).min(2).max(8),
       blend: z.number().min(0).max(1), shift: z.number().min(-1).max(1), spread: z.number().min(0.01).max(2),
@@ -208,7 +208,19 @@ export const ShotSchema = z.object({
       size: z.number().min(0.1).max(32),
       softness: z.number().min(0).max(1).optional(),
       colorAmount: z.number().min(0).max(1).optional(), aspect: z.number().min(0.25).max(4).optional(), seed: z.number().int().optional(),
-      stock: z.enum(['Tungsten 500', 'Kodak 5219', 'Fuji 400', 'Custom']).optional(),
+      stock: z
+        .enum([
+          'fine-daylight',
+          'daylight',
+          'tungsten-500',
+          'night-800',
+          'soft-100',
+          'Tungsten 500',
+          'Kodak 5219',
+          'Fuji 400',
+          'Custom',
+        ])
+        .optional(),
       shadowStrength: z.number().min(0).max(1).optional(), midStrength: z.number().min(0).max(1).optional(), highlightStrength: z.number().min(0).max(1).optional(),
       midpoint: z.number().min(0).max(1).optional(), protectBlacks: z.boolean().optional(), blendMode: z.enum(['film', 'overlay', 'softLight', 'multiply']).optional(),
       motion: z.enum(['frame', '12fps', 'static']).optional(), smooth: z.boolean().optional(), perChannel: z.boolean().optional(),

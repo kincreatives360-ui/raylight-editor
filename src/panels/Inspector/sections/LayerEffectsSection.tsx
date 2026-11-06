@@ -57,7 +57,7 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
     const effects = layer.effects;
     const change = (edit: (current: LayerEffects) => LayerEffects) => updateLayer(activeShotId, layer.id, l => ({ ...l, effects: edit(l.effects) }));
     const patch = (next: LayerEffects) => change(current => ({ ...current, ...next }));
-    const objectPatch = <K extends 'dropShadow' | 'glow' | 'liquidGlass' | 'warp' | 'screen' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit'>(key: K, next: Partial<NonNullable<LayerEffects[K]>>) => change(current => ({ ...current, [key]: { ...current[key], ...next } }));
+    const objectPatch = <K extends 'dropShadow' | 'glow' | 'liquidGlass' | 'warp' | 'screen' | 'agentGlow' | 'outline' | 'colorCorrection' | 'noise' | 'bevel' | 'halftone' | 'roughen' | 'colorKey' | 'pixelate' | 'rgbSplit'>(key: K, next: Partial<NonNullable<LayerEffects[K]>>) => change(current => ({ ...current, [key]: { ...current[key], ...next } }));
     const remove = (key: AddableLayerEffect) => change(current => {
         const next = { ...current }; delete next[key];
         if (key === 'dropShadow') delete next.shadows;
@@ -232,6 +232,15 @@ export function LayerEffectsSection({ activeShotId, layer }: { activeShotId: str
                     <NumberControl label="Speed" value={screen.speed} max={20} step={.1} unit=" /s" onChange={speed => objectPatch('screen', { speed })} />
                 </div></details>
                 <label className="flex items-center justify-between text-[11px] text-muted-foreground py-0.5 cursor-pointer hover:text-foreground transition">Snap to pixels<input type="checkbox" checked={screen.snapToPixels} onChange={e => objectPatch('screen', { snapToPixels: e.target.checked })} className="accent-primary" /></label>
+            </div>)}
+            {effects.agentGlow && card('agentGlow', <Zap size={14} />, <div className="space-y-3 pt-3">
+                <ColorPicker showGradientMode={false} label="Glow color" color={effects.agentGlow.color} onChange={color => objectPatch('agentGlow', { color })} />
+                <div className="grid grid-cols-2 gap-2">
+                    <Percent label="Intensity" value={effects.agentGlow.intensity} max={200} onChange={intensity => objectPatch('agentGlow', { intensity })} />
+                    <NumberControl label="Spread" value={effects.agentGlow.spread} min={0} max={100} unit=" px" onChange={spread => objectPatch('agentGlow', { spread })} />
+                    <NumberControl label="Ring width" value={effects.agentGlow.ringWidth} min={0} max={50} unit=" px" onChange={ringWidth => objectPatch('agentGlow', { ringWidth })} />
+                    <Percent label="Sweep" value={effects.agentGlow.sweep} max={100} onChange={sweep => objectPatch('agentGlow', { sweep })} />
+                </div>
             </div>)}
         </div>
     </section>;
