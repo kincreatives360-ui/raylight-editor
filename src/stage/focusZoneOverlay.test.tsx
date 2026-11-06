@@ -3,8 +3,8 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { FocusZoneOverlay } from './FocusZoneOverlay';
 import { useSelectionStore } from '../store/useSelectionStore';
-import { createDefaultShot } from '../model/defaults';
-import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
+import { createDefaultProject, createDefaultShot } from '../model/defaults';
+import { evaluateProjectAtTime, type EvaluatedProjectFrame } from '../engine/evaluateShot';
 
 // SSR uses Zustand's initial snapshot. Read real loaded state for rendering.
 vi.mock('../store/useSelectionStore', async (importOriginal) => {
@@ -20,6 +20,7 @@ describe('FocusZoneOverlay Component', () => {
   });
 
   const createDummyFrame = (dofEnabled = true): EvaluatedProjectFrame => {
+    const project = createDefaultProject();
     const shot = createDefaultShot();
     shot.effects.depthOfField = {
       ...shot.effects.depthOfField,
@@ -29,17 +30,8 @@ describe('FocusZoneOverlay Component', () => {
       bokehShape: 'anamorphic',
       target: { x: 0.5, y: -0.2, z: 2.0 },
     };
-    return {
-      activeShot: shot,
-      camera: {
-        position: { x: 0, y: 0, z: 5 },
-        target: { x: 0, y: 0, z: 0 },
-        rotation: { x: 0, y: 0, z: 0 },
-        zoom: 1,
-        focalLength: 50,
-      } as any,
-      layers: [],
-    };
+    project.shots = [shot];
+    return evaluateProjectAtTime(project, 0);
   };
 
   it('does not render when focusZonePreview is false', () => {

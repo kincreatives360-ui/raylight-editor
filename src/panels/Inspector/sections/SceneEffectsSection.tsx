@@ -87,7 +87,7 @@ const SETTINGS_FIELDS: Partial<Record<EffectKey, string[]>> = {
   chromaticAberration: ['edgeStrength', 'centerX', 'centerY', 'channelRed', 'channelGreen', 'channelBlue', 'fringeColorAngle'],
   filmGrain: ['softness', 'colorAmount', 'aspect', 'seed', 'shadowStrength', 'midStrength', 'highlightStrength', 'midpoint', 'blendMode', 'motion'],
   lensDistortion: ['centerX', 'centerY', 'edgeMode', 'measure'],
-  depthOfField: ['highlightIntensity', 'highlightThreshold', 'sceneScale', 'sensorHeightMm', 'focalLength', 'focusRange', 'maxBlur', 'samples', 'highlightGain', 'focusSoftness', 'apertureBlades', 'bokehRotation', 'focusMode', 'focusTargetId', 'focusLayerId', 'autofocus', 'target', 'focusAssetId'],
+  depthOfField: ['highlightIntensity', 'highlightThreshold', 'sceneScale', 'sensorHeightMm', 'focalLength', 'focusRange', 'maxBlur', 'samples', 'highlightGain', 'focusSoftness', 'apertureBlades', 'bokehRotation', 'focusMode', 'focusTargetId', 'focusLayerId', 'autofocus', 'target', 'focusAssetId', 'bokehScale', 'model'],
 };
 
 const FIELD_RANGES: Record<string, [number, number, number]> = {
@@ -103,7 +103,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
   colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
-  focusDistance: [0.05, 80, 0.05], aperture: [0.7, 22, 0.1], maxBlur: [1, 128, 1], highlightGain: [0, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [4, 720, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [-180, 180, 1], sceneScale: [1, 100000, 1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 2, 0.01],
+  focusDistance: [0.05, 80, 0.05], aperture: [0.7, 22, 0.1], maxBlur: [1, 128, 1], highlightGain: [0, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [8, 400, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [-180, 180, 1], sceneScale: [1, 100000, 1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 4, 0.01],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
@@ -216,8 +216,12 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     const min = isPercent ? rawMin * 100 : isLensDistortionStrength ? rawMin * scale : rawMin;
     const max = isPercent ? rawMax * 100 : isLensDistortionStrength ? rawMax * scale : rawMax;
     const step = isPercent ? (rawStep * 100 >= 1 ? Math.round(rawStep * 100) : rawStep * 100) : isLensDistortionStrength ? rawStep * scale : rawStep;
-    const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength' ? 'Edges' : label(field);
-    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneSize' ? ' cm' : '';
+    const fieldLabel = key === 'chromaticAberration' && field === 'edgeStrength'
+      ? 'Edges'
+      : field === 'sceneScale'
+      ? 'Scene size'
+      : label(field);
+    const unit = isPercent ? ' %' : scaledPixels ? ' px' : key === 'lensDistortion' && field === 'strength' ? '°' : ['angle', 'shutterAngle', 'fringeColorAngle'].includes(field) ? '°' : field === 'aperture' ? ' f' : field === 'sceneScale' ? ' mm' : field === 'focalLength' ? ' mm' : '';
 
     return (
       <ScrubInput
@@ -236,7 +240,23 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
   const renderSelect = (key: EffectKey, field: string, value: string) => {
     const options=SELECT_OPTIONS[key]?.[field];
     if(!options) return null;
-    return <div key={field} className="flex flex-col gap-1"><label className="text-[10px] text-muted-foreground font-medium">{label(field)}</label><FigmaSelect aria-label={label(field)} className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer" value={value} onChange={event=>setValue(key,field,event.target.value)}>{options.map(option=><option key={option} value={option}>{option}</option>)}</FigmaSelect></div>;
+    return (
+      <div key={field} className="flex flex-col gap-1">
+        <label className="text-[10px] text-muted-foreground font-medium">{label(field)}</label>
+        <FigmaSelect
+          aria-label={label(field)}
+          className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer"
+          value={value}
+          onChange={(event) => setValue(key, field, event.target.value)}
+        >
+          {options.map((option) => (
+            <option key={option} value={option}>
+              {option.charAt(0).toUpperCase() + option.slice(1)}
+            </option>
+          ))}
+        </FigmaSelect>
+      </div>
+    );
   };
 
 
@@ -387,12 +407,11 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                         <div>
                           <span className="text-[10px] text-muted-foreground block mb-1">Focus on</span>
                           <FigmaSelect
+                            aria-label="Focus on"
+                            className="w-full h-8 px-2 rounded-lg bg-[#18181b] border border-white/[0.08] text-[11px] text-white outline-none focus:border-white/20 cursor-pointer"
                             value={String(mergedFields['focusAssetId'] || '')}
-                            options={[
-                              { value: '', label: 'A point' },
-                              ...(shot.layers || []).map((l) => ({ value: l.id, label: l.name || `Layer ${l.id}` })),
-                            ]}
-                            onChange={(val) => {
+                            onChange={(event) => {
+                              const val = event.target.value;
                               updateShot(shot.id, (s) => ({
                                 ...s,
                                 effects: {
@@ -406,7 +425,14 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                                 },
                               }));
                             }}
-                          />
+                          >
+                            <option value="">A point</option>
+                            {(shot.layers || []).map((l) => (
+                              <option key={l.id} value={l.id}>
+                                {l.name || `Layer ${l.id}`}
+                              </option>
+                            ))}
+                          </FigmaSelect>
                         </div>
 
                         {!mergedFields['focusAssetId'] && (() => {
@@ -582,17 +608,17 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                           <>
                             <div className="text-[10px] text-muted-foreground">Highlights</div>
                             <div className="grid grid-cols-2 gap-2">
-                              {renderNumber(key, 'highlightIntensity', Number(mergedFields['highlightIntensity'] ?? 0))}
-                              {renderNumber(key, 'highlightThreshold', Number(mergedFields['highlightThreshold'] ?? 0.7))}
+                              {renderNumber(key, 'highlightIntensity', Number(mergedFields['highlightIntensity'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.highlightIntensity ?? 0.35))}
+                              {renderNumber(key, 'highlightThreshold', Number(mergedFields['highlightThreshold'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.highlightThreshold ?? 0.7))}
                             </div>
                             <div className="text-[10px] text-muted-foreground">Scene size & Focal length</div>
                             <div className="grid grid-cols-2 gap-2">
-                              {renderNumber(key, 'sceneScale', Number(mergedFields['sceneScale'] ?? 250))}
-                              {renderNumber(key, 'focalLength', Number(mergedFields['focalLength'] ?? 50))}
+                              {renderNumber(key, 'sceneScale', Number(mergedFields['sceneScale'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.sceneScale ?? 250))}
+                              {renderNumber(key, 'focalLength', Number(mergedFields['focalLength'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.focalLength ?? 50))}
                             </div>
                             <div className="grid grid-cols-2 gap-2">
-                              {renderNumber(key, 'bokehScale', Number(mergedFields['bokehScale'] ?? 1))}
-                              {renderSelect(key, 'model', String(mergedFields['model'] ?? 'physical'))}
+                              {renderNumber(key, 'bokehScale', Number(mergedFields['bokehScale'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.bokehScale ?? 1))}
+                              {renderSelect(key, 'model', String(mergedFields['model'] ?? DEFAULT_SCENE_EFFECTS.depthOfField.model ?? 'physical'))}
                             </div>
                           </>
                         )}
