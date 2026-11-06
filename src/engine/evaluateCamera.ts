@@ -10,7 +10,6 @@ import {
     DEFAULT_CAMERA_Z,
     CAMERA_SHAKE_AMPLITUDE_SCALE,
     CAMERA_SHAKE_FREQ_MULTIPLIERS,
-    CAMERA_Z_COMPENSATION,
     CAMERA_ROT_X_COMPENSATION,
 } from './constants';
 
@@ -137,11 +136,9 @@ export function evaluateShotCameraAtTime(
                     focalLength = baseFocal * zoom;
                 } else if (block.mode === 'dollyzoom') {
                     const fromBaseZoom = Math.max(0.2, safeFromZoom);
-                    fovDegrees = Math.max(
-                        10,
-                        Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
-                    );
-                    focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+                    const zoomRatio = zoom / fromBaseZoom;
+                    focalLength = Math.max(8, Math.min(400, baseFocal / zoomRatio));
+                    fovDegrees = focalLengthToFov(focalLength);
                 } else {
                     focalLength = baseFocal;
                     fovDegrees = focalLengthToFov(focalLength);
