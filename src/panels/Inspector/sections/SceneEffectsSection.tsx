@@ -140,7 +140,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
     return enabled;
   }, [shot.appliedEffects, shot.effects, order]);
 
-  const setValue = (key: EffectKey, field: string, value: number | string | boolean | GradientStop[]) => {
+  const setValue = (key: EffectKey, field: string, value: unknown) => {
     updateShot(shot.id, (s) => ({
       ...s,
       effects: {
@@ -417,7 +417,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                                 effects: {
                                   ...s.effects,
                                   depthOfField: {
-                                    ...(DEFAULT_SCENE_EFFECTS.depthOfField || {}),
+                                    ...DEFAULT_SCENE_EFFECTS.depthOfField,
                                     ...(s.effects?.depthOfField || {}),
                                     focusAssetId: val || undefined,
                                     focusMode: val ? 'selection' : 'target',

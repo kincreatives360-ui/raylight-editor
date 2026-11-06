@@ -504,6 +504,7 @@ const StageComponent: React.FC<StageProps> = ({
                                     effects: {
                                         ...s.effects,
                                         depthOfField: {
+                                            ...DEFAULT_SCENE_EFFECTS.depthOfField,
                                             ...(s.effects?.depthOfField ?? {}),
                                             focusDistance: value,
                                             focusMode: 'manual',
