@@ -1,6 +1,8 @@
 // src/store/projectLifecycle.test.ts
 import { describe, it, expect, beforeEach } from 'vitest';
 import { useProjectStore } from './useProjectStore';
+import { useSelectionStore } from './useSelectionStore';
+import { usePlayheadStore } from './usePlayheadStore';
 import { DEFAULT_PROJECT, createDefaultProject, createDefaultShot } from '../model/defaults';
 import { isBlankProjectState } from '../model/types';
 
@@ -155,5 +157,63 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     expect(shots[2].id).toBe('shot-2');
     expect(shots[2].startMs).toBe(4000);
     expect(shots[2].durationMs).toBe(3000);
+  });
+
+  it('undo prunes deleted layer IDs from selection store and updates validation', () => {
+    const projectStore = useProjectStore.getState();
+    const shot = projectStore.addShot();
+    const layer = projectStore.addLayerToShot(shot.id, 'shape');
+
+    useSelectionStore.getState().selectLayer(layer.id, shot.id);
+    expect(useSelectionStore.getState().selectedLayerIds).toEqual([layer.id]);
+
+    // Now undo the layer addition
+    projectStore.undo();
+
+    // Verify layer is no longer in project
+    const currentShot = useProjectStore.getState().project.shots.find((s) => s.id === shot.id);
+    expect(currentShot?.layers.find((l) => l.id === layer.id)).toBeUndefined();
+
+    // Verify selection store pruned the removed layer
+    expect(useSelectionStore.getState().selectedLayerIds).toEqual([]);
+    expect(useProjectStore.getState().validation.success).toBe(true);
+  });
+
+  it('loadProjectJson clears history, resets playhead to 0, and resets selection', () => {
+    useProjectStore.getState().addShot();
+    const shot = useProjectStore.getState().project.shots[0];
+    const layer = useProjectStore.getState().addLayerToShot(shot.id, 'text');
+    useSelectionStore.getState().selectLayer(layer.id, shot.id);
+    usePlayheadStore.getState().setCurrentTimeMs(2500);
+
+    expect(useProjectStore.getState().past.length).toBeGreaterThan(0);
+    expect(usePlayheadStore.getState().currentTimeMs).toBe(2500);
+    expect(useSelectionStore.getState().selectedLayerIds).toEqual([layer.id]);
+
+    const newProject = createDefaultProject();
+    newProject.name = 'Imported Project';
+
+    const result = useProjectStore.getState().loadProjectJson(JSON.stringify(newProject));
+    expect(result.success).toBe(true);
+
+    const state = useProjectStore.getState();
+    expect(state.project.name).toBe('Imported Project');
+    expect(state.past).toEqual([]);
+    expect(state.future).toEqual([]);
+    expect(usePlayheadStore.getState().currentTimeMs).toBe(0);
+    expect(useSelectionStore.getState().selectedLayerIds).toEqual([]);
+    expect(useSelectionStore.getState().selectedShotId).toBe(state.project.shots[0].id);
+  });
+
+  it('updateProject preserves updatedAt when skipHistory is true', () => {
+    const store = useProjectStore.getState();
+    const initialUpdatedAt = store.project.updatedAt;
+
+    // Fast transient update (e.g. dragging / scrubbing)
+    store.updateProject((p) => ({ ...p, name: 'Transient Change' }), { skipHistory: true });
+
+    expect(useProjectStore.getState().project.name).toBe('Transient Change');
+    expect(useProjectStore.getState().project.updatedAt).toBe(initialUpdatedAt);
+    expect(useProjectStore.getState().past.length).toBe(0);
   });
 });

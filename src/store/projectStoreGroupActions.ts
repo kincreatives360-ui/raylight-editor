@@ -65,6 +65,4 @@ export const createGroupActions: ProjectStoreActionCreator<'createGroupFromLayer
             };
         });
     },
-
-    // Every new shot created is completely BLANK (no default layers, no default camera move)
 });

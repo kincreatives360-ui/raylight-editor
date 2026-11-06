@@ -25,7 +25,3 @@ export function validateProject(raw: unknown): ValidationResult {
   return { success: false, errors };
 }
 
-
-
-
-

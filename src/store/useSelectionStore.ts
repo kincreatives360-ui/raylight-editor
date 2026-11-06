@@ -1,7 +1,7 @@
 import { MIN_STAGE_WIDTH, defaultInspectorWidth, DEFAULT_LEFT_PANEL_WIDTH, MIN_LEFT_PANEL_WIDTH, MAX_LEFT_PANEL_WIDTH, MIN_RIGHT_SIDEBAR_WIDTH, MAX_RIGHT_SIDEBAR_WIDTH } from '../ui/workspaceLayout';
 // src/store/useSelectionStore.ts
 import { create } from 'zustand';
-import type { LightSourceType } from '../model/types';
+import type { LightSourceType, Project } from '../model/types';
 
 export type InspectorTab =
     | 'project'
@@ -91,6 +91,8 @@ interface SelectionStore {
     selectLayerRange: (orderedLayerIds: string[], targetLayerId: string) => void;
     setSelectedLayerIds: (layerIds: string[]) => void;
     clearLayerSelection: () => void;
+    resetSelection: (firstShotId?: string) => void;
+    pruneSelectionAgainstProject: (project: Project) => void;
     selectBlock: (blockId: string | null, layerId?: string) => void;
     selectCameraBlock: (cameraBlockId: string | null) => void;
     selectLightBlock: (lightBlockId: string | null) => void;
@@ -282,6 +284,60 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             isCropping: false,
             inspectorTab: 'project',
         })),
+
+    resetSelection: (firstShotId?: string) =>
+        set((state) => ({
+            selectedShotId: firstShotId !== undefined ? firstShotId : (state.selectedShotId || 'shot-1'),
+            selectedLayerIds: [],
+            selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedLightId: null,
+            selectedPresetType: null,
+            isCropping: false,
+            inspectorTab: 'project',
+        })),
+
+    pruneSelectionAgainstProject: (project: Project) =>
+        set((state) => {
+            const shotExists = project.shots.some((s) => s.id === state.selectedShotId);
+            const activeShotId = shotExists ? state.selectedShotId : (project.shots[0]?.id || '');
+            const activeShot = project.shots.find((s) => s.id === activeShotId);
+
+            const activeLayerIdSet = new Set(activeShot?.layers.map((l) => l.id) || []);
+            const validLayerIds = state.selectedLayerIds.filter((id) => activeLayerIdSet.has(id));
+
+            const cameraBlocks = activeShot?.cameraBlocks || [];
+            const validCameraBlockId = cameraBlocks.some((cb) => cb.id === state.selectedCameraBlockId)
+                ? state.selectedCameraBlockId
+                : null;
+
+            const lightBlocks = activeShot?.lightBlocks || [];
+            const validLightBlockId = lightBlocks.some((lb) => lb.id === state.selectedLightBlockId)
+                ? state.selectedLightBlockId
+                : null;
+
+            const validBlockId = state.selectedBlockId
+                ? (activeShot?.layers.some((l) => l.blocks?.some((b) => b.id === state.selectedBlockId)) ? state.selectedBlockId : null)
+                : null;
+
+            const effectiveInspectorTab = validLayerIds.length > 0
+                ? 'layer'
+                : validCameraBlockId
+                ? 'camera'
+                : validBlockId
+                ? 'blocks'
+                : 'project';
+
+            return {
+                selectedShotId: activeShotId,
+                selectedLayerIds: validLayerIds,
+                selectedCameraBlockId: validCameraBlockId,
+                selectedLightBlockId: validLightBlockId,
+                selectedBlockId: validBlockId,
+                inspectorTab: effectiveInspectorTab,
+            };
+        }),
 
     selectBlock: (blockId, layerId) =>
         set((state) => ({

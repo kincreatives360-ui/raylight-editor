@@ -6,16 +6,17 @@ export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'up
 
     updateProject: (updater, options) =>
         set((state) => {
+            const isTransient = Boolean(options?.skipHistory || state.dragSnapshot !== null);
             const updated = {
                 ...updater(state.project),
-                updatedAt: new Date().toISOString(),
+                updatedAt: isTransient ? state.project.updatedAt : new Date().toISOString(),
             };
             const nextRevision = state.hydrationRevision + 1;
             // Hot internal mutations retain validation state.
             // Full schema validation is scoped to I/O boundaries (load, import, reset, migration).
             const validation = state.validation;
 
-            if (options?.skipHistory || state.dragSnapshot !== null) {
+            if (isTransient) {
                 return { project: updated, validation, hydrationRevision: nextRevision };
             }
 
