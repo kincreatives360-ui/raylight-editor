@@ -59,3 +59,4 @@ describe('cameraOptics module', () => {
     expect(getBokehShapeConfig('unknown' as any)).toEqual(BOKEH_SHAPES.spherical);
   });
 });
+

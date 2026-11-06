@@ -15,6 +15,8 @@ import {
     createOutputEncodingPass,
 } from './sceneEffectPasses';
 
+const focusPointWorld = new THREE.Vector3();
+
 interface SceneEffectsPipelineProps {
     effects: EvaluatedEffects;
     outgoingEffects?: EvaluatedEffects;
@@ -289,18 +291,21 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         const dofPass = passMapRef.current.get('depthOfField');
         if (dofPass && effectiveEffects.orderedEnabledPasses.some((p) => p.key === 'depthOfField')) {
             const dof = effectiveEffects.state.depthOfField;
+            let resolvedFocusPosition: { x: number; y: number; z: number } | null | undefined = undefined;
             if (dof?.focusAssetId) {
                 const targetObj = scene.getObjectByName(dof.focusAssetId);
                 if (targetObj) {
-                    const worldPos = new THREE.Vector3();
-                    targetObj.getWorldPosition(worldPos);
-                    dof.target = { x: worldPos.x, y: worldPos.y, z: worldPos.z };
+                    targetObj.getWorldPosition(focusPointWorld);
+                    resolvedFocusPosition = { x: focusPointWorld.x, y: focusPointWorld.y, z: focusPointWorld.z };
+                } else {
+                    resolvedFocusPosition = null;
                 }
             }
             configureSceneEffectPass(
                 dofPass, 'depthOfField', effectiveEffects,
                 Math.round(size.width * dpr), Math.round(size.height * dpr),
-                { x: 0, y: 0 }, describeCameraForPasses(camera)
+                { x: 0, y: 0 }, describeCameraForPasses(camera),
+                resolvedFocusPosition
             );
         }
         try {

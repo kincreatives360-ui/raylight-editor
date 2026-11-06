@@ -389,7 +389,16 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
   });
 }
 
-export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }, cameraClip: { near: number; far: number; position?: { x: number; y: number; z: number }; forward?: { x: number; y: number; z: number } } = { near: 0.1, far: 100 }) {
+export function configureSceneEffectPass(
+  pass: ShaderPass,
+  key: EffectKey,
+  effects: EvaluatedEffects,
+  width: number,
+  height: number,
+  motion = { x: 0, y: 0 },
+  cameraClip: { near: number; far: number; position?: { x: number; y: number; z: number }; forward?: { x: number; y: number; z: number } } = { near: 0.1, far: 100 },
+  resolvedFocusTarget?: { x: number; y: number; z: number } | null
+) {
   const e = effects.state, p = pass.uniforms.uParams.value as THREE.Vector4;
   p.set(0, 0, 0, 0);
   pass.uniforms.uExtra.value.set(0, 0, 0, 0);
@@ -481,18 +490,26 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       const dof = e.depthOfField ?? ({} as NonNullable<typeof e.depthOfField>);
       let focusDist = Number(dof.focusDistance);
       if (!Number.isFinite(focusDist)) focusDist = 2.65;
-      // Object-aware: when focusMode is target/selection and a target is set, focus on that point's depth.
+      // Object-aware: when focusMode is target, selection, or pick, calculate focus distance toward target.
       // Depth is measured along the camera's view direction, matching the depth buffer, so focus stays
-      // correct when the camera moves, orbits or zooms.
-      if (dof.target) {
-        const target = dof.target;
-        const { position, forward } = cameraClip;
-        if (position && forward) {
-          const alongView = calculateFocusDistanceToPoint(target, position, forward);
-          if (Number.isFinite(alongView) && alongView > 0.001) focusDist = alongView;
-        } else {
-          const tz = Number(target.z);
-          if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
+      // correct when the camera moves, orbits or zooms. When focusMode is manual, focusDist remains unchanged.
+      const shouldCalculateTarget = dof.focusMode === 'target' || dof.focusMode === 'selection' || dof.focusMode === 'pick';
+      if (shouldCalculateTarget) {
+        // When focusAssetId is configured, use resolvedFocusTarget if provided.
+        // If resolvedFocusTarget is null (focusAssetId was set but object was not found in scene),
+        // do not fall back to stale dof.target.
+        const target = (dof.focusAssetId !== undefined && dof.focusAssetId !== '')
+          ? (resolvedFocusTarget ?? null)
+          : (resolvedFocusTarget ?? dof.target);
+        if (target) {
+          const { position, forward } = cameraClip;
+          if (position && forward) {
+            const alongView = calculateFocusDistanceToPoint(target, position, forward);
+            if (Number.isFinite(alongView) && alongView > 0.001) focusDist = alongView;
+          } else {
+            const tz = Number(target.z);
+            if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
+          }
         }
       }
       const aperture = Number(dof.aperture);
@@ -524,9 +541,10 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       const bladeCount = Number(dof.apertureBlades);
       const blades = bladeCount >= 3 ? Math.min(12, Math.round(bladeCount)) : dof.bokehShape === 'hexagonal' ? 6 : dof.bokehShape === 'octagonal' ? 8 : 0;
 
-      // Max blur in render pixels
-      const effectiveMaxBlur = Number.isFinite(maxBlur) ? maxBlur : optics.bokehScale;
-      const maxBlurPx = Math.max(1, effectiveMaxBlur) * resolutionScale;
+      // Max blur in render pixels: resolutionScale applies only to configured maxBlur, not to optics.bokehScale fallback
+      const maxBlurPx = Number.isFinite(maxBlur)
+        ? Math.max(1, maxBlur * resolutionScale)
+        : Math.max(1, optics.bokehScale);
 
       // uParams: focusDistance, f-stop, maxBlurPx (render pixels), samples
       p.set(
@@ -561,10 +579,10 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       );
       // uMotion: bokehStretch.x, bokehStretch.y
       pass.uniforms.uMotion.value.set(shapeConfig.stretch.x, shapeConfig.stretch.y);
-      // uColor: r = softness, g = isPhysical (1.0 for physical/classic, 0.0 for artistic), b = 0
+      // uColor: r = softness, g = isPhysical (1.0 for physical, 0.0 for artistic and classic), b = 0
       (pass.uniforms.uColor.value as THREE.Color).setRGB(
         shapeConfig.softness,
-        dof.model === 'artistic' ? 0.0 : 1.0,
+        dof.model === 'physical' ? 1.0 : 0.0,
         0
       );
 

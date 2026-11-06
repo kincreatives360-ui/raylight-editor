@@ -2,7 +2,7 @@ import { MenuSurface, MenuItem } from '../../../ui/Menu';
 import { IconButton } from '../../../ui/primitives';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { useState, useMemo } from 'react';
-import type { Shot, EffectKey } from '../../../model/types';
+import type { Shot, EffectKey, DepthOfField } from '../../../model/types';
 import type { GradientStop } from '../../../model/types';
 import { DEFAULT_EFFECTS_ORDER } from '../../../model/enums';
 import { DEFAULT_SCENE_EFFECTS } from '../../../model/defaults';
@@ -103,7 +103,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
   colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
-  focusDistance: [0.05, 80, 0.05], aperture: [0.7, 22, 0.1], maxBlur: [1, 128, 1], highlightGain: [0, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [4, 720, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [-180, 180, 1], sceneScale: [10, 1000, 1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 2, 0.01],
+  focusDistance: [0.05, 80, 0.05], aperture: [0.7, 22, 0.1], maxBlur: [1, 128, 1], highlightGain: [0, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [4, 720, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [-180, 180, 1], sceneScale: [1, 100000, 1], highlightThreshold: [0, 1, 0.01], highlightIntensity: [0, 2, 0.01],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
@@ -114,7 +114,7 @@ const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
   gradientMap: { blendMode: ['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn'] },
   fishEye: { edgeMode: ['fill', 'balanced', 'none'] },
   lensDistortion: { mode: ['pinch', 'barrel'], edgeMode: ['fill', 'balanced', 'none'], measure: ['width', 'height', 'diagonal'] },
-  depthOfField: { bokehShape: ['spherical', 'anamorphic', 'vintage', 'portrait'], model: ['physical', 'classic', 'artistic'], quality: ['draft', 'balanced', 'high'] },
+  depthOfField: { bokehShape: ['spherical', 'anamorphic', 'vintage', 'portrait', 'hexagonal', 'octagonal'], model: ['physical', 'classic', 'artistic'], quality: ['draft', 'balanced', 'high'] },
 };
 
 export function SceneEffectsSection({ shot }: { shot: Shot }) {
@@ -393,72 +393,82 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                               ...(shot.layers || []).map((l) => ({ value: l.id, label: l.name || `Layer ${l.id}` })),
                             ]}
                             onChange={(val) => {
-                              setValue(key, 'focusAssetId', val || undefined);
-                              setValue(key, 'focusMode', val ? 'selection' : 'target');
+                              updateShot(shot.id, (s) => ({
+                                ...s,
+                                effects: {
+                                  ...s.effects,
+                                  depthOfField: {
+                                    ...(DEFAULT_SCENE_EFFECTS.depthOfField || {}),
+                                    ...(s.effects?.depthOfField || {}),
+                                    focusAssetId: val || undefined,
+                                    focusMode: val ? 'selection' : 'target',
+                                  },
+                                },
+                              }));
                             }}
                           />
                         </div>
 
-                        {!mergedFields['focusAssetId'] && (
-                          <>
-                            <div className="text-[10px] text-muted-foreground">Position</div>
-                            <div className="grid grid-cols-2 gap-2">
-                              <ScrubInput
-                                label="X"
-                                value={Number((mergedFields.target as any)?.x ?? 0)}
-                                min={-20}
-                                max={20}
-                                step={0.01}
-                                onChange={(val) => {
-                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
-                                  setValue(key, 'target', { ...cur, x: val });
-                                }}
-                              />
-                              <ScrubInput
-                                label="Y"
-                                value={Number((mergedFields.target as any)?.y ?? 0)}
-                                min={-20}
-                                max={20}
-                                step={0.01}
-                                onChange={(val) => {
-                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
-                                  setValue(key, 'target', { ...cur, y: val });
-                                }}
-                              />
-                            </div>
-                            <div className="text-[10px] text-muted-foreground">Depth</div>
-                            <div className="grid grid-cols-2 gap-2 items-center">
-                              <ScrubInput
-                                label="D"
-                                value={Number((mergedFields.target as any)?.z ?? 0)}
-                                min={-20}
-                                max={20}
-                                step={0.01}
-                                onChange={(val) => {
-                                  const cur = (mergedFields.target as any) || { x: 0, y: 0, z: 0 };
-                                  setValue(key, 'target', { ...cur, z: val });
-                                }}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  const targetLayer = shot.layers.find((l) => selectedLayerIds.includes(l.id)) || shot.layers[0];
-                                  if (targetLayer) {
-                                    setValue(key, 'target', {
-                                      x: Number(targetLayer.position.x ?? 0),
-                                      y: Number(targetLayer.position.y ?? 0),
-                                      z: Number(targetLayer.position.z ?? 0),
-                                    });
-                                  }
-                                }}
-                                className="h-7 px-2 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/90 font-medium transition cursor-pointer"
-                                title="Snap focus depth to selected subject"
-                              >
-                                Snap to subject
-                              </button>
-                            </div>
-                          </>
-                        )}
+                        {!mergedFields['focusAssetId'] && (() => {
+                          const dofTarget: DepthOfField['target'] = (mergedFields.target as DepthOfField['target'] | undefined) ?? { x: 0, y: 0, z: 0 };
+                          return (
+                            <>
+                              <div className="text-[10px] text-muted-foreground">Position</div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <ScrubInput
+                                  label="X"
+                                  value={Number(dofTarget?.x ?? 0)}
+                                  min={-20}
+                                  max={20}
+                                  step={0.01}
+                                  onChange={(val) => {
+                                    setValue(key, 'target', { ...dofTarget, x: val });
+                                  }}
+                                />
+                                <ScrubInput
+                                  label="Y"
+                                  value={Number(dofTarget?.y ?? 0)}
+                                  min={-20}
+                                  max={20}
+                                  step={0.01}
+                                  onChange={(val) => {
+                                    setValue(key, 'target', { ...dofTarget, y: val });
+                                  }}
+                                />
+                              </div>
+                              <div className="text-[10px] text-muted-foreground">Depth</div>
+                              <div className="grid grid-cols-2 gap-2 items-center">
+                                <ScrubInput
+                                  label="D"
+                                  value={Number(dofTarget?.z ?? 0)}
+                                  min={-20}
+                                  max={20}
+                                  step={0.01}
+                                  onChange={(val) => {
+                                    setValue(key, 'target', { ...dofTarget, z: val });
+                                  }}
+                                />
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const targetLayer = shot.layers.find((l) => selectedLayerIds.includes(l.id)) || shot.layers[0];
+                                    if (targetLayer) {
+                                      setValue(key, 'target', {
+                                        x: Number(targetLayer.position.x ?? 0),
+                                        y: Number(targetLayer.position.y ?? 0),
+                                        z: Number(targetLayer.position.z ?? 0),
+                                      });
+                                    }
+                                  }}
+                                  className="h-7 px-2 rounded-md bg-white/[0.06] hover:bg-white/[0.12] text-[11px] text-white/90 font-medium transition cursor-pointer"
+                                  title="Snap focus depth to selected subject"
+                                >
+                                  Snap to subject
+                                </button>
+                              </div>
+                            </>
+                          );
+                        })()}
 
                         <div className="grid grid-cols-2 gap-2">
                           {renderNumber(key, 'aperture', Number(mergedFields['aperture'] ?? 2.8))}

@@ -114,3 +114,4 @@ export function getBokehShapeConfig(shape?: string): BokehShapeConfig {
   }
   return BOKEH_SHAPES.spherical;
 }
+

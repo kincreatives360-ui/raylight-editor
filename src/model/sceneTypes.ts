@@ -370,3 +370,5 @@ export interface SceneEffects {
     quality: 'draft' | 'balanced' | 'high';
   };
 }
+
+export type DepthOfField = SceneEffects['depthOfField'];

@@ -95,4 +95,82 @@ describe('depth of field shader', () => {
     const color = pass.uniforms.uColor.value as THREE.Color;
     expect(color.r).toBeCloseTo(1.0, 2); // softness
   });
+
+  it('sets uColor.g to 1.0 for physical and 0.0 for artistic and classic models', () => {
+    const shot = createDefaultShot();
+    shot.effects.depthOfField = { ...shot.effects.depthOfField, enabled: true };
+    const pass = createSceneEffectPass('depthOfField');
+
+    shot.effects.depthOfField.model = 'physical';
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+    expect((pass.uniforms.uColor.value as THREE.Color).g).toBe(1.0);
+
+    shot.effects.depthOfField.model = 'artistic';
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+    expect((pass.uniforms.uColor.value as THREE.Color).g).toBe(0.0);
+
+    shot.effects.depthOfField.model = 'classic';
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080);
+    expect((pass.uniforms.uColor.value as THREE.Color).g).toBe(0.0);
+  });
+
+  it('preserves manual focusDistance when focusMode is manual, and updates when target is selected', () => {
+    const shot = createDefaultShot();
+    shot.effects.depthOfField = {
+      ...shot.effects.depthOfField,
+      enabled: true,
+      focusMode: 'manual',
+      focusDistance: 3.5,
+      target: { x: 0, y: 0, z: 10 },
+    };
+    const pass = createSceneEffectPass('depthOfField');
+    const cameraClip = {
+      near: 0.1,
+      far: 100,
+      position: { x: 0, y: 0, z: 0 },
+      forward: { x: 0, y: 0, z: -1 },
+    };
+
+    // In manual mode, focusDistance remains 3.5 even with target set
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080, { x: 0, y: 0 }, cameraClip);
+    expect((pass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(3.5);
+
+    // In target mode, focusDistance calculates to the target point
+    shot.effects.depthOfField.focusMode = 'target';
+    shot.effects.depthOfField.target = { x: 0, y: 0, z: -8 };
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080, { x: 0, y: 0 }, cameraClip);
+    expect((pass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(8.0);
+
+    // With resolvedFocusTarget provided
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080, { x: 0, y: 0 }, cameraClip, { x: 0, y: 0, z: -5 });
+    expect((pass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(5.0);
+
+    // When focusAssetId is set and resolvedFocusTarget is null (not found in scene), do not use stale dof.target
+    shot.effects.depthOfField.focusMode = 'selection';
+    shot.effects.depthOfField.focusAssetId = 'missing-layer';
+    shot.effects.depthOfField.focusDistance = 4.2;
+    shot.effects.depthOfField.target = { x: 0, y: 0, z: -15 };
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 1920, 1080, { x: 0, y: 0 }, cameraClip, null);
+    expect((pass.uniforms.uParams.value as THREE.Vector4).x).toBeCloseTo(4.2);
+  });
+
+  it('scales maxBlur by resolutionScale only when configured, leaving optics fallback in render pixels', () => {
+    const shot = createDefaultShot();
+    shot.effects.depthOfField = {
+      ...shot.effects.depthOfField,
+      enabled: true,
+      maxBlur: 32,
+    };
+    const pass = createSceneEffectPass('depthOfField');
+
+    // At 540p (resolutionScale = 0.5), configured maxBlur (32) scales to 16
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 960, 540);
+    expect((pass.uniforms.uParams.value as THREE.Vector4).z).toBeCloseTo(16);
+
+    // When maxBlur is NaN / unconfigured, optics fallback is used directly without resolution scaling
+    shot.effects.depthOfField.maxBlur = Number.NaN;
+    configureSceneEffectPass(pass, 'depthOfField', evaluateEffectsAtTime(shot, 0), 960, 540);
+    const fallbackBlur = (pass.uniforms.uParams.value as THREE.Vector4).z;
+    expect(fallbackBlur).toBeGreaterThanOrEqual(1);
+  });
 });
