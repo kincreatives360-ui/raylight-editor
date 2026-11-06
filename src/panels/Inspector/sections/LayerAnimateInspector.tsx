@@ -156,8 +156,9 @@ export function addLayerAnimation(shot: Shot, ids: string[], property: Animation
 }
 
 export function addSceneEffectAnimation(shot: Shot, fx: EffectAnimationDefinition) {
-    const localMs = Math.max(0, usePlayheadStore.getState().currentTimeMs - shot.startMs);
-    const durationMs = Math.min(1000, Math.max(100, shot.durationMs - localMs));
+    const rawLocalMs = Math.max(0, usePlayheadStore.getState().currentTimeMs - shot.startMs);
+    const durationMs = Math.min(1000, Math.min(shot.durationMs, Math.max(100, shot.durationMs - rawLocalMs)));
+    const localMs = Math.max(0, Math.min(shot.durationMs - durationMs, rawLocalMs));
     const blockId = generateId('fx');
     let fromValue = 0;
     let toValue = 1;

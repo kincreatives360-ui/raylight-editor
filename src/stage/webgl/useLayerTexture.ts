@@ -75,7 +75,10 @@ export function useLayerTexture({
         return false;
     }, [layer, project.assets]);
 
-    const animatedAlpha = Boolean(layer.effects.roughen?.enabled && layer.effects.roughen.speed);
+    const animatedAlpha = Boolean(
+        (layer.effects.roughen?.enabled && layer.effects.roughen.speed) ||
+            (layer.effects.agentGlow?.enabled && layer.effects.agentGlow.speed)
+    );
     const currentTimeMs = usePlayheadStore((s) => (isVideoAsset || animatedAlpha ? s.currentTimeMs : 0));
     const alphaTimeSeconds = animatedAlpha ? Math.max(0, currentTimeMs - shotStartMs) / 1000 : 0;
 
@@ -366,7 +369,7 @@ export function useLayerTexture({
         applyTextureMask(ctx, canvasW, canvasH, layer, project);
         applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
         applyLayerAlphaEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
-        applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale);
+        applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
 
         if (!textureRef.current) {
             const tex = new THREE.CanvasTexture(canvas);
@@ -421,7 +424,8 @@ export function useLayerTexture({
             evalLayer.glowRadiusOffset,
             gl.capabilities.maxTextureSize,
             authoredW * widthScale,
-            authoredH * heightScale
+            authoredH * heightScale,
+            alphaTimeSeconds
         );
         if (!result) return null;
         const haloTexture = new THREE.CanvasTexture(result.canvas);
@@ -437,6 +441,7 @@ export function useLayerTexture({
         authoredH,
         widthScale,
         heightScale,
+        alphaTimeSeconds,
     ]);
 
     useEffect(() => {
@@ -505,7 +510,7 @@ export function useLayerTexture({
             applyTextureMask(ctx, canvasW, canvasH, layer, project);
             applyLayerReveal(ctx, canvasW, canvasH, evalLayer.maskSweepProgress, evalLayer.pathRevealProgress);
             applyLayerAlphaEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
-            applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale);
+            applyLayerSurfaceEffects(canvas, layer.effects, authoredW * widthScale, authoredH * heightScale, alphaTimeSeconds);
             if (halo) {
                 const updated = drawLayerHalo(
                     canvas,
@@ -514,7 +519,8 @@ export function useLayerTexture({
                     evalLayer.glowRadiusOffset,
                     gl.capabilities.maxTextureSize,
                     authoredW * widthScale,
-                    authoredH * heightScale
+                    authoredH * heightScale,
+                    alphaTimeSeconds
                 );
                 const haloCtx = halo.canvas.getContext('2d');
                 if (updated && haloCtx) {

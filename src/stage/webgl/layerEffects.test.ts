@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
-import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, installLayerEffects, drawLayerHalo, applyMotionBlur, createWarpGeometry } from './layerEffects';
+import { getLayerHaloLayout, applyLayerReveal, getLayerEffectUniforms, installLayerEffects, drawLayerHalo, applyLayerSurfaceEffects, applyMotionBlur, createWarpGeometry } from './layerEffects';
 import { canvasPool } from '../../engine/canvasPool';
 
 describe('layer effect rendering', () => {
@@ -238,5 +238,133 @@ describe('layer effect rendering', () => {
     expect(layout.padding).toBeGreaterThanOrEqual(54); // 6 + 24 * 2
     expect(layout.agentGlow).toBeDefined();
     expect(layout.width).toBe(200 + layout.padding * 2);
+  });
+
+  it('scales agentGlow ringWidth and spread by source-to-authored ratio and honors sweep, speed, and intensity > 1', () => {
+    const drawnAlphas: number[] = [];
+    const putImageSnapshots: Uint8ClampedArray[] = [];
+    const createMockCtx = () => {
+      const ctx = {
+        globalAlpha: 1,
+        globalCompositeOperation: 'source-over',
+        filter: 'none',
+        fillStyle: '#000',
+        save: vi.fn(),
+        restore: vi.fn(),
+        resetTransform: vi.fn(),
+        clearRect: vi.fn(),
+        fillRect: vi.fn(),
+        drawImage: vi.fn(function (this: { globalAlpha: number }) {
+          drawnAlphas.push(this.globalAlpha);
+        }),
+        getImageData: vi.fn((_x: number, _y: number, w: number, h: number) => {
+          const data = new Uint8ClampedArray(w * h * 4);
+          // Populate an opaque inner square so outline dilation produces non-zero alpha
+          for (let y = Math.floor(h * 0.25); y < Math.floor(h * 0.75); y++) {
+            for (let x = Math.floor(w * 0.25); x < Math.floor(w * 0.75); x++) {
+              const idx = (y * w + x) * 4;
+              data[idx] = 255;
+              data[idx + 1] = 255;
+              data[idx + 2] = 255;
+              data[idx + 3] = 255;
+            }
+          }
+          return { data, width: w, height: h };
+        }),
+        putImageData: vi.fn((img: { data: Uint8ClampedArray }) => {
+          putImageSnapshots.push(new Uint8ClampedArray(img.data));
+        }),
+      };
+      return ctx;
+    };
+
+    (globalThis as unknown as { document?: unknown }).document = {
+      createElement: vi.fn(() => {
+        const ctx = createMockCtx();
+        return {
+          width: 100,
+          height: 100,
+          getContext: vi.fn(() => ctx),
+        };
+      }),
+    };
+
+    // source is 200x200 while authored is 100x100 => sx = 2
+    const sourceCanvas = {
+      width: 200,
+      height: 200,
+      getContext: vi.fn(() => createMockCtx()),
+    } as unknown as HTMLCanvasElement;
+
+    const haloScaled = drawLayerHalo(
+      sourceCanvas,
+      {
+        agentGlow: {
+          enabled: true,
+          color: '#3b82f6',
+          intensity: 1.6,
+          spread: 10,
+          ringWidth: 5,
+          speed: 1,
+          sweep: 0.5,
+        },
+      },
+      0,
+      0,
+      2048,
+      100,
+      100,
+      0.25
+    );
+
+    expect(haloScaled).not.toBeNull();
+    // sx = 2 => scaled ringWidth = 10, scaled spread = 20 => padding = 10 + 20 * 2 = 50 => width = 200 + 100 = 300 => widthScale = 1.5
+    expect(haloScaled!.widthScale).toBeCloseTo(300 / 200);
+    // intensity = 1.6 (> 1) triggers multi-pass drawMask (1.0 pass and 0.6 pass)
+    expect(drawnAlphas).toContain(1);
+    expect(drawnAlphas.some((a) => Math.abs(a - 0.6) < 1e-6)).toBe(true);
+
+    // Verify speed + timeSeconds changes the angular sweep mask
+    putImageSnapshots.length = 0;
+    applyLayerSurfaceEffects(
+      sourceCanvas,
+      {
+        agentGlow: {
+          enabled: true,
+          color: '#3b82f6',
+          intensity: 1.0,
+          spread: 8,
+          ringWidth: 4,
+          speed: 1,
+          sweep: 0.35,
+        },
+      },
+      100,
+      100,
+      0
+    );
+    const snapshotT0 = putImageSnapshots[putImageSnapshots.length - 1];
+
+    applyLayerSurfaceEffects(
+      sourceCanvas,
+      {
+        agentGlow: {
+          enabled: true,
+          color: '#3b82f6',
+          intensity: 1.0,
+          spread: 8,
+          ringWidth: 4,
+          speed: 1,
+          sweep: 0.35,
+        },
+      },
+      100,
+      100,
+      0.25
+    );
+    const snapshotT1 = putImageSnapshots[putImageSnapshots.length - 1];
+    expect(snapshotT0).toBeDefined();
+    expect(snapshotT1).toBeDefined();
+    expect( Array.from(snapshotT0).some((v, idx) => v !== snapshotT1[idx]) ).toBe(true);
   });
 });

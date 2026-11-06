@@ -23,6 +23,7 @@ import {
   DEFAULT_FOCAL_LENGTH,
   SENSOR_HEIGHT_MM,
 } from './constants';
+import { computePhysicalCocGain, DEFAULT_SCENE_SCALE } from './cameraOptics';
 
 export type DofQuality = 'draft' | 'balanced' | 'high';
 export type DofFocusMode = 'manual' | 'target' | 'selection' | 'pick';
@@ -163,9 +164,9 @@ export function solveOptimalSceneScale(options: SolveSceneScaleOptions): number 
     samples,
     focusRange = 0.85,
     viewportHeight = 1080,
-    minScale = 0.01,
-    maxScale = 100,
-    defaultScale = 1.0,
+    minScale = 1,
+    maxScale = 100000,
+    defaultScale = DEFAULT_SCENE_SCALE,
   } = options;
 
   if (!samples || samples.length === 0) return defaultScale;
@@ -188,13 +189,14 @@ export function solveOptimalSceneScale(options: SolveSceneScaleOptions): number 
     let maxRes = Number.NEGATIVE_INFINITY;
     let minRes = Number.POSITIVE_INFINITY;
     for (const sample of targets) {
-      const f = Math.max(sample.focalLengthMm, 0.001);
-      const S = Math.max(sample.focusDistance, 0) * scale;
-      const subject = Math.max(S - 1.0, 0.001);
-      const denom = Math.max(sample.aperture, 0.001) * Math.max(S - f, 0.001);
-      const cocMm = (Math.abs(subject - S) / subject) * ((f * f) / denom);
-      const cocPx = (cocMm / 24) * viewportHeight;
-      const diff = Math.log(Math.max(cocPx, 1e-9)) - sample.logTarget;
+      const { cocPixels } = computePhysicalCocGain({
+        focalLengthMm: sample.focalLengthMm,
+        fNumber: sample.aperture,
+        sceneScale: scale,
+        focusDistance: sample.focusDistance,
+        viewportHeight,
+      });
+      const diff = Math.log(Math.max(cocPixels, 1e-9)) - sample.logTarget;
       maxRes = Math.max(maxRes, diff);
       minRes = Math.min(minRes, diff);
     }

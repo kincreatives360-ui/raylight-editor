@@ -72,6 +72,18 @@ describe('object-aware animation controls', () => {
         expect(blurAnim?.property).toBe('aperture');
         expect(blurAnim?.kind).toBe('scalar');
 
+        const fisheyeAnim = EFFECT_ANIMATIONS.find(e => e.label === 'Fisheye');
+        expect(fisheyeAnim?.effectKey).toBe('fishEye');
+        expect(fisheyeAnim?.property).toBe('amount');
+
+        const gradientMapAnim = EFFECT_ANIMATIONS.find(e => e.label === 'Gradient map');
+        expect(gradientMapAnim?.effectKey).toBe('gradientMap');
+        expect(gradientMapAnim?.property).toBe('blend');
+
+        const atmosphereAnim = EFFECT_ANIMATIONS.find(e => e.label === 'Atmosphere');
+        expect(atmosphereAnim?.effectKey).toBe('atmosphere');
+        expect(atmosphereAnim?.property).toBe('fog');
+
         expect(createPreset('slide', 'in', 500).type).toBe('slide-up');
         expect(createPreset('float', 'in', 500).type).toBe('float-in');
         expect(createPreset('float', 'out', 500).type).toBe('float-out');

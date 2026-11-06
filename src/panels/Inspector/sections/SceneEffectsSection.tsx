@@ -422,7 +422,7 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
                                       effectKey: 'depthOfField',
                                       property: 'target',
                                       startMs: 0,
-                                      durationMs: 1000,
+                                      durationMs: Math.min(1000, Math.min(s.durationMs, Math.max(100, s.durationMs))),
                                       fromValue: 0,
                                       toValue: 1,
                                       fromTarget: { ...currentTarget },

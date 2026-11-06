@@ -37,7 +37,7 @@ const EFFECT_BLOCK_HANDLERS: Record<string, EffectBlockHandler> = {
     gradientMap: (config, val) => { config.gradientMap.enabled = true; config.gradientMap.blend = Math.max(0, Math.min(1, val)); },
     fishEye: (config, val) => { config.fishEye.enabled = true; config.fishEye.amount = Math.max(-1, Math.min(1, val)); },
     lensDistortion: (config, val) => { config.lensDistortion.enabled = true; config.lensDistortion.strength = Math.max(-1, Math.min(1, val)); },
-    depthOfField: (config, val) => { config.depthOfField.enabled = true; config.depthOfField.aperture = Math.max(0.7, val); },
+    depthOfField: (config) => { config.depthOfField.enabled = true; },
 };
 
 export interface ShotTransitionCompositeState {
@@ -389,8 +389,8 @@ export function evaluateProjectAtTime(
     // 3. Evaluate Camera Rig
     const camera = evaluateShotCameraAtTime(activeShot, shotLocalTimeMs, frameNumber);
 
-    // 4. Evaluate Scene Effects Rack (with local time for timeline rack focus)
-    const effects = evaluateEffectsAtTime(activeShot, frameNumber, shotLocalTimeMs);
+    // 4. Evaluate Scene Effects Rack
+    const effects = evaluateEffectsAtTime(activeShot, frameNumber);
 
     // Populate scene-level motionVector when motionBlur is enabled so Canvas 2D fallback matches WebGL
     const fps = project.fps && project.fps > 0 ? project.fps : 60;

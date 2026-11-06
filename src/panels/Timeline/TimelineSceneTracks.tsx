@@ -376,7 +376,7 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                                         anchorRect: targetRect,
                                                     });
                                                 },
-                                                onCopy: () => copyTimelineBlock({ type: 'animation', block: { ...eb, property: 'position', amount: 1 } as any }),
+                                                onCopy: () => copyTimelineBlock({ type: 'effect', block: eb }),
                                                 onDuplicate: () => updateShot(activeShot.id, (s) => ({
                                                     ...s,
                                                     effectBlocks: [...(s.effectBlocks || []), {

@@ -138,12 +138,13 @@ export async function drawLayerOnCanvas(
       totalBlurPx: Math.max(0, layer.totalBlurPx - (effects.layerBlur ?? 0) * 100),
       layer: { ...layer.layer, effects: {}, blendMode: 'normal' },
     }, project, frame, w, h);
-    applyLayerAlphaEffects(surface, effects, 1920, 1080, (frame.shotLocalTimeMs ?? 0) / 1000);
-    applyLayerSurfaceEffects(surface, effects, 1920, 1080);
+    const effectTimeSeconds = (frame.shotLocalTimeMs ?? 0) / 1000;
+    applyLayerAlphaEffects(surface, effects, 1920, 1080, effectTimeSeconds);
+    applyLayerSurfaceEffects(surface, effects, 1920, 1080, effectTimeSeconds);
     if (receivesLight && frame.activeShot) {
       renderSceneLightSources(content, frame.activeShot.light, frame.camera, w, h, project.aspectRatio, surface);
     }
-    const halo = drawLayerHalo(surface, effects, layer.glowIntensityOffset, layer.glowRadiusOffset, 8192, 1920, 1080);
+    const halo = drawLayerHalo(surface, effects, layer.glowIntensityOffset, layer.glowRadiusOffset, 8192, 1920, 1080, effectTimeSeconds);
     ctx.save();
     ctx.globalCompositeOperation = layer.layer.blendMode === 'add' ? 'lighter' : layer.layer.blendMode === 'normal' ? 'source-over' : layer.layer.blendMode as GlobalCompositeOperation;
     if (halo) {

@@ -41,11 +41,11 @@ export const EFFECT_ANIMATIONS: EffectAnimationDefinition[] = [
     { effectKey: 'depthOfField', property: 'aperture', kind: 'scalar', label: 'Blur' },
     { effectKey: 'bloom', property: 'intensity', kind: 'scalar', label: 'Bloom' },
     { effectKey: 'glitch', property: 'intensity', kind: 'scalar', label: 'Glitch' },
-    { effectKey: 'fisheye', property: 'intensity', kind: 'scalar', label: 'Fisheye' },
+    { effectKey: 'fishEye', property: 'amount', kind: 'scalar', label: 'Fisheye' },
     { effectKey: 'lensDistortion', property: 'fieldOfView', kind: 'scalar', label: 'Lens distortion' },
     { effectKey: 'chromaticAberration', property: 'offset', kind: 'scalar', label: 'Color split' },
-    { effectKey: 'gradientMap', property: 'intensity', kind: 'scalar', label: 'Gradient map' },
-    { effectKey: 'atmosphere', property: 'intensity', kind: 'scalar', label: 'Atmosphere' },
+    { effectKey: 'gradientMap', property: 'blend', kind: 'scalar', label: 'Gradient map' },
+    { effectKey: 'atmosphere', property: 'fog', kind: 'scalar', label: 'Atmosphere' },
     { effectKey: 'filmGrain', property: 'intensity', kind: 'scalar', label: 'Film grain' },
 ];
 
@@ -238,6 +238,31 @@ export const PRESET_PROPERTY_MAPPINGS: Record<TransitionType, PresetPropertyMapp
         preset: 'float-out',
         primaryProperty: 'position',
         defaultAmount: () => ({ x: 0, y: -0.15, z: 0 }),
+    },
+    'float-in': {
+        preset: 'float-in',
+        primaryProperty: 'position',
+        defaultAmount: () => ({ x: 0, y: 0.15, z: 0 }),
+    },
+    float: {
+        preset: 'float',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: 0, y: side === 'in' ? 0.15 : -0.15, z: 0 }),
+    },
+    slide: {
+        preset: 'slide',
+        primaryProperty: 'position',
+        defaultAmount: (side) => ({ x: 0, y: side === 'in' ? -0.25 : 0.25, z: 0 }),
+    },
+    'scale-in': {
+        preset: 'scale-in',
+        primaryProperty: 'scale',
+        defaultAmount: (side) => (side === 'in' ? 0.25 : -0.25),
+    },
+    scale: {
+        preset: 'scale',
+        primaryProperty: 'scale',
+        defaultAmount: (side) => (side === 'in' ? 0.25 : -0.25),
     },
     none: {
         preset: 'none',

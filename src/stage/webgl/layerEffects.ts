@@ -37,7 +37,7 @@ function paintSpread(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, x
 }
 
 /** Inner shadow and directional glow use the actual alpha silhouette. */
-export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: LayerEffects, authoredWidth = source.width, authoredHeight = source.height) {
+export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: LayerEffects, authoredWidth = source.width, authoredHeight = source.height, timeSeconds = 0) {
     const outline = effects.outline;
     if (outline?.enabled && outline.placement === 'inside') {
         const ctx = source.getContext('2d');
@@ -56,6 +56,7 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
             ctx.resetTransform();
             ctx.globalCompositeOperation = 'source-over';
             const ratio = source.width / Math.max(1, authoredWidth);
+            const phase = timeSeconds * (agentGlow.speed ?? 1) * Math.PI * 2;
             drawAlphaOutline(ctx, source, {
                 x: 0,
                 y: 0,
@@ -65,7 +66,9 @@ export function applyLayerSurfaceEffects(source: HTMLCanvasElement, effects: Lay
                 softness: (agentGlow.spread * 0.5) * ratio,
                 placement: 'inside',
                 color: agentGlow.color,
-                opacity: Math.max(0, Math.min(1, agentGlow.intensity * 0.9)),
+                opacity: Math.max(0, agentGlow.intensity * 0.9),
+                sweep: agentGlow.sweep,
+                phase,
             });
             ctx.restore();
         }
@@ -226,10 +229,10 @@ export function getLayerHaloLayout(effects: LayerEffects, width: number, height:
     return { padding, width: width + padding * 2, height: height + padding * 2, glowIntensity, glowRadius, shadow, agentGlow };
 }
 
-export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number, authoredWidth = source.width, authoredHeight = source.height) {
+export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, intensityOffset: number, radiusOffset: number, maxTextureSize: number, authoredWidth = source.width, authoredHeight = source.height, timeSeconds = 0) {
     const sx = source.width / Math.max(1, authoredWidth), sy = source.height / Math.max(1, authoredHeight);
     const shadowPixels = (s: NonNullable<LayerEffects['dropShadow']>) => ({ ...s, length: (s.length ?? 120) * sx, blur: s.blur * 1920 * sx / Math.max(source.width, source.height), offsetX: s.offsetX * 1920 / authoredWidth, offsetY: s.offsetY * 1080 / authoredHeight, spread: (s.spread ?? 0) * sx });
-    effects = { ...effects, dropShadow: effects.dropShadow && shadowPixels(effects.dropShadow), shadows: effects.shadows?.map(shadowPixels), outline: effects.outline && { ...effects.outline, width: effects.outline.width * sx, softness: effects.outline.softness * sx }, glow: effects.glow && { ...effects.glow, radius: effects.glow.radius * 1920 * sx / Math.max(source.width, source.height), depth: (effects.glow.depth ?? 0) * sx } };
+    effects = { ...effects, dropShadow: effects.dropShadow && shadowPixels(effects.dropShadow), shadows: effects.shadows?.map(shadowPixels), outline: effects.outline && { ...effects.outline, width: effects.outline.width * sx, softness: effects.outline.softness * sx }, glow: effects.glow && { ...effects.glow, radius: effects.glow.radius * 1920 * sx / Math.max(source.width, source.height), depth: (effects.glow.depth ?? 0) * sx }, agentGlow: effects.agentGlow && { ...effects.agentGlow, ringWidth: effects.agentGlow.ringWidth * sx, spread: effects.agentGlow.spread * sx } };
     const layout = getLayerHaloLayout(effects, source.width, source.height, intensityOffset, radiusOffset);
     const shadows = [effects.dropShadow, ...(effects.shadows ?? [])].filter(s => s?.enabled && s.mode !== 'inner');
     const outline = effects.outline?.enabled && effects.outline.placement === 'outside' ? effects.outline : undefined;
@@ -282,6 +285,7 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
     if (outline) drawAlphaOutline(ctx, source, { x: layout.padding * ratio, y: layout.padding * ratio, width: source.width * ratio, height: source.height * ratio, radius: outline.width * ratio, softness: outline.softness * ratio, placement: 'outside', color: outline.color, opacity: outline.opacity });
     if (agentGlow) {
         const glowRad = (agentGlow.ringWidth + agentGlow.spread) * ratio;
+        const phase = timeSeconds * (agentGlow.speed ?? 1) * Math.PI * 2;
         drawAlphaOutline(ctx, source, {
             x: layout.padding * ratio,
             y: layout.padding * ratio,
@@ -291,7 +295,9 @@ export function drawLayerHalo(source: HTMLCanvasElement, effects: LayerEffects, 
             softness: Math.max(1, agentGlow.spread * ratio),
             placement: 'outside',
             color: agentGlow.color,
-            opacity: Math.max(0, Math.min(1, agentGlow.intensity)),
+            opacity: Math.max(0, agentGlow.intensity),
+            sweep: agentGlow.sweep,
+            phase,
         });
     }
     releaseCanvas(mask);

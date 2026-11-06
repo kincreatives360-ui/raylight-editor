@@ -66,7 +66,7 @@ export function evaluateDepthOfFieldAtTime(
         else if (b.property === 'aperture' || (b.property === undefined && Number.isFinite(b.toValue))) {
             const fromAp = Number.isFinite(b.fromValue) ? b.fromValue : aperture;
             const toAp = Number.isFinite(b.toValue) ? b.toValue : (typeof b.amount === 'number' ? b.amount : aperture);
-            aperture = Number(lerp(fromAp, toAp, p).toFixed(2));
+            aperture = Math.max(0.7, Number(lerp(fromAp, toAp, p).toFixed(2)));
         }
         // 3. Manual Focus Distance
         else if (b.property === 'focusDistance') {
@@ -87,18 +87,9 @@ export function evaluateDepthOfFieldAtTime(
 // Pure Function: Evaluates ordered scene effects and deterministic frame seed
 export function evaluateEffectsAtTime(
     shot: Shot,
-    frameNumber: number,
-    localTimeMs: number = 0
+    frameNumber: number
 ): EvaluatedEffects {
-    let effects = shot.effects;
-
-    // Evaluates dynamic Depth of Field rack focus and aperture pulls if animated blocks exist
-    if (effects.depthOfField && shot.effectBlocks && shot.effectBlocks.length > 0) {
-        effects = {
-            ...effects,
-            depthOfField: evaluateDepthOfFieldAtTime(effects.depthOfField, shot.effectBlocks, localTimeMs),
-        };
-    }
+    const effects = shot.effects;
 
     // Deterministic pseudo-random seed from frameNumber (never uses Math.random())
     const frame = Math.max(0, Math.floor(Number.isFinite(frameNumber) ? frameNumber : 0));

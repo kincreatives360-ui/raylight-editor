@@ -61,20 +61,39 @@ describe('cameraOptics module', () => {
   });
 
   it('calibrates optimal sceneScale for physical depth of field using bisection', () => {
-    const samples = [
-      { focalLengthMm: 50, aperture: 2.8, focusDistance: 2.65 },
-      { focalLengthMm: 85, aperture: 2.0, focusDistance: 3.5 },
-    ];
+    const sample = { focalLengthMm: 50, aperture: 2.8, focusDistance: 2.65 };
+    const focusRange = 0.85;
+    const viewportHeight = 1080;
 
-    const optimalScale = solveOptimalSceneScale({
-      samples,
-      focusRange: 0.85,
-      viewportHeight: 1080,
+    const solvedScale = solveOptimalSceneScale({
+      samples: [sample],
+      focusRange,
+      viewportHeight,
     });
 
-    expect(optimalScale).toBeGreaterThan(0.01);
-    expect(optimalScale).toBeLessThan(100);
-    expect(Number.isFinite(optimalScale)).toBe(true);
+    const { cocPixels } = computePhysicalCocGain({
+      focalLengthMm: sample.focalLengthMm,
+      fNumber: sample.aperture,
+      sceneScale: solvedScale,
+      focusDistance: sample.focusDistance,
+      viewportHeight,
+    });
+
+    const targetArtisticBlur = (sample.focalLengthMm / 50) * (12 / sample.aperture);
+    const resultingBlur = (cocPixels * focusRange) / sample.focusDistance;
+    expect(resultingBlur).toBeCloseTo(targetArtisticBlur, 3);
+
+    const multiScale = solveOptimalSceneScale({
+      samples: [
+        sample,
+        { focalLengthMm: 85, aperture: 2.0, focusDistance: 3.5 },
+      ],
+      focusRange,
+      viewportHeight,
+    });
+    expect(multiScale).toBeGreaterThan(1);
+    expect(multiScale).toBeLessThan(100000);
+    expect(Number.isFinite(multiScale)).toBe(true);
   });
 });
 

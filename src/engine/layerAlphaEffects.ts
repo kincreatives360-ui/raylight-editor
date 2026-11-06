@@ -97,7 +97,7 @@ export function applyLayerAlphaEffects(source: HTMLCanvasElement, effects: Layer
 }
 
 interface MaskDrawing { x: number; y: number; width: number; height: number; color: string; opacity: number; }
-export interface AlphaOutlineOptions extends MaskDrawing { radius: number; softness: number; placement: 'inside' | 'outside'; }
+export interface AlphaOutlineOptions extends MaskDrawing { radius: number; softness: number; placement: 'inside' | 'outside'; sweep?: number; phase?: number; }
 export interface LongShadowOptions extends MaskDrawing { length: number; angle: number; fade: number; blur?: number; spread?: number; offsetX?: number; offsetY?: number; }
 
 function lineMaximum(input: Uint8ClampedArray, w: number, h: number, dx: number, dy: number, radius: number): Uint8ClampedArray {
@@ -157,18 +157,43 @@ function drawMask(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, opti
         for (let i = 0; i < result.length; i++) { image.data[i * 4] = 255; image.data[i * 4 + 1] = 255; image.data[i * 4 + 2] = 255; image.data[i * 4 + 3] = result[i]; }
         maskCtx.putImageData(image, 0, 0);
         maskCtx.globalCompositeOperation = 'source-in'; maskCtx.fillStyle = options.color; maskCtx.fillRect(0, 0, w, h);
-        ctx.save(); ctx.globalAlpha *= clamp(options.opacity); ctx.filter = blur > 0 ? `blur(${blur}px)` : 'none';
-        ctx.drawImage(mask, options.x - pad / scale, options.y - pad / scale, w / scale, h / scale); ctx.restore();
+        const totalOpacity = Math.max(0, options.opacity);
+        const passes = Math.min(4, Math.ceil(totalOpacity));
+        for (let pass = 0; pass < passes; pass++) {
+            ctx.save(); ctx.globalAlpha *= clamp(totalOpacity - pass); ctx.filter = blur > 0 ? `blur(${blur}px)` : 'none';
+            ctx.drawImage(mask, options.x - pad / scale, options.y - pad / scale, w / scale, h / scale); ctx.restore();
+        }
     } finally { releaseCanvas(mask); }
 }
 
 export function drawAlphaOutline(ctx: CanvasRenderingContext2D, source: HTMLCanvasElement, options: AlphaOutlineOptions): void {
-    if (options.radius <= 0 || options.opacity <= 0) return;
+    if (options.radius <= 0 || options.opacity <= 0 || (options.sweep !== undefined && options.sweep <= 0)) return;
     drawMask(ctx, source, options, options.radius + options.softness * 3 + 2, 1536, (alpha, w, h, scale) => {
         const inverse = options.placement === 'inside';
         const input = inverse ? alpha.map(a => 255 - a) : alpha;
         const expanded = dilateAlpha(input, w, h, options.radius * scale);
-        return expanded.map((a, i) => inverse ? Math.max(0, alpha[i] + a - 255) : Math.max(0, a - alpha[i]));
+        const ring = expanded.map((a, i) => inverse ? Math.max(0, alpha[i] + a - 255) : Math.max(0, a - alpha[i]));
+        if (options.sweep !== undefined && options.sweep < 1) {
+            const sweep = clamp(options.sweep);
+            const phase = options.phase ?? 0;
+            const cx = w * 0.5, cy = h * 0.5;
+            const twoPi = Math.PI * 2;
+            for (let y = 0; y < h; y++) {
+                for (let x = 0; x < w; x++) {
+                    const idx = y * w + x;
+                    if (!ring[idx]) continue;
+                    const angle = Math.atan2(y - cy, x - cx);
+                    const normAngle = (((angle - phase) % twoPi) + twoPi) % twoPi / twoPi;
+                    if (normAngle > sweep) {
+                        ring[idx] = 0;
+                    } else {
+                        const arcT = normAngle / Math.max(1e-4, sweep);
+                        ring[idx] = Math.round(ring[idx] * Math.sin(arcT * Math.PI));
+                    }
+                }
+            }
+        }
+        return ring;
     }, options.softness);
 }
 

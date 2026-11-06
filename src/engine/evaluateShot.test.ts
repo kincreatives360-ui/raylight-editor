@@ -377,4 +377,37 @@ describe('evaluateProjectAtTime', () => {
     expect(motionFrame.effects.motionVector).toBeDefined();
     expect(Math.hypot(motionFrame.effects.motionVector!.x, motionFrame.effects.motionVector!.y)).toBeGreaterThan(0);
   });
+
+  it('12. Evaluates a depthOfField target block without altering aperture', () => {
+    const shot = createDefaultShot({
+      id: 'shot-dof',
+      startMs: 0,
+      durationMs: 2000,
+    });
+    shot.effects.depthOfField.enabled = false;
+    shot.effects.depthOfField.aperture = 4.0;
+    shot.effects.depthOfField.target = { x: 0, y: 0, z: 0 };
+    shot.effectBlocks = [
+      {
+        id: 'fx-dof-target',
+        label: 'Rack Focus',
+        effectKey: 'depthOfField',
+        property: 'target',
+        startMs: 0,
+        durationMs: 1000,
+        fromValue: 0,
+        toValue: 1,
+        fromTarget: { x: 0, y: 0, z: 0 },
+        toTarget: { x: 10, y: -4, z: -6 },
+        easing: { kind: 'preset', name: 'linear' },
+      },
+    ];
+
+    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
+    const frame = evaluateProjectAtTime(project, 500);
+
+    expect(frame.effects.state.depthOfField.enabled).toBe(true);
+    expect(frame.effects.state.depthOfField.aperture).toBe(4.0);
+    expect(frame.effects.state.depthOfField.target).toEqual({ x: 5, y: -2, z: -3 });
+  });
 });
