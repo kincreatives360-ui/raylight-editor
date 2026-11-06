@@ -238,3 +238,4 @@ describe('pruneEmptyGroups', () => {
     expect(remainingIds).not.toContain('g-dead');
   });
 });
+
