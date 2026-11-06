@@ -290,10 +290,12 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                         aria-label="Scene Lighting"
                         aria-pressed={selectedLightId !== null && !selectedLightBlockId}
                         onClick={(e) => {
+                            if ((e.target as HTMLElement).closest('[data-light-pill]')) return;
                             e.stopPropagation();
                             selectLight?.('key');
                             selectLightBlock(null);
                             setInspectorTab('shot');
+                            addLightBlockAtTime?.(clientXToLocalMs(e.clientX));
                         }}
                         style={{ left: 0, width: `${activeShot.durationMs * pxPerMs}px` }}
                         className={`group absolute inset-y-0.5 rounded-md border-2 transition-colors duration-200 cursor-pointer overflow-hidden ${

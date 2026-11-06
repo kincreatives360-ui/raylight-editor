@@ -3,8 +3,6 @@ import React from 'react';
 export interface SnapLineOverlayProps {
     snapLineMs: number | null;
     pxPerMs: number;
-    timelineView?: 'video' | 'scene';
-    activeShotStartMs?: number;
 }
 
 /**
@@ -15,12 +13,9 @@ export interface SnapLineOverlayProps {
 export function SnapLineOverlay({
     snapLineMs,
     pxPerMs,
-    timelineView = 'video',
-    activeShotStartMs = 0,
 }: SnapLineOverlayProps) {
     if (snapLineMs === null || snapLineMs < 0) return null;
-    const displayMs = timelineView === 'scene' ? snapLineMs : snapLineMs;
-    const leftPx = displayMs * pxPerMs;
+    const leftPx = snapLineMs * pxPerMs;
 
     return (
         <div

@@ -36,7 +36,7 @@ export function buildEasingCurveSvgPaths(
     customSampleCount?: number
 ): { stroke: string; fill: string } {
     const sampleCount = customSampleCount ?? getEasingCurveSampleCount(widthPx);
-    const safeSamples = Math.max(2, sampleCount);
+    const safeSamples = Math.max(2, Math.floor(Number.isFinite(sampleCount) ? sampleCount : 24));
 
     const values: number[] = [];
     const times: number[] = [];

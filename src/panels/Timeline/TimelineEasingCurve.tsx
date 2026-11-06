@@ -54,13 +54,13 @@ export const TimelineEasingCurve: React.FC<TimelineEasingCurveProps> = React.mem
     label,
     className,
 }) => {
+    const paths = useMemo(() => buildEasingCurveSvgPaths(easing, widthPx), [easing, widthPx]);
+    const mask = useMemo(() => buildLabelMaskImage(label, widthPx), [label, widthPx]);
+
     // Suppress curve rendering on tiny bars to avoid visual noise (matches Raylight D1o = 28px)
     if (widthPx !== undefined && widthPx < 28) {
         return null;
     }
-
-    const paths = useMemo(() => buildEasingCurveSvgPaths(easing, widthPx), [easing, widthPx]);
-    const mask = useMemo(() => buildLabelMaskImage(label, widthPx), [label, widthPx]);
 
     const strokeColor = color ?? (tone ? (selected ? TONE_CURVE_COLORS[tone].selected : TONE_CURVE_COLORS[tone].unselected) : 'currentColor');
     const fillColor = color ?? strokeColor;

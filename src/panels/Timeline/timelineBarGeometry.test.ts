@@ -33,6 +33,14 @@ describe('timeline bar geometry', () => {
     expect(stroke.startsWith('M0,')).toBe(true);
     expect(stroke).toContain(' L100,');
     expect(fill).toBe(`${stroke} V300 H0 Z`);
+
+    // Normalized sample count handles fractional or non-finite counts
+    const pathsFrac = buildEasingCurveSvgPaths({ kind: 'preset', name: 'ease-out' }, 100, 10.7);
+    expect(pathsFrac.stroke.startsWith('M0,')).toBe(true);
+    expect(pathsFrac.stroke.split(' ').length).toBe(10);
+
+    const pathsNaN = buildEasingCurveSvgPaths({ kind: 'preset', name: 'ease-out' }, 100, Number.NaN);
+    expect(pathsNaN.stroke.startsWith('M0,')).toBe(true);
   });
 
   it('generates label mask image gradient for legibility', () => {

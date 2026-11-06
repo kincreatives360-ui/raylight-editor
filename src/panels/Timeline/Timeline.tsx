@@ -567,8 +567,6 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     <SnapLineOverlay
                         snapLineMs={snapLineMs}
                         pxPerMs={pxPerMs}
-                        timelineView={timelineView}
-                        activeShotStartMs={activeShot?.startMs ?? 0}
                     />
                     {/* Floating Visual Bezier Curve Popover */}
                     {easingPopoverTarget && (

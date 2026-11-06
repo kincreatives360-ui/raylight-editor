@@ -58,16 +58,39 @@ describe('TimelineEasingCurve', () => {
 });
 
 describe('FramerCutMoment', () => {
-    it('renders a diamond camera cut marker at the specified timestamp', () => {
+    it('renders non-interactive marker when onSelect is absent', () => {
+        const html = renderToStaticMarkup(
+            <FramerCutMoment
+                id="cut-static"
+                timeMs={2000}
+                pxPerMs={0.1}
+                label="Cut"
+            />
+        );
+        expect(html).toContain('data-testid="camera-cut-cut-static"');
+        expect(html).toContain('cursor-default');
+        expect(html).not.toContain('role="button"');
+        expect(html).not.toContain('tabindex');
+        expect(html).not.toContain('aria-pressed');
+    });
+
+    it('renders interactive button when onSelect is provided', () => {
+        const onSelect = vi.fn();
         const html = renderToStaticMarkup(
             <FramerCutMoment
                 id="cut-1"
                 timeMs={2500}
                 pxPerMs={0.1}
                 label="Cut to Wide"
+                selected={true}
+                onSelect={onSelect}
             />
         );
         expect(html).toContain('data-testid="camera-cut-cut-1"');
+        expect(html).toContain('role="button"');
+        expect(html).toContain('tabindex="0"');
+        expect(html).toContain('aria-pressed="true"');
+        expect(html).toContain('cursor-pointer');
         expect(html).toContain('left:250px');
         expect(html).toContain('rotate-45');
         expect(html).toContain('Cut to Wide at 2.50s');

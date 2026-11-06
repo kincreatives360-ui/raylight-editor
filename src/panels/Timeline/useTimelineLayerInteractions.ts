@@ -216,9 +216,13 @@ export function useTimelineLayerInteractions({
                     if (snapStart.snapped) {
                         targetGlobal = snapStart.time;
                         snapped = true;
+                        setSnapLineMs?.(snapStart.time);
                     } else if (snapEnd.snapped) {
                         targetGlobal = snapEnd.time - origDur;
                         snapped = true;
+                        setSnapLineMs?.(snapEnd.time);
+                    } else {
+                        setSnapLineMs?.(null);
                     }
                     const targetDelay = targetGlobal - layer.inMs;
                     nextDelay = Math.max(
@@ -241,6 +245,8 @@ export function useTimelineLayerInteractions({
                         Math.min(origDelay + origDur - 80, targetDelay)
                     );
                     nextDur = origDelay + origDur - nextDelay;
+                    if (snap.snapped) setSnapLineMs?.(snap.time);
+                    else setSnapLineMs?.(null);
                     setGhostDragPreview({
                         id: `${layer.id}-entrance`,
                         type: 'entrance',
@@ -257,6 +263,8 @@ export function useTimelineLayerInteractions({
                         80,
                         Math.min(layerSpan - origDelay, targetDur)
                     );
+                    if (snap.snapped) setSnapLineMs?.(snap.time);
+                    else setSnapLineMs?.(null);
                     setGhostDragPreview({
                         id: `${layer.id}-entrance`,
                         type: 'entrance',
@@ -289,9 +297,13 @@ export function useTimelineLayerInteractions({
                     if (snapEnd.snapped) {
                         targetGlobalEnd = snapEnd.time;
                         snapped = true;
+                        setSnapLineMs?.(snapEnd.time);
                     } else if (snapStart.snapped) {
                         targetGlobalEnd = snapStart.time + origDur;
                         snapped = true;
+                        setSnapLineMs?.(snapStart.time);
+                    } else {
+                        setSnapLineMs?.(null);
                     }
                     const targetDelay = layer.outMs - targetGlobalEnd;
                     nextDelay = Math.max(
@@ -313,6 +325,8 @@ export function useTimelineLayerInteractions({
                         80,
                         Math.min(layerSpan - origDelay, targetDur)
                     );
+                    if (snap.snapped) setSnapLineMs?.(snap.time);
+                    else setSnapLineMs?.(null);
                     setGhostDragPreview({
                         id: `${layer.id}-exit`,
                         type: 'exit',
@@ -330,6 +344,8 @@ export function useTimelineLayerInteractions({
                         Math.min(origDelay + origDur - 80, targetDelay)
                     );
                     nextDur = origDelay + origDur - nextDelay;
+                    if (snap.snapped) setSnapLineMs?.(snap.time);
+                    else setSnapLineMs?.(null);
                     setGhostDragPreview({
                         id: `${layer.id}-exit`,
                         type: 'exit',

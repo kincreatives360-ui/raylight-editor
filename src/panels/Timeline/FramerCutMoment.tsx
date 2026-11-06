@@ -27,22 +27,37 @@ export function FramerCutMoment({
 }: FramerCutMomentProps) {
     const centerPx = timeMs * pxPerMs;
     const isSeam = shape === 'seam';
+    const isInteractive = Boolean(onSelect);
+
+    const handleKeyDown = isInteractive
+        ? (e: React.KeyboardEvent) => {
+            if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                e.stopPropagation();
+                onSelect?.();
+            }
+        }
+        : undefined;
 
     return (
         <div
             data-testid={`camera-cut-${id}`}
             data-cut-id={id}
-            role="button"
+            role={isInteractive ? 'button' : undefined}
+            tabIndex={isInteractive ? 0 : undefined}
             aria-label={label}
-            aria-pressed={selected}
-            onClick={(e) => {
+            aria-pressed={isInteractive ? selected : undefined}
+            onClick={isInteractive ? (e) => {
                 e.stopPropagation();
                 onSelect?.();
-            }}
+            } : undefined}
+            onKeyDown={handleKeyDown}
             onContextMenu={onContextMenu}
             style={{ left: `${centerPx}px` }}
             title={`${label} at ${(timeMs / 1000).toFixed(2)}s`}
-            className="group absolute top-0.5 bottom-0.5 -translate-x-1/2 flex flex-col items-center justify-start cursor-pointer z-20 pointer-events-auto select-none"
+            className={`group absolute top-0.5 bottom-0.5 -translate-x-1/2 flex flex-col items-center justify-start z-20 pointer-events-auto select-none ${
+                isInteractive ? 'cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-primary' : 'cursor-default'
+            }`}
         >
             {/* Diamond shape (rotated square) */}
             <div
