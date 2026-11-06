@@ -19,7 +19,7 @@ on:
 
 env:
   NODE_VERSION: '20'
-  REFERENCE_URL: ${{ github.event.inputs.reference-url || vars.REFERENCE_URL }}
+  REFERENCE_URL: ${{ inputs.reference-url || vars['REFERENCE_URL'] }}
   VIEWPORTS: ${{ github.event.inputs.viewport || '375,768,1440' }}
 
 jobs:
@@ -42,7 +42,7 @@ jobs:
     name: Recon & Baseline Capture
     needs: doctor
     runs-on: ubuntu-latest
-    if: inputs.reference-url != '' || vars.REFERENCE_URL != ''
+    if: inputs.reference-url != '' || vars['REFERENCE_URL'] != ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -102,7 +102,7 @@ jobs:
     name: Parity Verification
     needs: [recon, rebuild]
     runs-on: ubuntu-latest
-    if: (inputs.reference-url != '' || vars.REFERENCE_URL != '') && !failure() && !cancelled() && needs.rebuild.result == 'success'
+    if: (inputs.reference-url != '' || vars['REFERENCE_URL'] != '') && !failure() && !cancelled() && needs.rebuild.result == 'success'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
