@@ -12,8 +12,7 @@
  *   --model <name>         Model name (default: claude-3-5-sonnet-20241022 for anthropic)
  *   --api-key <key>        API key (or set ANTHROPIC_API_KEY / OPENAI_API_KEY env var)
  *   --dry-run              Print the prompt without executing
- *   --max-turns <n>        Max conversation turns (default: 10)
- *   --timeout <ms>         Timeout per turn (default: 120000)
+ *   --timeout <ms>         Request timeout in ms (default: 120000)
  *   --verbose              Verbose output
  */
 const fs = require('fs');
@@ -38,8 +37,7 @@ Options:
   --model <name>         Model name (default: claude-3-5-sonnet-20241022)
   --api-key <key>        API key (or use ANTHROPIC_API_KEY/OPENAI_API_KEY env)
   --dry-run              Print the assembled prompt without executing
-  --max-turns <n>        Max conversation turns (default: 10)
-  --timeout <ms>         Timeout per turn in ms (default: 120000)
+  --timeout <ms>         Request timeout in ms (default: 120000)
   --verbose              Verbose output
 
 Examples:
@@ -65,7 +63,6 @@ function parseArgs(argv) {
     model: null,
     apiKey: null,
     dryRun: false,
-    maxTurns: 10,
     timeout: 120000,
     verbose: false,
   };
@@ -77,7 +74,6 @@ function parseArgs(argv) {
     else if (arg === '--model') opts.model = argv[++i];
     else if (arg === '--api-key') opts.apiKey = argv[++i];
     else if (arg === '--dry-run') opts.dryRun = true;
-    else if (arg === '--max-turns') opts.maxTurns = +argv[++i];
     else if (arg === '--timeout') opts.timeout = +argv[++i];
     else if (arg === '--verbose') opts.verbose = true;
     else if (!arg.startsWith('--')) {
@@ -177,7 +173,8 @@ if (opts.card.includes('#')) {
   if (!content) { console.error(`File not found: ${fullPath}`); process.exit(1); }
   
   // Extract card section
-  const regex = new RegExp(`^(###\\s+${id.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}\\b[\\s\\S]*?)(?=^###\\s+F-\\d+|$)`, 'm');
+  const escapedId = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const regex = new RegExp(`(?:^|\\r?\\n)(###\\s+${escapedId}\\b[\\s\\S]*?)(?=(?:\\r?\\n)###\\s+F-\\d+|$)`);
   const match = content.match(regex);
   if (!match) { console.error(`Card ${id} not found in ${fullPath}`); process.exit(1); }
   cardContent = match[1].trim();
@@ -186,14 +183,14 @@ if (opts.card.includes('#')) {
   const fullPath = path.resolve(opts.card);
   cardContent = readIfExists(fullPath);
   if (!cardContent) { console.error(`File not found: ${fullPath}`); process.exit(1); }
-  const m = cardContent.match(/^###\s+(F-\d+)/);
+  const m = cardContent.match(/^###\s+(F-\d+)/m);
   cardId = m ? m[1] : 'unknown';
 }
 
 // Extract card metadata
 function extractField(content, field) {
   const patterns = [
-    new RegExp(`^##\\s+${field}\\s*\\n([\\s\\S]*?)(?=^##|$)`, 'im'),
+    new RegExp(`(?:^|\\r?\\n)##\\s+${field}\\s*\\r?\\n([\\s\\S]*?)(?=(?:\\r?\\n)##|$)`, 'i'),
     new RegExp(`\\b${field}\\s*:\\s*([^\\n|]+)`, 'i'),
   ];
   for (const re of patterns) {
@@ -264,17 +261,30 @@ if (opts.dryRun) {
   process.exit(0);
 }
 
+// Helper to run temporary provider script safely
+function runTempScript(scriptContent, extraEnv) {
+  const tmpDir = fs.mkdtempSync(path.join(path.resolve(__dirname, '..'), '.agent-tmp-'));
+  const tmp = path.join(tmpDir, 'agent.mjs');
+  try {
+    fs.writeFileSync(tmp, scriptContent);
+    const env = { ...process.env, ...extraEnv };
+    const r = spawnSync('node', [tmp], { env, timeout: opts.timeout, stdio: 'inherit' });
+    return r.status ?? 1;
+  } finally {
+    try { fs.rmSync(tmpDir, { recursive: true, force: true }); } catch {}
+  }
+}
+
 // Invoke agent
 function invokeAgent(prompt) {
   const provider = opts.provider;
   
   if (provider === 'anthropic') {
-    // Use Anthropic CLI or API
     const script = `
 import anthropic from '@anthropic-ai/sdk';
 const client = new anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 const msg = await client.messages.create({
-  model: '${opts.model}',
+  model: process.env.AGENT_MODEL,
   max_tokens: 8192,
   temperature: 0.1,
   system: 'You are a senior software engineer implementing a single build card. Follow constraints exactly.',
@@ -282,12 +292,10 @@ const msg = await client.messages.create({
 });
 console.log(msg.content[0].text);
 `;
-    const tmp = path.join(require('os').tmpdir(), `agent-${Date.now()}.mjs`);
-    fs.writeFileSync(tmp, script);
-    const env = { ...process.env, ANTHROPIC_API_KEY: opts.apiKey };
-    const r = spawnSync('node', [tmp], { env, timeout: opts.timeout, stdio: 'inherit' });
-    fs.unlinkSync(tmp);
-    return r.status;
+    return runTempScript(script, {
+      ANTHROPIC_API_KEY: opts.apiKey || process.env.ANTHROPIC_API_KEY,
+      AGENT_MODEL: opts.model,
+    });
   }
   
   if (provider === 'openai') {
@@ -295,7 +303,7 @@ console.log(msg.content[0].text);
 import OpenAI from 'openai';
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const completion = await client.chat.completions.create({
-  model: '${opts.model}',
+  model: process.env.AGENT_MODEL,
   messages: [
     { role: 'system', content: 'You are a senior software engineer implementing a single build card. Follow constraints exactly.' },
     { role: 'user', content: ${JSON.stringify(prompt)} }
@@ -305,23 +313,20 @@ const completion = await client.chat.completions.create({
 });
 console.log(completion.choices[0].message.content);
 `;
-    const tmp = path.join(require('os').tmpdir(), `agent-${Date.now()}.mjs`);
-    fs.writeFileSync(tmp, script);
-    const env = { ...process.env, OPENAI_API_KEY: opts.apiKey };
-    const r = spawnSync('node', [tmp], { env, timeout: opts.timeout, stdio: 'inherit' });
-    fs.unlinkSync(tmp);
-    return r.status;
+    return runTempScript(script, {
+      OPENAI_API_KEY: opts.apiKey || process.env.OPENAI_API_KEY,
+      AGENT_MODEL: opts.model,
+    });
   }
   
   if (provider === 'local') {
-    // Ollama or similar local endpoint
-    const baseUrl = process.env.OLLAMA_BASE_URL || 'http://localhost:11434';
     const script = `
-const response = await fetch('${baseUrl}/api/chat', {
+const baseUrl = process.env.AGENT_BASE_URL;
+const response = await fetch(\`\${baseUrl}/api/chat\`, {
   method: 'POST',
   headers: { 'Content-Type': 'application/json' },
   body: JSON.stringify({
-    model: '${opts.model}',
+    model: process.env.AGENT_MODEL,
     messages: [
       { role: 'system', content: 'You are a senior software engineer implementing a single build card. Follow constraints exactly.' },
       { role: 'user', content: ${JSON.stringify(prompt)} }
@@ -333,11 +338,10 @@ const response = await fetch('${baseUrl}/api/chat', {
 const data = await response.json();
 console.log(data.message.content);
 `;
-    const tmp = path.join(require('os').tmpdir(), `agent-${Date.now()}.mjs`);
-    fs.writeFileSync(tmp, script);
-    const r = spawnSync('node', [tmp], { timeout: opts.timeout, stdio: 'inherit' });
-    fs.unlinkSync(tmp);
-    return r.status;
+    return runTempScript(script, {
+      AGENT_MODEL: opts.model,
+      AGENT_BASE_URL: process.env.OLLAMA_BASE_URL || 'http://localhost:11434',
+    });
   }
   
   console.error(`Unknown provider: ${provider}`);
@@ -346,7 +350,7 @@ console.log(data.message.content);
 
 console.log(`\n🤖 Invoking ${opts.provider}/${opts.model} for card ${cardId}...`);
 console.log(`📁 Workspace: ${workspace}`);
-console.log(`⏱️  Timeout: ${opts.timeout}ms per turn\n`);
+console.log(`⏱️  Timeout: ${opts.timeout}ms\n`);
 
 const exitCode = invokeAgent(prompt);
 process.exit(exitCode);

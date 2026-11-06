@@ -31,9 +31,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
       - name: Run doctor
@@ -43,30 +42,29 @@ jobs:
     name: Recon & Baseline Capture
     needs: doctor
     runs-on: ubuntu-latest
-    if: env.REFERENCE_URL != ''
+    if: inputs.reference-url != '' || vars.REFERENCE_URL != ''
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
       - name: Scaffold workspace
         run: npx reverse-engineer scaffold baseline --tier impl
       - name: Run recon
         run: |
-          npx reverse-engineer recon "${{ env.REFERENCE_URL }}" ./re-baseline \
+          npx reverse-engineer recon "$REFERENCE_URL" ./re-baseline \
             --format json \
             --json-out ./re-baseline/recon-summary.json \
             --width 1440 \
             --headless new
       - name: Capture visual baseline
         run: |
-          npx reverse-engineer visual-diff "${{ env.REFERENCE_URL }}" ./re-baseline/06-parity/ref \
-            --widths "${{ env.VIEWPORTS }}" \
+          npx reverse-engineer visual-diff "$REFERENCE_URL" ./re-baseline/06-parity/ref \
+            --widths "$VIEWPORTS" \
             --headless new
       - name: Upload baseline artifacts
         uses: actions/upload-artifact@v4
@@ -87,9 +85,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Run build
         run: |
           # Replace with your actual build command
@@ -105,30 +102,40 @@ jobs:
     name: Parity Verification
     needs: [recon, rebuild]
     runs-on: ubuntu-latest
-    if: env.REFERENCE_URL != ''
+    if: (inputs.reference-url != '' || vars.REFERENCE_URL != '') && !failure() && !cancelled() && needs.rebuild.result == 'success'
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: 'npm'
       - name: Install dependencies
-        run: npm ci
+        run: npm install
       - name: Install Playwright
         run: npx playwright install --with-deps chromium
       - name: Download baseline
         uses: actions/download-artifact@v4
+        continue-on-error: true
         with:
           name: baseline
           path: re-baseline
+      - name: Start app
+        run: |
+          npm run start &
+          for i in $(seq 1 30); do
+            if curl -s http://localhost:3000 > /dev/null; then
+              echo "App is ready at http://localhost:3000"
+              break
+            fi
+            sleep 1
+          done
       - name: Capture rebuild visual
         run: |
           npx reverse-engineer visual-diff "http://localhost:3000" ./re-baseline/06-parity/build \
-            --widths "${{ env.VIEWPORTS }}" \
+            --widths "$VIEWPORTS" \
             --headless new
       - name: Run visual diff
         run: |
-          for w in $(echo "${{ env.VIEWPORTS }}" | tr ',' ' '); do
+          for w in $(echo "$VIEWPORTS" | tr ',' ' '); do
             npx reverse-engineer visual-diff --diff \
               ./re-baseline/06-parity/ref/vp-${w}.png \
               ./re-baseline/06-parity/build/vp-${w}.png \
@@ -204,5 +211,3 @@ jobs:
         run: |
           echo "Parity verification failed. Check workflow run for details."
           # Add your notification logic here (Slack, email, etc.)
-
-```

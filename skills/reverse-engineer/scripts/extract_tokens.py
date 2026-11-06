@@ -34,6 +34,86 @@ def px(v):
     m = re.match(r"^(-?[\d.]+)px$", v or "")
     return float(m.group(1)) if m else None
 
+def to_valid_css_color(c):
+    if not c or not isinstance(c, str):
+        return c
+    m = re.match(r"^#([0-9a-fA-F]{6})@([\d.]+)$", c)
+    if m:
+        h = m.group(1)
+        a = float(m.group(2))
+        ab = max(0, min(255, int(round(a * 255))))
+        return f"#{h}{ab:02x}"
+    return c
+
+def parse_css_transition_parts(val):
+    if not val:
+        return []
+    entries = []
+    curr = []
+    depth = 0
+    for char in val:
+        if char == '(':
+            depth += 1
+            curr.append(char)
+        elif char == ')':
+            depth -= 1
+            curr.append(char)
+        elif char == ',' and depth == 0:
+            entries.append(''.join(curr).strip())
+            curr = []
+        else:
+            curr.append(char)
+    if curr:
+        entries.append(''.join(curr).strip())
+    
+    parsed = []
+    for entry in entries:
+        tokens = []
+        t_curr = []
+        t_depth = 0
+        for char in entry:
+            if char == '(':
+                t_depth += 1
+                t_curr.append(char)
+            elif char == ')':
+                t_depth -= 1
+                t_curr.append(char)
+            elif char.isspace() and t_depth == 0:
+                if t_curr:
+                    tokens.append(''.join(t_curr))
+                    t_curr = []
+            else:
+                t_curr.append(char)
+        if t_curr:
+            tokens.append(''.join(t_curr))
+        
+        if tokens:
+            prop = tokens[0]
+            dur = "0s"
+            timing = "ease"
+            delay = "0s"
+            time_tokens = []
+            other_tokens = []
+            for t in tokens[1:]:
+                if re.match(r'^-?[\d.]+(?:ms|s)$', t):
+                    time_tokens.append(t)
+                else:
+                    other_tokens.append(t)
+            if len(time_tokens) >= 1:
+                dur = time_tokens[0]
+            if len(time_tokens) >= 2:
+                delay = time_tokens[1]
+            if other_tokens:
+                timing = ' '.join(other_tokens)
+            parsed.append({
+                "property": prop,
+                "duration": dur,
+                "timing": timing,
+                "delay": delay,
+                "raw": f"{prop} {dur} {timing} {delay}".strip()
+            })
+    return parsed
+
 def to_tailwind(tokens):
     """Convert tokens to Tailwind config format."""
     config = {
@@ -55,7 +135,7 @@ def to_tailwind(tokens):
     for role, values in tokens["colors"].items():
         for i, v in enumerate(values[:10]):
             name = f"{role}-{i+1}" if i > 0 else role
-            config["theme"]["extend"]["colors"][name] = v["value"]
+            config["theme"]["extend"]["colors"][name] = to_valid_css_color(v["value"])
     # Typography
     for fam in tokens["typography"]["families"][:5]:
         key = re.sub(r"[^a-z0-9]+", "-", fam["value"].lower()).strip("-")
@@ -79,11 +159,11 @@ def to_tailwind(tokens):
         config["theme"]["extend"]["zIndex"][z["value"]] = z["value"]
     # Motion
     for i, tr in enumerate(tokens["motion"][:10]):
-        parts = tr["value"].split()
-        if len(parts) >= 2:
-            config["theme"]["extend"]["transitionDuration"][f"custom-{i+1}"] = parts[1]
-            if len(parts) >= 3:
-                config["theme"]["extend"]["transitionTimingFunction"][f"custom-{i+1}"] = parts[2]
+        parsed = parse_css_transition_parts(tr["value"])
+        if parsed:
+            p = parsed[0]
+            config["theme"]["extend"]["transitionDuration"][f"custom-{i+1}"] = p["duration"]
+            config["theme"]["extend"]["transitionTimingFunction"][f"custom-{i+1}"] = p["timing"]
     return config
 
 def to_css_modules(tokens):
@@ -93,7 +173,7 @@ def to_css_modules(tokens):
     for role, values in tokens["colors"].items():
         for i, v in enumerate(values[:10]):
             name = f"{role}-{i+1}" if i > 0 else role
-            lines.append(f"  --color-{name}: {v['value']};")
+            lines.append(f"  --color-{name}: {to_valid_css_color(v['value'])};")
     # Typography
     for i, fam in enumerate(tokens["typography"]["families"][:5]):
         lines.append(f"  --font-family-{i+1}: {fam['value']};")
@@ -127,7 +207,7 @@ def to_css_vars(tokens):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("inventory"); ap.add_argument("--css-vars"); ap.add_argument("--out", default="design-tokens.json")
+    ap.add_argument("inventory"); ap.add_argument("--css-vars"); ap.add_argument("--out", default=None)
     ap.add_argument("--format", choices=["json", "tailwind", "css-modules", "css-vars"], default="json")
     a = ap.parse_args()
     inv = json.load(open(a.inventory))
@@ -166,7 +246,10 @@ def main():
         if s["boxShadow"] != "none": shadows[s["boxShadow"]] += n
         if s["zIndex"] not in ("auto", "0"): z[s["zIndex"]] += n
         if s["transitionDuration"] not in ("0s", "") and s["transitionProperty"] != "none":
-            transitions[f'{s["transitionProperty"]} {s["transitionDuration"]} {s["transitionTimingFunction"]} {s["transitionDelay"]}'] += n
+            combined = f'{s["transitionProperty"]} {s["transitionDuration"]} {s["transitionTimingFunction"]} {s["transitionDelay"]}'
+            parsed_entries = parse_css_transition_parts(combined)
+            for pe in parsed_entries:
+                transitions[pe["raw"]] += n
 
     def top(c, k=20): return [{"value": v, "uses": n} for v, n in c.most_common(k)]
     scale = sorted({v for v in list(space) + list(gaps)})
@@ -196,9 +279,19 @@ def main():
     else:
         output = json.dumps(out, indent=2)
 
-    with open(a.out, "w") as f:
+    if a.out:
+        out_path = a.out
+    else:
+        if a.format == "tailwind":
+            out_path = "tailwind.config.json"
+        elif a.format in ("css-modules", "css-vars"):
+            out_path = "tokens.css"
+        else:
+            out_path = "design-tokens.json"
+
+    with open(out_path, "w") as f:
         f.write(output)
-    print(f"wrote {a.out} ({a.format})")
+    print(f"wrote {out_path} ({a.format})")
     if a.format == "json":
         print("top text colors:", [x["value"] for x in out["colors"]["text"][:5]])
         print("top backgrounds:", [x["value"] for x in out["colors"]["background"][:5]])

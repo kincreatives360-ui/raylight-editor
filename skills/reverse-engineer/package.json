@@ -32,7 +32,7 @@
   "scripts": {
     "install:playwright": "npx playwright install chromium",
     "doctor": "node scripts/doctor.js",
-    "test": "node scripts/doctor.js && echo 'Run smoke tests from evals/README.md'"
+    "check": "node scripts/doctor.js"
   },
   "keywords": [
     "reverse-engineering",
@@ -48,12 +48,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
-  "dependencies": {},
-  "devDependencies": {
+  "dependencies": {
     "playwright": "^1.44.0",
     "pixelmatch": "^5.3.0",
     "pngjs": "^7.0.0"
   },
+  "devDependencies": {},
   "files": [
     "scripts/**/*",
     "assets/**/*",

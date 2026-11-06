@@ -28,13 +28,6 @@ try:
 except ImportError:
     HAS_MSGPACK = False
 
-try:
-    import google.protobuf.json_format as pb_json
-    import google.protobuf.message as pb_message
-    HAS_PROTOBUF = True
-except ImportError:
-    HAS_PROTOBUF = False
-
 
 INJECTION_SCRIPT = r'''
 (() => {
@@ -45,120 +38,122 @@ INJECTION_SCRIPT = r'''
     actions: [],
   };
   
-  // Hook WebSocket constructor
+  // Hook WebSocket constructor with construct trap
   const OriginalWebSocket = window.WebSocket;
-  window.WebSocket = function(url, protocols) {
-    const ws = new OriginalWebSocket(url, protocols);
-    const connId = 'ws_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-    
-    const connInfo = {
-      id: connId,
-      url: url,
-      protocols: protocols,
-      readyState: ws.readyState,
-      createdAt: performance.now(),
-      sent: 0,
-      received: 0,
-    };
-    window.__wsInspector.connections.push(connInfo);
-    
-    // Hook send
-    const originalSend = ws.send.bind(ws);
-    ws.send = function(data) {
-      const msg = {
-        timestamp: performance.now(),
-        connectionId: connId,
-        direction: 'outgoing',
-        data: data,
-        type: typeof data,
-        size: data?.byteLength || data?.length || 0,
+  window.WebSocket = new Proxy(OriginalWebSocket, {
+    construct(target, args) {
+      const ws = Reflect.construct(target, args);
+      const url = args[0];
+      const protocols = args[1];
+      const connId = 'ws_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+      
+      const connInfo = {
+        id: connId,
+        url: url,
+        protocols: protocols,
+        readyState: ws.readyState,
+        createdAt: performance.now(),
+        sent: 0,
+        received: 0,
       };
-      window.__wsInspector.messages.push(msg);
-      connInfo.sent++;
-      if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
-      return originalSend(data);
-    };
-    
-    // Hook onmessage
-    const originalOnMessage = ws.onmessage;
-    Object.defineProperty(ws, 'onmessage', {
-      get: () => originalOnMessage,
-      set: (handler) => {
-        ws.onmessage = function(event) {
-          const msg = {
-            timestamp: performance.now(),
-            connectionId: connId,
-            direction: 'incoming',
-            data: event.data,
-            type: typeof event.data,
-            size: event.data?.byteLength || event.data?.length || 0,
-          };
-          window.__wsInspector.messages.push(msg);
-          connInfo.received++;
-          if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
-          return handler?.call(this, event);
+      window.__wsInspector.connections.push(connInfo);
+      
+      // Hook send
+      const originalSend = ws.send.bind(ws);
+      ws.send = function(data) {
+        const msg = {
+          timestamp: performance.now(),
+          connectionId: connId,
+          direction: 'outgoing',
+          data: data,
+          type: typeof data,
+          size: data?.byteLength || data?.length || 0,
         };
-      }
-    });
-    
-    // Track readyState changes
-    const originalOnOpen = ws.onopen;
-    ws.onopen = function(event) {
-      connInfo.readyState = ws.readyState;
-      connInfo.openedAt = performance.now();
-      return originalOnOpen?.call(this, event);
-    };
-    
-    const originalOnClose = ws.onclose;
-    ws.onclose = function(event) {
-      connInfo.readyState = ws.readyState;
-      connInfo.closedAt = performance.now();
-      connInfo.closeCode = event.code;
-      connInfo.closeReason = event.reason;
-      connInfo.wasClean = event.wasClean;
-      return originalOnClose?.call(this, event);
-    };
-    
-    const originalOnError = ws.onerror;
-    ws.onerror = function(event) {
-      connInfo.error = { timestamp: performance.now() };
-      return originalOnError?.call(this, event);
-    };
-    
-    return ws;
-  };
-  
-  // Hook EventSource (SSE)
-  const OriginalEventSource = window.EventSource;
-  window.EventSource = function(url, options) {
-    const es = new OriginalEventSource(url, options);
-    const connId = 'sse_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
-    
-    const connInfo = {
-      id: connId,
-      url: url,
-      type: 'EventSource',
-      createdAt: performance.now(),
-    };
-    window.__wsInspector.connections.push(connInfo);
-    
-    const originalOnMessage = es.onmessage;
-    es.onmessage = function(event) {
-      const msg = {
-        timestamp: performance.now(),
-        connectionId: connId,
-        direction: 'incoming',
-        data: event.data,
-        type: typeof event.data,
-        lastEventId: event.lastEventId,
+        window.__wsInspector.messages.push(msg);
+        connInfo.sent++;
+        if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
+        return originalSend(data);
       };
-      window.__wsInspector.messages.push(msg);
-      if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
-      return originalOnMessage?.call(this, event);
-    };
-    
-    return es;
-  };
+      
+      // Track incoming messages and lifecycle via addEventListener
+      ws.addEventListener('message', (event) => {
+        const msg = {
+          timestamp: performance.now(),
+          connectionId: connId,
+          direction: 'incoming',
+          data: event.data,
+          type: typeof event.data,
+          size: event.data?.byteLength || event.data?.length || 0,
+        };
+        window.__wsInspector.messages.push(msg);
+        connInfo.received++;
+        if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
+      });
+      
+      ws.addEventListener('open', (event) => {
+        connInfo.readyState = ws.readyState;
+        connInfo.openedAt = performance.now();
+      });
+      
+      ws.addEventListener('close', (event) => {
+        connInfo.readyState = ws.readyState;
+        connInfo.closedAt = performance.now();
+        connInfo.closeCode = event.code;
+        connInfo.closeReason = event.reason;
+        connInfo.wasClean = event.wasClean;
+      });
+      
+      ws.addEventListener('error', (event) => {
+        connInfo.error = { timestamp: performance.now() };
+      });
+      
+      return ws;
+    }
+  });
+  
+  // Hook EventSource (SSE) with construct trap
+  const OriginalEventSource = window.EventSource;
+  window.EventSource = new Proxy(OriginalEventSource, {
+    construct(target, args) {
+      const es = Reflect.construct(target, args);
+      const url = args[0];
+      const connId = 'sse_' + Date.now() + '_' + Math.random().toString(36).slice(2, 9);
+      
+      const connInfo = {
+        id: connId,
+        url: url,
+        type: 'EventSource',
+        createdAt: performance.now(),
+      };
+      window.__wsInspector.connections.push(connInfo);
+      
+      const recordedEvents = new Set(['message']);
+      function recordEvent(type, event) {
+        const msg = {
+          timestamp: performance.now(),
+          connectionId: connId,
+          direction: 'incoming',
+          eventType: type,
+          data: event.data,
+          type: typeof event.data,
+          lastEventId: event.lastEventId,
+        };
+        window.__wsInspector.messages.push(msg);
+        if (window.__wsInspector.messages.length > 5000) window.__wsInspector.messages.shift();
+      }
+      es.addEventListener('message', (e) => recordEvent('message', e));
+      const origAddEventListener = es.addEventListener.bind(es);
+      es.addEventListener = function(type, listener, options) {
+        if (!recordedEvents.has(type) && type !== 'open' && type !== 'error') {
+          recordedEvents.add(type);
+          origAddEventListener(type, (e) => recordEvent(type, e));
+        }
+        return origAddEventListener(type, listener, options);
+      };
+      
+      return es;
+    }
+  });
   
   // Hook fetch for streaming responses
   const originalFetch = window.fetch;
@@ -167,28 +162,29 @@ INJECTION_SCRIPT = r'''
     const startTime = performance.now();
     
     return originalFetch.apply(this, args).then(response => {
-      // Check if it's a streaming response
+      // Check if it's a streaming response without locking stream
       if (response.body) {
-        const reader = response.body.getReader();
         const streamConn = {
           id: requestId,
           url: args[0],
           type: 'ReadableStream',
           createdAt: startTime,
+          isStreaming: true,
         };
         window.__wsInspector.connections.push(streamConn);
-        
-        // We can't easily intercept the stream without consuming it
-        // Just note that it exists
-        streamConn.isStreaming = true;
       }
       return response;
     });
   };
   
   // Record user actions for correlation
+  function pushAction(action) {
+    window.__wsInspector.actions.push(action);
+    if (window.__wsInspector.actions.length > 5000) window.__wsInspector.actions.shift();
+  }
+  
   document.addEventListener('click', (e) => {
-    window.__wsInspector.actions.push({
+    pushAction({
       timestamp: performance.now(),
       type: 'click',
       target: e.target.tagName + (e.target.id ? '#' + e.target.id : ''),
@@ -198,7 +194,7 @@ INJECTION_SCRIPT = r'''
   }, true);
   
   document.addEventListener('keydown', (e) => {
-    window.__wsInspector.actions.push({
+    pushAction({
       timestamp: performance.now(),
       type: 'keydown',
       key: e.key,
@@ -208,7 +204,7 @@ INJECTION_SCRIPT = r'''
   }, true);
   
   document.addEventListener('input', (e) => {
-    window.__wsInspector.actions.push({
+    pushAction({
       timestamp: performance.now(),
       type: 'input',
       target: e.target.tagName + (e.target.id ? '#' + e.target.id : ''),
@@ -235,6 +231,7 @@ INJECTION_SCRIPT = r'''
           target: m.target.tagName + (m.target.id ? '#' + m.target.id : ''),
         });
       }
+      if (window.__wsInspector.mutations.length > 5000) window.__wsInspector.mutations.shift();
     });
   });
   observer.observe(document.documentElement, { childList: true, subtree: true, attributes: true });
@@ -374,21 +371,23 @@ def generate_sequence_diagram(messages, actions, mutations, max_events=100):
             size = ev.get('size', 0)
             data_preview = ''
             if isinstance(ev.get('data'), str):
-                data_preview = ev['data'][:50].replace('\n', '\\n')
+                data_preview = ev['data'][:50].replace('\n', '\\n').replace(';', ' ').replace('#', ' ')
             elif isinstance(ev.get('data'), (bytes, bytearray)):
                 data_preview = f'<binary {len(ev["data"])} bytes>'
             
-            arrow = '->>' if direction == 'outgoing' else '-->>'
-            lines.append(f'    User {arrow} {conn}: {direction} ({size}b) {data_preview}')
+            if direction == 'outgoing':
+                lines.append(f'    User ->> {conn}: outgoing ({size}b) {data_preview}')
+            else:
+                lines.append(f'    {conn} -->> User: incoming ({size}b) {data_preview}')
         
         elif ev_type == 'action':
             action_type = ev.get('type', 'action')
-            target = ev.get('target', '')
+            target = ev.get('target', '').replace(';', ' ').replace('#', ' ')
             lines.append(f'    User ->> DOM: {action_type} {target}')
         
         elif ev_type == 'mutation':
             mut_type = ev.get('type', 'mutation')
-            parent = ev.get('parent', '')
+            parent = ev.get('parent', '').replace(';', ' ').replace('#', ' ')
             lines.append(f'    DOM ->> User: {mut_type} {parent}')
     
     return '\n'.join(lines)
@@ -419,6 +418,13 @@ def save_pcap_like(messages, out_path):
 
 
 def main():
+    if len(sys.argv) == 1:
+        ap = argparse.ArgumentParser(description='WebSocket & Real-time Collaboration Capture')
+        ap.add_argument('url', help='URL to inspect')
+        ap.add_argument('out_dir', help='Output directory')
+        ap.print_help()
+        return
+
     ap = argparse.ArgumentParser(description='WebSocket & Real-time Collaboration Capture')
     ap.add_argument('url', help='URL to inspect')
     ap.add_argument('out_dir', help='Output directory')
@@ -427,16 +433,10 @@ def main():
     ap.add_argument('--storage-state', help='Playwright storage state')
     ap.add_argument('--headless', choices=['new', 'false'], default='new')
     ap.add_argument('--steps', help='JSON file with pre-navigation steps')
-    ap.add_argument('--decode-protobuf', action='store_true', help='Attempt protobuf decoding')
-    ap.add_argument('--protobuf-defs', help='Path to .proto files for decoding')
-    ap.add_argument('--inject-hooks', action='store_true', default=True, help='Inject WebSocket hooks')
+    ap.add_argument('--no-inject-hooks', dest='inject_hooks', action='store_false', default=True, help='Disable WebSocket hook injection')
     ap.add_argument('--width', type=int, default=1440)
     ap.add_argument('--height', type=int, default=900)
     a = ap.parse_args()
-    
-    if len(sys.argv) == 1:
-        ap.print_help()
-        return
     
     try:
         from playwright.sync_api import sync_playwright
@@ -460,6 +460,32 @@ def main():
         if a.inject_hooks:
             page.add_init_script(INJECTION_SCRIPT)
         
+        # Also capture via CDP for raw frames before navigation
+        cdp_ws_messages = []
+        try:
+            cdp = context.new_cdp_session(page)
+            cdp.send('Network.enable')
+            
+            def on_ws_created(msg):
+                cdp_ws_messages.append({'type': 'created', 'timestamp': time.time(), 'data': msg})
+            
+            def on_ws_frame_recv(msg):
+                cdp_ws_messages.append({'type': 'frame', 'direction': 'incoming', 'timestamp': time.time(), 'data': msg})
+            
+            def on_ws_frame_sent(msg):
+                cdp_ws_messages.append({'type': 'frame', 'direction': 'outgoing', 'timestamp': time.time(), 'data': msg})
+            
+            def on_ws_closed(msg):
+                cdp_ws_messages.append({'type': 'closed', 'timestamp': time.time(), 'data': msg})
+            
+            cdp.on('Network.webSocketCreated', on_ws_created)
+            cdp.on('Network.webSocketFrameReceived', on_ws_frame_recv)
+            cdp.on('Network.webSocketFrameSent', on_ws_frame_sent)
+            cdp.on('Network.webSocketClosed', on_ws_closed)
+        except Exception as e:
+            print(f"CDP capture not available: {e}")
+            cdp = None
+        
         # Navigate
         print(f"Navigating to {a.url}...")
         page.goto(a.url, wait_until='networkidle', timeout=60000)
@@ -480,29 +506,6 @@ def main():
                     page.hover(step['selector'])
                 page.wait_for_timeout(500)
         
-        # Also capture via CDP for raw frames
-        cdp_ws_messages = []
-        try:
-            cdp = context.new_cdp_session(page)
-            cdp.send('Network.enable')
-            
-            def on_ws_created(msg):
-                cdp_ws_messages.append({'type': 'created', 'timestamp': time.time(), 'data': msg})
-            
-            def on_ws_frame(msg):
-                cdp_ws_messages.append({'type': 'frame', 'timestamp': time.time(), 'data': msg})
-            
-            def on_ws_closed(msg):
-                cdp_ws_messages.append({'type': 'closed', 'timestamp': time.time(), 'data': msg})
-            
-            cdp.on('Network.webSocketCreated', on_ws_created)
-            cdp.on('Network.webSocketFrameReceived', on_ws_frame)
-            cdp.on('Network.webSocketFrameSent', on_ws_frame)
-            cdp.on('Network.webSocketClosed', on_ws_closed)
-        except Exception as e:
-            print(f"CDP capture not available: {e}")
-            cdp = None
-        
         # Wait and capture
         print(f"Capturing WebSocket traffic for {a.duration} seconds...")
         start = time.time()
@@ -520,6 +523,12 @@ def main():
         connections = inspector_data.get('connections', [])
         actions = inspector_data.get('actions', [])
         mutations = inspector_data.get('mutations', [])
+        
+        if a.filter:
+            pattern = re.compile(a.filter)
+            matching_ids = {c['id'] for c in connections if pattern.search(c.get('url', ''))}
+            connections = [c for c in connections if c.get('id') in matching_ids]
+            messages = [m for m in messages if m.get('connectionId') in matching_ids]
         
         print(f"Captured {len(messages)} messages across {len(connections)} connections")
         print(f"User actions: {len(actions)}")

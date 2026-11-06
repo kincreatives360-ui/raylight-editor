@@ -52,80 +52,83 @@ def sanitize_name(name):
 def extract_path_params(url, base_url):
     """Extract path parameters from URL."""
     parsed = urlparse(url)
-    base_parsed = urlparse(base_url)
+    base_parsed = urlparse(base_url) if base_url else None
     
-    # Remove base URL
+    # Remove base URL if path starts with it
     path = parsed.path
-    if base_parsed.path != '/':
+    if base_parsed and base_parsed.path and base_parsed.path != '/':
         if path.startswith(base_parsed.path):
             path = path[len(base_parsed.path):]
     
-    # Convert path segments that look like IDs to params
+    # Convert path segments that look like IDs to params (:id, :id2, ...)
     segments = path.strip('/').split('/')
     param_segments = []
+    param_counter = 0
     for seg in segments:
+        if not seg:
+            continue
         if re.match(r'^[0-9a-fA-F-]{8,}$', seg) or re.match(r'^\d+$', seg):
-            param_segments.append(f':{sanitize_name(seg)}')
+            param_counter += 1
+            param_name = 'id' if param_counter == 1 else f'id{param_counter}'
+            param_segments.append(f':{param_name}')
         else:
             param_segments.append(seg)
     
     return '/' + '/'.join(param_segments) if param_segments else '/'
 
-def generate_handler(req, idx, base_url):
+def is_graphql_record(req):
+    """Check if record is GraphQL."""
+    url = req.get('url', '')
+    method = req.get('method', 'GET').upper()
+    return req.get('type') == 'graphql' or (url.endswith('/graphql') and method == 'POST')
+
+def generate_handler(req, handler_idx, base_url):
     """Generate a single MSW handler."""
     method = req.get('method', 'GET').lower()
     url = req.get('url', '')
     status = req.get('status', 200)
     content_type = req.get('contentType', 'application/json')
-    post_data = req.get('postData')
     
     path = extract_path_params(url, base_url)
+    parsed = urlparse(url)
+    base_parsed = urlparse(base_url) if base_url else None
+
+    # Origin handling: if request is on another origin, retain its origin
+    if parsed.netloc and (not base_parsed or parsed.netloc != base_parsed.netloc):
+        target_path = f"{parsed.scheme}://{parsed.netloc}{path}"
+    else:
+        target_path = path
     
-    # Generate response
+    # Generate response body
     if content_type.startswith('application/json'):
         response_body = '{}'
         if 'response' in req and req['response']:
             try:
                 response_body = json.dumps(req['response'], indent=2)
-            except:
+            except (TypeError, ValueError):
                 response_body = '{}'
     else:
         response_body = '""'
     
-    # Generate handler
-    handler_name = f"handler{idx}_{sanitize_name(method)}_{sanitize_name(path.replace('/', '_').strip('_'))}"
-    
-    # Request body matcher for POST/PUT/PATCH
-    request_matchers = []
-    if post_data and method in ('post', 'put', 'patch'):
-        try:
-            body = json.loads(post_data) if isinstance(post_data, str) else post_data
-            # Create a loose matcher
-            request_matchers.append(f"body: {json.dumps(body, indent=4)}")
-        except:
-            pass
-    
-    matchers = ',\n'.join(request_matchers)
-    options_str = f",\n  {{ {matchers} }}" if matchers else ""
+    # Generate unique handler name
+    clean_path = sanitize_name(path.replace('/', '_').strip('_'))
+    handler_name = f"handler{handler_idx}_{sanitize_name(method)}_{clean_path}" if clean_path else f"handler{handler_idx}_{sanitize_name(method)}"
     
     # Delay simulation
     delay_ms = req.get('duration', 0) or 0
     delay_str = f"await delay({delay_ms});\n    " if delay_ms > 0 else ""
     
-    # Error simulation for failed requests
-    error_str = ""
-    if status >= 400:
-        error_str = f"\n    if (Math.random() < 0.1) {{\n      return HttpResponse.json({{ error: 'Simulated failure' }}, {{ status: 500 }});\n    }}"
+    target_path_lit = json.dumps(target_path)
+    content_type_lit = json.dumps(content_type)
     
     handler = (
-        f"const {handler_name} = http.{method}('{base_url}{path}'{options_str}, async () => {{\n"
+        f"const {handler_name} = http.{method}({target_path_lit}, async () => {{\n"
         f"  {delay_str}return HttpResponse.json({response_body}, {{\n"
         f"    status: {status},\n"
         f"    headers: {{\n"
-        f"      'Content-Type': '{content_type}',\n"
+        f"      'Content-Type': {content_type_lit},\n"
         f"    }},\n"
         f"  }});\n"
-        f"{error_str}\n"
         f"}});"
     )
     
@@ -133,29 +136,43 @@ def generate_handler(req, idx, base_url):
 
 def generate_graphql_handlers(records, base_url):
     """Generate GraphQL handlers from detected GraphQL requests."""
-    graphql_requests = []
-    for r in records:
-        if r.get('type') == 'graphql' or (r.get('url', '').endswith('/graphql') and r.get('method') == 'POST'):
-            graphql_requests.append(r)
+    graphql_requests = [r for r in records if is_graphql_record(r)]
     
     if not graphql_requests:
         return '', []
     
     handlers = []
     names = []
-    for idx, req in enumerate(graphql_requests):
+    seen_ops = set()
+    name_counts = defaultdict(int)
+
+    for req in graphql_requests:
         post_data = req.get('postData', '{}')
-        try:
-            body = json.loads(post_data) if isinstance(post_data, str) else post_data
-            operation_name = body.get('operationName', f'Operation{idx}')
-            query = body.get('query', '')
-        except:
-            operation_name = f'Operation{idx}'
-            query = ''
+        operation_name = None
+        if post_data:
+            try:
+                body = json.loads(post_data) if isinstance(post_data, str) else post_data
+                if isinstance(body, dict):
+                    operation_name = body.get('operationName')
+            except (TypeError, ValueError, json.JSONDecodeError):
+                pass
         
-        handler_name = f"graphql{sanitize_name(operation_name)}"
+        # Do not emit synthetic Operation{idx} when operationName is missing
+        if not operation_name:
+            continue
+        
+        if operation_name in seen_ops:
+            continue
+        seen_ops.add(operation_name)
+        
+        sanitized = sanitize_name(operation_name) or 'unnamed'
+        name_counts[sanitized] += 1
+        suffix = f"_{name_counts[sanitized]}" if name_counts[sanitized] > 1 else ""
+        handler_name = f"graphql_{sanitized}{suffix}"
+        
+        op_lit = json.dumps(operation_name)
         handler = (
-            f"const {handler_name} = graphql.query('{operation_name}', async () => {{\n"
+            f"const {handler_name} = graphql.query({op_lit}, async () => {{\n"
             f"  return HttpResponse.json({{ data: {{}} }}, {{ status: 200 }});\n"
             f"}});"
         )
@@ -183,35 +200,42 @@ def main():
         entries = data['log']['entries']
         records = []
         for e in entries:
-            req = e['request']
-            res = e['response']
+            req = e.get('request', {})
+            res = e.get('response', {})
+            post_data_obj = req.get('postData') or {}
+            timings = e.get('timings') or {}
+            wait = max(0, timings.get('wait') or 0)
+            receive = max(0, timings.get('receive') or 0)
+            duration = max(0, wait + receive)
             records.append({
-                'url': req['url'],
-                'method': req['method'],
-                'status': res['status'],
-                'contentType': res.get('content', {}).get('mimeType', 'application/json'),
-                'postData': req.get('postData', {}).get('text'),
-                'duration': e.get('timings', {}).get('wait', 0) + e.get('timings', {}).get('receive', 0),
+                'url': req.get('url', ''),
+                'method': req.get('method', 'GET'),
+                'status': res.get('status', 200),
+                'contentType': (res.get('content') or {}).get('mimeType', 'application/json'),
+                'postData': post_data_obj.get('text'),
+                'duration': duration,
             })
     else:
         # Already in our network.json format
         records = data if isinstance(data, list) else [data]
     
-    # Filter out static assets unless they're fonts
+    # Filter out records without url and static assets
+    STATIC_EXTS = ('.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.ico', '.css', '.js', '.map', '.woff', '.woff2', '.ttf', '.otf', '.eot')
     filtered = []
     for r in records:
         url = r.get('url', '')
-        ctype = r.get('contentType', '')
-        if any(url.endswith(ext) for ext in ('.png', '.jpg', '.jpeg', '.svg', '.gif', '.webp', '.ico', '.css', '.js', '.map', '.woff', '.woff2', '.ttf', '.otf', '.eot')):
-            if not any(url.endswith(ext) for ext in ('.woff', '.woff2', '.ttf', '.otf', '.eot')):
-                continue
+        if not url:
+            continue
+        parsed_path = urlparse(url).path.lower()
+        if any(parsed_path.endswith(ext) for ext in STATIC_EXTS):
+            continue
         filtered.append(r)
     
     print(f"Processing {len(filtered)} network requests (filtered from {len(records)})")
     
     # Auto-detect base URL
     base_url = a.base_url
-    if not base_url and filtered:
+    if not base_url and filtered and filtered[0].get('url'):
         parsed = urlparse(filtered[0]['url'])
         base_url = f"{parsed.scheme}://{parsed.netloc}"
         print(f"Auto-detected base URL: {base_url}")
@@ -231,17 +255,24 @@ def main():
     
     all_handlers = []
     all_names = []
+    handler_counter = 0
     
     for group_name, group_records in groups.items():
-        if a.group_by != 'none':
-            all_handlers.append(f"// --- {group_name} ---")
-        
-        for idx, req in enumerate(group_records):
+        group_handlers = []
+        for req in group_records:
+            if is_graphql_record(req):
+                continue
             if not a.include_failures and req.get('status', 200) >= 400:
                 continue
-            handler, name = generate_handler(req, idx, base_url)
-            all_handlers.append(handler)
+            handler_counter += 1
+            handler, name = generate_handler(req, handler_counter, base_url)
+            group_handlers.append(handler)
             all_names.append(name)
+        
+        if group_handlers:
+            if a.group_by != 'none':
+                all_handlers.append(f"// --- {group_name} ---")
+            all_handlers.extend(group_handlers)
     
     # Add GraphQL handlers
     gql_handlers, gql_names = generate_graphql_handlers(filtered, base_url)

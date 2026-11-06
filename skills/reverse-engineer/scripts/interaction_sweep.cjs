@@ -50,7 +50,9 @@ const width = +opt('width', 1440), height = +opt('height', 900), limit = +opt('l
 const scopeSel = opt('scope', null);
 const stepsFile = opt('steps', null);
 const shots = flag('shots'), noReload = flag('no-reload'), fuzz = flag('fuzz-inputs'), allowDestructive = flag('allow-destructive');
-const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
+const isHeadlessNew = flag('headless') && opt('headless', 'new') === 'new';
+const isHeadlessFalse = flag('headless') && opt('headless', 'new') === 'false';
+const headless = !isHeadlessFalse;
 
 fs.mkdirSync(outDir, { recursive: true });
 
@@ -90,7 +92,9 @@ async function collect(page) {
 }
 
 (async () => {
-  const browser = await chromium.launch({ headless });
+  const launchOptions = { headless };
+  if (isHeadlessNew) launchOptions.channel = 'chromium';
+  const browser = await chromium.launch(launchOptions);
   const ctxOpts = { viewport: { width, height }, acceptDownloads: true };
   if (opt('storage-state')) ctxOpts.storageState = opt('storage-state');
   const context = await browser.newContext(ctxOpts);

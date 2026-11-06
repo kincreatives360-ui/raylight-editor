@@ -57,17 +57,27 @@ node scripts/scaffold_workspace.js my-app --tier full
 | `visual_diff.js` | Multi-viewport screenshots + pixel-perfect diffing |
 | `extract_tokens.py` | Design system extraction (colors, type, spacing, motion, shadows, z-index) |
 | `har_to_contracts.py` | Convert network HAR to API contract markdown |
+| `har_to_msw.py` | Generate MSW handlers from network capture |
 | `summarize_inventory.py` | Turn raw inventory JSON into readable digest |
 | `diff_inventories.py` | Compare reference vs rebuild inventories |
 | `lint_cards.py` | Validate build cards have required fields, no cycles |
 | `unpack_extension.py` | Extract Chrome/Firefox extension manifests and file trees |
 | `save_auth.js` | Save login state for authenticated recon |
 | `scaffold_workspace.js` | Create the standard folder structure |
+| `run_agent.js` | Run coding agent on single build card with context injection |
+| `generate_tests.py` | Generate Playwright/Vitest component and interaction tests from sweep data |
+| `theme_tokens.py` | Multi-theme token pairing, semantic role assignment, and WCAG contrast validation |
+| `inspect_canvas.py` | Inspect 2D/WebGL/Three.js/Babylon/PIXI canvases and WebAssembly modules |
+| `inspect_extension.py` | Reverse engineer browser extensions, Electron apps, and Tauri apps |
+| `capture_websocket.py` | Real-time WebSocket, SSE, and streaming fetch traffic capture |
+| `enforce_budget.py` | Performance budget enforcement, CWV measurements, and regression checks |
+| `doctor.js` | Check local environment (Node, Python, Playwright, dependencies) |
 
 ## Workspace Structure
 
 ```
 re-<slug>/
+├── .github/                 # CI workflows (move to repo root for GitHub Actions)
 ├── STATE.md                 # Resume file — update at every phase gate
 ├── UNKNOWNS.md              # Unknowns log
 ├── IMPLEMENTATION.md        # Tier 2: single implementation doc with cards

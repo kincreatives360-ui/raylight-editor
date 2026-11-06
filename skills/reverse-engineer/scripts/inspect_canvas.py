@@ -22,82 +22,114 @@ from datetime import datetime
 INJECTION_SCRIPTS = {
     'three': r'''
 (() => {
-  window.__canvasInspector = { three: null, frames: [], drawCalls: [] };
+  window.__canvasInspector = window.__canvasInspector || { frames: [], drawCalls: [] };
+  window.__canvasInspector.three = null;
   
-  // Hook THREE.WebGLRenderer
-  const originalRender = THREE.WebGLRenderer.prototype.render;
-  THREE.WebGLRenderer.prototype.render = function(scene, camera) {
-    const frame = {
-      timestamp: performance.now(),
-      scene: scene.uuid,
-      camera: camera.uuid,
-      objects: [],
-    };
+  function initThree(THREE) {
+    if (!THREE || !THREE.WebGLRenderer || THREE.__inspectorHooked) return;
+    THREE.__inspectorHooked = true;
     
-    // Traverse scene graph
-    scene.traverse(obj => {
-      if (obj.isMesh || obj.isLine || obj.isPoints || obj.isSprite) {
-        frame.objects.push({
-          uuid: obj.uuid,
-          type: obj.type,
-          name: obj.name,
-          geometry: obj.geometry ? { uuid: obj.geometry.uuid, type: obj.geometry.type } : null,
-          material: obj.material ? { uuid: obj.material.uuid, type: obj.material.type, transparent: obj.material.transparent, opacity: obj.material.opacity } : null,
-          position: obj.position.toArray(),
-          rotation: obj.rotation.toArray(),
-          scale: obj.scale.toArray(),
-          visible: obj.visible,
-          frustumCulled: obj.frustumCulled,
-          renderOrder: obj.renderOrder,
-        });
-      } else if (obj.isLight) {
-        frame.objects.push({
-          uuid: obj.uuid,
-          type: obj.type,
-          name: obj.name,
-          color: obj.color ? obj.color.getHexString() : null,
-          intensity: obj.intensity,
-          position: obj.position.toArray(),
-          target: obj.target ? obj.target.position.toArray() : null,
-        });
-      } else if (obj.isCamera) {
-        frame.objects.push({
-          uuid: obj.uuid,
-          type: obj.type,
-          name: obj.name,
-          fov: obj.fov,
-          aspect: obj.aspect,
-          near: obj.near,
-          far: obj.far,
-          position: obj.position.toArray(),
-        });
-      }
-    });
-    
-    window.__canvasInspector.frames.push(frame);
-    if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
-    
-    return originalRender.apply(this, arguments);
-  };
-  
-  // Hook renderer.info for draw calls
-  const originalInfo = THREE.WebGLRenderer.prototype.info;
-  Object.defineProperty(THREE.WebGLRenderer.prototype, 'info', {
-    get: function() {
-      const info = originalInfo;
-      if (info && info.render) {
+    // Hook THREE.WebGLRenderer
+    const originalRender = THREE.WebGLRenderer.prototype.render;
+    THREE.WebGLRenderer.prototype.render = function(scene, camera) {
+      const frame = {
+        timestamp: performance.now(),
+        scene: scene.uuid,
+        camera: camera.uuid,
+        objects: [],
+      };
+      
+      // Traverse scene graph
+      scene.traverse(obj => {
+        if (obj.isMesh || obj.isLine || obj.isPoints || obj.isSprite) {
+          frame.objects.push({
+            uuid: obj.uuid,
+            type: obj.type,
+            name: obj.name,
+            geometry: obj.geometry ? { uuid: obj.geometry.uuid, type: obj.geometry.type } : null,
+            material: obj.material ? { uuid: obj.material.uuid, type: obj.material.type, transparent: obj.material.transparent, opacity: obj.material.opacity } : null,
+            position: obj.position.toArray(),
+            rotation: obj.rotation.toArray(),
+            scale: obj.scale.toArray(),
+            visible: obj.visible,
+            frustumCulled: obj.frustumCulled,
+            renderOrder: obj.renderOrder,
+          });
+        } else if (obj.isLight) {
+          frame.objects.push({
+            uuid: obj.uuid,
+            type: obj.type,
+            name: obj.name,
+            color: obj.color ? obj.color.getHexString() : null,
+            intensity: obj.intensity,
+            position: obj.position.toArray(),
+            target: obj.target ? obj.target.position.toArray() : null,
+          });
+        } else if (obj.isCamera) {
+          frame.objects.push({
+            uuid: obj.uuid,
+            type: obj.type,
+            name: obj.name,
+            fov: obj.fov,
+            aspect: obj.aspect,
+            near: obj.near,
+            far: obj.far,
+            position: obj.position.toArray(),
+          });
+        }
+      });
+      
+      window.__canvasInspector.frames.push(frame);
+      if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
+      
+      const res = originalRender.apply(this, arguments);
+      if (this.info && this.info.render) {
         window.__canvasInspector.drawCalls.push({
           timestamp: performance.now(),
-          frame: info.render.frame,
-          calls: info.render.calls,
-          triangles: info.render.triangles,
-          points: info.render.points,
-          lines: info.render.lines,
+          frame: this.info.render.frame,
+          calls: this.info.render.calls,
+          triangles: this.info.render.triangles,
+          points: this.info.render.points,
+          lines: this.info.render.lines,
         });
+        if (window.__canvasInspector.drawCalls.length > 1000) window.__canvasInspector.drawCalls.shift();
       }
-      return info;
+      return res;
+    };
+  }
+
+  function hookWhenAvailable(prop, hookFn) {
+    if (window[prop]) {
+      try { hookFn(window[prop]); } catch (e) {}
+      return;
     }
-  });
+    let value;
+    let hooked = false;
+    try {
+      Object.defineProperty(window, prop, {
+        configurable: true,
+        enumerable: true,
+        get() { return value; },
+        set(val) {
+          value = val;
+          if (!hooked && val) {
+            hooked = true;
+            try { hookFn(val); } catch (e) {}
+          }
+        }
+      });
+    } catch (e) {}
+    window.addEventListener('DOMContentLoaded', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+    window.addEventListener('load', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+  }
+
+  hookWhenAvailable('THREE', initThree);
+
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    this.__contextType = type;
+    return originalGetContext.call(this, type, ...args);
+  };
   
   // Auto-detect existing renderer
   setTimeout(() => {
@@ -113,53 +145,94 @@ INJECTION_SCRIPTS = {
 ''',
     'pixi': r'''
 (() => {
-  window.__canvasInspector = { pixi: null, frames: [] };
+  window.__canvasInspector = window.__canvasInspector || { frames: [], drawCalls: [] };
+  window.__canvasInspector.pixi = null;
   
-  // Hook PIXI.Application render
-  const originalRender = PIXI.Application.prototype.render;
-  PIXI.Application.prototype.render = function() {
-    const frame = {
-      timestamp: performance.now(),
-      stageChildren: [],
-    };
-    
-    if (this.stage) {
-      this.stage.children.forEach(child => {
-        frame.stageChildren.push({
-          type: child.constructor.name,
-          name: child.name,
-          children: child.children?.length || 0,
-          visible: child.visible,
-          alpha: child.alpha,
-          position: [child.x, child.y],
-          scale: [child.scale.x, child.scale.y],
-          rotation: child.rotation,
-        });
-      });
+  function initPixi(PIXI) {
+    if (!PIXI || PIXI.__inspectorHooked) return;
+    PIXI.__inspectorHooked = true;
+
+    // Hook PIXI.Application render
+    if (PIXI.Application) {
+      const originalRender = PIXI.Application.prototype.render;
+      PIXI.Application.prototype.render = function() {
+        const frame = {
+          timestamp: performance.now(),
+          stageChildren: [],
+        };
+        
+        if (this.stage) {
+          this.stage.children.forEach(child => {
+            frame.stageChildren.push({
+              type: child.constructor.name,
+              name: child.name,
+              children: child.children?.length || 0,
+              visible: child.visible,
+              alpha: child.alpha,
+              position: [child.x, child.y],
+              scale: [child.scale.x, child.scale.y],
+              rotation: child.rotation,
+            });
+          });
+        }
+        
+        window.__canvasInspector.frames.push(frame);
+        if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
+        
+        return originalRender.apply(this, arguments);
+      };
     }
     
-    window.__canvasInspector.frames.push(frame);
-    if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
-    
-    return originalRender.apply(this, arguments);
+    // Hook renderer.plugins
+    if (PIXI.Renderer) {
+      const originalPluginRender = PIXI.Renderer.prototype.render;
+      PIXI.Renderer.prototype.render = function() {
+        const drawCalls = this.renderer?.drawCalls || 0;
+        window.__canvasInspector.drawCalls = window.__canvasInspector.drawCalls || [];
+        window.__canvasInspector.drawCalls.push({
+          timestamp: performance.now(),
+          drawCalls,
+        });
+        return originalPluginRender.apply(this, arguments);
+      };
+    }
+  }
+
+  function hookWhenAvailable(prop, hookFn) {
+    if (window[prop]) {
+      try { hookFn(window[prop]); } catch (e) {}
+      return;
+    }
+    let value;
+    let hooked = false;
+    try {
+      Object.defineProperty(window, prop, {
+        configurable: true,
+        enumerable: true,
+        get() { return value; },
+        set(val) {
+          value = val;
+          if (!hooked && val) {
+            hooked = true;
+            try { hookFn(val); } catch (e) {}
+          }
+        }
+      });
+    } catch (e) {}
+    window.addEventListener('DOMContentLoaded', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+    window.addEventListener('load', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+  }
+
+  hookWhenAvailable('PIXI', initPixi);
+
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    this.__contextType = type;
+    return originalGetContext.call(this, type, ...args);
   };
   
-  // Hook renderer.plugins
-  if (PIXI.Renderer) {
-    const originalPluginRender = PIXI.Renderer.prototype.render;
-    PIXI.Renderer.prototype.render = function() {
-      const drawCalls = this.renderer?.drawCalls || 0;
-      window.__canvasInspector.drawCalls = window.__canvasInspector.drawCalls || [];
-      window.__canvasInspector.drawCalls.push({
-        timestamp: performance.now(),
-        drawCalls,
-      });
-      return originalPluginRender.apply(this, arguments);
-    };
-  }
-  
   setTimeout(() => {
-    if (window.app && window.app instanceof PIXI.Application) {
+    if (window.app && window.PIXI && window.app instanceof window.PIXI.Application) {
       window.__canvasInspector.pixi = {
         app: true,
         renderer: window.app.renderer?.type,
@@ -171,62 +244,101 @@ INJECTION_SCRIPTS = {
 ''',
     'babylon': r'''
 (() => {
-  window.__canvasInspector = { babylon: null, frames: [] };
+  window.__canvasInspector = window.__canvasInspector || { frames: [] };
+  window.__canvasInspector.babylon = null;
   
-  // Hook BABYLON.Engine render
-  const originalRender = BABYLON.Engine.prototype.render;
-  BABYLON.Engine.prototype.render = function() {
-    const frame = {
-      timestamp: performance.now(),
-      scenes: [],
-    };
-    
-    this.scenes.forEach(scene => {
-      const sceneData = {
-        name: scene.name,
-        meshes: [],
-        lights: [],
-        cameras: [],
+  function initBabylon(BABYLON) {
+    if (!BABYLON || !BABYLON.Engine || BABYLON.__inspectorHooked) return;
+    BABYLON.__inspectorHooked = true;
+
+    // Hook BABYLON.Engine render
+    const originalRender = BABYLON.Engine.prototype.render;
+    BABYLON.Engine.prototype.render = function() {
+      const frame = {
+        timestamp: performance.now(),
+        scenes: [],
       };
       
-      scene.meshes.forEach(mesh => {
-        sceneData.meshes.push({
-          name: mesh.name,
-          id: mesh.id,
-          vertices: mesh.getTotalVertices?.(),
-          material: mesh.material ? mesh.material.name : null,
-          visible: mesh.isVisible(),
-          position: mesh.position?.asArray(),
+      this.scenes.forEach(scene => {
+        const sceneData = {
+          name: scene.name,
+          meshes: [],
+          lights: [],
+          cameras: [],
+        };
+        
+        scene.meshes.forEach(mesh => {
+          sceneData.meshes.push({
+            name: mesh.name,
+            id: mesh.id,
+            vertices: mesh.getTotalVertices?.(),
+            material: mesh.material ? mesh.material.name : null,
+            visible: Boolean(mesh.isVisible),
+            position: mesh.position?.asArray(),
+          });
         });
+        
+        scene.lights.forEach(light => {
+          sceneData.lights.push({
+            name: light.name,
+            type: light.getTypeID?.(),
+            intensity: light.intensity,
+          });
+        });
+        
+        scene.cameras.forEach(cam => {
+          sceneData.cameras.push({
+            name: cam.name,
+            type: cam.getTypeID?.(),
+            position: cam.position?.asArray(),
+          });
+        });
+        
+        frame.scenes.push(sceneData);
       });
       
-      scene.lights.forEach(light => {
-        sceneData.lights.push({
-          name: light.name,
-          type: light.getTypeID?.(),
-          intensity: light.intensity,
-        });
-      });
+      window.__canvasInspector.frames.push(frame);
+      if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
       
-      scene.cameras.forEach(cam => {
-        sceneData.cameras.push({
-          name: cam.name,
-          type: cam.getTypeID?.(),
-          position: cam.position?.asArray(),
-        });
+      return originalRender.apply(this, arguments);
+    };
+  }
+
+  function hookWhenAvailable(prop, hookFn) {
+    if (window[prop]) {
+      try { hookFn(window[prop]); } catch (e) {}
+      return;
+    }
+    let value;
+    let hooked = false;
+    try {
+      Object.defineProperty(window, prop, {
+        configurable: true,
+        enumerable: true,
+        get() { return value; },
+        set(val) {
+          value = val;
+          if (!hooked && val) {
+            hooked = true;
+            try { hookFn(val); } catch (e) {}
+          }
+        }
       });
-      
-      frame.scenes.push(sceneData);
-    });
-    
-    window.__canvasInspector.frames.push(frame);
-    if (window.__canvasInspector.frames.length > 300) window.__canvasInspector.frames.shift();
-    
-    return originalRender.apply(this, arguments);
+    } catch (e) {}
+    window.addEventListener('DOMContentLoaded', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+    window.addEventListener('load', () => { if (window[prop]) try { hookFn(window[prop]); } catch (e) {} });
+  }
+
+  hookWhenAvailable('BABYLON', initBabylon);
+
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    this.__contextType = type;
+    return originalGetContext.call(this, type, ...args);
   };
   
   setTimeout(() => {
-    if (window.engine && window.engine instanceof BABYLON.Engine) {
+    if (window.engine && window.BABYLON && window.engine instanceof window.BABYLON.Engine) {
       window.__canvasInspector.babylon = {
         engine: true,
         scenes: window.engine.scenes?.length,
@@ -237,167 +349,237 @@ INJECTION_SCRIPTS = {
 ''',
     'webgl': r'''
 (() => {
-  window.__canvasInspector = { webgl: null, frames: [], shaders: [], textures: [], buffers: [] };
+  window.__canvasInspector = window.__canvasInspector || { drawCalls: [], shaders: [], textures: [], buffers: [] };
+  window.__canvasInspector.webgl = null;
   
-  // Hook WebGL context
-  const canvas = document.querySelector('canvas');
-  if (!canvas) return;
-  
-  const gl = canvas.getContext('webgl2') || canvas.getContext('webgl') || canvas.getContext('experimental-webgl');
-  if (!gl) return;
-  
-  window.__canvasInspector.webgl = {
-    version: gl.getParameter(gl.VERSION),
-    shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
-    vendor: gl.getParameter(gl.VENDOR),
-    renderer: gl.getParameter(gl.RENDERER),
-    maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
-    maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
-    maxVertexUniformVectors: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS),
-    maxFragmentUniformVectors: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
-  };
-  
-  // Wrap draw calls
-  const originalDrawArrays = gl.drawArrays.bind(gl);
-  const originalDrawElements = gl.drawElements.bind(gl);
-  const originalDrawArraysInstanced = gl.drawArraysInstanced?.bind(gl);
-  const originalDrawElementsInstanced = gl.drawElementsInstanced?.bind(gl);
-  
-  function wrapDrawCall(name, original, mode, count, ...args) {
-    const call = {
+  let webglCaptured = false;
+  function captureWebGLParams(gl) {
+    if (webglCaptured || !gl) return;
+    try {
+      webglCaptured = true;
+      window.__canvasInspector.webgl = {
+        version: gl.getParameter(gl.VERSION),
+        shadingLanguage: gl.getParameter(gl.SHADING_LANGUAGE_VERSION),
+        vendor: gl.getParameter(gl.VENDOR),
+        renderer: gl.getParameter(gl.RENDERER),
+        maxTextureSize: gl.getParameter(gl.MAX_TEXTURE_SIZE),
+        maxVertexAttribs: gl.getParameter(gl.MAX_VERTEX_ATTRIBS),
+        maxVertexUniformVectors: gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS),
+        maxFragmentUniformVectors: gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS),
+      };
+    } catch (e) {}
+  }
+
+  function recordDrawCall(method, mode, count, args) {
+    window.__canvasInspector.drawCalls = window.__canvasInspector.drawCalls || [];
+    window.__canvasInspector.drawCalls.push({
       timestamp: performance.now(),
-      method: name,
+      method: method,
       mode: mode,
       count: count,
       args: args.map(a => typeof a === 'number' ? a : 'buffer'),
-    };
-    window.__canvasInspector.drawCalls = window.__canvasInspector.drawCalls || [];
-    window.__canvasInspector.drawCalls.push(call);
+    });
     if (window.__canvasInspector.drawCalls.length > 1000) window.__canvasInspector.drawCalls.shift();
-    return original(mode, count, ...args);
   }
-  
-  gl.drawArrays = function(mode, first, count) {
-    return wrapDrawCall('drawArrays', originalDrawArrays, mode, first, count);
-  };
-  gl.drawElements = function(mode, count, type, offset) {
-    return wrapDrawCall('drawElements', originalDrawElements, mode, count, type, offset);
-  };
-  if (gl.drawArraysInstanced) {
-    gl.drawArraysInstanced = function(mode, first, count, instanceCount) {
-      return wrapDrawCall('drawArraysInstanced', originalDrawArraysInstanced, mode, first, count, instanceCount);
-    };
+
+  function instrumentWebGLPrototype(proto) {
+    if (!proto) return;
+    if (proto.drawArrays && !proto.__drawArraysHooked) {
+      const orig = proto.drawArrays;
+      proto.drawArrays = function(mode, first, count) {
+        recordDrawCall('drawArrays', mode, count, [first, count]);
+        return orig.call(this, mode, first, count);
+      };
+      proto.__drawArraysHooked = true;
+    }
+    if (proto.drawElements && !proto.__drawElementsHooked) {
+      const orig = proto.drawElements;
+      proto.drawElements = function(mode, count, type, offset) {
+        recordDrawCall('drawElements', mode, count, [type, offset]);
+        return orig.call(this, mode, count, type, offset);
+      };
+      proto.__drawElementsHooked = true;
+    }
+    if (proto.drawArraysInstanced && !proto.__drawArraysInstancedHooked) {
+      const orig = proto.drawArraysInstanced;
+      proto.drawArraysInstanced = function(mode, first, count, instanceCount) {
+        recordDrawCall('drawArraysInstanced', mode, count, [first, count, instanceCount]);
+        return orig.call(this, mode, first, count, instanceCount);
+      };
+      proto.__drawArraysInstancedHooked = true;
+    }
+    if (proto.drawElementsInstanced && !proto.__drawElementsInstancedHooked) {
+      const orig = proto.drawElementsInstanced;
+      proto.drawElementsInstanced = function(mode, count, type, offset, instanceCount) {
+        recordDrawCall('drawElementsInstanced', mode, count, [type, offset, instanceCount]);
+        return orig.call(this, mode, count, type, offset, instanceCount);
+      };
+      proto.__drawElementsInstancedHooked = true;
+    }
+    if (proto.compileShader && !proto.__compileShaderHooked) {
+      const orig = proto.compileShader;
+      proto.compileShader = function(shader) {
+        try {
+          const source = this.getShaderSource(shader);
+          const type = this.getShaderParameter(shader, this.SHADER_TYPE);
+          window.__canvasInspector.shaders.push({
+            timestamp: performance.now(),
+            type: type === this.VERTEX_SHADER ? 'vertex' : 'fragment',
+            source: source ? source.slice(0, 5000) : '',
+          });
+        } catch (e) {}
+        return orig.call(this, shader);
+      };
+      proto.__compileShaderHooked = true;
+    }
+    if (proto.texImage2D && !proto.__texImage2DHooked) {
+      const orig = proto.texImage2D;
+      proto.texImage2D = function(...args) {
+        window.__canvasInspector.textures.push({
+          timestamp: performance.now(),
+          target: args[0],
+          level: args[1],
+          internalFormat: args[2],
+          width: args[3],
+          height: args[4],
+        });
+        return orig.apply(this, args);
+      };
+      proto.__texImage2DHooked = true;
+    }
+    if (proto.bufferData && !proto.__bufferDataHooked) {
+      const orig = proto.bufferData;
+      proto.bufferData = function(target, data, usage) {
+        window.__canvasInspector.buffers.push({
+          timestamp: performance.now(),
+          target,
+          size: data?.byteLength || data?.length,
+          usage,
+        });
+        return orig.call(this, target, data, usage);
+      };
+      proto.__bufferDataHooked = true;
+    }
   }
-  if (gl.drawElementsInstanced) {
-    gl.drawElementsInstanced = function(mode, count, type, offset, instanceCount) {
-      return wrapDrawCall('drawElementsInstanced', originalDrawElementsInstanced, mode, count, type, offset, instanceCount);
-    };
+
+  if (typeof WebGLRenderingContext !== 'undefined') {
+    instrumentWebGLPrototype(WebGLRenderingContext.prototype);
   }
-  
-  // Hook shader compilation
-  const originalCompileShader = gl.compileShader.bind(gl);
-  gl.compileShader = function(shader) {
-    const source = gl.getShaderSource(shader);
-    const type = gl.getShaderParameter(shader, gl.SHADER_TYPE);
-    window.__canvasInspector.shaders.push({
-      timestamp: performance.now(),
-      type: type === gl.VERTEX_SHADER ? 'vertex' : 'fragment',
-      source: source.slice(0, 5000),
-    });
-    return originalCompileShader(shader);
-  };
-  
-  // Hook texture creation
-  const originalTexImage2D = gl.texImage2D.bind(gl);
-  gl.texImage2D = function(...args) {
-    window.__canvasInspector.textures.push({
-      timestamp: performance.now(),
-      target: args[0],
-      level: args[1],
-      internalFormat: args[2],
-      width: args[3],
-      height: args[4],
-    });
-    return originalTexImage2D(...args);
-  };
-  
-  // Hook buffer creation
-  const originalBufferData = gl.bufferData.bind(gl);
-  gl.bufferData = function(target, data, usage) {
-    window.__canvasInspector.buffers.push({
-      timestamp: performance.now(),
-      target,
-      size: data?.byteLength || data?.length,
-      usage,
-    });
-    return originalBufferData(target, data, usage);
+  if (typeof WebGL2RenderingContext !== 'undefined') {
+    instrumentWebGLPrototype(WebGL2RenderingContext.prototype);
+  }
+
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    this.__contextType = type;
+    const ctx = originalGetContext.call(this, type, ...args);
+    if (ctx && (type === 'webgl' || type === 'webgl2' || type === 'experimental-webgl')) {
+      captureWebGLParams(ctx);
+    }
+    return ctx;
   };
 })();
 ''',
     'wasm': r'''
 (() => {
-  window.__canvasInspector = { wasm: null, imports: [], exports: [], memory: null };
+  window.__canvasInspector = window.__canvasInspector || { imports: [], exports: [] };
+  window.__canvasInspector.wasm = null;
+  window.__canvasInspector.memory = null;
   
-  // Hook WebAssembly.instantiate
-  const originalInstantiate = WebAssembly.instantiate;
-  WebAssembly.instantiate = function(bytes, imports) {
-    window.__canvasInspector.wasm = { modules: window.__canvasInspector.wasm?.modules || [] };
-    const moduleInfo = {
-      timestamp: performance.now(),
-      size: bytes?.byteLength || bytes?.length,
-      imports: Object.keys(imports || {}),
-    };
-    
-    // Wrap imports
-    if (imports) {
-      Object.keys(imports).forEach(ns => {
-        Object.keys(imports[ns]).forEach(fn => {
-          const original = imports[ns][fn];
-          if (typeof original === 'function') {
-            imports[ns][fn] = function(...args) {
+  const importCallCounts = {};
+  const MAX_IMPORT_SAMPLES = 500;
+
+  function wrapImports(imports) {
+    if (!imports) return imports;
+    const wrapped = { ...imports };
+    Object.keys(imports).forEach(ns => {
+      wrapped[ns] = { ...imports[ns] };
+      Object.keys(imports[ns]).forEach(fn => {
+        const original = imports[ns][fn];
+        if (typeof original === 'function') {
+          const key = `${ns}.${fn}`;
+          importCallCounts[key] = 0;
+          wrapped[ns][fn] = function(...args) {
+            importCallCounts[key] = (importCallCounts[key] || 0) + 1;
+            if (window.__canvasInspector.imports.length < MAX_IMPORT_SAMPLES) {
               window.__canvasInspector.imports.push({
                 timestamp: performance.now(),
                 namespace: ns,
                 function: fn,
+                callCount: importCallCounts[key],
                 args: args.map(a => typeof a),
               });
-              return original.apply(this, args);
-            };
-          }
-        });
+            }
+            return original.apply(this, args);
+          };
+        }
       });
+    });
+    return wrapped;
+  }
+
+  function recordWasmInstance(result, bytesOrSource) {
+    window.__canvasInspector.wasm = { modules: window.__canvasInspector.wasm?.modules || [] };
+    const instance = (result && result.instance) ? result.instance : result;
+    
+    let size = null;
+    if (bytesOrSource && (bytesOrSource.byteLength !== undefined || bytesOrSource.length !== undefined)) {
+      size = bytesOrSource.byteLength || bytesOrSource.length;
     }
     
-    return originalInstantiate(bytes, imports).then(result => {
-      moduleInfo.exports = Object.keys(result.instance.exports);
-      window.__canvasInspector.wasm.modules.push(moduleInfo);
-      
-      // Check for memory export
-      if (result.instance.exports.memory) {
-        window.__canvasInspector.memory = {
-          initial: result.instance.exports.memory.buffer.byteLength,
-        };
-      }
-      
+    const moduleInfo = {
+      timestamp: performance.now(),
+      size: size,
+      exports: instance && instance.exports ? Object.keys(instance.exports) : [],
+    };
+    window.__canvasInspector.wasm.modules.push(moduleInfo);
+    
+    if (instance && instance.exports && instance.exports.memory) {
+      window.__canvasInspector.memory = {
+        initial: instance.exports.memory.buffer ? instance.exports.memory.buffer.byteLength : null,
+      };
+    }
+  }
+
+  const originalInstantiate = WebAssembly.instantiate;
+  WebAssembly.instantiate = function(bytesOrModule, imports) {
+    const wrappedImports = wrapImports(imports);
+    return originalInstantiate.call(WebAssembly, bytesOrModule, wrappedImports || imports).then(result => {
+      try {
+        recordWasmInstance(result, bytesOrModule);
+      } catch (e) {}
       return result;
     });
   };
-  
-  // Hook WebAssembly.instantiateStreaming
+
   const originalInstantiateStreaming = WebAssembly.instantiateStreaming;
-  WebAssembly.instantiateStreaming = function(source, imports) {
-    return originalInstantiateStreaming(source, imports);
+  if (originalInstantiateStreaming) {
+    WebAssembly.instantiateStreaming = function(source, imports) {
+      const wrappedImports = wrapImports(imports);
+      return originalInstantiateStreaming.call(WebAssembly, source, wrappedImports || imports).then(result => {
+        try {
+          recordWasmInstance(result, null);
+        } catch (e) {}
+        return result;
+      });
+    };
+  }
+
+  const originalGetContext = HTMLCanvasElement.prototype.getContext;
+  HTMLCanvasElement.prototype.getContext = function(type, ...args) {
+    this.__contextType = type;
+    return originalGetContext.call(this, type, ...args);
   };
 })();
 ''',
     'auto': r'''
 (() => {
-  window.__canvasInspector = { detected: [], frames: [] };
+  window.__canvasInspector = window.__canvasInspector || { detected: [], frames: [] };
   
-  // Detection
+  // Detection checks
   const checks = [
-    { name: 'three', check: () => window.THREE && window.THREE.REVISION },
-    { name: 'pixi', check: () => window.PIXI && window.PIXI.VERSION },
+    { name: 'three', check: () => window.THREE && (window.THREE.REVISION || window.THREE.WebGLRenderer) },
+    { name: 'pixi', check: () => window.PIXI && (window.PIXI.VERSION || window.PIXI.Application) },
     { name: 'babylon', check: () => window.BABYLON && window.BABYLON.Engine },
     { name: 'fabric', check: () => window.fabric && window.fabric.version },
     { name: 'paper', check: () => window.paper && window.paper.version },
@@ -409,9 +591,21 @@ INJECTION_SCRIPTS = {
     { name: 'rive', check: () => window.rive },
   ];
   
-  checks.forEach(c => {
-    if (c.check()) window.__canvasInspector.detected.push(c.name);
-  });
+  window.__canvasInspector.runDetection = function() {
+    window.__canvasInspector.detected = window.__canvasInspector.detected || [];
+    checks.forEach(c => {
+      try {
+        if (c.check() && !window.__canvasInspector.detected.includes(c.name)) {
+          window.__canvasInspector.detected.push(c.name);
+        }
+      } catch (e) {}
+    });
+    return window.__canvasInspector.detected;
+  };
+
+  window.__canvasInspector.runDetection();
+  window.addEventListener('DOMContentLoaded', () => window.__canvasInspector.runDetection());
+  window.addEventListener('load', () => window.__canvasInspector.runDetection());
   
   // Hook requestAnimationFrame for frame timing
   const originalRAF = window.requestAnimationFrame;
@@ -426,6 +620,7 @@ INJECTION_SCRIPTS = {
   // Hook canvas context creation
   const originalGetContext = HTMLCanvasElement.prototype.getContext;
   HTMLCanvasElement.prototype.getContext = function(type, attrs) {
+    this.__contextType = type;
     const ctx = originalGetContext.call(this, type, attrs);
     if (type.includes('webgl') || type === '2d') {
       window.__canvasInspector.contexts = window.__canvasInspector.contexts || [];
@@ -450,18 +645,23 @@ def inject_inspector(page, engine):
 
 def extract_results(page, engine):
     """Extract inspection results from the page."""
-    base = page.evaluate("() => window.__canvasInspector || {}")
+    base = page.evaluate("""
+        () => {
+            if (window.__canvasInspector && typeof window.__canvasInspector.runDetection === 'function') {
+                window.__canvasInspector.runDetection();
+            }
+            return window.__canvasInspector || {};
+        }
+    """)
     
-    # Also get canvas info
+    # Also get canvas info using recorded context types
     canvases = page.evaluate("""
         () => Array.from(document.querySelectorAll('canvas')).map(c => ({
             width: c.width,
             height: c.height,
             styleWidth: c.style.width,
             styleHeight: c.style.height,
-            contextTypes: ['webgl', 'webgl2', '2d', 'webgpu'].filter(t => {
-                try { return !!c.getContext(t); } catch { return false; }
-            })
+            contextTypes: c.__contextType ? [c.__contextType] : ['unknown']
         }))
     """)
     

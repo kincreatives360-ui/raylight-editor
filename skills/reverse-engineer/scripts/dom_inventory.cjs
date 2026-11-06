@@ -63,7 +63,9 @@ const waitMs = +opt('wait', 1500), maxNodes = +opt('max-nodes', 6000);
 const rootSel = opt('root', null), maxDepth = +opt('max-depth', 999);
 const stepsFile = opt('steps', null);
 const shotAt = opt('shot-at', null);
-const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
+const isHeadlessNew = flag('headless') && opt('headless', 'new') === 'new';
+const isHeadlessFalse = flag('headless') && opt('headless', 'new') === 'false';
+const headless = !isHeadlessFalse;
 fs.mkdirSync(path.join(outDir, 'css'), { recursive: true });
 
 const STYLE_PROPS = [
@@ -86,7 +88,9 @@ const STYLE_PROPS = [
 ];
 
 (async () => {
-  const browser = await chromium.launch({ headless });
+  const launchOptions = { headless };
+  if (isHeadlessNew) launchOptions.channel = 'chromium';
+  const browser = await chromium.launch(launchOptions);
   const ctxOpts = { viewport: { width, height }, deviceScaleFactor: 1 };
   const ss = opt('storage-state');
   if (ss) ctxOpts.storageState = ss;

@@ -90,3 +90,4 @@ if (tier === 'full') {
 }
 
 console.log(`Workspace ready: ${root} (tier: ${tier})`);
+console.log(`Notice: GitHub Actions workflows are in ${path.join(root, '.github')}. Move .github to your repository root for GitHub to run them.`);

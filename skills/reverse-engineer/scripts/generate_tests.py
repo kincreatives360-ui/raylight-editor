@@ -12,6 +12,7 @@ with proper selectors, assertions for hover/focus/click effects, and token-based
 import argparse, json, os, re, sys
 from pathlib import Path
 from collections import defaultdict
+from urllib.parse import urlparse
 
 TEMPLATE_PLAYWRIGHT = '''// Auto-generated from interaction sweep data
 // Source: {source_file}
@@ -27,11 +28,11 @@ test.describe('{suite_name}', () => {{
 }});
 '''
 
-TEST_CASE_PLAYWRIGHT = '''  test('{test_name}', async ({{ page }}) => {{
-    await page.goto(BASE_URL + '{path}', {{ waitUntil: 'networkidle' }});
+TEST_CASE_PLAYWRIGHT = '''  test({test_name}, async ({{ page }}) => {{
+    await page.goto(BASE_URL + {path}, {{ waitUntil: 'networkidle' }});
     await page.waitForTimeout(500);
 {setup_steps}
-    const el = page.locator('{selector}').first();
+    const el = page.locator({selector}).first();
     await expect(el).toBeVisible();
 {action_steps}
 {assertions}
@@ -42,7 +43,8 @@ TEMPLATE_VITEST = '''// Auto-generated from interaction sweep data
 // Source: {source_file}
 // Run: npx vitest run {test_file}
 
-import {{ describe, it, expect, beforeEach }} from 'vitest';
+import {{ describe, it, beforeEach, afterEach }} from 'vitest';
+import {{ expect }} from '@playwright/test';
 import {{ chromium }} from 'playwright';
 
 const BASE_URL = '{base_url}';
@@ -65,11 +67,11 @@ describe('{suite_name}', () => {{
 }});
 '''
 
-TEST_CASE_VITEST = '''  it('{test_name}', async () => {{
-    await page.goto(BASE_URL + '{path}', {{ waitUntil: 'networkidle' }});
+TEST_CASE_VITEST = '''  it({test_name}, async () => {{
+    await page.goto(BASE_URL + {path}, {{ waitUntil: 'networkidle' }});
     await page.waitForTimeout(500);
 {setup_steps}
-    const el = page.locator('{selector}').first();
+    const el = page.locator({selector}).first();
     await expect(el).toBeVisible();
 {action_steps}
 {assertions}
@@ -80,11 +82,9 @@ def sanitize_name(name):
     """Convert a string to a valid test name."""
     return re.sub(r'[^a-zA-Z0-9_]+', '_', name).strip('_').lower()
 
-def style_assertion(prop, expected, tolerance=False):
+def style_assertion(prop, expected):
     """Generate a style assertion."""
-    if tolerance and prop in ('width', 'height', 'top', 'left', 'right', 'bottom'):
-        return f"await expect(el).toHaveCSS('{prop}', expect.stringMatching(/^{re.escape(expected)[:-2] if expected.endswith('px') else expected}[0-9]*px$/));"
-    return f"await expect(el).toHaveCSS('{prop}', '{expected}');"
+    return f"await expect(el).toHaveCSS({json.dumps(prop)}, {json.dumps(expected)});"
 
 def generate_assertions(rec, tokens=None):
     """Generate assertions from sweep record."""
@@ -98,34 +98,38 @@ def generate_assertions(rec, tokens=None):
     
     # Focus assertions
     if rec.get('focus') and rec['focus'].get('outline'):
-        assertions.append(f"await expect(el).toHaveCSS('outline', '{rec['focus']['outline']}');")
+        assertions.append(f"await expect(el).toHaveCSS('outline', {json.dumps(rec['focus']['outline'])});")
     
     # ARIA state assertions
     if rec.get('afterAriaExpanded') is not None:
-        assertions.append(f"await expect(el).toHaveAttribute('aria-expanded', '{rec['afterAriaExpanded']}');")
+        assertions.append(f"await expect(el).toHaveAttribute('aria-expanded', {json.dumps(str(rec['afterAriaExpanded']))});")
     if rec.get('afterAriaPressed') is not None:
-        assertions.append(f"await expect(el).toHaveAttribute('aria-pressed', '{rec['afterAriaPressed']}');")
+        assertions.append(f"await expect(el).toHaveAttribute('aria-pressed', {json.dumps(str(rec['afterAriaPressed']))});")
     if rec.get('afterDataState'):
-        assertions.append(f"await expect(el).toHaveAttribute('data-state', '{rec['afterDataState']}');")
+        assertions.append(f"await expect(el).toHaveAttribute('data-state', {json.dumps(str(rec['afterDataState']))});")
     
     # Overlay assertions
     if rec.get('overlays'):
         for overlay in rec['overlays']:
             role = overlay.get('role', 'dialog')
-            assertions.append(f"await expect(page.locator('[role={role}'])).toBeVisible();")
+            assertions.append(f"await expect(page.locator({json.dumps(f'[role={role}]')})).toBeVisible();")
     
     # URL change
     if rec.get('urlChanged'):
-        assertions.append(f"await expect(page).toHaveURL(BASE_URL + '{rec['urlChanged'].replace('{base_url}', '')}');")
+        parsed = urlparse(rec['urlChanged'])
+        target_path = parsed.path + ('?' + parsed.query if parsed.query else '')
+        if not target_path:
+            target_path = '/'
+        assertions.append(f"await expect(page).toHaveURL(BASE_URL + {json.dumps(target_path)});")
     
     # Network requests
     if rec.get('network'):
         for req in rec['network'][:3]:
-            assertions.append(f"// Network: {req['method']} {req['url']}")
+            assertions.append(f"// Network: {req.get('method', 'GET')} {req.get('url', '')}")
     
     # Tooltip
     if rec.get('tooltip'):
-        assertions.append(f"await expect(page.locator('[role=tooltip]')).toContainText('{rec['tooltip'][:50]}');")
+        assertions.append(f"await expect(page.locator('[role=tooltip]')).toContainText({json.dumps(rec['tooltip'][:50])});")
     
     if not assertions:
         assertions.append("// No specific assertions generated - add custom checks")
@@ -202,18 +206,18 @@ def generate_test_file(records, args, group_name='default'):
         
         if args.format == 'playwright':
             tc = TEST_CASE_PLAYWRIGHT.format(
-                test_name=test_name,
-                path='/',  # Would need actual path from inventory
-                selector=selector,
+                test_name=json.dumps(test_name),
+                path=json.dumps('/'),
+                selector=json.dumps(selector),
                 setup_steps=setup,
                 action_steps=actions,
                 assertions=assertions,
             )
         else:
             tc = TEST_CASE_VITEST.format(
-                test_name=test_name,
-                path='/',
-                selector=selector,
+                test_name=json.dumps(test_name),
+                path=json.dumps('/'),
+                selector=json.dumps(selector),
                 setup_steps=setup,
                 action_steps=actions,
                 assertions=assertions,
@@ -247,7 +251,7 @@ def main():
     ap = argparse.ArgumentParser(description='Generate tests from interaction sweep data')
     ap.add_argument('interactions', help='interactions.json from interaction_sweep.cjs')
     ap.add_argument('--out-dir', default='tests', help='Output directory')
-    ap.add_argument('--format', choices=['playwright', 'vitest', 'jest'], default='playwright')
+    ap.add_argument('--format', choices=['playwright', 'vitest'], default='playwright')
     ap.add_argument('--base-url', default='http://localhost:3000', help='Base URL for tests')
     ap.add_argument('--storage-state', help='Playwright storage state file')
     ap.add_argument('--group-by', choices=['card', 'page', 'feature', 'none'], default='card')
@@ -257,7 +261,7 @@ def main():
     with open(a.interactions, 'r', encoding='utf-8') as f:
         records = json.load(f)
     
-    swept = [r for r in records if r.get('status') == 'swept' and r.get('visible') and not r.get('disabled')]
+    swept = [r for r in records if r.get('status') == 'swept' and r.get('visible', True) and not r.get('disabled')]
     print(f"Found {len(swept)} swept interactions out of {len(records)} total")
     
     if a.group_by == 'card':

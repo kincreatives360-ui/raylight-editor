@@ -22,6 +22,7 @@ import argparse, json, os, sys, statistics, subprocess
 from pathlib import Path
 from datetime import datetime
 from collections import defaultdict
+from xml.sax.saxutils import escape, quoteattr
 
 
 DEFAULT_BUDGETS = {
@@ -111,7 +112,7 @@ def collect_metrics(page, url):
             return {
                 domContentLoaded: nt.domContentLoadedEventEnd - nt.startTime,
                 load: nt.loadEventEnd - nt.startTime,
-                ttfb: nt.responseStart - nt.requestStart,
+                ttfb: nt.responseStart - nt.startTime,
                 dns: nt.domainLookupEnd - nt.domainLookupStart,
                 tcp: nt.connectEnd - nt.connectStart,
                 tls: nt.secureConnectionStart > 0 ? nt.connectEnd - nt.secureConnectionStart : 0,
@@ -286,8 +287,8 @@ def evaluate_budgets(metrics, budgets):
     results['runtime']['longTasks'] = evaluate_metric(len(long_tasks), rt.get('longTasks', {}))
     max_task = max((t['duration'] for t in long_tasks), default=0)
     results['runtime']['maxTaskDuration'] = evaluate_metric(max_task, rt.get('maxTaskDuration', {}))
-    # Layout shifts - would need more detailed tracking
-    results['runtime']['layoutShifts'] = evaluate_metric(0, rt.get('layoutShifts', {}))
+    # Layout shifts - metric not collected directly, report as unknown rather than implied 0
+    results['runtime']['layoutShifts'] = evaluate_metric(None, rt.get('layoutShifts', {}))
     if metrics.get('memory'):
         results['runtime']['memoryJSHeap'] = evaluate_metric(metrics['memory'].get('usedJSHeapSize'), rt.get('memoryJSHeap', {}))
     
@@ -349,16 +350,29 @@ def format_output(results, metrics, format='json'):
     elif format == 'junit':
         # JUnit XML for CI
         lines = ['<?xml version="1.0" encoding="UTF-8"?>']
-        lines.append(f'<testsuite name="Performance Budget" tests="{results["summary"]["pass"] + results["summary"]["warn"] + results["summary"]["fail"]}" failures="{results["summary"]["fail"]}" timestamp="{datetime.now().isoformat()}">')
+        reg_count = len(results.get('regressions', []))
+        total_tests = sum(len(results[c]) for c in ['core_web_vitals', 'timing', 'resources', 'runtime']) + reg_count
+        fail_count = results['summary']['fail']
+        ts = datetime.now().isoformat()
+        lines.append(f'<testsuite name="Performance Budget" tests="{total_tests}" failures="{fail_count}" timestamp={quoteattr(ts)}>')
         
         for category in ['core_web_vitals', 'timing', 'resources', 'runtime']:
             for metric, (status, msg) in results[category].items():
-                lines.append(f'  <testcase name="{category}.{metric}" classname="{category}">')
+                name_attr = quoteattr(f"{category}.{metric}")
+                class_attr = quoteattr(category)
+                lines.append(f'  <testcase name={name_attr} classname={class_attr}>')
                 if status == 'fail':
-                    lines.append(f'    <failure message="{msg}">{msg}</failure>')
+                    lines.append(f'    <failure message={quoteattr(msg)}>{escape(msg)}</failure>')
                 elif status == 'warn':
-                    lines.append(f'    <skipped message="{msg}"/>')
+                    lines.append(f'    <skipped message={quoteattr(msg)}/>')
+                elif status == 'unknown':
+                    lines.append(f'    <skipped message={quoteattr(msg)}/>')
                 lines.append('  </testcase>')
+        
+        for reg in results.get('regressions', []):
+            lines.append(f'  <testcase name={quoteattr(f"regression.{reg.split(\":\")[0]}")} classname="regressions">')
+            lines.append(f'    <failure message={quoteattr(reg)}>{escape(reg)}</failure>')
+            lines.append('  </testcase>')
         
         lines.append('</testsuite>')
         return '\n'.join(lines)
@@ -374,6 +388,8 @@ def format_output(results, metrics, format='json'):
                     lines.append(f"::warning title=Performance Budget: {category}.{metric}::{msg}")
                 else:
                     lines.append(f"::notice title=Performance Budget: {category}.{metric}::{msg}")
+        for reg in results.get('regressions', []):
+            lines.append(f"::error title=Performance Regression::{reg}")
         return '\n'.join(lines)
     
     else:
@@ -395,6 +411,12 @@ def format_output(results, metrics, format='json'):
             for metric, (status, msg) in cat_results.items():
                 icon = "✅" if status == 'pass' else "⚠️" if status == 'warn' else "❌" if status == 'fail' else "❓"
                 lines.append(f"  {icon} {metric}: {msg}")
+        
+        if results.get('regressions'):
+            lines.append("\nREGRESSIONS:")
+            lines.append("-" * 40)
+            for reg in results['regressions']:
+                lines.append(f"  ❌ {reg}")
         
         lines.append("\n" + "=" * 60)
         s = results['summary']
@@ -481,6 +503,7 @@ def main():
                     regressions.append(f"{key}: {base_val:.1f} -> {curr_val:.1f} (+{(curr_val/base_val-1)*100:.1f}%)")
             if regressions:
                 results['regressions'] = regressions
+                results['summary']['fail'] += len(regressions)
                 print(f"⚠️  REGRESSIONS DETECTED:")
                 for r in regressions:
                     print(f"  {r}")
@@ -504,7 +527,10 @@ def main():
         print(f"Raw data: {raw_file}")
         
         # Print summary
-        print(format_output(results, metrics, 'text'))
+        if a.format == 'github-annotation':
+            print(output)
+        else:
+            print(format_output(results, metrics, 'text'))
         
         browser.close()
     

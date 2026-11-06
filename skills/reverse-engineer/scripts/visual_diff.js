@@ -67,7 +67,9 @@ const flag = (n) => args.includes('--' + n);
 const widths = (opt('widths', '375,768,1440')).split(',').map(Number);
 const ss = opt('storage-state');
 const height = +opt('height', 900);
-const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
+const isHeadlessNew = flag('headless') && opt('headless', 'new') === 'new';
+const isHeadlessFalse = flag('headless') && opt('headless', 'new') === 'false';
+const headless = !isHeadlessFalse;
 
 let chromium;
 try { ({ chromium } = require('playwright')); }
@@ -75,7 +77,9 @@ catch { console.error('Playwright required'); process.exit(1); }
 
 (async () => {
   fs.mkdirSync(outDir, { recursive: true });
-  const browser = await chromium.launch({ headless });
+  const launchOptions = { headless };
+  if (isHeadlessNew) launchOptions.channel = 'chromium';
+  const browser = await chromium.launch(launchOptions);
   for (const w of widths) {
     const ctxOpts = { viewport: { width: w, height }, deviceScaleFactor: 1 };
     if (ss) ctxOpts.storageState = ss;

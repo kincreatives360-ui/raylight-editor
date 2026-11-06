@@ -33,33 +33,34 @@ def load(path):
 def fix_card(body):
     """Add missing required sections to a card body."""
     low = body.lower()
-    lines = body.splitlines()
+    fixed = body.rstrip()
     
-    # Find insertion point (after title/header)
-    insert_idx = 0
-    for i, line in enumerate(lines):
-        if line.strip().startswith("###") or line.strip().startswith("##"):
-            insert_idx = i + 1
-            break
-    
+    # If acceptance text exists but no checkbox item is present, add one
+    if re.search(r"\baccept|acceptance tests", low) and not re.search(r"- \[ \]", fixed):
+        m = re.search(r"(##+ [^\n]*accept[^\n]*)", fixed, re.I)
+        if m:
+            pos = m.end()
+            fixed = fixed[:pos] + "\n\n- [ ] Observable check" + fixed[pos:]
+            low = fixed.lower()
+
     additions = []
     if not re.search(r"\bgoal\b", low):
-        additions.append(("\n## Goal\n\nOne-sentence user-visible outcome.\n", "goal"))
+        additions.append("## Goal\n\nOne-sentence user-visible outcome.")
     if not re.search(r"\bspec\b|## spec|### structure", low):
-        additions.append(("\n## Spec\n\nStructure, styles, behavior, keyboard, a11y, responsive, content.\n", "spec"))
+        additions.append("## Spec\n\nStructure, styles, behavior, keyboard, a11y, responsive, content.")
     if not re.search(r"\baccept|acceptance tests", low):
-        additions.append(("\n## Acceptance Tests\n\n- [ ] Observable check 1\n- [ ] Observable check 2\n", "acceptance"))
+        additions.append("## Acceptance Tests\n\n- [ ] Observable check 1\n- [ ] Observable check 2")
     if not re.search(r"done when", low):
-        additions.append(("\n## Done When\n\nExplicit completion criteria.\n", "done-when"))
+        additions.append("## Done When\n\nExplicit completion criteria.")
     if not re.search(r"not in scope|out of scope|do not touch", low):
-        additions.append(("\n## Out of Scope\n\nWhat this card must not do.\n", "out-of-scope"))
+        additions.append("## Out of Scope\n\nWhat this card must not do.")
     
-    # Insert additions before the next header or at end
-    for addition, _ in additions:
-        lines.insert(insert_idx, addition)
-        insert_idx += len(addition.splitlines())
+    if additions:
+        fixed = fixed + "\n\n" + "\n\n".join(additions) + "\n"
+    else:
+        fixed = fixed + "\n"
     
-    return "\n".join(lines)
+    return fixed
 
 def main():
     if len(sys.argv) < 2:
@@ -122,16 +123,34 @@ def main():
                         fp.write(fixed)
                     print(f"fixed {cid} in {f}")
         else:
-            # Single file with multiple cards - rebuild
-            new_parts = []
-            for cid, title, body, f in cards:
-                fixed = fix_card(body)
-                new_parts.append(fixed)
-            new_content = "\n".join(new_parts)
-            if new_content != open(target, encoding="utf-8").read():
+            # Single file with multiple cards - update only changed cards in place
+            original_content = open(target, encoding="utf-8").read()
+            chunks = re.split(r"(?m)(?=^###\s+F-\d+)", original_content)
+            modified = False
+            new_chunks = []
+            for chunk in chunks:
+                if re.match(r"^###\s+F-\d+", chunk):
+                    # Check for trailing non-card headings like ^## Section
+                    end_m = re.search(r"\n(?=#{1,2}\s+)", chunk)
+                    if end_m:
+                        card_body = chunk[:end_m.start() + 1]
+                        trailing = chunk[end_m.start() + 1:]
+                    else:
+                        card_body = chunk
+                        trailing = ""
+                    
+                    fixed_body = fix_card(card_body)
+                    if fixed_body != card_body:
+                        modified = True
+                    new_chunks.append(fixed_body + trailing)
+                else:
+                    new_chunks.append(chunk)
+            
+            if modified:
+                new_content = "".join(new_chunks)
                 with open(target, "w", encoding="utf-8") as fp:
                     fp.write(new_content)
-                print(f"fixed {len(cards)} cards in {target}")
+                print(f"fixed cards in {target}")
     
     for e in errs: print("ERROR", e)
     for w in warns: print("warn ", w)

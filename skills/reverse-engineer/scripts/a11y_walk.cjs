@@ -32,11 +32,15 @@ const opt = (n, d) => { const i = args.indexOf('--' + n); return i > -1 ? args[i
 const flag = (n) => args.includes('--' + n);
 const max = +opt('max', 400);
 const stepsFile = opt('steps', null);
-const headless = flag('headless') ? (opt('headless', 'new') === 'false' ? false : opt('headless', 'new')) : true;
+const isHeadlessNew = flag('headless') && opt('headless', 'new') === 'new';
+const isHeadlessFalse = flag('headless') && opt('headless', 'new') === 'false';
+const headless = !isHeadlessFalse;
 fs.mkdirSync(outDir, { recursive: true });
 
 (async () => {
-  const browser = await chromium.launch({ headless });
+  const launchOptions = { headless };
+  if (isHeadlessNew) launchOptions.channel = 'chromium';
+  const browser = await chromium.launch(launchOptions);
   const ctxOpts = { viewport: { width: 1440, height: 900 } };
   if (opt('storage-state')) ctxOpts.storageState = opt('storage-state');
   const context = await browser.newContext(ctxOpts);

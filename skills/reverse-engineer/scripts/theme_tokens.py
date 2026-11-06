@@ -86,50 +86,68 @@ def load_tokens(path):
         return json.load(f)
 
 def to_rgb(color):
-    """Parse color string to (r, g, b, a). Supports hex, rgb, rgba."""
-    color = color.strip()
-    
-    # Hex
-    hex_match = re.match(r'^#([0-9a-fA-F]{3,8})$', color)
-    if hex_match:
-        hex_str = hex_match.group(1)
-        if len(hex_str) == 3:
-            hex_str = ''.join(c*2 for c in hex_str)
-        if len(hex_str) == 6:
-            r = int(hex_str[0:2], 16)
-            g = int(hex_str[2:4], 16)
-            b = int(hex_str[4:6], 16)
-            return (r, g, b, 1.0)
-        if len(hex_str) == 8:
-            r = int(hex_str[0:2], 16)
-            g = int(hex_str[2:4], 16)
-            b = int(hex_str[4:6], 16)
-            a = int(hex_str[6:8], 16) / 255
+    """Parse color string to (r, g, b, a). Supports hex, #rrggbb@alpha, rgb, rgba."""
+    if not color or not isinstance(color, str):
+        return None
+    try:
+        color = color.strip()
+        
+        # Hex with optional @alpha: #ffffff@0.8
+        hex_alpha_match = re.match(r'^#([0-9a-fA-F]{3,8})@([0-9.]+)$', color)
+        if hex_alpha_match:
+            hex_str = hex_alpha_match.group(1)
+            alpha_val = float(hex_alpha_match.group(2))
+            if len(hex_str) == 3:
+                hex_str = ''.join(c * 2 for c in hex_str)
+            if len(hex_str) >= 6:
+                r = int(hex_str[0:2], 16)
+                g = int(hex_str[2:4], 16)
+                b = int(hex_str[4:6], 16)
+                return (r, g, b, alpha_val)
+
+        # Hex
+        hex_match = re.match(r'^#([0-9a-fA-F]{3,8})$', color)
+        if hex_match:
+            hex_str = hex_match.group(1)
+            if len(hex_str) == 3:
+                hex_str = ''.join(c*2 for c in hex_str)
+            if len(hex_str) == 6:
+                r = int(hex_str[0:2], 16)
+                g = int(hex_str[2:4], 16)
+                b = int(hex_str[4:6], 16)
+                return (r, g, b, 1.0)
+            if len(hex_str) == 8:
+                r = int(hex_str[0:2], 16)
+                g = int(hex_str[2:4], 16)
+                b = int(hex_str[4:6], 16)
+                a = int(hex_str[6:8], 16) / 255
+                return (r, g, b, a)
+        
+        # RGB/RGBA
+        rgb_match = re.match(r'rgba?\(([^)]+)\)', color)
+        if rgb_match:
+            parts = [p.strip() for p in re.split(r'[,/ ]+', rgb_match.group(1)) if p.strip()]
+            r = int(float(parts[0]))
+            g = int(float(parts[1]))
+            b = int(float(parts[2]))
+            a = float(parts[3]) if len(parts) > 3 else 1.0
             return (r, g, b, a)
-    
-    # RGB/RGBA
-    rgb_match = re.match(r'rgba?\(([^)]+)\)', color)
-    if rgb_match:
-        parts = [p.strip() for p in re.split(r'[,/ ]+', rgb_match.group(1)) if p.strip()]
-        r = int(float(parts[0]))
-        g = int(float(parts[1]))
-        b = int(float(parts[2]))
-        a = float(parts[3]) if len(parts) > 3 else 1.0
-        return (r, g, b, a)
-    
-    # Named colors (basic)
-    named = {
-        'transparent': (0, 0, 0, 0),
-        'black': (0, 0, 0, 1),
-        'white': (255, 255, 255, 1),
-        'red': (255, 0, 0, 1),
-        'green': (0, 128, 0, 1),
-        'blue': (0, 0, 255, 1),
-    }
-    if color.lower() in named:
-        return named[color.lower()]
-    
-    return None
+        
+        # Named colors (basic)
+        named = {
+            'transparent': (0, 0, 0, 0),
+            'black': (0, 0, 0, 1),
+            'white': (255, 255, 255, 1),
+            'red': (255, 0, 0, 1),
+            'green': (0, 128, 0, 1),
+            'blue': (0, 0, 255, 1),
+        }
+        if color.lower() in named:
+            return named[color.lower()]
+        
+        return None
+    except Exception:
+        return None
 
 def relative_luminance(r, g, b):
     """Calculate relative luminance per WCAG."""
@@ -232,6 +250,7 @@ def validate_contrast(paired_tokens, level='AA'):
     """Validate WCAG contrast for all text/background pairs."""
     violations = []
     passes = []
+    skipped = []
     thresholds = WCAG_THRESHOLDS[level]
     
     # Test text on background combinations
@@ -247,26 +266,31 @@ def validate_contrast(paired_tokens, level='AA'):
             # We don't have size info, so use normal threshold
             required = thresholds['normal']
             
-            light_pass = light_ratio and light_ratio >= required
-            dark_pass = dark_ratio and dark_ratio >= required
-            
             result = {
                 'text_role': text_role,
                 'bg_role': bg_role,
-                'light_ratio': round(light_ratio, 2) if light_ratio else None,
-                'dark_ratio': round(dark_ratio, 2) if dark_ratio else None,
+                'light_ratio': round(light_ratio, 2) if light_ratio is not None else None,
+                'dark_ratio': round(dark_ratio, 2) if dark_ratio is not None else None,
                 'required': required,
                 'level': level,
-                'light_pass': light_pass,
-                'dark_pass': dark_pass,
             }
+            
+            # If either ratio cannot be computed, add to skipped instead of violations
+            if light_ratio is None or dark_ratio is None:
+                skipped.append(result)
+                continue
+            
+            light_pass = light_ratio >= required
+            dark_pass = dark_ratio >= required
+            result['light_pass'] = light_pass
+            result['dark_pass'] = dark_pass
             
             if light_pass and dark_pass:
                 passes.append(result)
             else:
                 violations.append(result)
     
-    return {'passes': passes, 'violations': violations}
+    return {'passes': passes, 'violations': violations, 'skipped': skipped}
 
 def suggest_fixes(violations, paired_tokens):
     """Suggest color adjustments to fix contrast violations."""
@@ -380,14 +404,8 @@ def main():
     if a.dark_tokens:
         dark_tokens = load_tokens(a.dark_tokens)
     elif a.dark_inventory:
-        # Extract from dark inventory
-        from extract_tokens import main as extract_main
-        import tempfile
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
-            json.dump(load_inventory(a.dark_inventory), f)
-            temp_path = f.name
-        # Would call extract_tokens here - simplified
-        dark_tokens = tokens  # fallback
+        print("Error: Direct token extraction from --dark-inventory is not implemented. Please extract tokens first using extract_tokens.py and provide them via --dark-tokens.", file=sys.stderr)
+        sys.exit(1)
     
     # Pair light/dark
     paired = {}
@@ -444,9 +462,12 @@ def main():
     if a.validate and validation:
         v = validation['violations']
         p = validation['passes']
+        s = validation.get('skipped', [])
         print(f"\nContrast Validation (WCAG {a.wcag}):")
         print(f"  Passes: {len(p)}")
         print(f"  Violations: {len(v)}")
+        if s:
+            print(f"  Skipped: {len(s)}")
         if v:
             print("\nTop violations:")
             for viol in v[:5]:
@@ -456,14 +477,17 @@ def main():
     
     if a.report and validation:
         report_path = Path(a.out).with_suffix('.report.md')
-        with open(report_path, 'w') as f:
+        with open(report_path, 'w', encoding='utf-8') as f:
             f.write(f"# Contrast Validation Report\n\n")
             f.write(f"**Source:** {a.tokens}\n")
             f.write(f"**WCAG Level:** {a.wcag}\n")
             f.write(f"**Generated:** {datetime.now().isoformat()}\n\n")
             f.write(f"## Summary\n")
             f.write(f"- **Passes:** {len(validation['passes'])}\n")
-            f.write(f"- **Violations:** {len(validation['violations'])}\n\n")
+            f.write(f"- **Violations:** {len(validation['violations'])}\n")
+            if validation.get('skipped'):
+                f.write(f"- **Skipped (uncomputable):** {len(validation['skipped'])}\n")
+            f.write("\n")
             if validation['violations']:
                 f.write(f"## Violations\n\n")
                 for v in validation['violations']:

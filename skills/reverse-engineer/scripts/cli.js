@@ -64,7 +64,7 @@ if (ext === '.js' || ext === '.cjs') {
   cmd = 'node';
   cmdArgs = [path.join(scriptDir, script), ...subArgs];
 } else if (ext === '.py') {
-  cmd = 'python3';
+  cmd = process.env.PYTHON || (process.platform === 'win32' ? 'python' : 'python3');
   cmdArgs = [path.join(scriptDir, script), ...subArgs];
 } else {
   console.error(`Unknown script type: ${ext}`);
@@ -72,6 +72,9 @@ if (ext === '.js' || ext === '.cjs') {
 }
 
 const r = spawnSync(cmd, cmdArgs, { stdio: 'inherit', shell: false });
+if (r.error) {
+  console.error(`Error executing ${cmd}: ${r.error.message}`);
+}
 process.exit(r.status ?? 1);
 
 function printHelp() {

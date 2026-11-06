@@ -262,19 +262,20 @@ def inspect_tauri_app(port=9222, out_dir='.'):
     return inspect_electron_app(port, out_dir)
 
 
-def capture_extension_popup(page, extension_id, out_dir):
+def capture_extension_popup(page, extension_id, out_dir, popup_page=None):
     """Capture extension popup page."""
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     
     # Navigate to popup
-    popup_url = f'chrome-extension://{extension_id}/popup.html'
+    popup_path = popup_page or 'popup.html'
+    popup_url = f'chrome-extension://{extension_id}/{popup_path.lstrip("/")}'
     try:
         page.goto(popup_url, wait_until='networkidle', timeout=10000)
         page.wait_for_timeout(1000)
         page.screenshot(path=str(out_dir / 'popup.png'), full_page=True)
         html = page.content()
-        (out_dir / 'popup.html').write_text(html)
+        (out_dir / 'popup.html').write_text(html, encoding='utf-8')
         return {'url': popup_url, 'captured': True}
     except Exception as e:
         return {'url': popup_url, 'captured': False, 'error': str(e)}
@@ -288,13 +289,13 @@ def capture_extension_options(page, extension_id, options_page, out_dir):
     if not options_page:
         return {'captured': False, 'reason': 'No options page'}
     
-    options_url = f'chrome-extension://{extension_id}/{options_page}'
+    options_url = f'chrome-extension://{extension_id}/{options_page.lstrip("/")}'
     try:
         page.goto(options_url, wait_until='networkidle', timeout=10000)
         page.wait_for_timeout(1000)
         page.screenshot(path=str(out_dir / 'options.png'), full_page=True)
         html = page.content()
-        (out_dir / 'options.html').write_text(html)
+        (out_dir / 'options.html').write_text(html, encoding='utf-8')
         return {'url': options_url, 'captured': True}
     except Exception as e:
         return {'url': options_url, 'captured': False, 'error': str(e)}
@@ -311,8 +312,8 @@ def capture_devtools_panel(page, extension_id, devtools_page, out_dir):
 
 def main():
     ap = argparse.ArgumentParser(description='Extension & Desktop App Inspector')
-    ap.add_argument('target', help='Path to CRX/XPI file, extension directory, or "electron"/"tauri"')
-    ap.add_argument('out_dir', help='Output directory')
+    ap.add_argument('target', nargs='?', help='Path to CRX/XPI/ZIP file, extension directory, or "electron"/"tauri"')
+    ap.add_argument('out_dir', nargs='?', help='Output directory')
     ap.add_argument('--type', choices=['extension', 'electron', 'tauri', 'auto'], default='auto')
     ap.add_argument('--profile-dir', help='Browser profile directory (for installed extensions)')
     ap.add_argument('--extension-id', help='Extension ID (for installed extensions)')
@@ -321,19 +322,16 @@ def main():
     ap.add_argument('--headless', choices=['new', 'false'], default='new')
     ap.add_argument('--width', type=int, default=1440)
     ap.add_argument('--height', type=int, default=900)
-    a = ap.parse_args()
     
     if len(sys.argv) == 1:
         ap.print_help()
         return
+
+    a = ap.parse_args()
+    if not a.target or not a.out_dir:
+        ap.print_help()
+        return
     
-    try:
-        from playwright.sync_api import sync_playwright
-    except ImportError:
-        print("Playwright not installed. Run: pip install playwright && playwright install chromium")
-        sys.exit(1)
-    
-    headless = a.headless == 'new' or (a.headless == 'false' and False)
     out_dir = Path(a.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     
@@ -343,7 +341,13 @@ def main():
         'timestamp': datetime.now().isoformat(),
     }
     
-    if a.type in ('extension', 'auto') and (a.target.endswith('.crx') or a.target.endswith('.xpi') or a.target.endswith('.zip')):
+    is_ext_target = (
+        os.path.isdir(a.target) or
+        a.target.endswith('.crx') or
+        a.target.endswith('.xpi') or
+        a.target.endswith('.zip')
+    )
+    if a.type in ('extension', 'auto') and is_ext_target:
         # Unpack extension
         ext_dir = out_dir / 'unpacked'
         if a.target.endswith('.crx'):
@@ -352,8 +356,15 @@ def main():
         elif a.target.endswith('.xpi'):
             unpack_firefox_extension(a.target, ext_dir)
             result['browser'] = 'firefox'
-        else:
+        elif a.target.endswith('.zip'):
+            import zipfile
+            with zipfile.ZipFile(a.target, 'r') as zf:
+                zf.extractall(ext_dir)
+            result['browser'] = 'unknown'
+        elif os.path.isdir(a.target):
+            import shutil
             shutil.copytree(a.target, ext_dir, dirs_exist_ok=True)
+            result['browser'] = 'directory'
         
         # Analyze manifest
         manifest_path = ext_dir / 'manifest.json'
@@ -393,30 +404,61 @@ def main():
     
     # If extension ID provided, use Playwright to capture UI
     if a.extension_id:
-        with sync_playwright() as p:
-            # Launch Chrome with extension loaded
-            browser = p.chromium.launch(headless=headless, args=[
-                f'--load-extension={a.target}' if os.path.isdir(a.target) else '',
-                '--disable-extensions-except=' + a.target if os.path.isdir(a.target) else '',
+        try:
+            from playwright.sync_api import sync_playwright
+        except ImportError:
+            print("Playwright not installed. Run: pip install playwright && playwright install chromium")
+            sys.exit(1)
+        
+        ext_load_dir = None
+        if os.path.isdir(a.target):
+            ext_load_dir = str(Path(a.target).resolve())
+        elif (out_dir / 'unpacked').is_dir():
+            ext_load_dir = str((out_dir / 'unpacked').resolve())
+        
+        args = []
+        if ext_load_dir:
+            args.extend([
+                f'--disable-extensions-except={ext_load_dir}',
+                f'--load-extension={ext_load_dir}',
             ])
-            context = browser.new_context(
+        
+        profile_dir = a.profile_dir or str(out_dir / 'browser_profile')
+        headless = a.headless == 'new'
+        
+        with sync_playwright() as p:
+            context = p.chromium.launch_persistent_context(
+                profile_dir,
+                headless=headless,
+                args=args,
                 viewport={'width': a.width, 'height': a.height},
-                storage_state=a.storage_state if a.storage_state else None,
             )
-            page = context.new_page()
-            
-            # Capture popup
-            result['popup'] = capture_extension_popup(page, a.extension_id, out_dir / 'popup')
-            
-            # Capture options
-            options_page = result.get('manifest', {}).get('options_page')
-            result['options'] = capture_extension_options(page, a.extension_id, options_page, out_dir / 'options')
-            
-            # Capture devtools
-            devtools_page = result.get('manifest', {}).get('devtools_page')
-            result['devtools'] = capture_devtools_panel(page, a.extension_id, devtools_page, out_dir / 'devtools')
-            
-            browser.close()
+            try:
+                if a.storage_state and os.path.exists(a.storage_state):
+                    try:
+                        with open(a.storage_state, 'r', encoding='utf-8') as sf:
+                            state_data = json.load(sf)
+                            if 'cookies' in state_data:
+                                context.add_cookies(state_data['cookies'])
+                    except Exception:
+                        pass
+                
+                page = context.pages[0] if context.pages else context.new_page()
+                
+                # Capture popup
+                action_info = result.get('manifest', {}).get('action', {})
+                popup_page = action_info.get('default_popup') if isinstance(action_info, dict) else None
+                result['popup'] = capture_extension_popup(page, a.extension_id, out_dir / 'popup', popup_page)
+                
+                # Capture options
+                options_page = result.get('manifest', {}).get('options_page')
+                result['options'] = capture_extension_options(page, a.extension_id, options_page, out_dir / 'options')
+                
+                # Capture devtools
+                devtools_page = result.get('manifest', {}).get('devtools_page')
+                result['devtools'] = capture_devtools_panel(page, a.extension_id, devtools_page, out_dir / 'devtools')
+            finally:
+                context.close()
     
     # Save result
     output_path = out_dir / 'extension_analysis.json'

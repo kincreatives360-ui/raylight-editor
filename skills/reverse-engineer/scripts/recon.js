@@ -58,7 +58,7 @@ run('node', [path.join(scriptDir, 'dom_inventory.cjs'), url, homeDir, ...extra],
 
 // 3. Summarize
 const inv = path.join(homeDir, 'inventory.json');
-const digestOut = path.join(homeDir, 'digest.md');
+const digestOut = path.join(homeDir, format === 'json' ? 'digest.json' : 'digest.md');
 if (fs.existsSync(inv)) {
   const summarizeArgs = [path.join(scriptDir, 'summarize_inventory.py'), inv, '--out', digestOut];
   if (format === 'json') summarizeArgs.push('--format', 'json');
