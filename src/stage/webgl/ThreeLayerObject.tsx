@@ -23,6 +23,7 @@ interface ThreeLayerObjectProps {
     onSelect: (layerId: string, multiSelect?: boolean) => void;
     shotStartMs?: number;
     currentTimeMs?: number;
+    isLit?: boolean;
 }
 
 export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
@@ -32,6 +33,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     onSelect,
     shotStartMs = 0,
     currentTimeMs = 0,
+    isLit,
 }) => {
     const { layer } = evalLayer;
     const { invalidate, gl, size } = useThree();
@@ -201,7 +203,7 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
 
     if (!surface.visible) return null;
     const renderOpacity = surface.surfaceOpacity;
-    const receivesLight = surface.receivesLight;
+    const receivesLight = surface.receivesLight && (isLit ?? true);
 
     const surfaceRoughness = layer.material?.roughness ?? 0.24;
     const surfaceMetalness = layer.material?.metalness ?? 0.06;

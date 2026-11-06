@@ -60,6 +60,24 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
         if (keyEnabled) onSelectLight(null);
     };
 
+    const handleAddKeyLight = () => {
+        setAddMenuOpen(false);
+        const currentRig: LightRig = shotLight || {
+            position: { x: -0.28, y: 0.36, z: 0.9 },
+            intensity: 1.2,
+            temperature: 6500,
+            ambience: 0.45,
+            sources: [],
+        };
+        updateShot(activeShot.id, {
+            light: {
+                ...currentRig,
+                keyLightEnabled: true,
+            },
+        });
+        onSelectLight('sun-key');
+    };
+
     const handleToggleSource = (e: React.MouseEvent, sourceId: string) => {
         e.stopPropagation();
         if (!shotLight) return;
@@ -160,6 +178,15 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
                         <MenuSurface
                             className="absolute right-0 top-full mt-1 w-32 rounded-lg bg-[#18181b]/85 backdrop-blur-xl saturate-180 border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.55),inset_0_1px_0_rgba(255,255,255,0.08)] py-1 z-50 text-[11px] origin-top-right"
                         >
+                            {!keyEnabled && (
+                                <MenuItem
+                                    unstyled
+                                    onClick={handleAddKeyLight}
+                                    className="w-full px-2.5 py-1.5 flex items-center gap-2 hover:bg-white/10 text-left text-white transition cursor-pointer"
+                                >
+                                    <LightTypeIcon type="directional" /><span>Key Light (Sun)</span>
+                                </MenuItem>
+                            )}
                             {(['spot', 'point', 'area', 'directional'] as const).map((type) => <MenuItem
                                 key={type}
                                 unstyled

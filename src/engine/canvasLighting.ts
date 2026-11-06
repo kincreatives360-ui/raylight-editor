@@ -32,6 +32,7 @@ export function renderSceneLightSources(
     return;
   }
   const resolved = resolveLighting(light);
+  if (!resolved.active) return;
   const artboard = getArtboardDimensions(aspectRatio);
   const targetX = (camera.target?.x ?? 0) / artboard.width;
   const targetY = (camera.target?.y ?? 0) / artboard.height;

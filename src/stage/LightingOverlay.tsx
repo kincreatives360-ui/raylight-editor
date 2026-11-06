@@ -109,30 +109,25 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45, sources: [],
         };
 
-        if (activeLightTool === 'directional') {
-            updateShot(activeShot.id, { light: { ...rig, position, keyLightEnabled: true } });
-            selectLight('sun-key');
-        } else {
-            const source: SceneLight = {
-                id: generateId(activeLightTool),
-                name: `${activeLightTool === 'area' ? 'Area' : activeLightTool[0].toUpperCase() + activeLightTool.slice(1)} Light`,
-                type: activeLightTool,
-                enabled: true,
-                position,
-                target: { x: 0, y: 0, z: 0 },
-                intensity: 1.2,
-                color: '#ffffff',
-                temperature: 6500,
-                distance: activeLightTool === 'point' || activeLightTool === 'spot' ? 6 : undefined,
-                angle: activeLightTool === 'spot' ? Math.PI / 6 : undefined,
-                penumbra: activeLightTool === 'spot' ? 0.2 : undefined,
-                width: activeLightTool === 'area' ? 3 : undefined,
-                height: activeLightTool === 'area' ? 3 : undefined,
-                castShadow: true,
-            };
-            updateShot(activeShot.id, { light: { ...rig, sources: [...(rig.sources ?? []), source] } });
-            selectLight(source.id);
-        }
+        const source: SceneLight = {
+            id: generateId(activeLightTool),
+            name: `${activeLightTool === 'area' ? 'Area' : activeLightTool[0].toUpperCase() + activeLightTool.slice(1)} Light`,
+            type: activeLightTool,
+            enabled: true,
+            position,
+            target: { x: 0, y: 0, z: 0 },
+            intensity: 1.2,
+            color: '#ffffff',
+            temperature: 6500,
+            distance: activeLightTool === 'point' || activeLightTool === 'spot' ? 6 : undefined,
+            angle: activeLightTool === 'spot' ? Math.PI / 6 : undefined,
+            penumbra: activeLightTool === 'spot' ? 0.2 : undefined,
+            width: activeLightTool === 'area' ? 3 : undefined,
+            height: activeLightTool === 'area' ? 3 : undefined,
+            castShadow: true,
+        };
+        updateShot(activeShot.id, { light: { ...rig, sources: [...(rig.sources ?? []), source] } });
+        selectLight(source.id);
         setActiveLightTool(null);
     }, [activeLightTool, activeShot.id, activeShot.light, aspect, cameraPose, frameHeight, frameWidth, selectLight, setActiveLightTool, updateShot]);
 
@@ -143,7 +138,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const currentRig: LightRig = activeShot.light || {
             position: { x: -0.28, y: 0.36, z: 0.9 },
             intensity: 1.2,
-            temperature: 6100,
+            temperature: 6500,
             ambience: 0.45,
             sources: [],
         };
@@ -154,8 +149,14 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
                 {
                     light: {
                         ...currentRig,
-                        ...patch,
-                        position: patch.position ? { ...currentRig.position, ...patch.position } : currentRig.position,
+                        ...(patch.position ? { position: { ...currentRig.position, ...patch.position } } : {}),
+                        ...(patch.target ? { target: { ...(currentRig.target ?? { x: 0, y: 0, z: 0 }), ...patch.target } } : {}),
+                        ...(patch.intensity !== undefined ? { intensity: patch.intensity, keyIntensity: patch.intensity } : {}),
+                        ...(patch.temperature !== undefined ? { temperature: patch.temperature } : {}),
+                        ...(patch.color !== undefined ? { keyColor: patch.color } : {}),
+                        ...(patch.castShadow !== undefined ? { castShadow: patch.castShadow } : {}),
+                        ...(patch.shadowStrength !== undefined ? { shadowStrength: patch.shadowStrength } : {}),
+                        ...(patch.shadowSoftness !== undefined ? { shadowSoftness: patch.shadowSoftness } : {}),
                     },
                 },
                 { skipHistory: true }

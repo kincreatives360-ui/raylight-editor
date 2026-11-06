@@ -52,5 +52,23 @@ describe('lightingSystem', () => {
     expect(resolved.sources).toEqual([]);
     expect(resolved.room.environment).toBe('studio');
   });
+
+  it('correctly resolves an unlit rig when lights are disabled or absent', () => {
+    const unlitRig: LightRig = {
+      position: { x: 0, y: 0, z: 1 },
+      intensity: 1.0,
+      temperature: 6500,
+      ambience: 0.45,
+      keyLightEnabled: false,
+      fillEnabled: false,
+      sources: [],
+    };
+    const resolved = resolveLighting(unlitRig);
+    expect(resolved.active).toBe(false);
+    expect(resolved.key.enabled).toBe(false);
+    expect(resolved.fill.enabled).toBe(false);
+    expect(resolved.room.intensity).toBe(0);
+    expect(resolved.sources).toEqual([]);
+  });
 });
 

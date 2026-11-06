@@ -92,7 +92,7 @@ export const DEFAULT_LIGHT_RIG: LightRig = {
   position: { x: -0.28, y: 0.36, z: 0.9 },
   target: { x: 0, y: 0, z: 0 },
   intensity: 1.0,
-  temperature: 6100,
+  temperature: 6500,
   ambience: 0.45,
   ambientColor: '#f8fafc',
   keyLightEnabled: false,

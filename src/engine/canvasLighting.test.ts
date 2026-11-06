@@ -46,4 +46,24 @@ describe('Canvas fallback lighting', () => {
     expect(context.fillRect).toHaveBeenCalled();
     expect(gradient.addColorStop).toHaveBeenCalled();
   });
+
+  it('skips all rendering passes when the light rig is unlit', () => {
+    const { context } = makeCanvasContext();
+    const unlitRig: LightRig = {
+      position: { x: -0.28, y: 0.36, z: 0.9 }, target: { x: 0, y: 0, z: 0 },
+      intensity: 1, temperature: 6500, ambience: 0.4,
+      keyLightEnabled: false, fillEnabled: false, sources: [],
+    };
+    renderSceneLightSources(
+      context,
+      unlitRig,
+      { zoom: 1, target: { x: 0, y: 0 } } as EvaluatedCamera,
+      1920,
+      1080,
+      '16:9'
+    );
+    expect(context.createLinearGradient).not.toHaveBeenCalled();
+    expect(context.createRadialGradient).not.toHaveBeenCalled();
+    expect(context.fillRect).not.toHaveBeenCalled();
+  });
 });

@@ -1,4 +1,5 @@
 import type { ImageLayer, Project, ShapeLayer, Shot, TextLayer, VideoLayer } from '../model/types';
+import { isRigLit } from '../model/types';
 import type { EvaluatedCamera } from './evaluateCamera';
 import type { EvaluatedEffects } from './evaluateEffects';
 import type { EvaluatedLayerWithEffects } from './evaluateShot';
@@ -124,7 +125,7 @@ export async function drawLayerOnCanvas(
   frame: Parameters<typeof drawLayerContentOnCanvas>[3], w: number, h: number
 ): Promise<void> {
   const effects = layer.layer.effects;
-  const receivesLight = layerReceivesLight(layer.layer) && Boolean(frame.activeShot?.light);
+  const receivesLight = layerReceivesLight(layer.layer) && isRigLit(frame.activeShot?.light);
   if (!Object.keys(effects).length && layer.glowIntensityOffset <= 0 && !receivesLight) {
     return drawLayerContentOnCanvas(ctx, layer, project, frame, w, h);
   }

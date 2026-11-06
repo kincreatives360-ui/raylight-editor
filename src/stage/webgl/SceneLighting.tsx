@@ -1,5 +1,6 @@
 import React, { useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import * as THREE from 'three';
+import { useThree } from '@react-three/fiber';
 import { Environment, Lightformer } from '@react-three/drei';
 import { RectAreaLightUniformsLib } from 'three/examples/jsm/lights/RectAreaLightUniformsLib.js';
 import type { LightRig, SceneLight } from '../../model/types';
@@ -261,15 +262,27 @@ function RoomEnvironment({ light }: { light: LightRig }) {
 /** Three.js light emitters and a procedural PBR environment resolved from saved light controls. */
 export const SceneLighting: React.FC<SceneLightingProps> = ({ light }) => {
   const resolved = useMemo(() => resolveLighting(light), [light]);
+  const { scene } = useThree();
+
+  useEffect(() => {
+    if (!resolved.active) {
+      scene.environment = null;
+    }
+  }, [resolved.active, scene]);
+
+  if (!resolved.active) {
+    return null;
+  }
+
   const rig: LightRig = light ?? {
-    position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45, sources: [],
+    position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6500, ambience: 0.45, sources: [],
   } satisfies LightRig;
   const sourceModels = new Map((rig.sources ?? []).map((source) => [source.id, source]));
 
   return (
     <group name="raylight_scene_lighting">
-      <RoomEnvironment light={rig} />
-      <ambientLight intensity={resolved.room.intensity} color={resolved.room.color} />
+      {resolved.room.environmentIntensity > 0 && <RoomEnvironment light={rig} />}
+      {resolved.room.intensity > 0 && <ambientLight intensity={resolved.room.intensity} color={resolved.room.color} />}
       {resolved.key.enabled && <AimedDirectionalLight config={resolved.key} />}
       {resolved.fill.enabled && (
         <directionalLight position={resolved.fill.position} intensity={resolved.fill.intensity} color={resolved.fill.color} />

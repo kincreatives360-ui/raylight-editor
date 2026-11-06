@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Canvas, useThree } from '@react-three/fiber';
 import * as THREE from 'three';
 import type { Project, Background } from '../../model/types';
+import { isRigLit } from '../../model/types';
 import {
     getShotTransitionCompositeState,
     type EvaluatedProjectFrame,
@@ -385,6 +386,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             onSelect={() => {}}
                             shotStartMs={transitionState.outgoingShotStartMs}
                             currentTimeMs={effectiveTimeMs}
+                            isLit={isRigLit(activeShot?.light)}
                         />
                     ))}
                     {layers.map((evalLayer) => (
@@ -396,6 +398,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                             onSelect={onSelectLayer}
                             shotStartMs={activeShot?.startMs ?? 0}
                             currentTimeMs={effectiveTimeMs}
+                            isLit={isRigLit(activeShot?.light)}
                         />
                     ))}
                 </group>

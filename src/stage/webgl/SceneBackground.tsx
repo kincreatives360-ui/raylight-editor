@@ -142,6 +142,19 @@ const BACKGROUND_LIGHT_FRAGMENT_SHADER = `
 
 function getBackgroundLightUniforms(light?: LightRig, opacity: number = 1) {
   const resolved = resolveLighting(light);
+  if (!resolved.active) {
+    return {
+      uAmbientColor: { value: new THREE.Color(0, 0, 0) },
+      uAmbientAmount: { value: 0 },
+      uKeyColor: { value: new THREE.Color(0, 0, 0) },
+      uKeyDirection: { value: new THREE.Vector2(1, -1) },
+      uKeyAmount: { value: 0 },
+      uSourceCount: { value: 0 },
+      uSources: { value: Array.from({ length: 8 }, () => new THREE.Vector4(0, 0, 0.08, 0)) },
+      uSourceColors: { value: Array.from({ length: 8 }, () => new THREE.Color(0, 0, 0)) },
+      uOpacity: { value: opacity },
+    };
+  }
   const sources = resolved.sources.filter((source) => source.type !== 'ambient').slice(0, 8);
   const keyDirection = new THREE.Vector2(
     (light?.target?.x ?? 0) - (light?.position?.x ?? -0.28),

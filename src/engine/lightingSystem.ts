@@ -1,5 +1,8 @@
 import type { LightAnimationBlock, LightRig, SceneLight, Vec3 } from '../model/types';
+import { isRigLit } from '../model/types';
 import { lerp } from './math';
+
+export { isRigLit };
 
 export const MAX_SHADOW_CASTERS = 3;
 export const DEFAULT_FILL_INTENSITY = 0.38;
@@ -26,6 +29,7 @@ export interface ResolvedSceneLight {
 }
 
 export interface ResolvedLighting {
+  active: boolean;
   key: Omit<ResolvedSceneLight, 'enabled' | 'id' | 'type' | 'distance' | 'decay' | 'angle' | 'penumbra' | 'width' | 'height'> & {
     enabled: boolean;
     id: 'key';
@@ -105,14 +109,29 @@ return `#${mixed.map((channel) => channel.toString(16).padStart(2, '0')).join(''
 }
 
 function resolveSource(source: SceneLight, rig: Partial<LightRig>, shadowIds: ReadonlySet<string>): ResolvedSceneLight {
-  const temperature = source.temperature ?? rig.temperature ?? 6100;
+  const temperature = source.temperature ?? rig.temperature ?? 6500;
+  const position = worldPosition(source.position, { x: 0, y: 0, z: 1 });
+  const target = worldPosition(source.target, FALLBACK_TARGET);
+  const dist = Math.max(0.5, Math.hypot(position[0] - target[0], position[1] - target[1], position[2] - target[2]));
+  const distSq = dist * dist;
+  const rawIntensity = source.intensity ?? 1;
+  let intensity: number;
+  if (source.type === 'directional') {
+    intensity = rawIntensity * 2;
+  } else if (source.type === 'area') {
+    const area = Math.max(0.001, (source.width ?? 3) * (source.height ?? 3));
+    intensity = (rawIntensity * distSq) / area;
+  } else {
+    intensity = rawIntensity * distSq;
+  }
+
   return {
     id: source.id,
     type: source.type,
     enabled: true,
-    position: worldPosition(source.position, { x: 0, y: 0, z: 1 }),
-    target: worldPosition(source.target, FALLBACK_TARGET),
-    intensity: (source.intensity ?? 1) * 2,
+    position,
+    target,
+    intensity,
     color: resolveKelvinColor(temperature, source.color || '#ffffff'),
     distance: Math.max(0, source.distance ?? (source.type === 'spot' ? 12 : 10)),
     decay: Math.max(0, source.decay ?? 2),
@@ -128,14 +147,53 @@ function resolveSource(source: SceneLight, rig: Partial<LightRig>, shadowIds: Re
 
 /** Resolve saved/editor light data to a single renderer-ready lighting contract. */
 export function resolveLighting(rig?: Partial<LightRig>): ResolvedLighting {
+  const active = isRigLit(rig);
   const light: Partial<LightRig> = rig ?? {
     position: FALLBACK_POSITION,
     intensity: 1.2,
-    temperature: 6100,
+    temperature: 6500,
     ambience: 0.45,
     keyLightEnabled: false,
     fillEnabled: false,
   };
+
+  const position = worldPosition(light.position, FALLBACK_POSITION);
+  const keyTarget = worldPosition(light.target, FALLBACK_TARGET);
+  const keyColor = resolveKelvinColor(light.temperature ?? 6500, light.keyColor);
+
+  if (!active) {
+    return {
+      active: false,
+      key: {
+        id: 'key',
+        type: 'directional',
+        enabled: false,
+        position,
+        target: keyTarget,
+        intensity: 0,
+        color: keyColor,
+        castShadow: false,
+        shadowIntensity: 0,
+        shadowRadius: 0,
+      },
+      room: {
+        intensity: 0,
+        environmentIntensity: 0,
+        color: '#ffffff',
+        environmentTint: '#ffffff',
+        environment: light.environment ?? 'studio',
+      },
+      fill: {
+        enabled: false,
+        intensity: 0,
+        position: [0, 0, 0],
+        color: '#e0e7ff',
+      },
+      sources: [],
+      showGizmos: Boolean(light.showGizmos),
+    };
+  }
+
   const keyEnabled = light.keyLightEnabled !== false;
   const keyIntensity = light.keyIntensity ?? light.intensity ?? 1.2;
   const shadowIds = new Set<string>();
@@ -150,9 +208,6 @@ export function resolveLighting(rig?: Partial<LightRig>): ResolvedLighting {
     remainingShadows -= 1;
   }
 
-  const keyColor = resolveKelvinColor(light.temperature ?? 6100, light.keyColor);
-  const position = worldPosition(light.position, FALLBACK_POSITION);
-  const keyTarget = worldPosition(light.target, FALLBACK_TARGET);
   const key = {
     id: 'key' as const,
     type: 'directional' as const,
@@ -166,13 +221,14 @@ export function resolveLighting(rig?: Partial<LightRig>): ResolvedLighting {
     shadowRadius: Math.max(0, (light.shadowSoftness ?? 50) / 10),
   };
   const fill = {
-    enabled: light.fillEnabled ?? keyEnabled,
+    enabled: light.fillEnabled !== undefined ? light.fillEnabled : keyEnabled,
     intensity: keyIntensity * (light.fillIntensity ?? DEFAULT_FILL_INTENSITY),
     position: [-position[0] * 0.7, -position[1] * 0.5, position[2] * 0.5] as Vector3Tuple,
     color: '#e0e7ff',
   };
 
   return {
+    active: true,
     key,
     room: {
       intensity: Math.max(0, light.ambience ?? 0.45) * 1.2,

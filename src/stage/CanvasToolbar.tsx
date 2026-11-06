@@ -242,14 +242,21 @@ export const CanvasToolbar: React.FC<CanvasToolbarProps> = ({
     const handleToggleLightButton = () => {
         if (selectedLightId) {
             selectLight(null);
-        } else {
-            if (activeShot?.light?.keyLightEnabled === false && activeShot) {
+        } else if (activeShot) {
+            const shotLight = activeShot.light;
+            const sources = shotLight?.sources || [];
+            const activeSource = sources.find((s) => s.enabled !== false);
+            if (activeSource) {
+                selectLight(activeSource.id);
+            } else if (shotLight?.keyLightEnabled) {
+                selectLight('sun-key');
+            } else {
                 updateShot(activeShot.id, (shot) => ({
                     ...shot,
                     light: { ...shot.light, keyLightEnabled: true },
                 }));
+                selectLight('sun-key');
             }
-            selectLight('sun-key');
         }
         if (onToggleLightRig) onToggleLightRig();
     };
