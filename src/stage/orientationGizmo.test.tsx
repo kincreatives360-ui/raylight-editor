@@ -7,13 +7,13 @@ import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 describe('OrientationGizmo HUD & Presets UI', () => {
     it('defines the seven named camera angles with stable poses', () => {
         expect(CAMERA_ANGLE_VIEWS).toEqual([
-            { id: 'three-quarter-right', label: 'Three-quarter right', orbit: 35, tilt: 20, roll: 0 },
-            { id: 'three-quarter-left', label: 'Three-quarter left', orbit: -35, tilt: 20, roll: 0 },
-            { id: 'profile-right', label: 'Profile right', orbit: 90, tilt: 0, roll: 0 },
-            { id: 'profile-left', label: 'Profile left', orbit: -90, tilt: 0, roll: 0 },
-            { id: 'top-down', label: 'Top down', orbit: 0, tilt: -89, roll: 0 },
-            { id: 'low-angle', label: 'Low angle', orbit: 18, tilt: -16, roll: 0 },
-            { id: 'front', label: 'Front', orbit: 0, tilt: 0, roll: 0 },
+            { id: 'three-quarter-right', label: 'Three-quarter right', orbit: 35, tilt: 18, roll: 0, dolly: 1.7 },
+            { id: 'three-quarter-left', label: 'Three-quarter left', orbit: -35, tilt: 18, roll: 0, dolly: 1.7 },
+            { id: 'profile-right', label: 'Profile right', orbit: 80, tilt: 6, roll: 0, dolly: 1.7 },
+            { id: 'profile-left', label: 'Profile left', orbit: -80, tilt: 6, roll: 0, dolly: 1.7 },
+            { id: 'top-down', label: 'Top down', orbit: 0, tilt: 78, roll: 0, dolly: 1.7 },
+            { id: 'low-angle', label: 'Low angle', orbit: 25, tilt: -30, roll: 0, dolly: 1.5 },
+            { id: 'front', label: 'Front', orbit: 0, tilt: 0, roll: 0, dolly: 1.7 },
         ]);
     });
     it('renders 3D axis HUD, readout pill, and quick presets', () => {

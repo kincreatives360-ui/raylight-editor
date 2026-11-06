@@ -113,6 +113,7 @@ function describeCameraForPasses(camera: THREE.Camera) {
         far: perspective.far ?? 100,
         position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
         forward: { x: cameraForward.x, y: cameraForward.y, z: cameraForward.z },
+        matrixWorldInverse: camera.matrixWorldInverse,
     };
 }
 

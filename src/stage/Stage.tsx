@@ -184,21 +184,65 @@ const StageComponent: React.FC<StageProps> = ({
         activeTool
     );
 
+    const orbitAnimRef = useRef<number | null>(null);
+    const stopOrbitAnimation = useCallback(() => {
+        if (orbitAnimRef.current !== null) {
+            cancelAnimationFrame(orbitAnimRef.current);
+            orbitAnimRef.current = null;
+        }
+    }, []);
+    useEffect(() => () => stopOrbitAnimation(), [stopOrbitAnimation]);
+
     const handleSetOrientation = useCallback((
         orbitDeg: number,
         tiltDeg: number,
         rollDeg: number = 0,
         zoomVal?: number
     ) => {
+        stopOrbitAnimation();
+        const startOrbit = radToDeg(frame.camera.rotation.y);
+        const startTilt = radToDeg(frame.camera.rotation.x);
+        const startRoll = radToDeg(frame.camera.rotation.z);
+        const startZoom = frame.camera.zoom;
+        const targetZoom = zoomVal !== undefined ? zoomVal : startZoom;
+
+        const startTime = performance.now();
+        const duration = 320; // 320ms matching Raylight $ro
+
         beginDragTransaction();
-        updateActiveShotCamera({
-            orbit: orbitDeg,
-            tilt: tiltDeg,
-            roll: rollDeg,
-            ...(zoomVal !== undefined ? { zoom: zoomVal } : {}),
-        });
-        commitDragTransaction();
-    }, [beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
+
+        const step = (now: number) => {
+            const rawT = Math.min(1, Math.max(0, (now - startTime) / duration));
+            const eased = rawT * rawT * (3 - 2 * rawT);
+
+            const currOrbit = startOrbit + (orbitDeg - startOrbit) * eased;
+            const currTilt = startTilt + (tiltDeg - startTilt) * eased;
+            const currRoll = startRoll + (rollDeg - startRoll) * eased;
+            const currZoom = Math.exp(Math.log(Math.max(0.01, startZoom)) + (Math.log(Math.max(0.01, targetZoom)) - Math.log(Math.max(0.01, startZoom))) * eased);
+
+            updateActiveShotCamera({
+                orbit: Math.round(currOrbit * 10) / 10,
+                tilt: Math.round(currTilt * 10) / 10,
+                roll: Math.round(currRoll * 10) / 10,
+                zoom: Math.round(currZoom * 100) / 100,
+            });
+
+            if (rawT < 1) {
+                orbitAnimRef.current = requestAnimationFrame(step);
+            } else {
+                orbitAnimRef.current = null;
+                updateActiveShotCamera({
+                    orbit: orbitDeg,
+                    tilt: tiltDeg,
+                    roll: rollDeg,
+                    zoom: targetZoom,
+                });
+                commitDragTransaction();
+            }
+        };
+
+        orbitAnimRef.current = requestAnimationFrame(step);
+    }, [frame.camera, stopOrbitAnimation, beginDragTransaction, updateActiveShotCamera, commitDragTransaction]);
 
     const handleResetCamera = useCallback(() => {
         beginDragTransaction();
@@ -235,22 +279,74 @@ const StageComponent: React.FC<StageProps> = ({
     }, [frame.camera, currentShotId, setCameraBookmark]);
 
     const handleBackFromOrbitCamera = useCallback(() => {
+        stopOrbitAnimation();
         if (currentShotCameraBookmark) {
+            const startOrbit = radToDeg(frame.camera.rotation.y);
+            const startTilt = radToDeg(frame.camera.rotation.x);
+            const startRoll = radToDeg(frame.camera.rotation.z);
+            const startZoom = frame.camera.zoom;
+            const startTargetX = frame.camera.target.x;
+            const startTargetY = frame.camera.target.y;
+            const startTargetZ = frame.camera.target.z;
+
+            const targetOrbit = currentShotCameraBookmark.orbit;
+            const targetTilt = currentShotCameraBookmark.tilt;
+            const targetRoll = currentShotCameraBookmark.roll;
+            const targetZoom = currentShotCameraBookmark.zoom;
+            const targetX = currentShotCameraBookmark.targetX;
+            const targetY = currentShotCameraBookmark.targetY;
+            const targetZ = currentShotCameraBookmark.targetZ;
+
+            const startTime = performance.now();
+            const duration = 320;
             beginDragTransaction();
-            updateActiveShotCamera({
-                orbit: currentShotCameraBookmark.orbit,
-                tilt: currentShotCameraBookmark.tilt,
-                roll: currentShotCameraBookmark.roll,
-                targetX: currentShotCameraBookmark.targetX,
-                targetY: currentShotCameraBookmark.targetY,
-                targetZ: currentShotCameraBookmark.targetZ,
-                zoom: currentShotCameraBookmark.zoom,
-                focalLength: currentShotCameraBookmark.focalLength,
-            });
-            commitDragTransaction();
+
+            const step = (now: number) => {
+                const rawT = Math.min(1, Math.max(0, (now - startTime) / duration));
+                const eased = rawT * rawT * (3 - 2 * rawT);
+
+                const currOrbit = startOrbit + (targetOrbit - startOrbit) * eased;
+                const currTilt = startTilt + (targetTilt - startTilt) * eased;
+                const currRoll = startRoll + (targetRoll - startRoll) * eased;
+                const currZoom = Math.exp(Math.log(Math.max(0.01, startZoom)) + (Math.log(Math.max(0.01, targetZoom)) - Math.log(Math.max(0.01, startZoom))) * eased);
+                const currX = startTargetX + (targetX - startTargetX) * eased;
+                const currY = startTargetY + (targetY - startTargetY) * eased;
+                const currZ = startTargetZ + (targetZ - startTargetZ) * eased;
+
+                updateActiveShotCamera({
+                    orbit: Math.round(currOrbit * 10) / 10,
+                    tilt: Math.round(currTilt * 10) / 10,
+                    roll: Math.round(currRoll * 10) / 10,
+                    zoom: Math.round(currZoom * 100) / 100,
+                    targetX: currX,
+                    targetY: currY,
+                    targetZ: currZ,
+                });
+
+                if (rawT < 1) {
+                    orbitAnimRef.current = requestAnimationFrame(step);
+                } else {
+                    orbitAnimRef.current = null;
+                    updateActiveShotCamera({
+                        orbit: targetOrbit,
+                        tilt: targetTilt,
+                        roll: targetRoll,
+                        zoom: targetZoom,
+                        targetX,
+                        targetY,
+                        targetZ,
+                        focalLength: currentShotCameraBookmark.focalLength,
+                    });
+                    commitDragTransaction();
+                    setActiveTool('select');
+                }
+            };
+
+            orbitAnimRef.current = requestAnimationFrame(step);
+        } else {
+            setActiveTool('select');
         }
-        setActiveTool('select');
-    }, [currentShotCameraBookmark, beginDragTransaction, updateActiveShotCamera, commitDragTransaction, setActiveTool]);
+    }, [currentShotCameraBookmark, frame.camera, stopOrbitAnimation, beginDragTransaction, updateActiveShotCamera, commitDragTransaction, setActiveTool]);
 
     const handleFrameSelectedLayers = useStageCameraFraming({
         frame,

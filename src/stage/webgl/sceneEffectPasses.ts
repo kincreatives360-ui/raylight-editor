@@ -389,6 +389,8 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
   });
 }
 
+const tempLocalFocusVec = new THREE.Vector3();
+
 export function configureSceneEffectPass(
   pass: ShaderPass,
   key: EffectKey,
@@ -396,7 +398,13 @@ export function configureSceneEffectPass(
   width: number,
   height: number,
   motion = { x: 0, y: 0 },
-  cameraClip: { near: number; far: number; position?: { x: number; y: number; z: number }; forward?: { x: number; y: number; z: number } } = { near: 0.1, far: 100 },
+  cameraClip: {
+    near: number;
+    far: number;
+    position?: { x: number; y: number; z: number };
+    forward?: { x: number; y: number; z: number };
+    matrixWorldInverse?: THREE.Matrix4;
+  } = { near: 0.1, far: 100 },
   resolvedFocusTarget?: { x: number; y: number; z: number } | null
 ) {
   const e = effects.state, p = pass.uniforms.uParams.value as THREE.Vector4;
@@ -502,13 +510,19 @@ export function configureSceneEffectPass(
           ? (resolvedFocusTarget ?? null)
           : (resolvedFocusTarget ?? dof.target);
         if (target) {
-          const { position, forward } = cameraClip;
-          if (position && forward) {
-            const alongView = calculateFocusDistanceToPoint(target, position, forward);
+          if (cameraClip.matrixWorldInverse) {
+            tempLocalFocusVec.set(target.x, target.y, target.z).applyMatrix4(cameraClip.matrixWorldInverse);
+            const alongView = Math.max(-tempLocalFocusVec.z, 0.001);
             if (Number.isFinite(alongView) && alongView > 0.001) focusDist = alongView;
           } else {
-            const tz = Number(target.z);
-            if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
+            const { position, forward } = cameraClip;
+            if (position && forward) {
+              const alongView = calculateFocusDistanceToPoint(target, position, forward);
+              if (Number.isFinite(alongView) && alongView > 0.001) focusDist = alongView;
+            } else {
+              const tz = Number(target.z);
+              if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
+            }
           }
         }
       }

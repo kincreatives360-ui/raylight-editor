@@ -56,10 +56,11 @@ describe('evaluateShotCameraAtTime', () => {
     expect(before.focalLength).toBe(50);
 
     // Midpoint: t=2000 (1000ms into 2000ms duration)
+    // Raylight logarithmic zoom interpolation: sqrt(1.0 * 1.5) = 1.2247...
     const mid = evaluateShotCameraAtTime(shot, 2000);
     expect(mid.target.x).toBeCloseTo(100, 2);
     expect(mid.target.y).toBeCloseTo(50, 2);
-    expect(mid.zoom).toBeCloseTo(1.25, 2);
+    expect(mid.zoom).toBeCloseTo(Math.sqrt(1.0 * 1.5), 2);
     expect(mid.rotation.x).toBeCloseTo(degToRad(15), 3);
     expect(mid.focalLength).toBe(50); // In dolly mode, focal length stays 50mm
     expect(mid.activeMode).toBe('dolly');

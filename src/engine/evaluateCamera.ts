@@ -2,7 +2,7 @@
 import type { Shot, CameraKeyframeEndpoint } from '../model/types';
 import { degToRad } from '../model/defaults';
 import { evaluateEasing } from './easing';
-import { lerp } from './math';
+import { lerp, lerpLog } from './math';
 import {
     BASE_FOV_DEGREES,
     DEFAULT_FOCAL_LENGTH,
@@ -169,7 +169,7 @@ export function evaluateShotCameraAtTime(
             : lerp(fromZ, toZ, eased);
         const safeFromZoom = Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1;
         const safeToZoom = Number.isFinite(toEndpoint.zoom) && toEndpoint.zoom > 0 ? toEndpoint.zoom : safeFromZoom;
-        const targetZoom = lerp(safeFromZoom, safeToZoom, eased);
+        const targetZoom = lerpLog(safeFromZoom, safeToZoom, eased);
         zoom = Math.max(0.15, targetZoom);
 
         rotX = degToRad(lerp(fromEndpoint.tilt, toEndpoint.tilt, eased));
@@ -185,16 +185,19 @@ export function evaluateShotCameraAtTime(
             fovDegrees = BASE_FOV_DEGREES / zoom;
             focalLength = fromFocal * zoom;
         } else if (block.mode === 'dollyzoom') {
-            // Warp (Dolly-Zoom / Vertigo Effect): counter-scales FOV against physical Z push
+            // Warp (Dolly-Zoom / Vertigo Effect):
+            // Raylight reciprocal optical law:
+            //   focalLength = f0 / zoom
+            //   FOV = 2 * atan(24 / (2 * focalLength))
+            //   Distance Z = Z0 / (zoom^2)
             const fromBaseZoom = Math.max(0.2, Number.isFinite(fromEndpoint.zoom) && fromEndpoint.zoom > 0 ? fromEndpoint.zoom : 1);
-            fovDegrees = Math.max(
-                10,
-                Math.min(95, BASE_FOV_DEGREES * (zoom / fromBaseZoom))
-            );
-            focalLength = (24 / (2 * Math.tan((fovDegrees * Math.PI) / 360)));
+            const zoomRatio = zoom / fromBaseZoom;
+            focalLength = Math.max(8, Math.min(400, fromFocal / zoomRatio));
+            fovDegrees = focalLengthToFov(focalLength);
             if (Math.abs(toZ - fromZ) < 1e-6) {
-                // Compensate Z distance when no explicit Z shift was authored so subject width stays locked
-                targetZ = fromZ + (1 - fromBaseZoom / zoom) * CAMERA_Z_COMPENSATION;
+                // Compensate Z distance with Raylight Vertigo inverse-square law
+                const baseDistance = DEFAULT_CAMERA_Z;
+                targetZ = fromZ + (baseDistance / (zoomRatio * zoomRatio) - baseDistance);
             }
         } else {
             // Dolly: physical 3D camera push with configured focal length (e.g. 50mm or custom lens)
@@ -207,7 +210,10 @@ export function evaluateShotCameraAtTime(
         const shakeTo = block.shake?.to ?? 0;
         const currentShakePct = lerp(shakeFrom, shakeTo, eased);
         if (currentShakePct > 0) {
-            const amp = (currentShakePct / 100) * CAMERA_SHAKE_AMPLITUDE_SCALE;
+            // Distance-scaled shake amplitude matching Raylight Tte:
+            // Translation jitter scales directly with camera distance / subject distance
+            const distanceScale = Math.max(0.5, Math.abs(DEFAULT_CAMERA_Z / Math.max(0.2, zoom)));
+            const amp = (currentShakePct / 100) * CAMERA_SHAKE_AMPLITUDE_SCALE * distanceScale;
             const freq = block.shake?.frequency ?? 1.0;
             // Deterministic shake: use block ID hash as stable phase offset, advance continuously with shot-local time
             const stableSeed = block.id

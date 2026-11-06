@@ -220,4 +220,44 @@ describe('SceneEffectsPipeline ordered passes & color encoding', () => {
     composer.dispose();
   });
 
+  it('calculates depth of field focus distance along camera optical axis using matrixWorldInverse', () => {
+    const effectsState = createDefaultEffects();
+    effectsState.depthOfField.enabled = true;
+    effectsState.depthOfField.focusMode = 'target';
+    effectsState.depthOfField.target = { x: 0, y: 0, z: -5 };
+
+    const evaluated: EvaluatedEffects = {
+      state: effectsState,
+      orderedEnabledPasses: [
+        { key: 'depthOfField', orderIndex: 1, summary: 'Depth of Field' },
+      ],
+      deterministicSeed: 0.5,
+    };
+
+    const camera = new THREE.PerspectiveCamera(50, 16 / 9, 0.1, 100);
+    // Position camera at z = 2.65 looking down -Z
+    camera.position.set(0, 0, 2.65);
+    camera.updateMatrixWorld();
+
+    const pass = createSceneEffectPass('depthOfField');
+    configureSceneEffectPass(
+      pass,
+      'depthOfField',
+      evaluated,
+      1920,
+      1080,
+      { x: 0, y: 0 },
+      {
+        near: camera.near,
+        far: camera.far,
+        position: camera.position,
+        matrixWorldInverse: camera.matrixWorldInverse,
+      }
+    );
+
+    const params = pass.uniforms.uParams.value as THREE.Vector4;
+    // Expected distance along camera -Z axis: 2.65 - (-5) = 7.65
+    expect(params.x).toBeCloseTo(7.65, 2);
+    pass.material.dispose();
+  });
 });

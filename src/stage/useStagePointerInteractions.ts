@@ -45,16 +45,17 @@ export const useStagePointerInteractions = ({ activeTool, isSpaceHeld, frame, pr
             return;
         }
 
-        // 0. Dedicated Camera Navigation Tool (C) OR Alt + Drag in Select Tool
-        // Left-drag: Orbit | Middle-drag (or Shift+Left-drag): Pan | Right-drag: Dolly
+        // 0. Dedicated Camera Navigation Tool (C / ⇧F) OR Alt + Drag in Select Tool
+        // Left-drag: Orbit | Middle-drag (or Alt+Left-drag): Pan | Shift+Left-drag: Roll | Right-drag: Dolly
         const isCameraAction = activeTool === 'camera' || (e.altKey && !isSpaceHeld);
         if (isCameraAction) {
             e.preventDefault();
             e.stopPropagation();
 
-            const isPanAction = e.button === 1 || (e.button === 0 && e.shiftKey);
+            const isPanAction = e.button === 1 || (e.button === 0 && e.altKey);
+            const isRollAction = e.button === 0 && e.shiftKey;
             const isDollyAction = e.button === 2;
-            const isOrbitAction = e.button === 0 && !e.shiftKey;
+            const isOrbitAction = e.button === 0 && !e.shiftKey && !e.altKey;
 
             const startX = e.clientX;
             const startY = e.clientY;
@@ -76,6 +77,9 @@ export const useStagePointerInteractions = ({ activeTool, isSpaceHeld, frame, pr
             const startTilt = activeEp
                 ? activeEp.tilt
                 : (baseFraming?.tilt ?? Math.round(radToDeg(frame.camera.rotation.x)));
+            const startRoll = activeEp
+                ? (activeEp.roll ?? 0)
+                : (baseFraming?.roll ?? Math.round(radToDeg(frame.camera.rotation.z)));
             const startTargetX = activeEp
                 ? activeEp.anchorX
                 : (baseFraming?.target.x ?? frame.camera.target.x);
@@ -93,14 +97,20 @@ export const useStagePointerInteractions = ({ activeTool, isSpaceHeld, frame, pr
                 const deltaY = moveEv.clientY - startY;
 
                 if (isOrbitAction) {
-                    const deltaOrbit = deltaX * 0.4;
-                    const deltaTilt = -deltaY * 0.4;
+                    // Raylight orbit sensitivity: 0.35 deg/px (nct = mlt = 0.35)
+                    const deltaOrbit = -deltaX * 0.35;
+                    const deltaTilt = deltaY * 0.35;
                     const nextOrbit = Math.round(startOrbit + deltaOrbit);
                     const nextTilt = Math.max(
                         -85,
                         Math.min(85, Math.round(startTilt + deltaTilt))
                     );
                     updateActiveShotCamera({ orbit: nextOrbit, tilt: nextTilt });
+                } else if (isRollAction) {
+                    // Raylight roll sensitivity: 0.25 deg/px (KSo = 0.25)
+                    const deltaRoll = deltaX * 0.25;
+                    const nextRoll = Math.round(startRoll + deltaRoll);
+                    updateActiveShotCamera({ roll: nextRoll });
                 } else if (isPanAction) {
                     const panFactor = 1 / (Math.max(0.2, startZoom) * canvasZoom);
                     const deltaNormX = (deltaX / frameWidth) * panFactor;

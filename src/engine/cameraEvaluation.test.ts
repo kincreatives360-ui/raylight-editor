@@ -211,5 +211,52 @@ describe('Raylight Camera Framing & Evaluation', () => {
             expect(result.data.schemaVersion).toBe(2);
         }
     });
+
+    it('5. Evaluates logarithmic zoom interpolation uniformly across wide and telephoto scales', () => {
+        const block: CameraBlock = {
+            id: 'cam-log-zoom',
+            startMs: 0,
+            durationMs: 1000,
+            fromFramingId: 'f1',
+            toFramingId: 'f2',
+            mode: 'dolly',
+            easing: { kind: 'preset', name: 'linear' },
+            from: { anchorX: 0, anchorY: 0, zoom: 0.5, roll: 0, orbit: 0, tilt: 0 },
+            to: { anchorX: 0, anchorY: 0, zoom: 2.0, roll: 0, orbit: 0, tilt: 0 },
+        };
+        const shot = createTestShot([block]);
+
+        // At 50% linear progress:
+        // Linear interpolation would produce (0.5 + 2.0)/2 = 1.25.
+        // Logarithmic interpolation produces exp((ln(0.5) + ln(2.0)) / 2) = exp(0) = 1.0!
+        const midCamera = evaluateShotCameraAtTime(shot, 500);
+        expect(midCamera.zoom).toBeCloseTo(1.0, 3);
+    });
+
+    it('6. Evaluates Vertigo dolly-zoom scaling focal length and Z-distance with reciprocal optical laws', () => {
+        const block: CameraBlock = {
+            id: 'cam-dollyzoom',
+            startMs: 0,
+            durationMs: 1000,
+            fromFramingId: 'f1',
+            toFramingId: 'f2',
+            mode: 'dollyzoom',
+            easing: { kind: 'preset', name: 'linear' },
+            from: { anchorX: 0, anchorY: 0, zoom: 1.0, focalLength: 50, roll: 0, orbit: 0, tilt: 0 },
+            to: { anchorX: 0, anchorY: 0, zoom: 2.0, focalLength: 50, roll: 0, orbit: 0, tilt: 0 },
+        };
+        const shot = createTestShot([block]);
+
+        const atStart = evaluateShotCameraAtTime(shot, 0);
+        expect(atStart.focalLength).toBeCloseTo(50, 1);
+        expect(atStart.target.z).toBeCloseTo(0, 3);
+
+        // At end: zoom ratio is 2.0. Focal length scales to 50 / 2 = 25mm.
+        // Z distance scales by inverse square 1 / (2^2) = 0.25 relative to 2.65m.
+        const atEnd = evaluateShotCameraAtTime(shot, 1000);
+        expect(atEnd.focalLength).toBeCloseTo(25, 1);
+        // targetZ offset: (2.65 / 4 - 2.65) = -1.9875
+        expect(atEnd.target.z).toBeCloseTo(-1.9875, 3);
+    });
 });
 
