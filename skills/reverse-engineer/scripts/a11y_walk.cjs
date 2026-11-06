@@ -13,8 +13,11 @@ const path = require('path');
 const { runSteps } = require('./lib/steps.cjs');
 let chromium;
 try { ({ chromium } = require('playwright')); }
-catch (e) { try { ({ chromium } = require('playwright-core')); } catch (e2) {
-  console.error('Playwright required'); process.exit(1); } }
+catch (e) {
+  try { ({ chromium } = require('playwright-core')); } catch (e2) {
+    console.error('Playwright required'); process.exit(1);
+  }
+}
 
 const args = process.argv.slice(2);
 if (args.includes('--help') || args.includes('-h')) {
@@ -170,11 +173,11 @@ fs.mkdirSync(outDir, { recursive: true });
     `# A11y walk: ${url}`,
     ``,
     `## Role counts (accessibility snapshot)`,
-    ...Object.entries(roles).sort((a,b)=>b[1]-a[1]).map(([k,v]) => `- ${k}: ${v}`),
+    ...Object.entries(roles).sort((a, b) => b[1] - a[1]).map(([k, v]) => `- ${k}: ${v}`),
     ``,
     `## Tab order (${order.length} stops)`,
-    ...order.slice(0, 60).map(o => `${o.index}. \`${o.selectorHint}\` role=${o.role||'-'} name="${(o.name||'').slice(0,40)}" `),
-    order.length > 60 ? `... and ${order.length-60} more` : '',
+    ...order.slice(0, 60).map(o => `${o.index}. \`${o.selectorHint}\` role=${o.role || '-'} name="${(o.name || '').slice(0, 40)}" `),
+    order.length > 60 ? `... and ${order.length - 60} more` : '',
     ``,
     `Files: a11y-tree.json, tab-order.json`
   ].join('\n');
