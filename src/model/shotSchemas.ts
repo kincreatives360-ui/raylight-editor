@@ -84,11 +84,16 @@ export const SceneEffectAnimationBlockSchema = z.object({
   id: z.string(),
   label: z.string(),
   effectKey: EffectKeySchema,
+  property: z.string().optional(),
   startMs: z.number().min(0),
   durationMs: z.number().min(50),
   fromValue: z.number(),
   toValue: z.number(),
+  fromTarget: Vec3Schema.optional(),
+  toTarget: Vec3Schema.optional(),
+  amount: z.union([z.number(), Vec3Schema]).optional(),
   easing: EasingSchema,
+  direction: z.enum(['forward', 'reverse']).optional(),
 });
 
 export const ShotSchema = z.object({

@@ -144,26 +144,26 @@ export function evaluateLayerAtTime(
                     const unfocused = Math.max(0, Math.min(1, inv));
                     extraLayerBlur += blur * unfocused;
                     if (ent.fade !== false) opacity *= p;
-                } else if (ent.type === 'fade') opacity *= p;
-                else if (ent.type === 'slide-up') {
+                } else if (ent.type === 'fade') {
+                    opacity *= p;
+                } else if (ent.type === 'slide' || ent.type.startsWith('slide-')) {
                     if (ent.fade !== false) opacity *= p;
-                    position.y += dist * inv;
-                } else if (ent.type === 'slide-down') {
-                    if (ent.fade !== false) opacity *= p;
-                    position.y -= dist * inv;
-                } else if (ent.type === 'slide-left') {
-                    if (ent.fade !== false) opacity *= p;
-                    position.x += dist * inv;
-                } else if (ent.type === 'slide-right') {
-                    if (ent.fade !== false) opacity *= p;
-                    position.x -= dist * inv;
-                } else if (ent.type === 'float-out') {
-                    if (ent.fade !== false) opacity *= p;
+                    const dir = ent.direction ?? (ent.type === 'slide-down' ? 'down' : ent.type === 'slide-left' ? 'left' : ent.type === 'slide-right' ? 'right' : 'up');
+                    if (dir === 'up') position.y += dist * inv;
+                    else if (dir === 'down') position.y -= dist * inv;
+                    else if (dir === 'left') position.x += dist * inv;
+                    else if (dir === 'right') position.x -= dist * inv;
+                } else if (ent.type === 'float' || ent.type === 'float-in' || ent.type === 'float-out') {
+                    // Raylight Dr float-in uses quadratic opacity curve (p * p) for smooth optical ramp
+                    if (ent.fade !== false) opacity *= p * p;
                     position.z -= dist * inv;
-                } else if (ent.type === 'scale-out') {
+                } else if (ent.type === 'scale' || ent.type === 'scale-in' || ent.type === 'scale-out') {
                     if (ent.fade !== false) opacity *= p;
-                    scale.x *= 0.7 + 0.3 * p;
-                    scale.y *= 0.7 + 0.3 * p;
+                    // Raylight t6e = 0.92 base scale factor
+                    const initialScale = Math.max(0, 1 - (1 - 0.92) * (ent.distance ?? 1.0));
+                    const scaleFactor = initialScale + (1 - initialScale) * p;
+                    scale.x *= scaleFactor;
+                    scale.y *= scaleFactor;
                 } else if (ent.type === 'pop') {
                     if (ent.fade !== false) opacity *= Math.min(1, p * 1.4);
                     const popFactor = 0.25 + 0.75 * p + Math.sin(p * Math.PI) * 0.14 * inv;
@@ -222,26 +222,25 @@ export function evaluateLayerAtTime(
                     const unfocused = Math.max(0, Math.min(1, p));
                     extraLayerBlur += blur * unfocused;
                     if (ext.fade !== false) opacity *= 1 - p;
-                } else if (ext.type === 'fade') opacity *= 1 - p;
-                else if (ext.type === 'slide-up') {
+                } else if (ext.type === 'fade') {
+                    opacity *= 1 - p;
+                } else if (ext.type === 'slide' || ext.type.startsWith('slide-')) {
                     if (ext.fade !== false) opacity *= 1 - p;
-                    position.y -= dist * p;
-                } else if (ext.type === 'slide-down') {
-                    if (ext.fade !== false) opacity *= 1 - p;
-                    position.y += dist * p;
-                } else if (ext.type === 'slide-left') {
-                    if (ext.fade !== false) opacity *= 1 - p;
-                    position.x -= dist * p;
-                } else if (ext.type === 'slide-right') {
-                    if (ext.fade !== false) opacity *= 1 - p;
-                    position.x += dist * p;
-                } else if (ext.type === 'float-out') {
-                    if (ext.fade !== false) opacity *= 1 - p;
+                    const dir = ext.direction ?? (ext.type === 'slide-down' ? 'down' : ext.type === 'slide-left' ? 'left' : ext.type === 'slide-right' ? 'right' : 'up');
+                    if (dir === 'up') position.y -= dist * p;
+                    else if (dir === 'down') position.y += dist * p;
+                    else if (dir === 'left') position.x -= dist * p;
+                    else if (dir === 'right') position.x += dist * p;
+                } else if (ext.type === 'float' || ext.type === 'float-in' || ext.type === 'float-out') {
+                    // Raylight Lr float-out uses square root opacity curve for smooth dissipation
+                    if (ext.fade !== false) opacity *= Math.pow(Math.max(1 - p, 0), 0.5);
                     position.z += dist * p;
-                } else if (ext.type === 'scale-out') {
+                } else if (ext.type === 'scale' || ext.type === 'scale-in' || ext.type === 'scale-out') {
                     if (ext.fade !== false) opacity *= 1 - p;
-                    scale.x *= 1 - 0.3 * p;
-                    scale.y *= 1 - 0.3 * p;
+                    const targetScale = Math.max(0, 1 - (1 - 0.92) * (ext.distance ?? 1.0));
+                    const scaleFactor = 1 + (targetScale - 1) * p;
+                    scale.x *= scaleFactor;
+                    scale.y *= scaleFactor;
                 } else if (ext.type === 'pop') {
                     if (ext.fade !== false) opacity *= 1 - p;
                     const popFactor = 1 - 0.75 * p;

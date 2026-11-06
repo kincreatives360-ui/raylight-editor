@@ -88,19 +88,14 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
         vec2 stretch = uMotion.xy;
         vec2 shaped = tap * (length(stretch) > 0.01 ? stretch : vec2(1.0, 1.0));
         float catEye = uFringe.z;
-        if (catEye > 0.0) {
-          vec2 centered = (uv - 0.5) * 2.0;
-          float dist = length(centered);
-          if (dist > 0.001) {
-            vec2 dir = centered / dist;
-            vec2 perp = vec2(-dir.y, dir.x);
-            float shear = catEye * clamp(dist * dist, 0.0, 1.0);
-            float rComp = dot(shaped, dir);
-            float tComp = dot(shaped, perp) * (1.0 - 0.5 * shear);
-            shaped = dir * rComp + perp * tComp;
-          }
-        }
-        return shaped;
+        if (catEye <= 0.0) return shaped;
+        vec2 fromCenter = (uv - 0.5) * vec2(uResolution.x / uResolution.y, 1.0);
+        float dist = length(fromCenter);
+        if (dist < 1e-4) return shaped;
+        vec2 radial = fromCenter / dist;
+        vec2 tangent = vec2(-radial.y, radial.x);
+        float squeeze = 1.0 - catEye * smoothstep(0.0, 0.7, dist);
+        return radial * (dot(shaped, radial) * squeeze) + tangent * dot(shaped, tangent);
       }
       float bokehRimWeight(float normalizedRadius) {
         float rim = uFringe.w;
@@ -111,7 +106,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
       float bokehSoftnessWeight(float normalizedRadius) {
         float softness = uColor.r;
         if (softness <= 0.0) return 1.0;
-        return mix(1.0, exp(-2.5 * normalizedRadius * normalizedRadius), softness);
+        return mix(1.0, exp(-4.0 * normalizedRadius * normalizedRadius), softness);
       }
       // Aperture-shaped sample on the unit disc; z compensates the sample density of polygon shapes.
       vec3 dofTap(float index, float count, float jitter, float blades, float rotation) {

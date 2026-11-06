@@ -304,4 +304,82 @@ describe('evaluateLayerAtTime', () => {
     expect(scrambleMid.textContentOverride).toContain('Raylight ');
     expect(scrambleMid.textContentOverride).not.toBe('Raylight Studio Motion');
   });
+
+  it('9. Raylight Dr/Lr runtime parity: float-in quadratic opacity, float-out sqrt dissipation, scale-in base threshold, slide direction', () => {
+    const baseShape = createDefaultShapeLayer({
+      inMs: 0,
+      outMs: 2000,
+      opacity: 1,
+      position: { x: 0, y: 0, z: 0 },
+      scale: { x: 1, y: 1, z: 1 },
+    });
+
+    // Float-in: at p = 0.5 (t = 500ms / 1000ms), opacity = 0.5^2 = 0.25, and Z is displaced
+    const floatIn = evaluateLayerAtTime(
+      {
+        ...baseShape,
+        entrance: {
+          type: 'float-in',
+          durationMs: 1000,
+          delayMs: 0,
+          distance: 0.5,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      },
+      500
+    );
+    expect(floatIn.opacity).toBeCloseTo(0.25, 3); // quadratic optical ramp p * p
+    expect(floatIn.position.z).toBeCloseTo(-0.25, 3); // -0.5 * (1 - 0.5)
+
+    // Float-out: at exit start + 500ms (t = 1500ms), p = 0.5, opacity is sqrt(1 - p) = sqrt(0.5) ≈ 0.707
+    const floatOut = evaluateLayerAtTime(
+      {
+        ...baseShape,
+        exit: {
+          type: 'float-out',
+          durationMs: 1000,
+          delayMs: 0,
+          distance: 0.4,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      },
+      1500
+    );
+    expect(floatOut.opacity).toBeCloseTo(Math.sqrt(0.5), 3);
+    expect(floatOut.position.z).toBeCloseTo(0.2, 3); // 0.4 * 0.5
+
+    // Scale-in: at p = 0.5, scale factor = (1 - 0.08 * 1.0) + (0.08 * 1.0) * 0.5 = 0.92 + 0.04 = 0.96
+    const scaleIn = evaluateLayerAtTime(
+      {
+        ...baseShape,
+        entrance: {
+          type: 'scale-in',
+          durationMs: 1000,
+          delayMs: 0,
+          distance: 1.0,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      },
+      500
+    );
+    expect(scaleIn.scale.x).toBeCloseTo(0.96, 3);
+    expect(scaleIn.scale.y).toBeCloseTo(0.96, 3);
+
+    // Slide with explicit direction 'left': position.x displaces positively on entrance (coming from right to left)
+    const slideLeft = evaluateLayerAtTime(
+      {
+        ...baseShape,
+        entrance: {
+          type: 'slide',
+          direction: 'left',
+          durationMs: 1000,
+          delayMs: 0,
+          distance: 0.3,
+          easing: { kind: 'preset', name: 'linear' },
+        },
+      },
+      500
+    );
+    expect(slideLeft.position.x).toBeCloseTo(0.15, 3); // 0.3 * (1 - 0.5)
+  });
 });

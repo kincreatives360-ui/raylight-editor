@@ -15,6 +15,7 @@ export interface Transitionish {
   fade?: boolean;
   stagger?: 'none' | 'letter' | 'word' | 'line';
   type: TransitionType;
+  direction?: 'left' | 'right' | 'up' | 'down';
   durationMs: number;
   delayMs: number;
   distance: number;

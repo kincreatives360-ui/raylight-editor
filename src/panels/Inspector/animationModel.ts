@@ -1,6 +1,6 @@
 import { degToRad } from '../../model/defaults';
 import { generateId } from '../../model/id';
-import type { AnimationBlock, AnimationBlockProperty, Layer, Shot, Transitionish, TransitionType } from '../../model/types';
+import type { AnimationBlock, AnimationBlockProperty, EffectKey, Layer, Shot, Transitionish, TransitionType } from '../../model/types';
 export type PresetSide = 'in' | 'out';
 export type LayerPreset = Transitionish & {
     id?: string;
@@ -10,15 +10,45 @@ export const PRESETS: {
     label: string;
     textOnly?: boolean;
 }[] = [
-    { type: 'fade', label: 'Fade' }, { type: 'blur', label: 'Blur' }, { type: 'slide-up', label: 'Slide' },
+    { type: 'fade', label: 'Fade' },
+    { type: 'slide-up', label: 'Slide' },
+    { type: 'float-out', label: 'Float' },
+    { type: 'scale-out', label: 'Scale' },
     { type: 'mask-sweep', label: 'Wipe' },
-    { type: 'typewriter', label: 'Typewriter', textOnly: true }, { type: 'scramble', label: 'Scramble', textOnly: true },
-    { type: 'slide-down', label: 'Slide down' }, { type: 'slide-left', label: 'Slide left' }, { type: 'slide-right', label: 'Slide right' },
-    { type: 'float-out', label: 'Float' }, { type: 'scale-out', label: 'Scale' },
-    { type: 'pop', label: 'Pop' }, { type: 'spin', label: 'Spin' },
-    { type: 'flip-x', label: 'Flip X' }, { type: 'flip-y', label: 'Flip Y' },
-    { type: 'swing', label: 'Swing' }, { type: 'wipe', label: 'Mask sweep' },
+    { type: 'typewriter', label: 'Typewriter', textOnly: true },
+    { type: 'scramble', label: 'Scramble', textOnly: true },
+    { type: 'blur', label: 'Blur' },
+    { type: 'slide-down', label: 'Slide down' },
+    { type: 'slide-left', label: 'Slide left' },
+    { type: 'slide-right', label: 'Slide right' },
+    { type: 'pop', label: 'Pop' },
+    { type: 'spin', label: 'Spin' },
+    { type: 'flip-x', label: 'Flip X' },
+    { type: 'flip-y', label: 'Flip Y' },
+    { type: 'swing', label: 'Swing' },
+    { type: 'wipe', label: 'Mask sweep' },
 ];
+
+export interface EffectAnimationDefinition {
+    effectKey: EffectKey;
+    property: string;
+    kind: 'scalar' | 'vector';
+    label: string;
+}
+
+export const EFFECT_ANIMATIONS: EffectAnimationDefinition[] = [
+    { effectKey: 'depthOfField', property: 'target', kind: 'vector', label: 'Focus' },
+    { effectKey: 'depthOfField', property: 'aperture', kind: 'scalar', label: 'Blur' },
+    { effectKey: 'bloom', property: 'intensity', kind: 'scalar', label: 'Bloom' },
+    { effectKey: 'glitch', property: 'intensity', kind: 'scalar', label: 'Glitch' },
+    { effectKey: 'fisheye', property: 'intensity', kind: 'scalar', label: 'Fisheye' },
+    { effectKey: 'lensDistortion', property: 'fieldOfView', kind: 'scalar', label: 'Lens distortion' },
+    { effectKey: 'chromaticAberration', property: 'offset', kind: 'scalar', label: 'Color split' },
+    { effectKey: 'gradientMap', property: 'intensity', kind: 'scalar', label: 'Gradient map' },
+    { effectKey: 'atmosphere', property: 'intensity', kind: 'scalar', label: 'Atmosphere' },
+    { effectKey: 'filmGrain', property: 'intensity', kind: 'scalar', label: 'Film grain' },
+];
+
 export const ANIMATIONS: {
     property: AnimationBlockProperty;
     label: string;
@@ -26,19 +56,45 @@ export const ANIMATIONS: {
     textOnly?: boolean;
     shapeOnly?: boolean;
 }[] = [
-    { property: 'position', label: 'Position', group: 'Custom' }, { property: 'rotation', label: 'Rotation', group: 'Custom' },
-    { property: 'tilt', label: 'Tilt', group: 'Custom' }, { property: 'scale', label: 'Scale', group: 'Custom' },
-    { property: 'opacity', label: 'Opacity', group: 'Custom' }, { property: 'size', label: 'Size', group: 'Custom' },
-    { property: 'followPath', label: 'Follow path', group: 'Custom' }, { property: 'wiggle', label: 'Wiggle', group: 'Custom' },
-    { property: 'shimmer', label: 'Shimmer', group: 'Custom' }, { property: 'emphasis', label: 'Emphasis', group: 'Custom' },
-    { property: 'counter', label: 'Counter', group: 'Custom', textOnly: true }, { property: 'changeText', label: 'Change text', group: 'Custom', textOnly: true },
-    { property: 'maskSweep', label: 'Wipe', group: 'Appearance' }, { property: 'cornerRadius', label: 'Corner radius', group: 'Appearance', shapeOnly: true },
-    { property: 'pathReveal', label: 'Path reveal', group: 'Appearance', shapeOnly: true },
-    { property: 'layerBlur', label: 'Blur', group: 'Effects' }, { property: 'glow', label: 'Glow', group: 'Effects' },
+    { property: 'position', label: 'Position', group: 'Custom' },
+    { property: 'rotation', label: 'Rotation', group: 'Custom' },
+    { property: 'tilt', label: 'Tilt', group: 'Custom' },
+    { property: 'scale', label: 'Scale', group: 'Custom' },
+    { property: 'opacity', label: 'Opacity', group: 'Custom' },
+    { property: 'followPath', label: 'Follow path', group: 'Custom' },
+    { property: 'wiggle', label: 'Wiggle', group: 'Custom' },
+    { property: 'size', label: 'Size', group: 'Custom' },
+    { property: 'shimmer', label: 'Shimmer', group: 'Custom' },
+    { property: 'emphasis', label: 'Emphasis', group: 'Custom' },
+    { property: 'counter', label: 'Counter', group: 'Custom', textOnly: true },
+    { property: 'changeText', label: 'Change text', group: 'Custom', textOnly: true },
+    { property: 'cornerRadius', label: 'Corner radius', group: 'Appearance', shapeOnly: true },
+    { property: 'pathReveal', label: 'Stroke', group: 'Appearance', shapeOnly: true },
+    { property: 'maskSweep', label: 'Wipe', group: 'Appearance' },
+    { property: 'layerBlur', label: 'Blur', group: 'Effects' },
+    { property: 'glow', label: 'Glow', group: 'Effects' },
 ];
-export const presetLabel = (type: TransitionType) => PRESETS.find(p => p.type === type)?.label ?? type;
+
+export const presetLabel = (type: TransitionType) => {
+    if (type === 'fade') return 'Fade';
+    if (type === 'slide' || type === 'slide-up' || type === 'slide-down' || type === 'slide-left' || type === 'slide-right') return 'Slide';
+    if (type === 'float' || type === 'float-in' || type === 'float-out') return 'Float';
+    if (type === 'scale' || type === 'scale-in' || type === 'scale-out') return 'Scale';
+    if (type === 'mask-sweep' || type === 'wipe') return 'Wipe';
+    return PRESETS.find(p => p.type === type)?.label ?? type;
+};
+
 export const animationLabel = (property: AnimationBlockProperty) => ANIMATIONS.find(p => p.property === property)?.label ?? (property === 'morph' ? 'Morph into' : property);
-export const availablePresets = (layers: Layer[]) => PRESETS.filter(p => !p.textOnly || layers.every(l => l.kind === 'text'));
+
+export const availablePresets = (layers: Layer[]) => {
+    const isAllText = layers.length > 0 && layers.every(l => l.kind === 'text');
+    return PRESETS.filter(p => {
+        if (p.textOnly) return isAllText;
+        if (['fade', 'slide-up', 'float-out', 'scale-out', 'mask-sweep'].includes(p.type)) return true;
+        return false;
+    });
+};
+
 export const availableAnimations = (layers: Layer[]) => ANIMATIONS.filter(p => (!p.textOnly || layers.every(l => l.kind === 'text')) && (!p.shapeOnly || layers.every(l => l.kind === 'shape' || (p.property === 'cornerRadius' && (l.kind === 'image' || l.kind === 'video')))) && (p.property !== 'glow' || layers.every(l => l.effects.glow?.enabled)));
 export function presetList(layer: Layer, side: PresetSide): LayerPreset[] {
     const stack = side === 'in' ? layer.entrances : layer.exits;
@@ -50,7 +106,24 @@ export function replacePresets(layer: Layer, side: PresetSide, list: LayerPreset
     return side === 'in' ? { ...layer, entrances: list.length ? list : undefined, entrance: list[0] ?? empty } : { ...layer, exits: list.length ? list : undefined, exit: list[0] ?? empty };
 }
 export function createPreset(type: TransitionType, side: PresetSide, durationMs: number): LayerPreset {
-    return { id: generateId(side), type, durationMs: Math.max(10, Math.min(600, durationMs)), delayMs: 0, distance: .25, blur: 40, fade: true, stagger: 'none', enabled: true, easing: { kind: 'preset', name: side === 'in' ? 'ease-out' : 'ease-in' } };
+    let resolvedType: TransitionType = type;
+    if (type === 'float') resolvedType = side === 'in' ? 'float-in' : 'float-out';
+    else if (type === 'scale') resolvedType = side === 'in' ? 'scale-in' : 'scale-out';
+    else if (type === 'slide') resolvedType = 'slide-up';
+    else if (type === 'wipe') resolvedType = 'mask-sweep';
+    return {
+        id: generateId(side),
+        type: resolvedType,
+        direction: (resolvedType.startsWith('slide') || resolvedType === 'slide') ? 'up' : undefined,
+        durationMs: Math.max(10, Math.min(600, durationMs)),
+        delayMs: 0,
+        distance: 0.25,
+        blur: 40,
+        fade: true,
+        stagger: 'none',
+        enabled: true,
+        easing: { kind: 'preset', name: side === 'in' ? 'ease-out' : 'ease-in' }
+    };
 }
 export function createAnimationBlock(property: AnimationBlockProperty, shot: Shot, localMs: number, layer?: Layer): AnimationBlock {
     const windowStart = layer?.inMs ?? 0;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createDefaultShapeLayer, createDefaultTextLayer, createDefaultShot } from '../../model/defaults';
-import { addBlocksToShot, availableAnimations, availablePresets, presetList, replacePresets, getUnderlyingPropertyForPreset, inferPresetFromProperty } from './animationModel';
+import { addBlocksToShot, availableAnimations, availablePresets, createPreset, EFFECT_ANIMATIONS, presetList, replacePresets, getUnderlyingPropertyForPreset, inferPresetFromProperty } from './animationModel';
 describe('object-aware animation controls', () => {
     it('limits typography presets and animations to text selections', () => {
         const text = createDefaultTextLayer();
@@ -46,5 +46,36 @@ describe('object-aware animation controls', () => {
         expect(inferPresetFromProperty('position')).toBe('slide-up');
         expect(inferPresetFromProperty('scale')).toBe('scale-out');
         expect(inferPresetFromProperty('maskSweep')).toBe('mask-sweep');
+    });
+
+    it('exposes canonical presets and the full 10 effect animations matching Raylight editor', () => {
+        expect(EFFECT_ANIMATIONS.map(e => e.label)).toEqual([
+            'Focus',
+            'Blur',
+            'Bloom',
+            'Glitch',
+            'Fisheye',
+            'Lens distortion',
+            'Color split',
+            'Gradient map',
+            'Atmosphere',
+            'Film grain',
+        ]);
+
+        const focusAnim = EFFECT_ANIMATIONS.find(e => e.label === 'Focus');
+        expect(focusAnim?.effectKey).toBe('depthOfField');
+        expect(focusAnim?.property).toBe('target');
+        expect(focusAnim?.kind).toBe('vector');
+
+        const blurAnim = EFFECT_ANIMATIONS.find(e => e.label === 'Blur');
+        expect(blurAnim?.effectKey).toBe('depthOfField');
+        expect(blurAnim?.property).toBe('aperture');
+        expect(blurAnim?.kind).toBe('scalar');
+
+        expect(createPreset('slide', 'in', 500).type).toBe('slide-up');
+        expect(createPreset('float', 'in', 500).type).toBe('float-in');
+        expect(createPreset('float', 'out', 500).type).toBe('float-out');
+        expect(createPreset('scale', 'in', 500).type).toBe('scale-in');
+        expect(createPreset('scale', 'out', 500).type).toBe('scale-out');
     });
 });

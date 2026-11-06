@@ -2,9 +2,10 @@ import { MenuItem } from '../../../ui/Menu';
 import { AxisFields } from '../../../ui/AxisFields';
 import { AnimationTimingFields } from '../../../ui/AnimationTimingFields';
 import { SegmentedControl } from '../../../ui/primitives';
-import { ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Compass, Eye, EyeOff, Focus, Maximize2, Move, Plus, RotateCw, Scan, Sparkles, Spline, Square, Star, Type, Waves, X } from 'lucide-react';
+import { Aperture, ArrowDown, ArrowLeft, ArrowRight, ArrowUp, ChevronLeft, ChevronRight, CircleDashed, Cloud, Compass, Eye, EyeOff, Film, Focus, Globe, Layers, Maximize2, Move, Palette, Plus, RotateCw, Scan, Sparkles, Spline, Square, Star, Sun, Triangle, Type, Waves, X, Zap } from 'lucide-react';
 import { useCallback, useState, type ReactNode } from 'react';
 import { degToRad, radToDeg } from '../../../model/defaults';
+import { generateId } from '../../../model/id';
 import type { AnimationBlock, AnimationBlockProperty, Easing, Layer, Shot, Transitionish, TransitionType, Vec3 } from '../../../model/types';
 import { usePlayheadStore } from '../../../store/usePlayheadStore';
 import { useProjectStore } from '../../../store/useProjectStore';
@@ -13,14 +14,37 @@ import { EasingControl } from '../../../ui/EasingControl';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { IconButton, InspectorRow, Switch } from '../../../ui/primitives';
 import { ScrubInput } from '../../../ui/ScrubInput';
-import { addBlocksToShot, animationLabel, availableAnimations, availablePresets, createAnimationBlock, createPreset, editPreset, presetLabel, presetList, replacePresets, type PresetSide } from '../animationModel';
+import { addBlocksToShot, animationLabel, availableAnimations, availablePresets, createAnimationBlock, createPreset, editPreset, EFFECT_ANIMATIONS, presetLabel, presetList, replacePresets, type EffectAnimationDefinition, type PresetSide } from '../animationModel';
 import { ColorPicker } from '../ColorPicker';
 import { InspectorFlyout } from './InspectorFlyout';
 import './layerAnimate.css';
 function AnimationIcon({ property }: {
     property: string;
 }) {
-    const Icon = property === 'position' || property.startsWith('slide') ? Move : property === 'rotation' ? RotateCw : property === 'tilt' ? Compass : property === 'size' || property === 'scale' || property === 'emphasis' ? Maximize2 : property === 'opacity' || property === 'fade' ? CircleDashed : property === 'shimmer' ? Star : property === 'followPath' ? Spline : property === 'wiggle' ? Waves : property === 'typewriter' || property === 'counter' || property === 'changeText' ? Type : property === 'blur' || property === 'layerBlur' ? Focus : property === 'mask-sweep' || property === 'maskSweep' || property === 'pathReveal' ? Scan : property === 'cornerRadius' ? Square : Sparkles;
+    const p = property.toLowerCase();
+    const Icon = p === 'position' || p.startsWith('slide') ? Move
+        : p === 'rotation' ? RotateCw
+        : p === 'tilt' ? Compass
+        : p === 'size' || p === 'scale' || p === 'emphasis' ? Maximize2
+        : p === 'opacity' || p === 'fade' ? CircleDashed
+        : p === 'float' || p.startsWith('float') ? Layers
+        : p === 'wipe' || p === 'mask-sweep' || p === 'masksweep' || p === 'pathreveal' ? Scan
+        : p === 'shimmer' ? Star
+        : p === 'followpath' ? Spline
+        : p === 'wiggle' ? Waves
+        : p === 'typewriter' || p === 'counter' || p === 'changetext' ? Type
+        : p === 'focus' || p === 'depthoffield' ? Focus
+        : p === 'blur' || p === 'layerblur' ? Aperture
+        : p === 'bloom' ? Sun
+        : p === 'glitch' ? Zap
+        : p === 'fisheye' ? Maximize2
+        : p === 'lensdistortion' ? Globe
+        : p === 'chromaticaberration' || p === 'colorsplit' || p === 'color split' ? Triangle
+        : p === 'gradientmap' || p === 'gradient map' ? Palette
+        : p === 'atmosphere' ? Cloud
+        : p === 'filmgrain' || p === 'film grain' ? Film
+        : p === 'cornerradius' ? Square
+        : Sparkles;
     return <Icon aria-hidden="true"/>;
 }
 function Field({ label, children }: {
@@ -60,13 +84,25 @@ function PresetSettings({ preset, side, layers, maxDuration, onChange }: {
     onChange: (patch: Partial<Transitionish>) => void;
 }) {
     const blur = preset.type === 'blur';
-    const move = preset.type.startsWith('slide') || preset.type === 'float-out';
+    const isSlide = preset.type === 'slide' || preset.type.startsWith('slide');
+    const isFloat = preset.type === 'float' || preset.type.startsWith('float');
+    const isScale = preset.type === 'scale' || preset.type.startsWith('scale');
+    const move = isSlide || isFloat;
     return <div className="animate-settings-fields">
         <Field label="Type"><FigmaSelect aria-label="Preset type" value={preset.type} onChange={event => onChange({ type: event.target.value as TransitionType })}>{availablePresets(layers).map(p => <option key={p.type} value={p.type}>{p.label}</option>)}</FigmaSelect></Field>
+        {isSlide && (
+            <Field label="Direction">
+                <Directions
+                    value={preset.direction ?? (preset.type === 'slide-down' ? 'down' : preset.type === 'slide-left' ? 'left' : preset.type === 'slide-right' ? 'right' : 'up')}
+                    onChange={direction => onChange({ direction, type: 'slide' })}
+                    vertical={true}
+                />
+            </Field>
+        )}
         <ScrubInput label="Duration" value={preset.durationMs} min={10} max={Math.max(10, maxDuration - preset.delayMs)} unit=" ms" onChange={durationMs => onChange({ durationMs })}/>
         {blur && <Field label="Blur"><ScrubInput aria-label="Blur amount" label={side === 'in' ? 'From' : 'To'} value={preset.blur ?? 40} min={0} max={200} unit=" px" onChange={value => onChange({ blur: value })}/></Field>}
         {move && <Field label="Distance"><ScrubInput label="Offset" value={preset.distance * 100} min={0} max={200} unit=" %" onChange={value => onChange({ distance: value / 100 })}/></Field>}
-        {(blur || move || preset.type === 'scale-out') && <div className="animate-toggle-row"><span>Fade</span><Switch ariaLabel="Fade" checked={preset.fade !== false} className="animate-switch" onChange={fade => onChange({ fade })}/></div>}
+        {(blur || move || isScale) && <div className="animate-toggle-row"><span>Fade</span><Switch ariaLabel="Fade" checked={preset.fade !== false} className="animate-switch" onChange={fade => onChange({ fade })}/></div>}
         {layers.every(layer => layer.kind === 'text') && <Field label="Stagger"><FigmaSelect aria-label="Stagger" value={preset.stagger ?? 'none'} onChange={event => onChange({ stagger: event.target.value as Transitionish['stagger'] })}>{[['none', 'None'], ['letter', 'Letter'], ['word', 'Word'], ['line', 'Line']].map(([value, label]) => <option key={value} value={value}>{label}</option>)}</FigmaSelect></Field>}
         <EasingField value={preset.easing} onChange={easing => onChange({ easing })}/>
         <details className="animate-timing"><summary>Timing</summary><ScrubInput label="Delay" value={preset.delayMs} min={0} max={Math.max(0, maxDuration - preset.durationMs)} unit=" ms" onChange={delayMs => onChange({ delayMs })}/></details>
@@ -117,6 +153,59 @@ export function addLayerAnimation(shot: Shot, ids: string[], property: Animation
     const first = next.layers.find(layer => ids.includes(layer.id) && !layer.locked)?.blocks.at(-1);
     if (first)
         selection.selectBlock(first.id);
+}
+
+export function addSceneEffectAnimation(shot: Shot, fx: EffectAnimationDefinition) {
+    const localMs = Math.max(0, usePlayheadStore.getState().currentTimeMs - shot.startMs);
+    const durationMs = Math.min(1000, Math.max(100, shot.durationMs - localMs));
+    const blockId = generateId('fx');
+    let fromValue = 0;
+    let toValue = 1;
+    let fromTarget: Vec3 | undefined;
+    let toTarget: Vec3 | undefined;
+
+    if (fx.effectKey === 'depthOfField') {
+        const dof = shot.effects?.depthOfField;
+        if (fx.property === 'target') {
+            const currentTarget = dof?.target ?? { x: 0, y: 0, z: 0 };
+            fromTarget = { ...currentTarget };
+            toTarget = { ...currentTarget, z: currentTarget.z - 2 };
+        } else if (fx.property === 'aperture') {
+            fromValue = Number.isFinite(dof?.aperture) ? Number(dof?.aperture) : 2.8;
+            toValue = Math.min(22, fromValue * 2);
+        }
+    } else {
+        const effectObj = (shot.effects as Record<string, any>)?.[fx.effectKey];
+        const currentVal = effectObj?.[fx.property];
+        if (typeof currentVal === 'number') {
+            fromValue = currentVal;
+            toValue = currentVal > 0 ? 0 : 0.8;
+        }
+    }
+
+    const nextShot: Shot = {
+        ...shot,
+        effectBlocks: [
+            ...(shot.effectBlocks || []),
+            {
+                id: blockId,
+                label: fx.label,
+                effectKey: fx.effectKey,
+                property: fx.property,
+                startMs: localMs,
+                durationMs,
+                fromValue,
+                toValue,
+                fromTarget,
+                toTarget,
+                easing: { kind: 'preset', name: 'ease-in-out' },
+            }
+        ]
+    };
+    useProjectStore.getState().updateShot(shot.id, nextShot);
+    const selection = useSelectionStore.getState();
+    selection.setTimelineView('scene');
+    selection.selectBlock(blockId);
 }
 export function LayerAnimateInspector({ activeShot, selectedLayer, selectedLayerIds }: {
     activeShot: Shot;
@@ -177,8 +266,8 @@ export function LayerAnimateInspector({ activeShot, selectedLayer, selectedLayer
                 {submenu ? <>{menuItem(submenu, <ChevronLeft />, () => setSubmenu(null))}<div className="animate-menu-divider"/>{submenu === 'Morph into' ? activeShot.layers.filter(layer => !selectedLayerIds.includes(layer.id)).map(target => menuItem(target.name, <AnimationIcon property="morph"/>, () => {
                             updateSelected(layer => ({ ...layer, blocks: [...layer.blocks, { ...createAnimationBlock('morph', activeShot, usePlayheadStore.getState().currentTimeMs - activeShot.startMs, layer), label: `Morph into ${target.name}`, settings: { targetPosition: target.position, targetScale: target.scale, targetSize: target.kind === 'text' ? { width: target.maxWidth, height: target.font.size * 2.5 } : target.size } }] }));
                             close();
-                        })) : animations.filter(item => item.group === submenu).map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property)))}</>
-                        : <><div className="animate-menu-label">Custom</div>{animations.filter(item => item.group === 'Custom').map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property)))}{activeShot.layers.some(layer => !selectedLayerIds.includes(layer.id)) && menuItem('Morph into', <Sparkles />, () => setSubmenu('Morph into'), true)}<div className="animate-menu-divider"/><div className="animate-menu-label">Appearance</div>{menuItem('Appearance', <Eye />, () => setSubmenu('Appearance'), true)}<div className="animate-menu-divider"/><div className="animate-menu-label">Effects</div>{animations.filter(item => item.group === 'Effects').map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property)))}</>}
+                        })) : submenu === 'Appearance' ? animations.filter(item => item.group === 'Appearance').map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property))) : animations.filter(item => item.group === submenu).map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property)))}</>
+                        : <><div className="animate-menu-label">Custom</div>{animations.filter(item => item.group === 'Custom').map(item => menuItem(item.label, <AnimationIcon property={item.property}/>, () => add(item.property)))}{activeShot.layers.some(layer => !selectedLayerIds.includes(layer.id)) && menuItem('Morph into', <Sparkles />, () => setSubmenu('Morph into'), true)}<div className="animate-menu-divider"/><div className="animate-menu-label">Appearance</div>{menuItem('Appearance', <Eye />, () => setSubmenu('Appearance'), true)}<div className="animate-menu-divider"/><div className="animate-menu-label">Effects</div>{EFFECT_ANIMATIONS.map(fx => menuItem(fx.label, <AnimationIcon property={fx.property === 'target' ? 'focus' : fx.property === 'aperture' ? 'blur' : fx.effectKey}/>, () => { addSceneEffectAnimation(activeShot, fx); close(); }))}</>}
             </> : <><div className="animate-menu-label">Presets</div>{availablePresets(editable).map(preset => menuItem(preset.label, <AnimationIcon property={preset.type}/>, () => addPreset(flyout.kind as PresetSide, preset.type)))}</>}
         </InspectorFlyout>}
     </div>;

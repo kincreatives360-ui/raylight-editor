@@ -143,11 +143,16 @@ export const BLEND_MODES: BlendMode[] = [
 export type TransitionType =
   | 'none'
   | 'fade'
+  | 'slide'
   | 'slide-up'
   | 'slide-down'
   | 'slide-left'
   | 'slide-right'
+  | 'float'
+  | 'float-in'
   | 'float-out'
+  | 'scale'
+  | 'scale-in'
   | 'scale-out'
   | 'mask-sweep'
   | 'wipe'
@@ -163,11 +168,16 @@ export type TransitionType =
 export const TRANSITION_TYPES: TransitionType[] = [
   'none',
   'fade',
+  'slide',
   'slide-up',
   'slide-down',
   'slide-left',
   'slide-right',
+  'float',
+  'float-in',
   'float-out',
+  'scale',
+  'scale-in',
   'scale-out',
   'mask-sweep',
   'wipe',
