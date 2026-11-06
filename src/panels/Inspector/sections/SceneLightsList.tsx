@@ -9,6 +9,7 @@ import {
     ChevronDown,
 } from 'lucide-react';
 import type { Shot, SceneLight, LightSourceType, LightRig } from '../../../model/types';
+import { DEFAULT_LIGHT_RIG } from '../../../model/defaults';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { SceneLightRow } from './SceneLightRow';
 import { LightTypeIcon } from '../../../ui/LightTypeIcon';
@@ -44,13 +45,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
 
     const handleToggleKeyLight = (e: React.MouseEvent) => {
         e.stopPropagation();
-        const currentRig: LightRig = shotLight || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-            sources: [],
-        };
+        const currentRig: LightRig = shotLight || { ...DEFAULT_LIGHT_RIG };
         updateShot(activeShot.id, {
             light: {
                 ...currentRig,
@@ -62,13 +57,7 @@ export const SceneLightsList: React.FC<SceneLightsListProps> = ({
 
     const handleAddKeyLight = () => {
         setAddMenuOpen(false);
-        const currentRig: LightRig = shotLight || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-            sources: [],
-        };
+        const currentRig: LightRig = shotLight || { ...DEFAULT_LIGHT_RIG };
         updateShot(activeShot.id, {
             light: {
                 ...currentRig,

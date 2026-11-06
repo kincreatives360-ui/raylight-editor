@@ -3,6 +3,7 @@ import { LightTypeIcon } from '../ui/LightTypeIcon';
 import { SelectedLightGizmo, type UnifiedLight } from './SelectedLightGizmo';
 import type { EvaluatedProjectFrame } from '../engine/evaluateShot';
 import type { LightRig, SceneLight } from '../model/types';
+import { DEFAULT_LIGHT_RIG } from '../model/defaults';
 import { generateId } from '../model/id';
 import { useProjectStore } from '../store/useProjectStore';
 import { useSelectionStore } from '../store/useSelectionStore';
@@ -61,11 +62,11 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
             id: 'sun-key',
             name: 'Sun Key',
             type: 'directional',
-            position: shotLight?.position || { x: -0.28, y: 0.36, z: 0.9 },
+            position: shotLight?.position || DEFAULT_LIGHT_RIG.position,
             target: (shotLight as unknown as { target?: Vec3Like })?.target || { x: 0, y: 0, z: 0 },
             intensity: shotLight?.keyIntensity ?? shotLight?.intensity ?? 1.2,
             color: shotLight?.keyColor ?? '#ffffff',
-            temperature: shotLight?.temperature ?? 6100,
+            temperature: shotLight?.temperature ?? 6500,
         };
 
         const sources: UnifiedLight[] = (shotLight?.sources || []).map((s) => ({
@@ -105,9 +106,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
         const camera = createVirtualCamera(cameraPose, aspect);
         const world = unprojectScreenToWorldPlane(screenX, screenY, 5, camera, frameWidth, frameHeight);
         const position = worldToLight(world);
-        const rig: LightRig = activeShot.light || {
-            position: { x: -0.28, y: 0.36, z: 0.9 }, intensity: 1.2, temperature: 6100, ambience: 0.45, sources: [],
-        };
+        const rig: LightRig = activeShot.light || { ...DEFAULT_LIGHT_RIG };
 
         const source: SceneLight = {
             id: generateId(activeLightTool),
@@ -135,13 +134,7 @@ export const LightingOverlay: React.FC<LightingOverlayProps> = ({
     const updateLight = useCallback((patch: Partial<SceneLight>) => {
         if (!selectedLightId) return;
 
-        const currentRig: LightRig = activeShot.light || {
-            position: { x: -0.28, y: 0.36, z: 0.9 },
-            intensity: 1.2,
-            temperature: 6500,
-            ambience: 0.45,
-            sources: [],
-        };
+        const currentRig: LightRig = activeShot.light || { ...DEFAULT_LIGHT_RIG };
 
         if (selectedLightId === 'sun-key' || selectedLightId === 'key' || selectedLightId === 'sun') {
             updateShot(
