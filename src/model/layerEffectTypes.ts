@@ -75,7 +75,7 @@ export interface BlurSettings {
   type?: 'gaussian' | 'radial' | 'zoom';
   centerX?: number;
   centerY?: number;
-  quality?: 8 | 16 | 32;
+  quality?: 8 | 16 | 24 | 32;
   mode: 'uniform' | 'progressive';
   start: number;
   end: number;

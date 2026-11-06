@@ -288,7 +288,7 @@ const BlurSettingsSchema = z.object({
   type: z.enum(['gaussian', 'radial', 'zoom']).optional(),
   centerX: z.number().min(0).max(1).optional(),
   centerY: z.number().min(0).max(1).optional(),
-  quality: z.union([z.literal(8), z.literal(16), z.literal(32)]).optional(),
+  quality: z.union([z.literal(8), z.literal(16), z.literal(24), z.literal(32)]).optional(),
   mode: z.enum(['uniform', 'progressive']),
   start: z.number().min(0).max(200),
   end: z.number().min(0).max(200),

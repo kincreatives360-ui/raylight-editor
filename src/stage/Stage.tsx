@@ -23,7 +23,7 @@ import { CanvasToolbar } from './CanvasToolbar';
 
 import { ViewportCanvas } from './webgl/ViewportCanvas';
 import * as THREE from 'three';
-import { radToDeg } from '../model/defaults';
+import { radToDeg, DEFAULT_SCENE_EFFECTS } from '../model/defaults';
 import {
     DEFAULT_CAMERA_Z,
     DEFAULT_FOCAL_LENGTH,

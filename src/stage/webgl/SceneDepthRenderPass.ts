@@ -27,7 +27,7 @@ export class SceneDepthRenderPass extends RenderPass {
     ): void {
         // The composer's current read buffer is where the next effect pass expects the scene colour.
         super.render(renderer, writeBuffer, this.sceneTarget, deltaTime, maskActive);
-        this.copyPass.render(renderer, readBuffer, this.sceneTarget);
+        this.copyPass.render(renderer, readBuffer, this.sceneTarget, deltaTime, maskActive);
     }
 
     override dispose(): void {
