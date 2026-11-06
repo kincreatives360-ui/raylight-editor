@@ -120,6 +120,11 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
             className="w-full bg-transparent text-sm text-white placeholder-zinc-500 outline-none"
             aria-autocomplete="list"
             aria-controls="command-list"
+            aria-activedescendant={
+              filteredCommands.length > 0
+                ? `command-option-${filteredCommands[activeIndex]?.id ?? activeIndex}`
+                : undefined
+            }
         ><ShortcutKey className="px-1.5 py-0.5 text-[11px] font-mono text-zinc-400 bg-white/[0.06] rounded border border-white/10">
             Esc
           </ShortcutKey></SearchField>
@@ -142,6 +147,7 @@ export const CommandMenu: React.FC<CommandMenuProps> = ({
               return (
                 <div
                   key={cmd.id}
+                  id={`command-option-${cmd.id}`}
                   role="option"
                   aria-selected={isSelected}
                   data-active={isSelected}

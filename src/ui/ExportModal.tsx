@@ -114,7 +114,7 @@ export const ExportModal: React.FC<ExportModalProps> = ({
             </div>
             <div>
               <h3 id="export-modal-title" className="text-sm font-bold text-foreground">
-                Export &amp; Share Video
+                Export Video
               </h3>
               <p className="text-xs text-muted-foreground">
                 Render MP4, WebM, Looping GIF, or lossless PNG

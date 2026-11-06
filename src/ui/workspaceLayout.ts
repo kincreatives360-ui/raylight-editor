@@ -3,10 +3,11 @@ export const MIN_STAGE_WIDTH = 340;
 export const MIN_LEFT_PANEL_WIDTH = 200;
 export const MAX_LEFT_PANEL_WIDTH = 460;
 export const DEFAULT_LEFT_PANEL_WIDTH = 260;
-export const MIN_RIGHT_SIDEBAR_WIDTH = 260;
+export const MIN_RIGHT_SIDEBAR_WIDTH = 240;
 export const MAX_RIGHT_SIDEBAR_WIDTH = 500;
+/** Prefer a compact inspector so the stage keeps viewport primacy (~250px at 1536). */
 export function defaultInspectorWidth(viewport: number) {
-    return Math.round(Math.max(260, Math.min(300, 260 + (viewport - 1536) * 40 / 384)));
+    return Math.round(Math.max(240, Math.min(280, 250 + (viewport - 1536) * 30 / 384)));
 }
 export function clampPanelWidth(value: number, min: number, max: number, available = max) {
     return Math.max(min, Math.min(max, available, Number.isFinite(value) ? Math.round(value) : min));

@@ -62,6 +62,10 @@ interface ColorPickerProps {
     compact?: boolean;
     showGradientMode?: boolean;
     gradientTypes?: GradientValue['gradientType'][];
+    /** Optional layer blend mode shown in the popover (parity with reference color workflow). */
+    blendMode?: string;
+    onBlendModeChange?: (mode: string) => void;
+    blendModes?: string[];
     className?: string;
     children?: React.ReactNode;
     disabled?: boolean;
@@ -92,6 +96,9 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
     compact = false,
     showGradientMode = true,
     gradientTypes = ['linear', 'radial', 'angular', 'diamond', 'mesh'],
+    blendMode,
+    onBlendModeChange,
+    blendModes = ['normal', 'darken', 'multiply', 'lighten', 'screen', 'add', 'difference'],
     className = '',
     children,
     disabled = false,
@@ -428,7 +435,41 @@ export const ColorPicker: React.FC<ColorPickerProps> = ({
                 >
                     <span className="h-3.5 w-3.5 rounded-sm border border-current bg-[linear-gradient(135deg,#fff_0%,#777_50%,#111_100%)]" />
                 </button>
+                {onBlendModeChange && (
+                    <label className="ml-auto flex items-center gap-1.5 text-[10px] text-[var(--text-muted,#a1a1aa)]">
+                        <span className="uppercase tracking-wide">Blend</span>
+                        <select
+                            aria-label="Blend mode"
+                            value={blendMode ?? 'normal'}
+                            onChange={(event) => onBlendModeChange(event.target.value)}
+                            className="h-7 max-w-[110px] rounded-lg border border-white/10 bg-[var(--bg-subtle,#1c1c1f)] px-1.5 text-[11px] text-white outline-none focus:border-[var(--border-focus,#0088ff)] cursor-pointer"
+                        >
+                            {blendModes.map((mode) => (
+                                <option key={mode} value={mode}>
+                                    {mode}
+                                </option>
+                            ))}
+                        </select>
+                    </label>
+                )}
             </div>}
+            {!showGradientMode && onBlendModeChange && (
+                <label className="mb-2 flex items-center justify-between gap-1.5 text-[10px] text-[var(--text-muted,#a1a1aa)]">
+                    <span className="uppercase tracking-wide">Blend mode</span>
+                    <select
+                        aria-label="Blend mode"
+                        value={blendMode ?? 'normal'}
+                        onChange={(event) => onBlendModeChange(event.target.value)}
+                        className="h-7 max-w-[140px] rounded-lg border border-white/10 bg-[var(--bg-subtle,#1c1c1f)] px-1.5 text-[11px] text-white outline-none focus:border-[var(--border-focus,#0088ff)] cursor-pointer"
+                    >
+                        {blendModes.map((mode) => (
+                            <option key={mode} value={mode}>
+                                {mode}
+                            </option>
+                        ))}
+                    </select>
+                </label>
+            )}
 
             {pickerMode === 'color' ? (
                 <>

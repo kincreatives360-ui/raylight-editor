@@ -35,12 +35,22 @@ export function TimelineShotOverview({
                     return (
                         <div
                             key={shot.id}
+                            role="button"
+                            tabIndex={0}
+                            aria-pressed={isSelected}
+                            aria-label={`${shot.name}, ${(shot.durationMs / 1000).toFixed(2)} seconds`}
                             onPointerDown={(event) => onShotPointerDown(event, shot, shotIndex)}
                             onClick={(event) => onShotClick(event, shot)}
                             onDoubleClick={(event) => onShotDoubleClick(event, shot)}
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    onShotClick(event as unknown as React.MouseEvent<HTMLDivElement>, shot);
+                                }
+                            }}
                             title={`${shot.name} · ${(shot.durationMs / 1000).toFixed(2)}s · Drag to reorder, drag the right edge to trim, double-click to open layer tracks`}
                             style={{ width: `${width}px` }}
-                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group ${isSelected
+                            className={`h-8 rounded-xl border-[1.5px] px-3 flex items-center justify-between text-[11px] font-medium transition cursor-grab active:cursor-grabbing relative group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue ${isSelected
                                     ? 'border-[#8176d9] bg-gradient-to-b from-[#28204f]/95 to-[#17152d]/95 text-white shadow-sm'
                                     : 'border-[#3e3870]/80 bg-gradient-to-b from-[#181628]/90 to-[#100e1c]/90 text-slate-300 hover:border-[#8176d9]/60'
                                 }`}

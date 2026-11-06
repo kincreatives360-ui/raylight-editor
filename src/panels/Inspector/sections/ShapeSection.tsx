@@ -143,6 +143,13 @@ export const ShapeSection: React.FC<ShapeSectionProps> = ({
                         onGradientChange={(gradient) => updateLayer(activeShotId, layer.id, (l) => l.kind === 'shape' ? { ...l, fill: mergeGradient(l.fill.kind === 'gradient' ? l.fill : undefined, gradient) } : l)}
                         onEnterGradient={() => useSelectionStore.getState().setGradientEditor(true, layer.fill.kind === 'gradient' ? layer.fill.angle : 0, layer.id)}
                         onExitGradient={() => useSelectionStore.getState().setGradientEditor(false)}
+                        blendMode={layer.blendMode}
+                        onBlendModeChange={(mode) =>
+                            updateLayer(activeShotId, layer.id, (l) => ({
+                                ...l,
+                                blendMode: mode as typeof layer.blendMode,
+                            }))
+                        }
                         onChange={(newColor) =>
                             updateLayer(activeShotId, layer.id, (l) => {
                                 if (l.kind !== 'shape') return l;

@@ -422,8 +422,30 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         return { cameraBookmarks };
     }),
 
-    toggleLeftPanel: () => set((state) => ({ leftPanelOpen: !state.leftPanelOpen, ...(!state.leftPanelOpen && typeof window !== 'undefined' && window.innerWidth < MIN_STAGE_WIDTH + MIN_LEFT_PANEL_WIDTH + MIN_RIGHT_SIDEBAR_WIDTH ? { rightSidebarOpen: false } : {}) })),
-    toggleRightSidebar: () => set((state) => ({ rightSidebarOpen: !state.rightSidebarOpen })),
+    toggleLeftPanel: () =>
+        set((state) => {
+            const opening = !state.leftPanelOpen;
+            const cramped =
+                opening &&
+                typeof window !== 'undefined' &&
+                window.innerWidth < MIN_STAGE_WIDTH + MIN_LEFT_PANEL_WIDTH + MIN_RIGHT_SIDEBAR_WIDTH;
+            return {
+                leftPanelOpen: opening,
+                ...(cramped ? { rightSidebarOpen: false } : {}),
+            };
+        }),
+    toggleRightSidebar: () =>
+        set((state) => {
+            const opening = !state.rightSidebarOpen;
+            const cramped =
+                opening &&
+                typeof window !== 'undefined' &&
+                window.innerWidth < MIN_STAGE_WIDTH + MIN_LEFT_PANEL_WIDTH + MIN_RIGHT_SIDEBAR_WIDTH;
+            return {
+                rightSidebarOpen: opening,
+                ...(cramped ? { leftPanelOpen: false } : {}),
+            };
+        }),
     setLeftPanelOpen: (leftPanelOpen) => set({ leftPanelOpen }),
     setRightSidebarOpen: (rightSidebarOpen) => set({ rightSidebarOpen }),
 

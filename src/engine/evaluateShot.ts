@@ -12,6 +12,9 @@ import { lerp } from './math';
 
 /** Deep clone SceneEffects to prevent mutation of original shot object. */
 function deepCloneEffects(effects: SceneEffects): SceneEffects {
+    if (typeof structuredClone === 'function') {
+        return structuredClone(effects);
+    }
     return JSON.parse(JSON.stringify(effects));
 }
 

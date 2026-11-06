@@ -71,7 +71,7 @@ describe('ExportModal Component', () => {
       />
     );
 
-    expect(html).toContain('Export &amp; Share Video');
+    expect(html).toContain('Export Video');
     expect(html).toContain('Animated GIF');
     expect(html).toContain('1920×1080px');
     expect(html).toContain('~4.2 MB');
