@@ -81,6 +81,15 @@ export function evaluateEffectsAtTime(
             case 'glitch':
                 summary = `Intensity: ${effects.glitch.intensity} | Seed: ${deterministicSeed.toFixed(3)}`;
                 break;
+            case 'depthOfField': {
+                const dof = effects.depthOfField ?? ({} as any);
+                const focus = Number(dof.focusDistance);
+                const range = Number(dof.focusRange);
+                const aperture = Number(dof.aperture);
+                const fl = Number(dof.focalLength);
+                summary = `Focus ${ (Number.isFinite(focus) ? focus : 2.65).toFixed(2) }u | f/${ (Number.isFinite(aperture) ? aperture : 2.8).toFixed(1) } | ${ Math.round(Number.isFinite(fl) ? fl : 50) }mm | DoF ±${ (Number.isFinite(range) ? range : 0.85).toFixed(2) }`;
+                break;
+            }
         }
 
         orderedEnabledPasses.push({

@@ -181,6 +181,28 @@ export const DEFAULT_SCENE_EFFECTS: SceneEffects = {
     colorShift: 0.5,
     mode: 'digital', jitter: 0.2, scanlines: 0, seed: 0,
   },
+  depthOfField: {
+    enabled: false,
+    target: { x: 0, y: 0, z: 0 },
+    focusDistance: 2.65,
+    focusRange: 0.85,
+    aperture: 2.8,
+    focalLength: 50,
+    sensorHeightMm: 24,
+    bokehScale: 1,
+    maxBlur: 36,
+    samples: 16,
+    highlightGain: 1.5,
+    highlightThreshold: 0.7,
+    highlightIntensity: 0.35,
+    focusSoftness: 0.3,
+    apertureBlades: 0,
+    bokehRotation: 0,
+    bokehShape: 'spherical',
+    model: 'physical',
+    focusMode: 'manual',
+    quality: 'balanced',
+  },
 };
 
 export function createDefaultVideoLayer(

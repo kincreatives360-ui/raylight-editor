@@ -11,7 +11,8 @@ export type EffectKey =
   | 'atmosphere'
   | 'gradientMap'
   | 'fishEye'
-  | 'lensDistortion';
+  | 'lensDistortion'
+  | 'depthOfField';
 
 export const EFFECT_KEYS: EffectKey[] = [
   'bloom',
@@ -27,9 +28,11 @@ export const EFFECT_KEYS: EffectKey[] = [
   'gradientMap',
   'fishEye',
   'lensDistortion',
+  'depthOfField',
 ];
 
 export const DEFAULT_EFFECTS_ORDER: EffectKey[] = [
+  'depthOfField',
   'bloom',
   'motionBlur',
   'chromaticAberration',

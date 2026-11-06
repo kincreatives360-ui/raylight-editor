@@ -3,7 +3,7 @@ import React, { useLayoutEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { useThree, useFrame } from '@react-three/fiber';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
-import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { SceneDepthRenderPass } from './SceneDepthRenderPass';
 import { FXAAPass } from 'three/examples/jsm/postprocessing/FXAAPass.js';
 import { ShaderPass } from 'three/examples/jsm/postprocessing/ShaderPass.js';
 import { renderSceneFrame } from './sceneRenderLoop';
@@ -101,6 +101,19 @@ function blendEvaluatedEffects(
     };
 }
 
+const cameraForward = new THREE.Vector3();
+/** Camera facts the passes need: clip planes for depth, plus pose so depth of field can focus on a target. */
+function describeCameraForPasses(camera: THREE.Camera) {
+    const perspective = camera as THREE.PerspectiveCamera;
+    camera.getWorldDirection(cameraForward);
+    return {
+        near: perspective.near ?? 0.1,
+        far: perspective.far ?? 100,
+        position: { x: camera.position.x, y: camera.position.y, z: camera.position.z },
+        forward: { x: cameraForward.x, y: cameraForward.y, z: cameraForward.z },
+    };
+}
+
 /**
  * Calculates a safe MSAA sample count based on viewport pixel dimensions and GPU limits.
  * Reduces or disables samples for oversized buffers (e.g. 4K / high-DPI displays)
@@ -128,7 +141,7 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
     const { gl, scene, camera, size } = useThree();
     const dpr = useThree((state) => state.viewport.dpr);
     const composerRef = useRef<EffectComposer | null>(null);
-    const renderPassRef = useRef<RenderPass | null>(null);
+    const renderPassRef = useRef<SceneDepthRenderPass | null>(null);
     const passMapRef = useRef<Map<EffectKey, ShaderPass>>(new Map());
     const encodingPassRef = useRef<ShaderPass | null>(null);
     const fxaaPassRef = useRef<FXAAPass | null>(null);
@@ -143,16 +156,33 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         // Anti-aliasing is provided by the downstream FXAAPass. Setting beauty samples to 0
         // allows WebGL2 gl.copyTexSubImage2D to capture the framebuffer for backdrop blur & glass.
         composer.renderTarget1.samples = composer.renderTarget2.samples = 0;
+        // Mip chains let blur passes read pre-averaged texels (smooth blur with few samples).
+        // Three regenerates them after each pass renders; passes sample explicit levels only.
+        for (const target of [composer.renderTarget1, composer.renderTarget2]) {
+            target.texture.generateMipmaps = true;
+            target.texture.minFilter = THREE.LinearMipmapLinearFilter;
+        }
         
-        // Atmosphere uses the scene depth buffer to blend fog by depth.
+        // Scene depth for Atmosphere + Depth of Field lives on a dedicated scene target.
+        // The composer's two ping-pong buffers never carry a depth texture, so no effect pass can ever
+        // write to a buffer whose depth texture it is also sampling (the cause of the depth-of-field flicker).
         const depthTexture = new THREE.DepthTexture(pixelW, pixelH);
         depthTexture.format = THREE.DepthFormat;
-        depthTexture.type = THREE.UnsignedShortType;
-        composer.renderTarget1.depthTexture = depthTexture;
+        // 24-bit depth: 16-bit steps show up as banding in depth-of-field blur.
+        depthTexture.type = THREE.UnsignedIntType;
+        depthTexture.name = 'RaylightSceneDepth';
+        const sceneTarget = new THREE.WebGLRenderTarget(pixelW, pixelH, { type: THREE.HalfFloatType });
+        sceneTarget.samples = 0;
+        sceneTarget.depthTexture = depthTexture;
+        composer.renderTarget1.depthTexture = null;
+        composer.renderTarget2.depthTexture = null;
 
         composer.setSize(size.width, size.height);
+        // Keep both composer buffers free of depth textures after any resize.
+        composer.renderTarget1.depthTexture = null;
+        composer.renderTarget2.depthTexture = null;
 
-        const renderPass = new RenderPass(scene, camera);
+        const renderPass = new SceneDepthRenderPass(scene, camera, sceneTarget);
         const encodingPass = createOutputEncodingPass();
         const fxaaPass = new FXAAPass();
         fxaaPass.setSize(pixelW, pixelH);
@@ -165,6 +195,8 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
 
         const passMap = passMapRef.current;
         return () => {
+            renderPass.dispose();
+            sceneTarget.dispose();
             depthTexture.dispose();
             fxaaPass.material.dispose();
             encodingPass.material.dispose();
@@ -217,9 +249,11 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 }
                 pass.renderToScreen = false;
                 if (pass.uniforms.tDepth) {
-                    pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
+                    // Always sample the depth that was written by the initial RenderPass.
+                    // Never let this texture be an attachment of the current write buffer.
+                    pass.uniforms.tDepth.value = renderPass.sceneTarget.depthTexture;
                 }
-                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, describeCameraForPasses(camera));
                 composer.addPass(pass);
             }
 
@@ -236,9 +270,9 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
                 const pass = passMapRef.current.get(key);
                 if (pass) {
                     if (pass.uniforms.tDepth) {
-                        pass.uniforms.tDepth.value = composer.renderTarget1.depthTexture;
+                        pass.uniforms.tDepth.value = renderPass.sceneTarget.depthTexture;
                     }
-                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion);
+                    configureSceneEffectPass(pass, key, effectiveEffects, pixelW, pixelH, cameraMotion, describeCameraForPasses(camera));
                 }
             }
         }
@@ -250,6 +284,15 @@ export const SceneEffectsPipeline: React.FC<SceneEffectsPipelineProps> = ({ effe
         if (!composer) {
             gl.render(scene, camera);
             return;
+        }
+        // Target focus depends on the camera pose, which can change every frame.
+        const dofPass = passMapRef.current.get('depthOfField');
+        if (dofPass && effectiveEffects.orderedEnabledPasses.some((p) => p.key === 'depthOfField')) {
+            configureSceneEffectPass(
+                dofPass, 'depthOfField', effectiveEffects,
+                Math.round(size.width * dpr), Math.round(size.height * dpr),
+                { x: 0, y: 0 }, describeCameraForPasses(camera)
+            );
         }
         try {
             renderSceneFrame(gl, scene, camera, composer);

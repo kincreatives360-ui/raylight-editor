@@ -292,11 +292,11 @@ async function drawLayerContentOnCanvas(
     const imageLayer = layer as ImageLayer | VideoLayer;
     {
       const radius = imageLayer.cornerRadius * Math.min(baseW, baseH) * 0.5;
-      for (let step = 4; step >= 1; step--) {
-        ctx.fillStyle = '#334155';
-        drawRoundedRectPath(ctx, -baseW / 2 - step * 0.7, -baseH / 2 + step * 0.7, baseW, baseH, radius);
-        ctx.fill();
-      }
+      // One soft shadow instead of stacked hard-edged copies, which read as boxy steps.
+      ctx.shadowColor = '#334155';
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetX = -2.8;
+      ctx.shadowOffsetY = 2.8;
       ctx.fillStyle = '#05070d';
       drawRoundedRectPath(ctx, -baseW / 2, -baseH / 2, baseW, baseH, radius);
       ctx.fill();

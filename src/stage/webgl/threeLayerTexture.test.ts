@@ -28,6 +28,12 @@ describe('Layer Texture High-Resolution Filtering', () => {
 });
 
 describe('getLayerBlurBleedLayout', () => {
+  it('adds room for the material layer blur so it feathers past the artwork edge', () => {
+    const layout = getLayerBlurBleedLayout(800, 600, 0, undefined, false, 40);
+    expect(layout.blurPadding).toBeGreaterThanOrEqual(40);
+    expect(layout.paddedCanvasW).toBe(800 + layout.blurPadding * 2);
+  });
+
   it('returns zero padding and 1.0 scale when no blur is active', () => {
     const layout = getLayerBlurBleedLayout(800, 600, 0);
     expect(layout.blurPadding).toBe(0);

@@ -148,6 +148,8 @@ export function useLayerTexture({
         }
         const ctx = canvas.getContext('2d');
         if (!ctx) return null;
+        // Start from a clean transform: a leftover scale/translate from the previous frame makes the artwork drift.
+        ctx.resetTransform();
         ctx.clearRect(0, 0, paddedTextureW, paddedTextureH);
         ctx.scale(paddedTextureW / paddedCanvasW, paddedTextureH / paddedCanvasH);
         if (blurPadding > 0) {

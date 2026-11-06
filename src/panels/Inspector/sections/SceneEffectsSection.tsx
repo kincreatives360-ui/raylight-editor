@@ -28,6 +28,7 @@ import {
   Image as ImageIcon,
   Fish,
   ScanSearch,
+  Aperture,
   Settings2,
   X,
 } from 'lucide-react';
@@ -47,6 +48,7 @@ const EFFECT_NAMES: Record<EffectKey, string> = {
   gradientMap: 'Gradient map',
   fishEye: 'Fish eye',
   lensDistortion: 'Lens distortion',
+  depthOfField: 'Depth of field',
 };
 
 function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: EffectKey; className?: string }) {
@@ -73,6 +75,7 @@ function EffectIcon({ effectKey, className = 'w-3.5 h-3.5' }: { effectKey: Effec
     case 'gradientMap': return <ImageIcon className={className} />;
     case 'fishEye': return <Fish className={className} />;
     case 'lensDistortion': return <ScanSearch className={className} />;
+    case 'depthOfField': return <Aperture className={className} />;
     default:
       return <Sparkles className={className} />;
   }
@@ -98,6 +101,7 @@ const FIELD_RANGES: Record<string, [number, number, number]> = {
   aspect: [0.25, 4, 0.01], seed: [0, 100000, 1], shadowStrength: [0, 1, 0.01], midStrength: [0, 1, 0.01], highlightStrength: [0, 1, 0.01], midpoint: [0, 1, 0.01],
   colorAmount: [0, 1, 0.01],
   x: [-20,20,.01], y: [-20,20,.01], channelRed: [-2,2,.01], channelGreen: [-2,2,.01], channelBlue: [-2,2,.01], fringeColorAngle: [-180,180,1],
+  focusDistance: [0.2, 80, 0.1], aperture: [0.5, 16, 0.1], maxBlur: [1, 96, 1], samples: [4, 32, 1], highlightGain: [1, 4, 0.05], focusSoftness: [0, 1, 0.01], focalLength: [12, 200, 1], focusRange: [0.05, 40, 0.1], bokehScale: [0, 8, 0.05], sensorHeightMm: [4, 36, 0.5], apertureBlades: [0, 12, 1], bokehRotation: [0, 180, 1],
 };
 
 const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
@@ -108,6 +112,7 @@ const SELECT_OPTIONS: Partial<Record<EffectKey, Record<string, string[]>>> = {
   gradientMap: { blendMode: ['normal', 'multiply', 'screen', 'overlay', 'softLight', 'hardLight', 'difference', 'exclusion', 'lighten', 'darken', 'colorDodge', 'colorBurn'] },
   fishEye: { edgeMode: ['fill', 'balanced', 'none'] },
   lensDistortion: { mode: ['pinch', 'barrel'], edgeMode: ['fill', 'balanced', 'none'], measure: ['width', 'height', 'diagonal'] },
+  depthOfField: { focusMode: ['manual', 'target', 'selection'], quality: ['draft', 'balanced', 'high'], bokehShape: ['spherical', 'hexagonal', 'octagonal'], model: ['physical', 'artistic'] },
 };
 
 export function SceneEffectsSection({ shot }: { shot: Shot }) {
@@ -137,6 +142,8 @@ export function SceneEffectsSection({ shot }: { shot: Shot }) {
       effects: {
         ...s.effects,
         [key]: {
+          // Always start from full defaults so partial objects never miss numeric fields
+          ...(DEFAULT_SCENE_EFFECTS[key] || {}),
           ...(s.effects?.[key] || {}),
           [field]: value,
         },

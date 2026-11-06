@@ -7,6 +7,7 @@ import { getMediaTextureSize, getLayerSurfaceState } from './mediaSurface';
 import type { EvaluatedLayerWithEffects } from '../../engine/evaluateShot';
 import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 import type { Project } from '../../model/types';
+import { getBlurSettings } from '../../model/layerEffects';
 import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout, getAspectRatio } from './cameraMath';
 import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
@@ -93,13 +94,19 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
     const edgeLength = (a: { x: number; y: number }, b: { x: number; y: number }) => Math.hypot(a.x - b.x, a.y - b.y);
     const { width: canvasW, height: canvasH } = getMediaTextureSize(meshW, meshH);
 
+    // The material's layer blur reaches this far (authored pixels) past the artwork, so the quad needs
+    // transparent room for it; without that room the blur is clipped into a hard rectangle.
+    const layerBlurSettings = getBlurSettings(layer.effects, 'layerBlur');
+    const layerBlurAuthoredPx = Math.max((layer.effects.layerBlur ?? 0) * 100, layerBlurSettings.start, layerBlurSettings.end);
+    const layerBlurPaddingPx = layerBlurAuthoredPx > 0.1 ? Math.ceil(layerBlurAuthoredPx * (canvasW / authoredW)) : 0;
+
     const { blurPadding, paddedCanvasW, paddedCanvasH, widthScale, heightScale } = getLayerBlurBleedLayout(
         canvasW,
         canvasH,
         totalBlurPx,
         evalLayer.motionBlur,
         Boolean(deviceFrameSettings),
-        0
+        layerBlurPaddingPx
     );
 
     const maxTexSize = gl.capabilities.maxTextureSize || 4096;
@@ -252,6 +259,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                         customProgramCacheKey={() => `layer-effects-${layer.id}-${layer.blendMode}`}
                         color="#ffffff"
                         transparent
+                        // Fully transparent (feathered) pixels must not write depth, or depth of field sees a hard rectangle.
+                        alphaTest={0.02}
                         opacity={renderOpacity}
                         metalness={surfaceMetalness}
                         roughness={surfaceRoughness}
@@ -265,6 +274,8 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                         customProgramCacheKey={() => `layer-effects-${layer.id}-${layer.blendMode}`}
                         color="#ffffff"
                         transparent
+                        // Fully transparent (feathered) pixels must not write depth, or depth of field sees a hard rectangle.
+                        alphaTest={0.02}
                         opacity={renderOpacity}
                         side={THREE.DoubleSide}
                     />

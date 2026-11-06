@@ -472,6 +472,26 @@ const StageComponent: React.FC<StageProps> = ({
                 onPin={handlePinCameraView}
                 onBack={handleBackFromOrbitCamera}
                 onZoom={setCanvasZoom}
+                focalLengthMm={effectiveViewportFrame.camera.focalLength}
+                dofEnabled={Boolean(frame.activeShot?.effects?.depthOfField?.enabled)}
+                focusDistance={frame.activeShot?.effects?.depthOfField?.focusDistance}
+                focusRange={frame.activeShot?.effects?.depthOfField?.focusRange}
+                aperture={frame.activeShot?.effects?.depthOfField?.aperture}
+                focusMode={frame.activeShot?.effects?.depthOfField?.focusMode}
+                onFocusDistanceChange={(value) => {
+                    if (!frame.activeShot) return;
+                    updateShot(frame.activeShot.id, (s) => ({
+                        ...s,
+                        effects: {
+                            ...s.effects,
+                            depthOfField: {
+                                ...(s.effects?.depthOfField ?? {}),
+                                focusDistance: value,
+                                focusMode: 'manual',
+                            },
+                        },
+                    }));
+                }}
             />
             {/* Top-Center Active Animate Recording Pill (Raylight-style) */}
             {isAnimateMode && (

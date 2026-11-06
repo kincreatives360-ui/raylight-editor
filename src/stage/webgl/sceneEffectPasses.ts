@@ -4,8 +4,18 @@ import type { EffectKey } from '../../model/types';
 import type { EvaluatedEffects } from '../../engine/evaluateEffects';
 import { COLOR_GRADE_GLSL, RANDOM_GLSL } from './shaderPrimitives';
 
-export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion'];
+export const scenePassKeys: EffectKey[] = ['bloom', 'vignette', 'motionBlur', 'chromaticAberration', 'filmGrain', 'ghost', 'colorGrade', 'edgeFade', 'glitch', 'atmosphere', 'gradientMap', 'fishEye', 'lensDistortion', 'depthOfField'];
 const vertexShader = 'varying vec2 vUv; void main(){vUv=uv;gl_Position=projectionMatrix*modelViewMatrix*vec4(position,1.0);}';
+/** Authored frame height that blur sizes (in pixels) are written against; matches the film-grain pass. */
+export const DOF_REFERENCE_HEIGHT = 1080;
+/**
+ * Blur sizes are authored for a 1080-pixel-high frame. Scaling them to the real render height keeps the look the same
+ * on a 1x or 2x display, a small preview, and a 4K export; unscaled, the same project blurred ~2x harder in a
+ * 540-pixel preview than in a 1080p export.
+ */
+export function dofResolutionScale(renderHeight: number): number {
+  return Number.isFinite(renderHeight) && renderHeight > 0 ? Math.max(0.25, renderHeight / DOF_REFERENCE_HEIGHT) : 1;
+}
 
 // Each pass reads the result of the preceding pass. All intermediate RGB is linear and premultiplied.
 export function createSceneEffectPass(key: EffectKey): ShaderPass {
@@ -15,7 +25,7 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
       uParams: { value: new THREE.Vector4() }, uExtra: { value: new THREE.Vector4() }, uExtra2: { value: new THREE.Vector4() },
       uFringe: { value: new THREE.Vector4() }, uColor: { value: new THREE.Color('#ffffff') },
       uStops: { value: Array.from({ length: 8 }, () => new THREE.Vector4()) }, uStopOpacity: { value: Array(8).fill(1) }, uStopCount: { value: 2 },
-      uSeed: { value: 0 }, uMotion: { value: new THREE.Vector2() },
+      uSeed: { value: 0 }, uMotion: { value: new THREE.Vector2() }, uDebug: { value: 0 },
     },
     vertexShader,
     fragmentShader: `
@@ -29,40 +39,71 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
       uniform float uStopOpacity[8];
       uniform int uStopCount;
       uniform float uSeed;
+      uniform float uDebug;
       varying vec2 vUv;
-      vec4 sampleAt(vec2 uv) { return texture2D(tDiffuse, clamp(uv, vec2(0.0), vec2(1.0))); }
+      // Explicit mip levels: sampling stays predictable inside branches and loops, and blurs can read pre-averaged texels.
+      vec4 sampleAt(vec2 uv) { return textureLod(tDiffuse, clamp(uv, vec2(0.0), vec2(1.0)), 0.0); }
+      vec4 sampleLod(vec2 uv, float lod) { return textureLod(tDiffuse, clamp(uv, vec2(0.0), vec2(1.0)), lod); }
+      // Size of one blur tap in pixels -> mip level that averages exactly that footprint.
+      float blurLod(float footprintPx) { return clamp(log2(max(footprintPx, 1.0)), 0.0, 8.0); }
+      // Per-pixel grain (interleaved gradient noise): breaks up any remaining sample pattern so it never reads as echoes.
+      float interleavedNoise() { return fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(.06711056, .00583715)))); }
       ${COLOR_GRADE_GLSL}
       ${RANDOM_GLSL}
       float random(vec2 cell) { return raylightRandom(cell,uSeed); }
       vec2 rotate2(vec2 v,float a){float c=cos(a),s=sin(a);return vec2(c*v.x-s*v.y,s*v.x+c*v.y);}
+      #if EFFECT == 13
+      float dofLinearDepth(float depth) {
+        float zNear = max(0.001, uExtra2.x);
+        float zFar = max(zNear + 0.01, uExtra2.y);
+        return (zNear * zFar) / (zFar - depth * (zFar - zNear));
+      }
+      // Signed blur size in pixels: negative in front of the focus plane, positive behind it.
+      float dofCoc(float linearDepth) {
+        float signedDist = linearDepth - max(0.05, uParams.x);
+        float focusRange = max(0.02, uExtra.x);
+        float outside = max(0.0, abs(signedDist) - focusRange * 0.5);
+        float coc = outside * (2.8 / max(0.5, uParams.y)) * max(0.05, uExtra.z) * max(0.2, uExtra.w) * 8.0;
+        coc = min(coc, max(0.5, uParams.z));
+        coc *= smoothstep(0.0, max(0.02, focusRange * mix(0.15, 0.8, clamp(uFringe.w, 0.0, 1.0))), outside);
+        return signedDist < 0.0 ? -coc : coc;
+      }
+      // Aperture-shaped sample on the unit disc; z compensates the sample density of polygon shapes.
+      vec3 dofTap(float index, float count, float jitter, float blades, float rotation) {
+        float radius = sqrt((index + 0.5) / count);
+        float angle = (index + jitter) * 2.39996323;
+        float density = 1.0;
+        if (blades >= 3.0) {
+          float segment = 6.2831853 / blades;
+          float local = mod(angle - rotation, segment) - segment * 0.5;
+          float edge = cos(3.14159265 / blades) / cos(local);
+          radius *= edge;
+          density = edge * edge;
+        }
+        return vec3(vec2(cos(angle), sin(angle)) * radius, density);
+      }
+      #endif
       void main(){
         vec4 col=sampleAt(vUv);
         #if EFFECT == 0
+          // Bright-pass glow gathered from mip-filtered taps over a disc: smooth, no repeated copies.
           vec3 glow=vec3(0.0);
-          float radius=max(1.0,uResolution.x/240.0)*max(0.0,uParams.z);
+          float reach=max(1.0,uResolution.x/240.0)*max(0.0,uParams.z)*2.0;
           float soft=max(.0001,uParams.w);
+          float jitter=interleavedNoise();
           float total=0.0;
-          for(int i=0;i<16;i++){
+          float lod=blurLod(reach*sqrt(3.14159265/24.0));
+          for(int i=0;i<24;i++){
             float fi=float(i);
-            float angle=fi*2.39996323;
-            float r=sqrt((fi+0.5)/16.0)*radius;
-            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
-            vec4 s=sampleAt(vUv+offset);
-            float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
-            glow+=s.rgb*w;
-            total+=1.0;
-          }
-          for(int i=0;i<8;i++){
-            float fi=float(i);
-            float angle=fi*2.39996323+1.2;
-            float r=sqrt((fi+0.5)/8.0)*radius*2.0;
-            vec2 offset=vec2(cos(angle),sin(angle))*r/uResolution;
-            vec4 s=sampleAt(vUv+offset);
-            float lum=dot(s.rgb,vec3(.2126,.7152,.0722));
-            float w=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001)*.45;
-            glow+=s.rgb*w;
-            total+=0.45;
+            float phase=(fi+0.5)/24.0;
+            float angle=(fi+jitter)*2.39996323;
+            vec2 offset=vec2(cos(angle),sin(angle))*sqrt(phase)*reach/uResolution;
+            vec3 s=sampleLod(vUv+offset,lod).rgb;
+            float lum=dot(s,vec3(.2126,.7152,.0722));
+            float gate=smoothstep(uParams.y-soft,uParams.y+soft,lum)*max(0.0,lum-uParams.y)/max(lum,.0001);
+            float w=exp(-2.5*phase);
+            glow+=s*gate*w;
+            total+=w;
           }
           vec3 bloom = (glow / max(0.001, total)) * (uParams.x * 2.5);
           if (uExtra.x == 1.0) col.rgb += bloom;
@@ -73,9 +114,16 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           float edge=clamp((length(centered)-uParams.y)*2.0+0.5,0.0,1.0);
           col.rgb*=1.0-edge*uParams.x;
         #elif EFFECT == 2
-          vec4 accum=vec4(0.0); float count=clamp(uParams.y,2.0,32.0);
-          for(int i=0;i<32;i++){ if(float(i)>=count) break;
-            accum += sampleAt(vUv - uMotion * ((float(i) - count * 0.5) / (count - 1.0)) * (uParams.x / 180.0));
+          // Enough taps for the streak length, jittered along the streak and read from pre-averaged mips.
+          vec2 streak=uMotion*(uParams.x/180.0);
+          float streakPx=length(streak*uResolution);
+          float count=floor(clamp(max(uParams.y,streakPx*0.5),2.0,48.0)+0.5);
+          float jitter=interleavedNoise();
+          float lod=blurLod(streakPx/count*0.7);
+          vec4 accum=vec4(0.0);
+          for(int i=0;i<48;i++){ if(float(i)>=count) break;
+            float t=(float(i)+jitter)/count-0.5;
+            accum += sampleLod(vUv - streak*t, lod);
           }
           col=accum/count;
         #elif EFFECT == 3
@@ -114,19 +162,25 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           else if(uExtra.w==3.0) col.rgb*=1.0+grainColor;
           else col.rgb+=grainColor*col.a;
         #elif EFFECT == 5
-          vec4 ghost=vec4(0.0);
-          float angle=radians(uParams.w);
-          vec2 shift=-vec2(cos(angle),sin(angle))*uParams.y;
-          float radius=uParams.z*uResolution.x/1920.0*max(.0,uExtra.x);
-          float ghostTotal=0.0;
-          for(int i=0;i<16;i++){
-            float fi=float(i);
-            float angle=fi*2.39996323;
-            float r=sqrt((fi+0.5)/16.0)*radius;
-            ghost+=sampleAt(vUv+shift+vec2(cos(angle),sin(angle))*r/uResolution);
-            ghostTotal+=1.0;
+          float gAngle=radians(uParams.w);
+          vec2 shift=-vec2(cos(gAngle),sin(gAngle))*uParams.y;
+          float reach=uParams.z*uResolution.x/1920.0*max(.0,uExtra.x);
+          vec3 ghostColor=sampleAt(vUv+shift).rgb;
+          if(reach>0.5){
+            float jitter=interleavedNoise();
+            float lod=blurLod(reach*sqrt(3.14159265/24.0));
+            vec3 ghost=vec3(0.0);
+            float ghostTotal=0.0;
+            for(int i=0;i<24;i++){
+              float fi=float(i);
+              float phase=(fi+0.5)/24.0;
+              float ang=(fi+jitter)*2.39996323;
+              float w=exp(-2.5*phase);
+              ghost+=sampleLod(vUv+shift+vec2(cos(ang),sin(ang))*sqrt(phase)*reach/uResolution,lod).rgb*w;
+              ghostTotal+=w;
+            }
+            ghostColor=ghost/max(0.001,ghostTotal);
           }
-          vec3 ghostColor = ghost.rgb / max(1.0, ghostTotal);
           col.rgb = mix(col.rgb, 1.0 - (1.0 - col.rgb) * (1.0 - ghostColor), uParams.x);
         #elif EFFECT == 6
           vec3 straight=col.a>.00001?col.rgb/col.a:vec3(0.0);
@@ -154,9 +208,10 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           col.r=sampleAt(vUv+vec2(shift+uParams.x*uParams.z/uResolution.x,0.0)).r;
           col.b=sampleAt(vUv+vec2(shift-uParams.x*uParams.z/uResolution.x,0.0)).b;
         #elif EFFECT == 9
-          float zNear=.1, zFar=100.0;
+          float zNear=max(0.001,uExtra2.x>0.0?uExtra2.x:0.1);
+          float zFar=max(zNear+0.01,uExtra2.y>0.0?uExtra2.y:100.0);
           float depthVal=texture2D(tDepth,vUv).r;
-          float linearDepth=(2.0*zNear)/(zFar+zNear-depthVal*(zFar-zNear));
+          float linearDepth=(zNear*zFar)/(zFar-depthVal*(zFar-zNear));
           float depthMix=uExtra.w>.5?smoothstep(uParams.w,uParams.w+max(.001,uExtra.x),linearDepth):1.0;
           float heightMask=smoothstep(1.0-uExtra.y,1.0,1.0-vUv.y);
           float amount=clamp(uParams.x*depthMix+uParams.y*heightMask+uParams.z,0.0,1.0);
@@ -209,13 +264,81 @@ export function createSceneEffectPass(key: EffectKey): ShaderPass {
           if(uExtra.x==1.0) warped=mix(warped,clamp(warped,0.0,1.0),.35);
           if(uExtra.x==2.0&&(warped.x<0.0||warped.x>1.0||warped.y<0.0||warped.y>1.0)) col=vec4(0.0);
           else col=sampleAt(warped);
+
+        #elif EFFECT == 13
+          // Camera-style depth of field, built so a defocused shape is blurred itself rather than feathered:
+          //  - every sample carries its own blur size, so a sharp subject never takes colour from a blurry background
+          //  - blurry foreground spreads over sharper areas behind it
+          //  - each tap is weighted by 1 / (its blur disc area): a sample spreads a fixed amount of light over its own
+          //    disc, so a shape blurred less than its surroundings still reaches them with the right strength. Weighting
+          //    taps equally under-counts it, which left a crisp silhouette with a glow around it
+          //  - alpha is gathered with the same weights, so transparent renders blur their silhouette too
+          float jitter = interleavedNoise();
+          float linearDepth = dofLinearDepth(textureLod(tDepth, vUv, 0.0).r);
+          float ownCoc = abs(dofCoc(linearDepth));
+          float maxBlurPx = max(0.5, uParams.z);
+
+          // Blurrier, nearer neighbours reach over this pixel even when it is sharp itself.
+          float reach = ownCoc;
+          for (int i = 0; i < 16; i++) {
+            float fi = float(i);
+            float angle = (fi + jitter) * 2.39996323;
+            vec2 offsetPx = vec2(cos(angle), sin(angle)) * sqrt((fi + 0.5) / 16.0) * maxBlurPx;
+            vec2 neighbourUv = clamp(vUv + offsetPx / uResolution, vec2(0.001), vec2(0.999));
+            float neighbourCoc = dofCoc(dofLinearDepth(textureLod(tDepth, neighbourUv, 0.0).r));
+            if (neighbourCoc < 0.0 && -neighbourCoc >= length(offsetPx) * 0.5) reach = max(reach, -neighbourCoc);
+          }
+
+          if (reach >= 0.4) {
+            float count = floor(min(48.0, clamp(uParams.w, 4.0, 32.0) + clamp(reach * 0.5, 0.0, 16.0)) + 0.5);
+            float lod = blurLod(reach * sqrt(3.14159265 / count) * 0.9);
+            float highlightBoost = max(0.0, max(1.0, uExtra.y) - 1.0) + uFringe.y;
+            float artistic = uFringe.z;
+            // Depth gap over which "behind" fades in, so the in-front / behind decision never flips on a single pixel.
+            float depthTolerance = max(0.02, uExtra.x * 0.25);
+            // Smallest disc a tap is normalised by: keeps a nearly sharp tap from dominating a wide gather.
+            float minDisc = max(1.0, reach * 0.5);
+            // A pixel that is itself in focus keeps its own colour; a blurred pixel is rebuilt from its taps only,
+            // so no sharp copy of the shape survives underneath the blur.
+            float selfWeight = clamp(1.0 - ownCoc, 0.0, 1.0);
+            vec4 accum = col * selfWeight;
+            float wSum = selfWeight;
+            for (int i = 0; i < 48; i++) {
+              if (float(i) >= count) break;
+              vec3 tap = dofTap(float(i), count, jitter, uExtra2.z, uExtra2.w);
+              vec2 offsetPx = tap.xy * reach;
+              float dist = length(offsetPx);
+              vec2 rawUv = vUv + offsetPx / uResolution;
+              vec2 inside = step(vec2(0.0), rawUv) * step(rawUv, vec2(1.0));
+              vec2 sampleUv = clamp(rawUv, vec2(0.001), vec2(0.999));
+              float sampleDepth = dofLinearDepth(textureLod(tDepth, sampleUv, 0.0).r);
+              float sampleCoc = abs(dofCoc(sampleDepth));
+              // A sample behind this pixel can only spill as far as this pixel's own blur allows.
+              float behind = smoothstep(-depthTolerance, depthTolerance, sampleDepth - linearDepth);
+              float effective = mix(sampleCoc, min(sampleCoc, ownCoc), behind);
+              // Soft rim: a wide ramp instead of a hard cut-off, so the disc edge never reads as a crisp outline.
+              float cover = clamp((effective - dist) / max(1.0, effective * 0.25) + 1.0, 0.0, 1.0);
+              float disc = minDisc / max(effective, minDisc);
+              float shape = artistic > 0.5 ? exp(-2.0 * pow(dist / max(reach, 1.0), 2.0)) : 1.0;
+              vec4 sampleTexel = sampleLod(sampleUv, lod);
+              float lum = dot(sampleTexel.rgb, vec3(0.2126, 0.7152, 0.0722));
+              float highlight = 1.0 + max(0.0, lum - uFringe.x) * highlightBoost * 2.0;
+              float w = cover * disc * disc * shape * tap.z * highlight * inside.x * inside.y;
+              accum += sampleTexel * w;
+              wSum += w;
+            }
+            if (wSum > 0.001) col = accum / wSum;
+          }
+          // Debug view (add ?dofDebug=1 to the page address): red = blur size, green = gather reach, blue = in focus.
+          if (uDebug > 0.5) col.rgb = vec3(ownCoc / maxBlurPx, reach / maxBlurPx, ownCoc < 0.4 ? 1.0 : 0.0);
+
         #endif
         gl_FragColor=col;
       }`,
   });
 }
 
-export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }) {
+export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effects: EvaluatedEffects, width: number, height: number, motion = { x: 0, y: 0 }, cameraClip: { near: number; far: number; position?: { x: number; y: number; z: number }; forward?: { x: number; y: number; z: number } } = { near: 0.1, far: 100 }) {
   const e = effects.state, p = pass.uniforms.uParams.value as THREE.Vector4;
   p.set(0, 0, 0, 0);
   pass.uniforms.uExtra.value.set(0, 0, 0, 0);
@@ -267,6 +390,7 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       const atmosphere=e.atmosphere;
       p.set(atmosphere.fog, atmosphere.mist, atmosphere.haze, atmosphere.start);
       pass.uniforms.uExtra.value.set(atmosphere.reach, atmosphere.mistHeight, 0.1, atmosphere.depthEnabled ? 1 : 0);
+      pass.uniforms.uExtra2.value.set(Math.max(0.001, cameraClip.near), Math.max(0.01, cameraClip.far), 0, 0);
       (pass.uniforms.uColor.value as THREE.Color).set(atmosphere.color);
       break;
     }
@@ -300,6 +424,80 @@ export function configureSceneEffectPass(pass: ShaderPass, key: EffectKey, effec
       p.set(lens.strength,lens.centerX,lens.centerY,measure);
       pass.uniforms.uExtra.value.x=({ fill: 0, balanced: 1, none: 2 } as const)[lens.edgeMode as 'fill' | 'balanced' | 'none'];
       pass.uniforms.uExtra.value.z=lens.mode==='barrel'?1:0;
+      break;
+    }
+    case 'depthOfField': {
+      const dof = e.depthOfField ?? ({} as NonNullable<typeof e.depthOfField>);
+      let focusDist = Number(dof.focusDistance);
+      if (!Number.isFinite(focusDist)) focusDist = 2.65;
+      // Object-aware: when focusMode is target/selection and a target is set, focus on that point's depth.
+      // Depth is measured along the camera's view direction, matching the depth buffer, so focus stays
+      // correct when the camera moves, orbits or zooms.
+      if ((dof.focusMode === 'target' || dof.focusMode === 'selection') && dof.target) {
+        const target = dof.target;
+        const { position, forward } = cameraClip;
+        if (position && forward) {
+          const alongView = (target.x - position.x) * forward.x + (target.y - position.y) * forward.y + (target.z - position.z) * forward.z;
+          if (Number.isFinite(alongView) && alongView > 0.05) focusDist = alongView;
+        } else {
+          const tz = Number(target.z);
+          if (Number.isFinite(tz)) focusDist = Math.max(0.05, Math.abs(2.65 - tz));
+        }
+      }
+      const aperture = Number(dof.aperture);
+      const maxBlur = Number(dof.maxBlur);
+      let samples = Number(dof.samples);
+      // Quality presets override sample count when present
+      if (dof.quality === 'draft') samples = Math.min(samples || 8, 10);
+      else if (dof.quality === 'high') samples = Math.max(samples || 20, 24);
+      else if (!Number.isFinite(samples)) samples = 16;
+
+      const focusRange = Math.max(0.02, Number(dof.focusRange) || 0.85);
+      const bokehScale = Math.max(0.05, Number(dof.bokehScale) || 1);
+      const highlightGain = Number(dof.highlightGain);
+      const highlightThreshold = Number(dof.highlightThreshold);
+      const highlightIntensity = Number(dof.highlightIntensity);
+      const focusSoftness = Number(dof.focusSoftness);
+      const focalLength = Number(dof.focalLength);
+      const sensor = Number(dof.sensorHeightMm);
+      // focalScale: longer lenses + smaller sensors → stronger relative CoC
+      const resolutionScale = dofResolutionScale(height);
+      const focalScale = ((Number.isFinite(focalLength) ? focalLength : 50) / 50) * (24 / (Number.isFinite(sensor) ? sensor : 24)) * resolutionScale;
+
+      // Aperture shape: an explicit blade count wins, otherwise the named shape decides (0 = round).
+      const bladeCount = Number(dof.apertureBlades);
+      const blades = bladeCount >= 3 ? Math.min(12, Math.round(bladeCount)) : dof.bokehShape === 'hexagonal' ? 6 : dof.bokehShape === 'octagonal' ? 8 : 0;
+
+      // uParams: focusDistance, f-stop, maxBlurPx (render pixels), samples
+      p.set(
+        focusDist,
+        Number.isFinite(aperture) ? aperture : 2.8,
+        Math.max(1, Number.isFinite(maxBlur) ? maxBlur : 36) * resolutionScale,
+        Math.max(4, Math.min(32, Math.round(samples)))
+      );
+      // uExtra: focusRange, highlightGain, bokehScale, focalScale (includes the resolution scale)
+      pass.uniforms.uExtra.value.set(
+        focusRange,
+        Number.isFinite(highlightGain) ? highlightGain : 1.5,
+        bokehScale,
+        focalScale
+      );
+      // uExtra2: camera near / far for depth linearization, aperture blades, bokeh rotation (radians)
+      pass.uniforms.uExtra2.value.set(
+        Math.max(0.001, cameraClip.near),
+        Math.max(0.01, cameraClip.far),
+        blades,
+        THREE.MathUtils.degToRad(Number.isFinite(Number(dof.bokehRotation)) ? Number(dof.bokehRotation) : 0)
+      );
+      // uFringe: highlight threshold, highlight intensity, artistic model flag, focus softness
+      pass.uniforms.uFringe.value.set(
+        Number.isFinite(highlightThreshold) ? highlightThreshold : 0.7,
+        Number.isFinite(highlightIntensity) ? highlightIntensity : 0,
+        dof.model === 'artistic' ? 1 : 0,
+        Number.isFinite(focusSoftness) ? focusSoftness : 0.3
+      );
+      pass.uniforms.uSeed.value = effects.deterministicSeed;
+      pass.uniforms.uDebug.value = typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('dofDebug') === '1' ? 1 : 0;
       break;
     }
   }

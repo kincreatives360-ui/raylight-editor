@@ -75,12 +75,17 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
     const primaryEval = selectedEvalLayers[0];
     const { layer } = primaryEval;
     const isLocked = isLayerEffectivelyLocked(layer, activeShot.groups);
-    const refCameraZ = evaluateCustomPose({
-        position: { x: 0, y: 0, z: 2.65 },
-        rotation: { x: 0, y: 0, z: 0 },
-        focalLength: 50,
-    }).position?.z ?? 2.65;
-    const refFocalLength = 50;
+    // Use the LIVE camera focal length / FOV so selection handles stay locked to the
+    // projected object when the user changes lens (focal length). Hardcoding 50mm
+    // previously made the overlay grow/shrink incorrectly relative to the content.
+    const refFocalLength = cameraPose?.focalLength ?? DEFAULT_FOCAL_LENGTH;
+    const refCameraZ = cameraPose?.position?.z
+        ?? evaluateCustomPose({
+            position: { x: 0, y: 0, z: 2.65 },
+            rotation: { x: 0, y: 0, z: 0 },
+            focalLength: refFocalLength,
+        }).position?.z
+        ?? 2.65;
     const zoom = Math.max(0.15, frame.camera.zoom || 1);
 
     // The shared layout projects the resolved body; crop handles use the display aperture.

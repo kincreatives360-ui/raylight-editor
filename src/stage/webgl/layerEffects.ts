@@ -153,15 +153,26 @@ export function applyMotionBlur(
     ctx.save();
     ctx.resetTransform();
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    const count = Math.max(2, Math.min(32, Math.round(sampleCount)));
-    ctx.globalAlpha = 1 / count;
-    ctx.globalCompositeOperation = 'lighter';
+    // Proper temporal average (NOT 'lighter' additive). Additive mode stacked
+    // opaque copies of hard-edged shapes and produced the classic "boxy / repeated
+    // rectangle" look instead of a continuous motion streak.
+    const count = Math.max(3, Math.min(32, Math.round(sampleCount)));
+    ctx.globalCompositeOperation = 'source-over';
+    ctx.globalAlpha = 1;
 
     const cx = canvas.width / 2;
     const cy = canvas.height / 2;
 
+    // Accumulate into an offscreen buffer with equal weights, then copy back.
+    // Drawing with alpha=1/N on source-over under-weights later samples; we use
+    // a two-pass approach: draw all samples at full opacity into a linear sum
+    // via intermediate, or simply use source-over with carefully ordered alpha.
+    // Simplest correct average: draw first at 1, subsequent with alpha 1/(i+1)
+    // using source-over (online mean). That is numerically stable and smooth.
     for (let i = 0; i < count; i++) {
-        const t = (i / (count - 1)) - 0.5;
+        const t = count === 1 ? 0 : (i / (count - 1)) - 0.5;
+        const alpha = 1 / (i + 1);
+        ctx.globalAlpha = alpha;
         if (hasAngular || hasScale) {
             ctx.save();
             ctx.translate(cx + mX * t, cy + mY * t);
@@ -173,6 +184,7 @@ export function applyMotionBlur(
             ctx.drawImage(source, mX * t, mY * t);
         }
     }
+    ctx.globalAlpha = 1;
     ctx.restore();
     releaseCanvas(source);
 }
@@ -259,7 +271,7 @@ export function getLayerEffectUniforms(effects: LayerEffects, blend: BlendMode) 
     };
     const blurShape = (key: 'layerBlur' | 'backdropBlur') => {
         const p = getBlurSettings(effects, key);
-        return new THREE.Vector4(p.type === 'radial' ? 1 : p.type === 'zoom' ? 2 : 0, p.centerX ?? .5, p.centerY ?? .5, p.quality ?? 16);
+        return new THREE.Vector4(p.type === 'radial' ? 1 : p.type === 'zoom' ? 2 : 0, p.centerX ?? .5, p.centerY ?? .5, Math.max(12, p.quality ?? 24));
     };
     return {
         ...getLayerStyleUniforms(effects),
@@ -367,6 +379,10 @@ uniform float layerBackdrop, layerGlass;
 uniform vec4 layerGlassParams, layerGlassLighting, layerGlassOptics;
 uniform vec3 layerTint, layerRimColor;
 uniform vec2 layerWarp;
+// Interleaved gradient noise: turns any leftover sampling pattern into fine grain instead of visible echoes.
+float layerNoise(vec2 p) {
+    return fract(52.9829189 * fract(dot(p, vec2(.06711056, .00583715))));
+}
 float layerBlurRadius(vec4 profile, vec2 uv, vec4 shape) {
     if (shape.x > .5) {
         vec2 fromCenter = uv - shape.yz;
@@ -399,26 +415,50 @@ vec2 layerBlurOffset(vec2 uv, float radius, vec4 shape, float index, float count
     }
     return (center - uv) * phase * min(1., radius * 2. / max(size.x, size.y));
 }
-vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
+// reach: how far the gather extends. variable: the blur size changes across the layer (progressive, radial, zoom),
+// so each tap only counts when its own blur size (or this pixel's) reaches across the gap. That makes the shape's
+// own edge blur from both sides instead of staying sharp where the local blur size is small.
+vec4 layerSampleArtworkReach(vec2 uv, float radius, vec4 shape, float reach, bool variable) {
+    // Mip-filtered gather: every tap already averages the texels around it, so the taps blend into a
+    // smooth Gaussian-like blur instead of showing one faint copy of the artwork per tap.
+    vec2 texSize = vec2(textureSize(map, 0));
+    float count = clamp(shape.w, 16., 32.);
+    float jitter = layerNoise(gl_FragCoord.xy);
+    float reachTex = reach * texSize.x / max(layerAuthorSize.x, 1.);
+    float spacing = reachTex * sqrt(3.14159265 / count);
+    float lod = clamp(log2(max(spacing, 1.)), 0., log2(max(texSize.x, texSize.y)));
+    // Padded layers have transparent room around the artwork, so outside samples count as transparent
+    // and the edge feathers outward. Unpadded layers (device screens) keep their edges solid.
+    bool padded = max(layerContentScale.x, layerContentScale.y) > 1.001;
     vec4 accum = vec4(0.); float totalW = 0.;
-    float count = max(1., shape.w);
-    // No per-pixel dither: dither causes a visible noise/grain texture on smooth blurs.
-    // Use a fixed golden-angle spiral that is already well-distributed.
     for (int i = 0; i < 32; i++) {
         if (float(i) >= count) break;
         float phase = (float(i) + .5) / count;
-        float rNorm = sqrt(phase);
-        float w = exp(-2.5 * rNorm * rNorm);
-        vec2 delta = layerBlurOffset(uv, radius, shape, float(i), count, layerAuthorSize);
-        vec2 p = uv + delta;
-        // Mask BOTH rgb and alpha for out-of-bounds samples so they do not
-        // bleed edge colours into transparent pixels (prevents size inflation).
-        float inBounds = step(0., p.x) * step(p.x, 1.) * step(0., p.y) * step(p.y, 1.);
-        vec4 sampleColor = texture2D(map, clamp(p, vec2(0.), vec2(1.))) * inBounds;
-        accum += sampleColor * w;
-        totalW += w * inBounds;
+        float w = exp(-2.5 * phase);
+        vec2 offset = layerBlurOffset(uv, reach, shape, float(i) + jitter, count, layerAuthorSize);
+        vec2 p = uv + offset;
+        if (variable) {
+            vec2 sampleLocal = (p - layerContentCenter) * layerContentScale + .5;
+            float sampleRadius = layerBlurRadius(layerBlurProfile, sampleLocal, layerBlurShape);
+            float gap = length(offset * layerAuthorSize);
+            w *= clamp((max(radius, sampleRadius) - gap) / max(1., max(radius, sampleRadius) * .25) + 1., 0., 1.);
+        }
+        vec2 inside = step(vec2(0.), p) * step(p, vec2(1.));
+        float inBounds = inside.x * inside.y;
+        vec4 t = textureLod(map, clamp(p, vec2(0.), vec2(1.)), lod);
+        // Mip levels average straight colour with black transparent texels, which already behaves like
+        // premultiplied colour; only the sharp level needs the explicit multiply.
+        vec3 premult = mix(t.rgb * t.a, t.rgb, clamp(lod, 0., 1.));
+        accum += vec4(premult, t.a) * (w * inBounds);
+        totalW += padded ? w : w * inBounds;
     }
-    return accum / max(totalW, .00001);
+    if (totalW < .0001) return texture2D(map, uv);
+    vec4 result = accum / totalW;
+    result.rgb = min(result.rgb / max(result.a, .0001), vec3(1.));
+    return result;
+}
+vec4 layerSampleArtwork(vec2 uv, float radius, vec4 shape) {
+    return layerSampleArtworkReach(uv, radius, shape, radius, false);
 }
 vec3 layerScreenLcd(vec3 color, vec2 f) {
     float subX = fract(f.x * 3.0);
@@ -498,15 +538,17 @@ vec2 layerSceneBlurOffset(vec2 uv, float radius, vec4 shape, float index, float 
 vec3 layerSampleScene(vec2 uv, float radius, vec4 shape) {
     if (radius <= .001) return texture2D(layerScene, uv).rgb;
     vec3 accum = vec3(0.); float totalW = 0.;
-    float count = min(shape.w, 32.);
-    float dither = fract(sin(dot(gl_FragCoord.xy, vec2(12.9898, 78.233))) * 43758.5453);
-    for (int i = 0; i < 32; i++) {
+    float baseCount = max(16., min(shape.w, 32.));
+    float count = min(48., baseCount + clamp(radius * .35, 0., 16.));
+    // The captured backdrop has no mip chain, so per-pixel jitter turns tap gaps into fine grain.
+    float jitter = layerNoise(gl_FragCoord.xy);
+    for (int i = 0; i < 48; i++) {
         if (float(i) >= count) break;
         float phase = (float(i) + .5) / count;
-        float rNorm = sqrt(phase);
-        float w = exp(-2.5 * rNorm * rNorm);
-        vec2 offset = layerSceneBlurOffset(uv, radius, shape, float(i) + dither * .5, count);
-        accum += texture2D(layerScene, clamp(uv + offset, vec2(0.), vec2(1.))).rgb * w;
+        float w = exp(-2.5 * phase);
+        vec2 offset = layerSceneBlurOffset(uv, radius, shape, float(i) + jitter, count);
+        vec2 p = clamp(uv + offset, vec2(0.), vec2(1.));
+        accum += texture2D(layerScene, p).rgb * w;
         totalW += w;
     }
     return accum / max(totalW, .00001);
@@ -530,7 +572,10 @@ ${LAYER_STYLE_GLSL}
         sampleUv = (floor(layerUv * cellCount) + .5) / cellCount;
     }
     sampleUv = layerStyleUv(sampleUv, localUv);
-    vec4 artwork = radius > .01 ? layerSampleArtwork(sampleUv, radius, layerBlurShape) : texture2D(map, sampleUv);
+    float blurReach = radius;
+    bool blurVaries = layerBlurProfile.w > .5 || layerBlurShape.x > .5;
+    if (blurVaries) blurReach = max(radius, max(layerBlurProfile.x, layerBlurProfile.y));
+    vec4 artwork = blurReach > .01 ? layerSampleArtworkReach(sampleUv, radius, layerBlurShape, blurReach, blurVaries) : texture2D(map, sampleUv);
     if (layerScreen.x > .5) {
         vec2 cellCount = max(vec2(1.0), layerAuthorSize / max(.5, layerScreen.y));
         vec2 cellCoord = layerUv * cellCount;

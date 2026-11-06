@@ -325,4 +325,59 @@ export interface SceneEffects {
     scanlines?: number;
     seed?: number;
   };
+  /** Physically inspired depth of field using the scene depth buffer (object + depth aware).
+   *  Aligned with raylight.app: target point, focusRange, bokehScale, physical model. */
+  /**
+   * Camera-subsystem depth of field (not a generic blur).
+   * Focus distance is in scene units; focal length in mm; aperture is f-number.
+   * Prefer focusMode + focusTargetId / target for object-aware focus.
+   */
+/**
+   * Camera-style depth of field (object- and depth-aware).
+   * Focus distance is in scene units; focal length in mm; aperture is f-stop.
+   * Target object tracking uses world-space target when set.
+   */
+  depthOfField: {
+    enabled: boolean;
+    /** World-space focus point (object tracking / canvas pick). */
+    target: { x: number; y: number; z: number };
+    /** Focus plane distance from camera in scene units. */
+    focusDistance: number;
+    /** Half-width of the sharp zone in scene units (DoF near/far span). */
+    focusRange: number;
+    /** f-stop. Lower = shallower DoF. Typical 1.4–16. */
+    aperture: number;
+    /** Lens focal length in mm (synced with camera when possible). */
+    focalLength: number;
+    /** Sensor height in mm (full-frame default 24). Affects CoC scale. */
+    sensorHeightMm: number;
+    /** Overall bokeh strength multiplier for artistic control. */
+    bokehScale: number;
+    /** Max blur radius in screen pixels (performance / look clamp). */
+    maxBlur: number;
+    /** Spiral sample count: 8 draft, 16 balanced, 28 high. */
+    samples: number;
+    /** Highlight boost for specular bokeh. */
+    highlightGain: number;
+    /** Softness of the transition out of the sharp zone. */
+    focusSoftness: number;
+    /** Aperture blade count for bokeh shape (0 = circular). */
+    apertureBlades: number;
+    /** Bokeh shape rotation in degrees. */
+    bokehRotation: number;
+    /** Named aperture shape; an explicit apertureBlades count (3+) takes priority. */
+    bokehShape?: 'spherical' | 'hexagonal' | 'octagonal';
+    /** physical = flat-disc bokeh, artistic = soft-edged bokeh. */
+    model?: 'physical' | 'artistic';
+    /** Brightness (0-1) above which highlights are boosted. */
+    highlightThreshold?: number;
+    /** Extra boost for highlights above the threshold. */
+    highlightIntensity?: number;
+    /** Focus mode: manual distance, track target, or selected layer. */
+    focusMode: 'manual' | 'target' | 'selection';
+    /** Optional layer id when focusMode is selection. */
+    focusLayerId?: string;
+    /** Quality preset hint for the renderer. */
+    quality: 'draft' | 'balanced' | 'high';
+  };
 }

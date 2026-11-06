@@ -25,6 +25,33 @@ const blendChannel = (base:number, map:number, mode:string) => {
   }
 };
 
+/** One running-sum box blur pass over interleaved RGBA floats; edges clamp. */
+function boxBlurPass(src: Float32Array, dst: Float32Array, width: number, height: number, radius: number, horizontal: boolean): void {
+  const length = horizontal ? width : height, lines = horizontal ? height : width;
+  const stride = horizontal ? 4 : width * 4, lineStride = horizontal ? width * 4 : 4;
+  const scale = 1 / (2 * radius + 1), last = length - 1;
+  for (let line = 0; line < lines; line++) for (let c = 0; c < 4; c++) {
+    const base = line * lineStride + c;
+    let sum = 0;
+    for (let k = -radius; k <= radius; k++) sum += src[base + Math.max(0, Math.min(last, k)) * stride];
+    for (let i = 0; i < length; i++) {
+      dst[base + i * stride] = sum * scale;
+      sum += src[base + Math.min(last, i + radius + 1) * stride] - src[base + Math.max(0, i - radius) * stride];
+    }
+  }
+}
+
+/** Three box blurs approximate a Gaussian, so blurred edges feather smoothly instead of repeating. */
+function blurRgba(source: Float32Array, width: number, height: number, radiusPx: number): Float32Array {
+  const radius = Math.max(1, Math.round(radiusPx * 0.4));
+  let a = source.slice(), b = new Float32Array(source.length);
+  for (let pass = 0; pass < 3; pass++) {
+    boxBlurPass(a, b, width, height, radius, true);
+    boxBlurPass(b, a, width, height, radius, false);
+  }
+  return a;
+}
+
 /** Ordered post-processing in linear light; output is Canvas2D\'s sRGB bytes. */
 export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, height: number, evaluated: EvaluatedEffects): void {
   const len = data.length;
@@ -37,6 +64,22 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
   const e = evaluated.state;
   for (const { key } of evaluated.orderedEnabledPasses) {
     dst.set(src);
+    // Blur-based effects work from a properly blurred copy, not from a sparse grid of taps.
+    let blurred: Float32Array | null = null;
+    if (key === 'bloom') {
+      const reach = Math.max(1, width / 240) * (e.bloom.radius ?? 1) * 2, soft = e.bloom.softness ?? 0.5;
+      const bright = new Float32Array(len);
+      for (let i = 0; i < len; i += 4) {
+        const lum = src[i] * 0.2126 + src[i + 1] * 0.7152 + src[i + 2] * 0.0722;
+        const gate = soft <= 0 ? Number(lum >= e.bloom.threshold) : clamp((lum - e.bloom.threshold + soft) / (2 * soft));
+        const gain = gate * Math.max(0, lum - e.bloom.threshold) / Math.max(lum, 0.0001);
+        bright[i] = src[i] * gain; bright[i + 1] = src[i + 1] * gain; bright[i + 2] = src[i + 2] * gain;
+      }
+      blurred = blurRgba(bright, width, height, reach);
+    } else if (key === 'ghost') {
+      const reach = e.ghost.blur * width / 1920 * (e.ghost.spread ?? 1);
+      blurred = reach > 0.5 ? blurRgba(src, width, height, reach) : src;
+    }
     const sample = (x: number, y: number, c: number) => src[(Math.max(0, Math.min(height - 1, Math.round(y))) * width + Math.max(0, Math.min(width - 1, Math.round(x)))) * 4 + c];
     for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
       const i = (y * width + x) * 4, u = (x + 0.5) / width, v = (y + 0.5) / height;
@@ -90,16 +133,8 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
           for(let c=0;c<4;c++) dst[i+c]=sample(ex*width-.5,ey*height-.5,c);
         }
       } else if (key === 'bloom') {
-        const radius = Math.max(1, width / 240)*(e.bloom.radius??1), softness=e.bloom.softness??0.5;
         for(let c=0;c<3;c++) {
-          let glow=0;
-          for(let ring=1;ring<=2;ring++) for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) {
-            const weight=ring===1?1:.45, sx=x+dx*radius*ring, sy=y+dy*radius*ring;
-            const lum=sample(sx,sy,0)*0.2126+sample(sx,sy,1)*0.7152+sample(sx,sy,2)*0.0722;
-            const gate=softness<=0?Number(lum>=e.bloom.threshold):clamp((lum-e.bloom.threshold+softness)/(2*softness));
-            glow += sample(sx,sy,c) * gate * Math.max(0,lum-e.bloom.threshold) / Math.max(lum,0.0001)*weight;
-          }
-          const bloom=glow/14.4*e.bloom.intensity, mode=e.bloom.blendMode??'screen';
+          const bloom=blurred![i+c]*e.bloom.intensity*2.5, mode=e.bloom.blendMode??'screen';
           dst[i+c]=mode==='add'?src[i+c]+bloom:mode==='softLight'?blendChannel(src[i+c],clamp(bloom),mode):1-(1-src[i+c])*(1-clamp(bloom));
         }
       } else if (key === 'vignette') {
@@ -132,7 +167,8 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
         const motion = (evaluated as EvaluatedEffects & { motionVector?: {x:number;y:number} }).motionVector;
         const blurMotion=e.motionBlur.direction==='angle'?{x:Math.cos((e.motionBlur.angle??0)*Math.PI/180)*(e.motionBlur.amount??.01),y:Math.sin((e.motionBlur.angle??0)*Math.PI/180)*(e.motionBlur.amount??.01)}:motion;
         if (blurMotion && (blurMotion.x || blurMotion.y)) {
-          const count=Math.max(2,Math.min(32,e.motionBlur.samples??8));
+          const streakPx=Math.hypot(blurMotion.x*width,blurMotion.y*height)*e.motionBlur.shutterAngle/360;
+          const count=Math.max(2,Math.min(64,Math.round(Math.max(e.motionBlur.samples??8,streakPx*0.5))));
           for(let c=0;c<3;c++) {
             let sum=0;
             for(let n=0;n<count;n++) { const t=(n/(count-1)-0.5)*e.motionBlur.shutterAngle/360; sum+=sample(x+blurMotion.x*width*t,y+blurMotion.y*height*t,c); }
@@ -140,13 +176,11 @@ export function applyCanvasSceneEffects(data: Uint8ClampedArray, width: number, 
           }
         }
       } else if (key === 'ghost') {
-        const angle=(e.ghost.angle??0)*Math.PI/180, spread=e.ghost.spread??1;
-        const radius=e.ghost.blur*width/1920*spread;
-        for(let c=0;c<3;c++) {
-          let echo=0;
-          for(let dy=-1;dy<=1;dy++) for(let dx=-1;dx<=1;dx++) echo+=sample(x-Math.cos(angle)*e.ghost.offset*width+dx*radius,y+Math.sin(angle)*e.ghost.offset*height+dy*radius,c);
-          dst[i+c]+=echo/9*e.ghost.opacity;
-        }
+        const angle=(e.ghost.angle??0)*Math.PI/180;
+        const gx=Math.max(0,Math.min(width-1,Math.round(x-Math.cos(angle)*e.ghost.offset*width)));
+        const gy=Math.max(0,Math.min(height-1,Math.round(y+Math.sin(angle)*e.ghost.offset*height)));
+        const gi=(gy*width+gx)*4;
+        for(let c=0;c<3;c++) dst[i+c]=src[i+c]+(1-(1-src[i+c])*(1-clamp(blurred![gi+c]))-src[i+c])*e.ghost.opacity;
       } else if (key === 'edgeFade') {
         const f=e.edgeFade;
         const softness=f.softness??1, raw=Math.min(f.top>0?v/f.top:1,f.bottom>0?(1-v)/f.bottom:1,(f.left??0)>0?u/f.left!:1,(f.right??0)>0?(1-u)/f.right!:1,1);

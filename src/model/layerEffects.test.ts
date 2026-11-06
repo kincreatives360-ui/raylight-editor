@@ -17,7 +17,7 @@ describe('reference layer effect parameters', () => {
       pixelate: { ...effects.pixelate!, offsetX: -10, offsetY: 5 },
     };
     expect(LayerEffectsSchema.parse(JSON.parse(JSON.stringify(authored)))).toEqual(authored);
-    expect(getBlurSettings({}, 'layerBlur')).toMatchObject({ type: 'gaussian', centerX: .5, centerY: .5, quality: 16 });
+    expect(getBlurSettings({}, 'layerBlur')).toMatchObject({ type: 'gaussian', centerX: .5, centerY: .5, quality: 24 });
   });
   it('rejects invalid blur samples and normalized centers or split channel strengths', () => {
     const blur = { type: 'radial', mode: 'uniform', start: 0, end: 20, angle: 0 };
