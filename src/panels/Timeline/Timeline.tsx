@@ -9,6 +9,8 @@ import { useTimelinePlayback } from './useTimelinePlayback';
 import type { TimelineEasingPopoverTarget, TimelineGhostDragPreview } from './timelineTypes';
 import { ContextMenu } from '../../ui/ContextMenu';
 import { isBlankProjectState } from '../../model/types';
+import type { LightAnimationBlock } from '../../model/types';
+import { generateId } from '../../model/id';
 import { useProjectStore } from '../../store/useProjectStore';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
@@ -17,6 +19,7 @@ import { TimelineShotOverview } from './TimelineShotOverview';
 import { TimelineMediaTrack } from './TimelineMediaTrack';
 import { TimelineSceneTracks } from './TimelineSceneTracks';
 import { PlayheadOverlay } from './PlayheadOverlay';
+import { SnapLineOverlay } from './SnapLineOverlay';
 import { EasingPopover } from './EasingPopover';
 import { getShotTimelineWidth } from './timelineBarGeometry';
 
@@ -64,6 +67,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectedBlockId,
         selectedCameraBlockId,
         selectedLightBlockId,
+        selectedLightId,
+        selectLight,
         selectedPresetType,
         inspectorTab,
         clearLayerSelection,
@@ -91,7 +96,13 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         [expandedTimelineLayerIds]
     );
 
-    const { trackRef, timelineViewportWidth, handleStartResizeTimelineHeight } = useTimelineViewport({
+    const {
+        trackRef,
+        timelineViewportWidth,
+        handleStartResizeTimelineHeight,
+        snapLineMs,
+        setSnapLineMs,
+    } = useTimelineViewport({
         timelineZoom,
         setTimelineZoom,
         timelineHeightPx,
@@ -111,6 +122,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     const [addLayerHoverX, setAddLayerHoverX] = useState<number | null>(null);
     const [dragging, setDragging] = useState(false);
     const [hoverCameraTimeMs, setHoverCameraTimeMs] = useState<number | null>(null);
+    const [hoverLightTimeMs, setHoverLightTimeMs] = useState<number | null>(null);
     const [easingPopoverTarget, setEasingPopoverTarget] = useState<TimelineEasingPopoverTarget | null>(null);
     const [ghostDragPreview, setGhostDragPreview] = useState<TimelineGhostDragPreview | null>(null);
 
@@ -207,6 +219,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectLayer,
         selectPreset,
         selectBlock,
+        setSnapLineMs,
     });
     const { startCameraBlockDrag, startLightBlockDrag, startEffectBlockDrag } = useTimelineCameraLightInteractions({
         pxPerMs,
@@ -217,6 +230,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         updateShot,
         selectCameraBlock,
         selectLightBlock,
+        setSnapLineMs,
     });
     const { startShotTrim, startShotReorder } = useTimelineShotInteractions({
         pxPerMs,
@@ -266,6 +280,34 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         );
         const block = addCameraBlockToShot(activeShot.id, { startMs, durationMs });
         if (block) selectCameraBlock(block.id);
+    };
+
+    const addLightBlockAtTime = (timeMs: number) => {
+        if (!activeShot) return;
+        const startMs = Math.max(
+            0,
+            Math.min(Math.max(0, activeShot.durationMs - 100), timeMs)
+        );
+        const durationMs = Math.max(
+            100,
+            Math.min(1000, activeShot.durationMs - startMs)
+        );
+        const newBlockId = generateId('light-blk');
+        const newBlock: LightAnimationBlock = {
+            id: newBlockId,
+            property: 'intensity',
+            startMs,
+            durationMs,
+            easing: { kind: 'preset', name: 'ease-out' },
+            fromValue: 0.5,
+            toValue: 1.0,
+            label: 'Intensity',
+        };
+        updateShot(activeShot.id, (s) => ({
+            ...s,
+            lightBlocks: [...(s.lightBlocks || []), newBlock],
+        }));
+        selectLightBlock(newBlockId);
     };
 
     return (
@@ -462,6 +504,11 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                             hasLightBlocks={hasLightBlocks}
                             selectedLightBlockId={selectedLightBlockId}
                             selectLightBlock={selectLightBlock}
+                            selectedLightId={selectedLightId}
+                            selectLight={selectLight}
+                            hoverLightTimeMs={hoverLightTimeMs}
+                            setHoverLightTimeMs={setHoverLightTimeMs}
+                            addLightBlockAtTime={addLightBlockAtTime}
                             startLightBlockDrag={startLightBlockDrag}
                             hasEffectBlocks={hasEffectBlocks}
                             startEffectBlockDrag={startEffectBlockDrag}
@@ -516,6 +563,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                         timelineView={timelineView}
                         activeShotStartMs={activeShot?.startMs ?? 0}
                         scrollContainerRef={trackRef}
+                    />
+                    <SnapLineOverlay
+                        snapLineMs={snapLineMs}
+                        pxPerMs={pxPerMs}
+                        timelineView={timelineView}
+                        activeShotStartMs={activeShot?.startMs ?? 0}
                     />
                     {/* Floating Visual Bezier Curve Popover */}
                     {easingPopoverTarget && (

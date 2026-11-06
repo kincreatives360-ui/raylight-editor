@@ -19,6 +19,7 @@ export function useTimelineViewport({
     const trackRef = useRef<HTMLDivElement | null>(null);
     const timelineZoomRef = useRef(timelineZoom);
     const [timelineViewportWidth, setTimelineViewportWidth] = useState(800);
+    const [snapLineMs, setSnapLineMs] = useState<number | null>(null);
 
     useEffect(() => {
         timelineZoomRef.current = timelineZoom;
@@ -107,5 +108,11 @@ export function useTimelineViewport({
         window.addEventListener('pointercancel', onEnd);
     };
 
-    return { trackRef, timelineViewportWidth, handleStartResizeTimelineHeight };
+    return {
+        trackRef,
+        timelineViewportWidth,
+        handleStartResizeTimelineHeight,
+        snapLineMs,
+        setSnapLineMs,
+    };
 }

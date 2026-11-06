@@ -23,6 +23,7 @@ interface TimelineLayerInteractionsOptions {
     selectLayer: (layerId: string, additive?: boolean) => void;
     selectPreset: (type: 'entrance' | 'exit', layerId?: string) => void;
     selectBlock: (blockId: string | null, layerId?: string) => void;
+    setSnapLineMs?: (ms: number | null) => void;
 }
 
 export function useTimelineLayerInteractions({
@@ -38,6 +39,7 @@ export function useTimelineLayerInteractions({
     selectLayer,
     selectPreset,
     selectBlock,
+    setSnapLineMs,
 }: TimelineLayerInteractionsOptions) {    // 1. Drag / Trim Main Layer Bar (Hardened with Pointer Events & >3px deadzone + Magnetic Snapping)
     const startLayerBarDrag = (
         e: React.PointerEvent,
@@ -79,6 +81,8 @@ export function useTimelineLayerInteractions({
             if (mode === 'in') {
                 const snap = snapTime(origIn + deltaMs, snapTargets, snapThresholdMs);
                 nextIn = Math.max(0, Math.min(origOut - 100, snap.time));
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: layer.id,
                     type: 'layer',
@@ -94,6 +98,8 @@ export function useTimelineLayerInteractions({
                     origIn + 100,
                     Math.min(shot.durationMs, snap.time)
                 );
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: layer.id,
                     type: 'layer',
@@ -112,9 +118,13 @@ export function useTimelineLayerInteractions({
                 if (snapStart.snapped) {
                     targetIn = snapStart.time;
                     snapped = true;
+                    setSnapLineMs?.(snapStart.time);
                 } else if (snapEnd.snapped) {
                     targetIn = snapEnd.time - dur;
                     snapped = true;
+                    setSnapLineMs?.(snapEnd.time);
+                } else {
+                    setSnapLineMs?.(null);
                 }
                 nextIn = Math.max(0, Math.min(shot.durationMs - dur, targetIn));
                 nextOut = nextIn + dur;
@@ -139,6 +149,7 @@ export function useTimelineLayerInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -344,6 +355,7 @@ export function useTimelineLayerInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 suppressPillClickRef.current = `${layer.id}-${which}`;
                 commitDragTransaction();
@@ -409,6 +421,8 @@ export function useTimelineLayerInteractions({
                     Math.min(origStart + origDur - 80, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: block.id,
                     type: 'block',
@@ -422,6 +436,8 @@ export function useTimelineLayerInteractions({
                 const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
                 const nextEnd = Math.max(origStart + 80, Math.min(shot.durationMs, snap.time));
                 nextDur = nextEnd - origStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: block.id,
                     type: 'block',
@@ -439,9 +455,13 @@ export function useTimelineLayerInteractions({
                 if (snapStart.snapped) {
                     targetStart = snapStart.time;
                     snapped = true;
+                    setSnapLineMs?.(snapStart.time);
                 } else if (snapEnd.snapped) {
                     targetStart = snapEnd.time - origDur;
                     snapped = true;
+                    setSnapLineMs?.(snapEnd.time);
+                } else {
+                    setSnapLineMs?.(null);
                 }
                 nextStart = Math.max(
                     0,
@@ -475,6 +495,7 @@ export function useTimelineLayerInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 suppressPillClickRef.current = block.id;
                 commitDragTransaction();

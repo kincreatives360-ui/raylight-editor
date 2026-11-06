@@ -1,10 +1,12 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { IconButton } from '../../ui/primitives';
 import type { AnimationBlock, CameraBlock, Easing, Layer, LightAnimationBlock, SceneEffectAnimationBlock, Shot } from '../../model/types';
+import { isRigLit } from '../../model/types';
 import { generateId } from '../../model/id';
 import { copyTimelineBlock } from '../../utils/editorClipboard';
 import { TimelineDragPreview } from './TimelineDragPreview';
 import { TimelineEasingCurve } from './TimelineEasingCurve';
+import { FramerCutMoment } from './FramerCutMoment';
 import { TimelineRangeBar, TrimHandle } from './TimelineRangeBar';
 import { createTimelineBlockContextMenu } from './timelineBlockContextMenu';
 import { TransitionPill } from './TransitionPill';
@@ -35,6 +37,11 @@ interface TimelineSceneTracksProps {
     hasLightBlocks: boolean;
     selectedLightBlockId: string | null;
     selectLightBlock: (id: string | null) => void;
+    selectedLightId?: string | null;
+    selectLight?: (id: string | null) => void;
+    hoverLightTimeMs?: number | null;
+    setHoverLightTimeMs?: (timeMs: number | null) => void;
+    addLightBlockAtTime?: (timeMs: number) => void;
     startLightBlockDrag: (event: React.PointerEvent, shot: Shot, block: LightAnimationBlock, mode: 'move' | 'left' | 'right') => void;
     hasEffectBlocks?: boolean;
     startEffectBlockDrag?: (event: React.PointerEvent, shot: Shot, block: SceneEffectAnimationBlock, mode: 'move' | 'left' | 'right') => void;
@@ -59,11 +66,27 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
         clientXToLocalMs, addCameraBlockAtTime, selectedCameraBlockId, selectCameraBlock,
         updateShot, setContextMenu, setEasingPopoverTarget, startCameraBlockDrag,
         ghostDragPreview, hasLightBlocks, selectedLightBlockId, selectLightBlock,
+        selectedLightId = null, selectLight, hoverLightTimeMs = null, setHoverLightTimeMs, addLightBlockAtTime,
         startLightBlockDrag, hasEffectBlocks, startEffectBlockDrag, selectedLayerSet, expandedTimelineLayerSet,
         startLayerBarDrag, updateLayer, selectPreset,
         selectedPresetType, suppressPillClickRef, startPresetDrag,
         selectedBlockId, selectBlock, startBlockDrag, setTimelineView,
     } = props;
+
+    const abuttingCuts = useMemo(() => {
+        const blocks = (activeShot.cameraBlocks || []).slice().sort((a, b) => a.startMs - b.startMs);
+        const cuts: Array<{ id: string; timeMs: number }> = [];
+        for (let i = 0; i < blocks.length - 1; i++) {
+            const endMs = blocks[i].startMs + blocks[i].durationMs;
+            const nextStartMs = blocks[i + 1].startMs;
+            if (Math.abs(endMs - nextStartMs) <= 20) {
+                cuts.push({ id: `seam-${blocks[i].id}-${blocks[i + 1].id}`, timeMs: endMs });
+            }
+        }
+        return cuts;
+    }, [activeShot.cameraBlocks]);
+
+    const hasLightTrack = hasLightBlocks || isRigLit(activeShot.lightRig) || ((activeShot.lightRig?.sources?.length ?? 0) > 0);
 
     return (
         <div className="relative flex flex-col gap-0.5">
@@ -196,7 +219,13 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         ghostDragPreview?.id === cb.id ? 'opacity-40' : ''
                                     }`}
                                 >
-                                    <TimelineEasingCurve easing={cb.easing} tone="camera" selected={isCamSelected} />
+                                    <TimelineEasingCurve
+                                        easing={cb.easing}
+                                        tone="camera"
+                                        selected={isCamSelected}
+                                        widthPx={width}
+                                        label={modeLabel}
+                                    />
                                     <span className="relative z-10 pointer-events-none drop-shadow-sm">{modeLabel}</span>
                                     <TrimHandle side="left"
                                         onPointerDown={(e) =>
@@ -222,11 +251,77 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                             </React.Fragment>
                         );
                     })}
+
+                    {/* Instantaneous Camera Cut Diamonds at abutting move boundaries (matches Raylight FramerCutMoment qYt) */}
+                    {abuttingCuts.map((cut) => (
+                        <FramerCutMoment
+                            key={cut.id}
+                            id={cut.id}
+                            timeMs={cut.timeMs}
+                            pxPerMs={pxPerMs}
+                            shape="seam"
+                            label="Camera cut"
+                        />
+                    ))}
             </div>
 
-            {/* 2. Light Track Row (h-7 = 28px, ONLY rendered when Light blocks exist) */}
-            {hasLightBlocks && (
-                <div style={{ order: 20 }} className="h-10 relative flex items-center">
+            {/* 2. Lighting Track (matches Raylight production rme + ime + ZYt, order: 35 below Camera) */}
+            {hasLightTrack && (
+                <div
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onMouseMove={(e) => {
+                        e.stopPropagation();
+                        setHoverLightTimeMs?.(clientXToLocalMs(e.clientX));
+                    }}
+                    onMouseLeave={() => setHoverLightTimeMs?.(null)}
+                    onClick={(e) => {
+                        if ((e.target as HTMLElement).closest('[data-light-pill]')) return;
+                        addLightBlockAtTime?.(clientXToLocalMs(e.clientX));
+                    }}
+                    title="Hover to preview a light animation; click to add it"
+                    aria-label="Lighting track"
+                    style={{ order: 35 }}
+                    className="h-10 relative flex items-center cursor-pointer"
+                >
+                    {/* Base Light Bar (rme) spanning the full shot duration */}
+                    <div
+                        data-testid="timeline-main-light-bar"
+                        role="button"
+                        aria-label="Scene Lighting"
+                        aria-pressed={selectedLightId !== null && !selectedLightBlockId}
+                        onClick={(e) => {
+                            e.stopPropagation();
+                            selectLight?.('key');
+                            selectLightBlock(null);
+                            setInspectorTab('shot');
+                        }}
+                        style={{ left: 0, width: `${activeShot.durationMs * pxPerMs}px` }}
+                        className={`group absolute inset-y-0.5 rounded-md border-2 transition-colors duration-200 cursor-pointer overflow-hidden ${
+                            selectedLightId !== null && !selectedLightBlockId
+                                ? 'border-light-key bg-linear-to-b from-light-key/60 to-light-key/10'
+                                : 'border-light-key/40 hover:border-light-key/70 bg-linear-to-b from-light-key/15 to-transparent'
+                        }`}
+                    >
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[10px] font-medium text-amber-200/90 pointer-events-none select-none">
+                            💡 Lighting
+                        </span>
+                    </div>
+
+                    {/* Hover preview for adding a light animation block (ime) */}
+                    {hoverLightTimeMs !== null && (
+                        <div
+                            aria-hidden="true"
+                            style={{
+                                left: `${hoverLightTimeMs * pxPerMs}px`,
+                                width: `${Math.min(1000, Math.max(100, activeShot.durationMs - hoverLightTimeMs)) * pxPerMs}px`,
+                            }}
+                            className="pointer-events-none absolute inset-y-0.5 rounded-md border-2 border-dashed border-light-key/70 bg-light-key/20 flex items-center justify-center text-[10px] text-amber-100 z-10"
+                        >
+                            + Add light animation
+                        </div>
+                    )}
+
+                    {/* Light Animation Blocks (ZYt) */}
                     {(activeShot.lightBlocks || []).map((lb) => {
                         const isLightSelected = selectedLightBlockId === lb.id;
                         const left = lb.startMs * pxPerMs;
@@ -293,7 +388,13 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         ghostDragPreview?.id === lb.id ? 'opacity-40' : ''
                                     }`}
                                 >
-                                    <TimelineEasingCurve easing={lb.easing} tone="light" selected={isLightSelected} />
+                                    <TimelineEasingCurve
+                                        easing={lb.easing}
+                                        tone="light"
+                                        selected={isLightSelected}
+                                        widthPx={width}
+                                        label={lb.label || 'Light'}
+                                    />
                                     <span className="relative z-10 pointer-events-none drop-shadow-sm truncate max-w-[calc(100%-30px)]">{lb.label || 'Light'}</span>
                                     <IconButton
                                         unstyled
@@ -408,7 +509,12 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                         ghostDragPreview?.id === eb.id ? 'opacity-40' : ''
                                     }`}
                                 >
-                                    <TimelineEasingCurve easing={eb.easing} tone="effect" />
+                                    <TimelineEasingCurve
+                                        easing={eb.easing}
+                                        tone="effect"
+                                        widthPx={width}
+                                        label={label}
+                                    />
                                     <span className="relative z-10 pointer-events-none drop-shadow-sm truncate max-w-[calc(100%-30px)]">
                                         {label}
                                     </span>
@@ -677,7 +783,13 @@ export function TimelineSceneTracks(props: TimelineSceneTracksProps) {
                                                     ghostDragPreview?.id === blk.id ? 'opacity-40' : ''
                                                 }`}
                                             >
-                                                <TimelineEasingCurve easing={blk.easing} tone="animation" selected={selectedBlockId === blk.id} />
+                                                <TimelineEasingCurve
+                                                    easing={blk.easing}
+                                                    tone="animation"
+                                                    selected={selectedBlockId === blk.id}
+                                                    widthPx={Math.max(36, blk.durationMs * pxPerMs)}
+                                                    label={blk.label}
+                                                />
                                                 <span className="relative z-10 pointer-events-none drop-shadow-sm truncate">{blk.label}</span>
                                                 <TrimHandle side="left"
                                                     onPointerDown={(e) =>

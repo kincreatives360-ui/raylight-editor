@@ -17,6 +17,7 @@ interface TimelineCameraLightInteractionsOptions {
     ) => void;
     selectCameraBlock: (blockId: string | null) => void;
     selectLightBlock: (blockId: string | null) => void;
+    setSnapLineMs?: (ms: number | null) => void;
 }
 
 export function useTimelineCameraLightInteractions({
@@ -28,6 +29,7 @@ export function useTimelineCameraLightInteractions({
     updateShot,
     selectCameraBlock,
     selectLightBlock,
+    setSnapLineMs,
 }: TimelineCameraLightInteractionsOptions) {    // 4. Drag / Trim Camera Block (Hardened)
     const startCameraBlockDrag = (
         e: React.PointerEvent,
@@ -81,6 +83,8 @@ export function useTimelineCameraLightInteractions({
                     Math.min(origStart + origDur - 100, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: camBlock.id,
                     type: 'camera',
@@ -97,6 +101,8 @@ export function useTimelineCameraLightInteractions({
                     Math.min(shot.durationMs, snap.time)
                 );
                 nextDur = nextEnd - origStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: camBlock.id,
                     type: 'camera',
@@ -114,11 +120,14 @@ export function useTimelineCameraLightInteractions({
                 if (snapStart.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
                     snapped = true;
+                    setSnapLineMs?.(snapStart.time);
                 } else if (snapEnd.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
                     snapped = true;
+                    setSnapLineMs?.(snapEnd.time);
                 } else {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                    setSnapLineMs?.(null);
                 }
                 setGhostDragPreview({
                     id: camBlock.id,
@@ -147,6 +156,7 @@ export function useTimelineCameraLightInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -214,6 +224,8 @@ export function useTimelineCameraLightInteractions({
                     Math.min(origStart + origDur - 100, snap.time)
                 );
                 nextDur = origStart + origDur - nextStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: lightBlock.id,
                     type: 'light',
@@ -230,6 +242,8 @@ export function useTimelineCameraLightInteractions({
                     Math.min(shot.durationMs, snap.time)
                 );
                 nextDur = nextEnd - origStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: lightBlock.id,
                     type: 'light',
@@ -247,11 +261,14 @@ export function useTimelineCameraLightInteractions({
                 if (snapStart.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
                     snapped = true;
+                    setSnapLineMs?.(snapStart.time);
                 } else if (snapEnd.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
                     snapped = true;
+                    setSnapLineMs?.(snapEnd.time);
                 } else {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                    setSnapLineMs?.(null);
                 }
                 setGhostDragPreview({
                     id: lightBlock.id,
@@ -280,6 +297,7 @@ export function useTimelineCameraLightInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
@@ -341,6 +359,8 @@ export function useTimelineCameraLightInteractions({
                 const snap = snapTime(origStart + deltaMs, snapTargets, snapThresholdMs);
                 nextStart = Math.max(0, Math.min(origStart + origDur - 100, snap.time));
                 nextDur = origStart + origDur - nextStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: effectBlock.id,
                     type: 'block',
@@ -354,6 +374,8 @@ export function useTimelineCameraLightInteractions({
                 const snap = snapTime(origStart + origDur + deltaMs, snapTargets, snapThresholdMs);
                 const nextEnd = Math.max(origStart + 100, Math.min(shot.durationMs, snap.time));
                 nextDur = nextEnd - origStart;
+                if (snap.snapped) setSnapLineMs?.(snap.time);
+                else setSnapLineMs?.(null);
                 setGhostDragPreview({
                     id: effectBlock.id,
                     type: 'block',
@@ -371,11 +393,14 @@ export function useTimelineCameraLightInteractions({
                 if (snapStart.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapStart.time));
                     snapped = true;
+                    setSnapLineMs?.(snapStart.time);
                 } else if (snapEnd.snapped) {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, snapEnd.time - dur));
                     snapped = true;
+                    setSnapLineMs?.(snapEnd.time);
                 } else {
                     nextStart = Math.max(0, Math.min(shot.durationMs - dur, origStart + deltaMs));
+                    setSnapLineMs?.(null);
                 }
                 setGhostDragPreview({
                     id: effectBlock.id,
@@ -404,6 +429,7 @@ export function useTimelineCameraLightInteractions({
         const onEnd = (ev: PointerEvent) => {
             if (ev.pointerId !== pointerId) return;
             setGhostDragPreview(null);
+            setSnapLineMs?.(null);
             if (hasMoved) {
                 commitDragTransaction();
                 setDragging(false);
