@@ -10,7 +10,8 @@ export type InspectorTab =
     | 'transitions'
     | 'blocks'
     | 'camera'
-    | 'effects';
+    | 'effects'
+    | 'audio';
 
 export type CanvasTool =
     | 'select'
@@ -45,6 +46,7 @@ interface SelectionStore {
     selectedCameraBlockId: string | null;
     selectedLightBlockId: string | null;
     selectedLightId: string | null;
+    selectedAudioClipId: string | null;
     activeLightTool: LightSourceType | null;
     setActiveLightTool: (type: LightSourceType | null) => void;
     selectedPresetType: 'entrance' | 'exit' | null;
@@ -56,6 +58,8 @@ interface SelectionStore {
     timelineHeightPx: number;
     timelineScrollTop: number;
     expandedTimelineLayerIds: string[];
+    mixerOpen: boolean;
+    mixerHeightPx: number;
 
     activeTool: CanvasTool;
     isAnimateMode: boolean;
@@ -98,6 +102,7 @@ interface SelectionStore {
     selectLightBlock: (lightBlockId: string | null) => void;
     selectLight: (lightId: string | null) => void;
     setSelectedLightId: (lightId: string | null) => void;
+    selectAudioClip: (clipId: string | null) => void;
     selectPreset: (preset: 'entrance' | 'exit' | null, layerId?: string) => void;
     setInspectorTab: (tab: InspectorTab) => void;
 
@@ -107,6 +112,9 @@ interface SelectionStore {
     setTimelineScrollTop: (scrollTop: number) => void;
     toggleTimelineLayerExpanded: (layerId: string) => void;
     setTimelineLayerExpanded: (layerId: string, expanded: boolean) => void;
+    setMixerOpen: (open: boolean) => void;
+    toggleMixer: () => void;
+    setMixerHeightPx: (heightPx: number) => void;
 
     setActiveTool: (tool: CanvasTool) => void;
     toggleAnimateMode: () => void;
@@ -154,6 +162,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     selectedCameraBlockId: null,
     selectedLightBlockId: null,
     selectedLightId: null,
+    selectedAudioClipId: null,
     activeLightTool: null,
     selectedPresetType: null,
     inspectorTab: 'project',
@@ -163,6 +172,8 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     timelineHeightPx: 220,
     timelineScrollTop: 0,
     expandedTimelineLayerIds: [],
+    mixerOpen: false,
+    mixerHeightPx: 148,
 
     activeTool: 'select',
     isAnimateMode: false,
@@ -193,6 +204,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            selectedAudioClipId: null,
             activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
@@ -207,6 +219,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            selectedAudioClipId: null,
             activeLightTool: null,
             selectedPresetType: null,
             isCropping: false,
@@ -222,6 +235,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                     selectedCameraBlockId: null,
                     selectedLightBlockId: null,
                     selectedLightId: null,
+                    selectedAudioClipId: null,
                     selectedPresetType: null,
                     isCropping: false,
                     inspectorTab: 'layer',
@@ -236,6 +250,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 selectedCameraBlockId: null,
                 selectedLightBlockId: null,
                 selectedLightId: null,
+                selectedAudioClipId: null,
                 isCropping: false,
                 inspectorTab: 'layer',
             };
@@ -245,12 +260,12 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
         set((state) => {
             const anchorId = state.selectedLayerIds[0];
             if (!anchorId) {
-                return { selectedLayerIds: [targetLayerId], selectedLightId: null, isCropping: false, inspectorTab: 'layer' };
+                return { selectedLayerIds: [targetLayerId], selectedLightId: null, selectedAudioClipId: null, isCropping: false, inspectorTab: 'layer' };
             }
             const startIdx = orderedLayerIds.indexOf(anchorId);
             const endIdx = orderedLayerIds.indexOf(targetLayerId);
             if (startIdx === -1 || endIdx === -1) {
-                return { selectedLayerIds: [targetLayerId], selectedLightId: null, isCropping: false, inspectorTab: 'layer' };
+                return { selectedLayerIds: [targetLayerId], selectedLightId: null, selectedAudioClipId: null, isCropping: false, inspectorTab: 'layer' };
             }
             const low = Math.min(startIdx, endIdx);
             const high = Math.max(startIdx, endIdx);
@@ -259,6 +274,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 selectedCameraBlockId: null,
                 selectedLightBlockId: null,
                 selectedLightId: null,
+                selectedAudioClipId: null,
                 isCropping: false,
                 inspectorTab: 'layer',
             };
@@ -269,6 +285,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedLayerIds,
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
+            selectedAudioClipId: null,
             ...(selectedLayerIds.length > 0 ? { selectedLightId: null } : {}),
             isCropping: false,
             inspectorTab: selectedLayerIds.length > 0 ? 'layer' : 'project',
@@ -280,6 +297,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            selectedAudioClipId: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',
@@ -293,6 +311,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
             selectedLightId: null,
+            selectedAudioClipId: null,
             selectedPresetType: null,
             isCropping: false,
             inspectorTab: 'project',
@@ -321,8 +340,15 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 ? (activeShot?.layers.some((l) => l.blocks?.some((b) => b.id === state.selectedBlockId)) ? state.selectedBlockId : null)
                 : null;
 
+            const audioClips = project.audio?.clips || [];
+            const validAudioClipId = state.selectedAudioClipId && audioClips.some((c) => c.id === state.selectedAudioClipId)
+                ? state.selectedAudioClipId
+                : null;
+
             const effectiveInspectorTab = validLayerIds.length > 0
                 ? 'layer'
+                : validAudioClipId
+                ? 'audio'
                 : validCameraBlockId
                 ? 'camera'
                 : validBlockId
@@ -335,6 +361,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                 selectedCameraBlockId: validCameraBlockId,
                 selectedLightBlockId: validLightBlockId,
                 selectedBlockId: validBlockId,
+                selectedAudioClipId: validAudioClipId,
                 inspectorTab: effectiveInspectorTab,
             };
         }),
@@ -387,8 +414,21 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
     setSelectedLightId: (selectedLightId) =>
         set({
             selectedLightId,
-            ...(selectedLightId ? { selectedLayerIds: [], inspectorTab: 'shot' } : {}),
+            ...(selectedLightId ? { selectedLayerIds: [], selectedAudioClipId: null, inspectorTab: 'shot' } : {}),
             isCropping: false,
+        }),
+
+    selectAudioClip: (clipId) =>
+        set({
+            selectedAudioClipId: clipId,
+            selectedLayerIds: [],
+            selectedBlockId: null,
+            selectedCameraBlockId: null,
+            selectedLightBlockId: null,
+            selectedLightId: null,
+            selectedPresetType: null,
+            isCropping: false,
+            inspectorTab: clipId ? 'audio' : 'project',
         }),
 
     selectPreset: (preset, layerId) =>
@@ -397,6 +437,7 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
             selectedBlockId: null,
             selectedCameraBlockId: null,
             selectedLightBlockId: null,
+            selectedAudioClipId: null,
             selectedLayerIds: layerId ? [layerId] : state.selectedLayerIds,
             inspectorTab: 'transitions',
         })),
@@ -433,6 +474,15 @@ export const useSelectionStore = create<SelectionStore>((set) => ({
                     ? [...state.expandedTimelineLayerIds, layerId]
                     : state.expandedTimelineLayerIds.filter((id) => id !== layerId),
             };
+        }),
+
+    setMixerOpen: (mixerOpen) => set({ mixerOpen }),
+
+    toggleMixer: () => set((state) => ({ mixerOpen: !state.mixerOpen })),
+
+    setMixerHeightPx: (heightPx) =>
+        set({
+            mixerHeightPx: Math.max(108, Math.min(280, Math.round(heightPx))),
         }),
 
     setActiveTool: (activeTool) =>

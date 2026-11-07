@@ -7,12 +7,14 @@ import { AudioClipBar } from './AudioClipBar';
 interface TimelineMediaTrackProps {
     clips: AudioClip[];
     muted: boolean;
+    selectedAudioClipId?: string | null;
     timelineWidth: number;
     totalDurationMs: number;
     pxPerMs: number;
     timelineView: 'video' | 'scene';
     activeShot?: Shot;
     onToggleMute: () => void;
+    onSelectClip?: (clipId: string) => void;
     onClipDrag: (event: React.PointerEvent<HTMLElement>, clip: AudioClip, edge: 'move' | 'left' | 'right') => void;
     onClipSeek: (timeMs: number) => void;
     onClipDelete: (clipId: string) => void;
@@ -22,12 +24,14 @@ interface TimelineMediaTrackProps {
 export function TimelineMediaTrack({
     clips,
     muted,
+    selectedAudioClipId,
     timelineWidth,
     totalDurationMs,
     pxPerMs,
     timelineView,
     activeShot,
     onToggleMute,
+    onSelectClip,
     onClipDrag,
     onClipSeek,
     onClipDelete,
@@ -61,6 +65,8 @@ export function TimelineMediaTrack({
                 )}
             />
             {clips.map((clip) => {
+                const anySolo = clips.some((c) => c.solo);
+                const effectivelyMuted = Boolean(clip.muted || muted || (anySolo && !clip.solo));
                 const clipEnd = clip.startMs + clip.durationMs;
                 const isSceneView = timelineView === 'scene' && activeShot;
                 if (isSceneView) {
@@ -76,7 +82,9 @@ export function TimelineMediaTrack({
                             clip={clip}
                             left={(visibleStart - shotStart) * pxPerMs}
                             width={Math.max(18, (visibleEnd - visibleStart) * pxPerMs)}
-                            muted={clip.muted || muted}
+                            muted={effectivelyMuted}
+                            selected={selectedAudioClipId === clip.id}
+                            onSelect={() => onSelectClip?.(clip.id)}
                             onDrag={(event, edge) => onClipDrag(event, clip, edge)}
                             onSeek={() => onClipSeek(visibleStart)}
                             onDelete={() => onClipDelete(clip.id)}
@@ -91,7 +99,9 @@ export function TimelineMediaTrack({
                         clip={clip}
                         left={Math.max(0, clip.startMs) * pxPerMs}
                         width={Math.max(18, clip.durationMs * pxPerMs)}
-                        muted={clip.muted || muted}
+                        muted={effectivelyMuted}
+                        selected={selectedAudioClipId === clip.id}
+                        onSelect={() => onSelectClip?.(clip.id)}
                         onDrag={(event, edge) => onClipDrag(event, clip, edge)}
                         onSeek={() => onClipSeek(Math.max(0, clip.startMs))}
                         onDelete={() => onClipDelete(clip.id)}

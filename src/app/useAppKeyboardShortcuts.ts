@@ -157,7 +157,8 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
           selectedLayerIds.length > 0 ||
           Boolean(selectedBlockId) ||
           Boolean(selectedCameraBlockId) ||
-          Boolean(selectedLightBlockId);
+          Boolean(selectedLightBlockId) ||
+          Boolean(selState.selectedAudioClipId);
 
         setIsCropping(false);
         setActiveTool('select');
@@ -321,6 +322,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         }
         if (key === 'l') { setActiveTool('line'); return; }
         if (key === 'a') { setActiveTool('arrow'); return; }
+        if (key === 'm') { useSelectionStore.getState().toggleMixer(); return; }
         if (matchesPenPathShortcut(e)) { setActiveTool('pen'); return; }
       }
 
@@ -436,8 +438,20 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         return;
       }
 
-      // Delete / Backspace: Delete Selected Layer(s), Block(s) or Active Shot
+      // Delete / Backspace: Delete Selected Layer(s), Block(s), Audio Clip, or Active Shot
       if (e.key === 'Backspace' || e.key === 'Delete') {
+        const selectedAudioClipId = useSelectionStore.getState().selectedAudioClipId;
+        if (selectedAudioClipId) {
+          e.preventDefault();
+          useProjectStore.getState().deleteAudioClip(selectedAudioClipId);
+          useSelectionStore.getState().selectAudioClip(null);
+          setUndoToast({
+            message: 'Deleted audio clip',
+            isOpen: true,
+            historyLength: useProjectStore.getState().past.length,
+          });
+          return;
+        }
         if (selectedCameraBlockId && activeShot) {
           e.preventDefault();
           updateShot(activeShot.id, (s) => ({

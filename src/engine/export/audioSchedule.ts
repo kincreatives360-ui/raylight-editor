@@ -20,6 +20,9 @@ export interface MixPlanClipInput {
     offsetMs?: number;
     volume?: number;
     muted?: boolean;
+    solo?: boolean;
+    fadeInMs?: number;
+    fadeOutMs?: number;
     /** Decoded buffer length, in seconds. */
     bufferDurationSec: number;
 }
@@ -72,10 +75,12 @@ export function buildAudioMixPlan(
     if (windowSec <= 0) return null;
 
     const masterVolume = master.masterVolume ?? 1;
+    const hasSolo = clips.some((c) => Boolean(c.solo));
     const entries: MixPlanEntry[] = [];
 
     for (const clip of clips) {
         if (clip.muted || (clip.volume ?? 1) <= 0 || clip.bufferDurationSec <= 0) continue;
+        if (hasSolo && !clip.solo) continue;
 
         const clipEndMs = clip.startMs + clip.durationMs;
         // Only clips overlapping the export window contribute.
@@ -108,8 +113,14 @@ export function buildAudioMixPlan(
         // envelope intact.
         const startsInWindow = clip.startMs >= startMs;
         const endsInWindow = clipEndMs <= endMs;
-        const fadeInSec = startsInWindow ? Math.min(DE_CLICK_RAMP_SEC, durationSec / 2) : 0;
-        const fadeOutSec = endsInWindow ? Math.min(DE_CLICK_RAMP_SEC, durationSec / 2) : 0;
+        const authoredFadeInSec = Math.min(durationSec, Math.max(0, (clip.fadeInMs ?? 0) / 1000));
+        const authoredFadeOutSec = Math.min(durationSec, Math.max(0, (clip.fadeOutMs ?? 0) / 1000));
+        const fadeInSec = startsInWindow
+            ? Math.max(authoredFadeInSec, Math.min(DE_CLICK_RAMP_SEC, durationSec / 2))
+            : authoredFadeInSec;
+        const fadeOutSec = endsInWindow
+            ? Math.max(authoredFadeOutSec, Math.min(DE_CLICK_RAMP_SEC, durationSec / 2))
+            : authoredFadeOutSec;
 
         entries.push({
             id: clip.id,

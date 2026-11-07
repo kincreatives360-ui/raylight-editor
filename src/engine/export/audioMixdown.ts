@@ -24,8 +24,9 @@ export async function prepareAudioMixPlan(
 ): Promise<{ plan: AudioMixPlan; buffers: Map<string, AudioBuffer> } | null> {
     // Master mute/volume-zero means video-only; don't decode anything.
     if (master.muted || (master.masterVolume ?? 1) <= 0) return null;
+    const hasSolo = clips.some((clip) => Boolean(clip.solo));
     const audibleClips = clips.filter(
-        (clip) => !clip.muted && (clip.volume ?? 1) > 0
+        (clip) => !clip.muted && (clip.volume ?? 1) > 0 && (!hasSolo || Boolean(clip.solo))
     );
     if (audibleClips.length === 0) return null;
 

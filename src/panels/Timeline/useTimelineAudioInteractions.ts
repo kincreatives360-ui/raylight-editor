@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import { Trash2 } from 'lucide-react';
 import type { AudioClip, Project } from '../../model/types';
+import { generateId } from '../../model/id';
 import { usePlayheadStore } from '../../store/usePlayheadStore';
 import type { TimelineContextMenuState } from './timelineTypes';
 
@@ -128,7 +129,7 @@ export function useTimelineAudioInteractions({
             if (!clip) return p;
             const newClip = {
                 ...clip,
-                id: `audio-${Date.now()}`,
+                id: generateId('audio-clip'),
                 startMs: clip.startMs + clip.durationMs,
             };
             return {
@@ -143,13 +144,41 @@ export function useTimelineAudioInteractions({
         });
     };
 
+    const toggleClipMute = (clipId: string) => {
+        updateProject((p) => ({
+            ...p,
+            audio: {
+                ...p.audio,
+                muted: p.audio?.muted ?? false,
+                masterVolume: p.audio?.masterVolume ?? 1,
+                clips: (p.audio?.clips || []).map((c) =>
+                    c.id === clipId ? { ...c, muted: !c.muted } : c
+                ),
+            },
+        }));
+    };
+
+    const toggleClipSolo = (clipId: string) => {
+        updateProject((p) => ({
+            ...p,
+            audio: {
+                ...p.audio,
+                muted: p.audio?.muted ?? false,
+                masterVolume: p.audio?.masterVolume ?? 1,
+                clips: (p.audio?.clips || []).map((c) =>
+                    c.id === clipId ? { ...c, solo: !c.solo } : c
+                ),
+            },
+        }));
+    };
+
     const setAudioFade = (clipId: string, type: 'in' | 'out', ms: number) => {
         updateProject((p) => ({
             ...p,
             audio: {
                 ...p.audio,
-                    muted: p.audio?.muted ?? false,
-                    masterVolume: p.audio?.masterVolume ?? 1,
+                muted: p.audio?.muted ?? false,
+                masterVolume: p.audio?.masterVolume ?? 1,
                 clips: (p.audio?.clips || []).map((c) =>
                     c.id === clipId
                         ? {
@@ -180,6 +209,7 @@ export function useTimelineAudioInteractions({
                     id: 'fade-in',
                     label: 'Quick fade in',
                     children: [
+                        { id: 'fi-0', label: 'None', onClick: () => setAudioFade(clip.id, 'in', 0) },
                         { id: 'fi-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'in', 100) },
                         { id: 'fi-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'in', 250) },
                         { id: 'fi-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'in', 500) },
@@ -190,6 +220,7 @@ export function useTimelineAudioInteractions({
                     id: 'fade-out',
                     label: 'Quick fade out',
                     children: [
+                        { id: 'fo-0', label: 'None', onClick: () => setAudioFade(clip.id, 'out', 0) },
                         { id: 'fo-100', label: '100 ms', onClick: () => setAudioFade(clip.id, 'out', 100) },
                         { id: 'fo-250', label: '250 ms', onClick: () => setAudioFade(clip.id, 'out', 250) },
                         { id: 'fo-500', label: '500 ms', onClick: () => setAudioFade(clip.id, 'out', 500) },
@@ -197,9 +228,18 @@ export function useTimelineAudioInteractions({
                     ],
                 },
                 {
+                    id: 'toggle-clip-mute',
+                    label: clip.muted ? 'Unmute clip' : 'Mute clip',
+                    onClick: () => toggleClipMute(clip.id),
+                },
+                {
+                    id: 'toggle-clip-solo',
+                    label: clip.solo ? 'Unsolo clip' : 'Solo clip',
+                    onClick: () => toggleClipSolo(clip.id),
+                },
+                {
                     id: 'toggle-mute',
-                    label: project.audio?.muted ? 'Unmute' : 'Mute',
-                    shortcut: 'M',
+                    label: project.audio?.muted ? 'Unmute master audio' : 'Mute master audio',
                     onClick: () => toggleProjectAudioMuted(),
                 },
                 { type: 'divider' },

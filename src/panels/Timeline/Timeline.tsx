@@ -21,6 +21,7 @@ import { TimelineSceneTracks } from './TimelineSceneTracks';
 import { PlayheadOverlay } from './PlayheadOverlay';
 import { SnapLineOverlay } from './SnapLineOverlay';
 import { EasingPopover } from './EasingPopover';
+import { AudioMixer } from './AudioMixer';
 import { getShotTimelineWidth } from './timelineBarGeometry';
 
 interface TimelineProps {
@@ -44,6 +45,11 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         addLayerToShot,
         addCameraBlockToShot,
         toggleProjectAudioMuted,
+        setProjectMasterVolume,
+        updateAudioClip,
+        toggleAudioClipMuted,
+        toggleAudioClipSolo,
+        clearAudioClipSolos,
         splitAtPlayhead,
 
         splitAudioClipAtPlayhead,
@@ -69,6 +75,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         selectedLightBlockId,
         selectedLightId,
         selectLight,
+        selectedAudioClipId,
+        selectAudioClip,
         selectedPresetType,
         inspectorTab,
         clearLayerSelection,
@@ -76,6 +84,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         timelineZoom,
         timelineHeightPx,
         timelineScrollTop,
+        mixerOpen,
+        mixerHeightPx,
         expandedTimelineLayerIds,
         selectShot,
         selectLayer,
@@ -88,6 +98,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
         setTimelineZoom,
         setTimelineHeightPx,
         setTimelineScrollTop,
+        toggleMixer,
+        setMixerHeightPx,
     } = useSelectionStore();
 
     const selectedLayerSet = useMemo(() => new Set(selectedLayerIds), [selectedLayerIds]);
@@ -338,6 +350,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 onTimelineZoomChange={setTimelineZoom}
                 timelineView={timelineView}
                 onToggleTimelineView={() => setTimelineView(timelineView === 'scene' ? 'video' : 'scene')}
+                mixerOpen={mixerOpen}
+                onToggleMixer={toggleMixer}
             />
 
             {/* 2. SCROLL-SYNCED TRACKS BODY (Includes Ruler + Tracks + Playhead + Skimmer) */}
@@ -427,12 +441,14 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     <TimelineMediaTrack
                         clips={project.audio?.clips ?? []}
                         muted={project.audio?.muted ?? false}
+                        selectedAudioClipId={selectedAudioClipId}
                         timelineWidth={timelineWidth}
                         totalDurationMs={totalDurationMs}
                         pxPerMs={pxPerMs}
                         timelineView={timelineView}
                         activeShot={activeShot}
                         onToggleMute={toggleProjectAudioMuted}
+                        onSelectClip={selectAudioClip}
                         onClipDrag={(event, clip, edge) => startAudioClipDrag(event, clip, edge)}
                         onClipSeek={setCurrentTimeMs}
                         onClipDelete={deleteAudioClip}
@@ -594,6 +610,23 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                     )}
                 </div>
             </div>
+            {mixerOpen && (
+                <AudioMixer
+                    clips={project.audio?.clips ?? []}
+                    masterVolume={project.audio?.masterVolume ?? 1}
+                    masterMuted={project.audio?.muted ?? false}
+                    mixerHeightPx={mixerHeightPx}
+                    selectedAudioClipId={selectedAudioClipId}
+                    onResizeMixerHeight={setMixerHeightPx}
+                    onSetMasterVolume={setProjectMasterVolume}
+                    onToggleMasterMute={toggleProjectAudioMuted}
+                    onClearSolos={clearAudioClipSolos}
+                    onSelectClip={selectAudioClip}
+                    onSetClipVolume={(clipId, volume) => updateAudioClip(clipId, (c) => ({ ...c, volume }))}
+                    onToggleClipMute={toggleAudioClipMuted}
+                    onToggleClipSolo={toggleAudioClipSolo}
+                />
+            )}
         </section>
     );
 });

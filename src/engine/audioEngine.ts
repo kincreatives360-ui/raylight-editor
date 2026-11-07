@@ -193,7 +193,7 @@ function computeAudioStateKey(audio: ProjectAudio): string {
   const clipsKey = audio.clips
     .map((c) => {
       const ready = c.dataUrl && getCachedAudioBuffer(c.dataUrl) ? '1' : '0';
-      return `${c.id}:${c.startMs}:${c.durationMs}:${c.offsetMs}:${c.volume}:${c.muted ? 1 : 0}:${getUrlCompactId(c.dataUrl)}:${ready}`;
+      return `${c.id}:${c.startMs}:${c.durationMs}:${c.offsetMs}:${c.volume}:${c.muted ? 1 : 0}:${c.solo ? 1 : 0}:${c.fadeInMs ?? 0}:${c.fadeOutMs ?? 0}:${getUrlCompactId(c.dataUrl)}:${ready}`;
     })
     .join('|');
   return `${audio.muted ? 1 : 0}:${audio.masterVolume}:${clipsKey}`;
@@ -261,9 +261,12 @@ export function syncAudioPlayback(
     masterGainNode.gain.value = audio.muted ? 0 : audio.masterVolume;
   }
 
+  const hasSolo = audio.clips.some((c) => Boolean(c.solo));
+
   // Schedule each eligible clip (active now OR starting in the future)
   for (const clip of audio.clips) {
     if (clip.muted || clip.volume <= 0 || clip.durationMs <= 0) continue;
+    if (hasSolo && !clip.solo) continue;
 
     const clipStart = clip.startMs;
     const clipEnd = clip.startMs + clip.durationMs;
@@ -306,6 +309,32 @@ export function syncAudioPlayback(
       source.buffer = buffer;
       const gain = ctx.createGain();
       gain.gain.value = clip.volume;
+
+      if (
+        typeof gain.gain.setValueAtTime === 'function' &&
+        typeof gain.gain.linearRampToValueAtTime === 'function'
+      ) {
+        const fadeInSec = Math.max(0, (clip.fadeInMs ?? 0) / 1000);
+        const fadeOutSec = Math.max(0, (clip.fadeOutMs ?? 0) / 1000);
+        const elapsedInClipSec = isFutureClip ? 0 : Math.max(0, (currentTimeMs - clipStart) / 1000);
+
+        if (fadeInSec > 0 && elapsedInClipSec < fadeInSec) {
+          const startGain = clip.volume * (elapsedInClipSec / fadeInSec);
+          const remainingFadeInSec = Math.min(playDurationSec, fadeInSec - elapsedInClipSec);
+          gain.gain.setValueAtTime(startGain, startWhenSec);
+          gain.gain.linearRampToValueAtTime(clip.volume, startWhenSec + remainingFadeInSec);
+        } else {
+          gain.gain.setValueAtTime(clip.volume, startWhenSec);
+        }
+
+        if (fadeOutSec > 0) {
+          const clipEndSec = startWhenSec + playDurationSec;
+          const fadeOutStartSec = Math.max(startWhenSec, clipEndSec - fadeOutSec);
+          gain.gain.setValueAtTime(clip.volume, fadeOutStartSec);
+          gain.gain.linearRampToValueAtTime(0, clipEndSec);
+        }
+      }
+
       source.connect(gain);
       gain.connect(masterGainNode);
 

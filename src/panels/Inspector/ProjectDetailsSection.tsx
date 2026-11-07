@@ -1,6 +1,6 @@
 import React from 'react';
 import type { AspectRatio, Project } from '../../model/types';
-import { InspectorRow } from '../../ui/primitives';
+import { InspectorRow, Switch } from '../../ui/primitives';
 import { FigmaSelect } from '../../ui/FigmaSelect';
 import { ScrubInput } from '../../ui/ScrubInput';
 
@@ -95,6 +95,56 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
                 }}
                 className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
             />
+        </InspectorRow>
+
+        <InspectorRow
+            unstyled
+            className="space-y-1.5"
+            labelTag="label"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
+            label={<>Master Volume</>}
+        >
+            <div className="flex items-center gap-2">
+                <div className="flex-1 min-w-0">
+                    <ScrubInput
+                        label={<span className="text-disabled font-medium mr-1.5">VOL</span>}
+                        value={Math.round((project.audio?.masterVolume ?? 1) * 100)}
+                        min={0}
+                        max={100}
+                        step={1}
+                        unit="%"
+                        onChange={(val) => {
+                            const clamped = Math.max(0, Math.min(1, val / 100));
+                            updateProject((p) => ({
+                                ...p,
+                                audio: {
+                                    clips: p.audio?.clips ?? [],
+                                    muted: p.audio?.muted ?? false,
+                                    masterVolume: clamped,
+                                },
+                            }));
+                        }}
+                        className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
+                    />
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-[10px] text-muted-foreground">Mute</span>
+                    <Switch
+                        checked={Boolean(project.audio?.muted)}
+                        ariaLabel="Mute project audio"
+                        onChange={(checked) => {
+                            updateProject((p) => ({
+                                ...p,
+                                audio: {
+                                    clips: p.audio?.clips ?? [],
+                                    muted: checked,
+                                    masterVolume: p.audio?.masterVolume ?? 1,
+                                },
+                            }));
+                        }}
+                    />
+                </div>
+            </div>
         </InspectorRow>
 
         <InspectorRow

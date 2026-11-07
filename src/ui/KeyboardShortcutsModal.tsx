@@ -58,6 +58,7 @@ const SHORTCUTS: ShortcutItem[] = [
   { keys: ['\\'], description: 'Zen Mode (Toggle both left & right sidebars)', category: 'View & Navigation' },
   { keys: ['['], description: 'Toggle Left Sidebar (Panels & Audio)', category: 'View & Navigation' },
   { keys: [']'], description: 'Toggle Right Inspector Sidebar', category: 'View & Navigation' },
+  { keys: ['M'], description: 'Toggle Audio Mixer Rack', category: 'View & Navigation' },
   { keys: ['?'], description: 'Open Keyboard Shortcuts Guide', category: 'View & Navigation' },
   { keys: ['Esc'], description: 'Deselect / Cancel crop / Close modal', category: 'View & Navigation' },
 ];

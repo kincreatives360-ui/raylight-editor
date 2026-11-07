@@ -50,6 +50,9 @@ export interface AudioClip {
   offsetMs: number;
   volume: number;
   muted: boolean;
+  fadeInMs?: number;
+  fadeOutMs?: number;
+  solo?: boolean;
 }
 
 export interface ProjectAudio {

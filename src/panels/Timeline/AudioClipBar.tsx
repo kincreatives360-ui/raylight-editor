@@ -10,6 +10,8 @@ interface AudioClipBarProps {
     left: number;
     width: number;
     muted?: boolean;
+    selected?: boolean;
+    onSelect?: () => void;
     onSeek: () => void;
     onDelete: () => void;
     onDrag: (event: React.PointerEvent<HTMLElement>, edge: 'move' | 'left' | 'right') => void;
@@ -64,16 +66,20 @@ const AudioWaveform: React.FC<{
     }
 );
 
-export function AudioClipBar({ clip, left, width, muted, onSeek, onDelete, onDrag, onContextMenu }: AudioClipBarProps) {
+export function AudioClipBar({ clip, left, width, muted, selected, onSelect, onSeek, onDelete, onDrag, onContextMenu }: AudioClipBarProps) {
     return (
         <TimelineRangeBar
             tone="audio"
-            selected={!muted}
+            selected={Boolean(selected)}
             title={`${clip.name} · ${(clip.durationMs / 1000).toFixed(2)}s · Drag to move, drag edges to trim`}
-            onPointerDown={(e) => onDrag(e, 'move')}
+            onPointerDown={(e) => {
+                onSelect?.();
+                onDrag(e, 'move');
+            }}
             onContextMenu={onContextMenu}
             onClick={(e) => {
                 e.stopPropagation();
+                onSelect?.();
                 onSeek();
             }}
             left={left}
@@ -93,6 +99,11 @@ export function AudioClipBar({ clip, left, width, muted, onSeek, onDelete, onDra
             />
             <div className="flex items-center gap-1.5 z-10 pointer-events-none pl-1 truncate">
                 <Volume2 className="w-3 h-3 text-orange-400 shrink-0 opacity-80" />
+                {clip.solo && (
+                    <span className="px-1 rounded bg-amber-500/30 border border-amber-400/50 text-amber-200 text-[8px] font-bold leading-tight shrink-0">
+                        S
+                    </span>
+                )}
                 <span className="truncate drop-shadow-sm">{clip.name}</span>
                 <span className="text-[10px] font-mono text-orange-300/70 hidden sm:inline">
                     {(clip.durationMs / 1000).toFixed(1)}s

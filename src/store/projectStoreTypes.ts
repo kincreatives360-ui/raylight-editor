@@ -70,6 +70,16 @@ export interface ProjectStore {
         options?: AddCameraBlockOptions
     ) => CameraBlock | null;
     toggleProjectAudioMuted: () => void;
+    setProjectMasterVolume: (volume: number, options?: { skipHistory?: boolean }) => void;
+    updateAudioClip: (
+        clipId: string,
+        updater: (clip: AudioClip) => AudioClip,
+        options?: { skipHistory?: boolean }
+    ) => void;
+    deleteAudioClip: (clipId: string) => void;
+    toggleAudioClipMuted: (clipId: string) => void;
+    toggleAudioClipSolo: (clipId: string) => void;
+    clearAudioClipSolos: () => void;
     addMultipleLayersToShot: (
         shotId: string,
         newLayers: Layer[],

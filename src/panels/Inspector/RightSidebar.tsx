@@ -14,6 +14,7 @@ import { useProjectStore } from '../../store/useProjectStore';
 import { useSelectionStore } from '../../store/useSelectionStore';
 import { InspectorModeTabs } from '../../ui/primitives';
 import { CameraBlockSection } from './sections/CameraBlockSection';
+import { AudioClipInspector } from './sections/AudioClipInspector';
 import { LayerDesignInspector } from './sections/LayerDesignInspector';
 import { LayerAnimateInspector, addLayerAnimation } from './sections/LayerAnimateInspector';
 import { LightBlockInspector } from './sections/LightBlockInspector';
@@ -54,9 +55,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
         selectedCameraBlockId,
         selectedLightBlockId,
         selectedLightId,
+        selectedAudioClipId,
         selectLight,
         selectLightBlock,
         selectCameraBlock,
+        selectAudioClip,
         clearLayerSelection,
         setInspectorTab,
         toggleRightSidebar,
@@ -93,6 +96,9 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
 
     const activeLightBlock: LightAnimationBlock | undefined =
         activeShot?.lightBlocks?.find((lb) => lb.id === selectedLightBlockId);
+
+    const activeAudioClip =
+        project.audio?.clips?.find((clip) => clip.id === selectedAudioClipId);
 
     const handleFontFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
@@ -185,6 +191,11 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     activeShotId={activeShot.id}
                     activeLightBlock={activeLightBlock}
                     onDone={() => selectLightBlock(null)}
+                />
+            ) : activeAudioClip ? (
+                <AudioClipInspector
+                    clip={activeAudioClip}
+                    onDone={() => selectAudioClip(null)}
                 />
             ) : selectedLayer && activeShot ? (
                 <>

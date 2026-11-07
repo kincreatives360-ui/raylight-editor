@@ -1,4 +1,4 @@
-import { Pause, Play, Scissors, Trash2 } from 'lucide-react';
+import { Pause, Play, Scissors, SlidersHorizontal, Trash2 } from 'lucide-react';
 import { IconButton } from '../../ui/primitives';
 import type { Shot } from '../../model/types';
 import { TimelineTimecode } from './TimelineTimecode';
@@ -16,6 +16,8 @@ interface TimelineToolbarProps {
     onTimelineZoomChange: (zoom: number) => void;
     timelineView?: 'video' | 'scene';
     onToggleTimelineView?: () => void;
+    mixerOpen?: boolean;
+    onToggleMixer?: () => void;
 }
 
 export function TimelineToolbar({
@@ -30,6 +32,8 @@ export function TimelineToolbar({
     onTimelineZoomChange,
     timelineView,
     onToggleTimelineView,
+    mixerOpen,
+    onToggleMixer,
 }: TimelineToolbarProps) {
     const zoomPercent = ((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100;
 
@@ -102,6 +106,23 @@ export function TimelineToolbar({
             </div>
 
             <div className="flex items-center gap-2">
+                {onToggleMixer && (
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Toggle Audio Mixer"
+                        type="button"
+                        onClick={onToggleMixer}
+                        title="Toggle Audio Mixer (M)"
+                        aria-pressed={Boolean(mixerOpen)}
+                        className={`w-7 h-7 rounded-lg border flex items-center justify-center cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue ${
+                            mixerOpen
+                                ? 'border-brand-blue/60 bg-brand-blue/15 text-brand-blue'
+                                : 'border-subtle hover:border-medium bg-surface/50 hover:bg-subtle text-muted-foreground hover:text-foreground'
+                        }`}
+                        icon={<SlidersHorizontal className="w-3.5 h-3.5" />}
+                    />
+                )}
                 <div className="relative w-28 h-1.5 rounded-full bg-subtle flex items-center group/zoom">
                     <div
                         className="h-full rounded-full bg-brand-blue transition-[width] duration-75"

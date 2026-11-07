@@ -12,6 +12,9 @@ export const AudioClipSchema = z.object({
   offsetMs: z.number().min(0),
   volume: z.number().min(0).max(1),
   muted: z.boolean(),
+  fadeInMs: z.number().min(0).optional(),
+  fadeOutMs: z.number().min(0).optional(),
+  solo: z.boolean().optional(),
 });
 
 export const ProjectAudioSchema = z.object({
@@ -49,6 +52,7 @@ export const ProjectSchema = z.object({
     '4:5',
   ]),
   fps: z.union([z.literal(24), z.literal(30), z.literal(60)]),
+  bpm: z.number().min(20).max(300).optional(),
   background: BackgroundSchema,
   defaultCamera: z
     .object({
