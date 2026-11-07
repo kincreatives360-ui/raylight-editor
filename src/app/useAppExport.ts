@@ -29,12 +29,28 @@ function loadInitialExportSettings(projectFps: Project['fps']): ExportSettings {
     const parsed = JSON.parse(raw) as Partial<ExportSettings>;
     return {
       ...defaults,
-      ...(parsed.format ? { format: parsed.format } : {}),
-      ...(parsed.resolution ? { resolution: parsed.resolution } : {}),
+      ...(parsed.format === 'mp4' ||
+      parsed.format === 'webm' ||
+      parsed.format === 'gif' ||
+      parsed.format === 'png' ||
+      parsed.format === 'png-seq'
+        ? { format: parsed.format }
+        : {}),
+      ...(parsed.resolution === '480p' ||
+      parsed.resolution === '720p' ||
+      parsed.resolution === '1080p' ||
+      parsed.resolution === '4k'
+        ? { resolution: parsed.resolution }
+        : {}),
       ...(parsed.fps === 15 || parsed.fps === 24 || parsed.fps === 30 || parsed.fps === 60
         ? { fps: parsed.fps }
         : {}),
-      ...(parsed.quality ? { quality: parsed.quality } : {}),
+      ...(parsed.quality === 'studio' ||
+      parsed.quality === 'social' ||
+      parsed.quality === 'web' ||
+      parsed.quality === 'web-low'
+        ? { quality: parsed.quality }
+        : {}),
       ...(parsed.scope === 'entire' || parsed.scope === 'shot' ? { scope: parsed.scope } : {}),
       ...(typeof parsed.gifHighQuality === 'boolean' ? { gifHighQuality: parsed.gifHighQuality } : {}),
       ...(typeof parsed.gifLoop === 'boolean' ? { gifLoop: parsed.gifLoop } : {}),

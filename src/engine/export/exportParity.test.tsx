@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { createDefaultProject, createDefaultShot } from '../../model/defaults';
@@ -211,7 +211,7 @@ describe('Export & Offline Render Pipeline Parity Suite', () => {
                 }
             );
 
-            (globalThis as unknown as { document: unknown }).document = {
+            vi.stubGlobal('document', {
                 createElement: vi.fn((tag: string) => {
                     if (tag === 'canvas') {
                         return {
@@ -230,11 +230,15 @@ describe('Export & Offline Render Pipeline Parity Suite', () => {
                 }),
                 body: { appendChild: vi.fn(), removeChild: vi.fn() },
                 fonts: { ready: Promise.resolve() },
-            };
-            (globalThis as unknown as { URL: unknown }).URL = {
+            });
+            vi.stubGlobal('URL', {
                 createObjectURL: vi.fn(() => 'blob:still'),
                 revokeObjectURL: vi.fn(),
-            };
+            });
+        });
+
+        afterEach(() => {
+            vi.unstubAllGlobals();
         });
 
         it('exports still frame at playheadTimeMs and invokes onSeekFrame with that time', async () => {
