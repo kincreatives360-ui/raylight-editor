@@ -78,6 +78,30 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
             className="space-y-1.5"
             labelTag="label"
             labelClassName="text-[11px] font-medium text-muted-foreground block"
+            label={<>Tempo</>}
+        >
+            <ScrubInput
+                label={<span className="text-disabled font-medium mr-1.5">BPM</span>}
+                value={project.bpm ?? 120}
+                min={40}
+                max={240}
+                step={1}
+                unit=" bpm"
+                onChange={(val) => {
+                    updateProject((p) => ({
+                        ...p,
+                        bpm: Math.round(Math.max(40, Math.min(240, val))),
+                    }));
+                }}
+                className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
+            />
+        </InspectorRow>
+
+        <InspectorRow
+            unstyled
+            className="space-y-1.5"
+            labelTag="label"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
             label={<>Lens</>}
         >
             <ScrubInput

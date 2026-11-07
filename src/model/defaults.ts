@@ -447,6 +447,7 @@ export function createDefaultProject(overrides: Partial<Project> = {}): Project 
     createdAt: new Date().toISOString(),
     aspectRatio: '16:9',
     fps: 60,
+    bpm: 120,
     background: {
       kind: 'solid',
       color: '#0c0e17',

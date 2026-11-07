@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
-import type { Shot } from '../../model/types';
+import type { Shot, ShotTransition } from '../../model/types';
 import { useProjectStore } from '../../store/useProjectStore';
 import { InspectorRow, InspectorModeTabs, Switch } from '../../ui/primitives';
+import { FigmaSelect } from '../../ui/FigmaSelect';
+import { ScrubInput } from '../../ui/ScrubInput';
 import { CameraBlockSection } from './sections/CameraBlockSection';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
@@ -31,14 +33,9 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     className="shot-settings-tabs flex items-center gap-2 -mx-3.5 -mt-3 px-3.5 py-2.5 border-b border-subtle mb-1"
                 />
 
-                {/* Shot Title & Duration */}
+                {/* Shot Title */}
                 <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                        <label className="text-[11px] text-muted-foreground block font-medium uppercase tracking-[.04em]">Shot Name</label>
-                        <span className="text-[11px] font-mono text-disabled">
-                            {(activeShot.durationMs / 1000).toFixed(1)}s
-                        </span>
-                    </div>
+                    <label className="text-[11px] text-muted-foreground block font-medium uppercase tracking-[.04em]">Shot Name</label>
                     <input
                         type="text"
                         value={activeShot.name || ''}
@@ -48,8 +45,94 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                     />
                 </div>
 
+                {/* Shot Duration */}
+                <InspectorRow
+                    unstyled
+                    className="space-y-1.5"
+                    labelTag="label"
+                    labelClassName="text-[11px] font-medium text-muted-foreground block uppercase tracking-[.04em]"
+                    label={<>Duration</>}
+                >
+                    <ScrubInput
+                        label={<span className="text-disabled font-medium mr-1.5">Dur</span>}
+                        value={Number((activeShot.durationMs / 1000).toFixed(2))}
+                        min={0.5}
+                        max={60}
+                        step={0.1}
+                        unit=" s"
+                        onChange={(val) => {
+                            const newDurationMs = Math.round(Math.max(500, Math.min(60000, val * 1000)));
+                            updateShot(activeShot.id, (s) => ({
+                                ...s,
+                                durationMs: newDurationMs,
+                            }));
+                        }}
+                        className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
+                    />
+                </InspectorRow>
+
                 {shotTab === 'design' ? (
                     <>
+                        {/* Shot Transition */}
+                        <div className="space-y-2">
+                            <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em]">Transition</h3>
+                            <div className="relative">
+                                <FigmaSelect
+                                    value={activeShot.transition?.type ?? 'cut'}
+                                    onChange={(e) => {
+                                        const type = e.target.value as ShotTransition['type'];
+                                        updateShot(activeShot.id, (s) => ({
+                                            ...s,
+                                            transition: {
+                                                type,
+                                                durationMs: type === 'cut' ? 0 : s.transition?.durationMs || 500,
+                                                easing: s.transition?.easing ?? { kind: 'preset', name: 'linear' },
+                                            },
+                                        }));
+                                    }}
+                                    className="w-full h-8 px-3 pr-8 rounded-lg bg-surface border border-subtle text-[12px] text-foreground outline-none appearance-none cursor-pointer focus:border-brand-blue transition"
+                                >
+                                    <option value="cut">Cut (Instant)</option>
+                                    <option value="crossfade">Crossfade</option>
+                                    <option value="push">Push</option>
+                                    <option value="slide">Slide</option>
+                                </FigmaSelect>
+                            </div>
+
+                            {activeShot.transition?.type && activeShot.transition.type !== 'cut' && (
+                                <InspectorRow
+                                    unstyled
+                                    className="space-y-1.5"
+                                    labelTag="label"
+                                    labelClassName="text-[11px] font-medium text-muted-foreground block"
+                                    label={<>Transition Duration</>}
+                                >
+                                    <ScrubInput
+                                        label={<span className="text-disabled font-medium mr-1.5">T</span>}
+                                        value={Number(((activeShot.transition.durationMs || 500) / 1000).toFixed(2))}
+                                        min={0.1}
+                                        max={Math.min(5, Number((activeShot.durationMs / 1000).toFixed(2)))}
+                                        step={0.05}
+                                        unit=" s"
+                                        onChange={(val) => {
+                                            const durationMs = Math.round(Math.max(100, Math.min(activeShot.durationMs, val * 1000)));
+                                            updateShot(activeShot.id, (s) => ({
+                                                ...s,
+                                                transition: {
+                                                    ...s.transition,
+                                                    durationMs,
+                                                },
+                                            }));
+                                        }}
+                                        className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
+                                    />
+                                </InspectorRow>
+                            )}
+                        </div>
+
+                        {/* Divider */}
+                        <div className="border-t border-subtle" />
+
                         {/* Background Section */}
                         <div className="space-y-2">
                         <h3 className="text-[11px] font-semibold text-muted-foreground uppercase tracking-[.04em]">Background</h3>

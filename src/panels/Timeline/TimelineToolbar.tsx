@@ -14,6 +14,8 @@ interface TimelineToolbarProps {
     totalDurationMs: number;
     timelineZoom: number;
     onTimelineZoomChange: (zoom: number) => void;
+    timelineView?: 'video' | 'scene';
+    onToggleTimelineView?: () => void;
 }
 
 export function TimelineToolbar({
@@ -26,6 +28,8 @@ export function TimelineToolbar({
     totalDurationMs,
     timelineZoom,
     onTimelineZoomChange,
+    timelineView,
+    onToggleTimelineView,
 }: TimelineToolbarProps) {
     const zoomPercent = ((timelineZoom - MIN_TIMELINE_ZOOM) / (MAX_TIMELINE_ZOOM - MIN_TIMELINE_ZOOM)) * 100;
 
@@ -70,6 +74,31 @@ export function TimelineToolbar({
                 )}
                 <div className="h-4 w-px bg-border/40 mx-1" />
                 <TimelineTimecode totalDurationMs={totalDurationMs} />
+                {onToggleTimelineView && (
+                    <>
+                        <div className="h-4 w-px bg-border/40 mx-1" />
+                        <button
+                            type="button"
+                            onClick={onToggleTimelineView}
+                            title={
+                                timelineView === 'scene'
+                                    ? `In ${activeShot?.name ?? 'Scene'} · Click to view All Shots (Esc)`
+                                    : 'All Shots · Click to view active scene tracks'
+                            }
+                            className="h-7 px-2.5 rounded-lg border border-subtle bg-surface/50 hover:bg-subtle text-[11px] font-medium text-foreground flex items-center gap-1.5 cursor-pointer transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand-blue"
+                        >
+                            {timelineView === 'scene' ? (
+                                <>
+                                    <span className="text-muted-foreground hover:text-foreground">Shots</span>
+                                    <span className="text-disabled">/</span>
+                                    <span className="text-brand-blue truncate max-w-[100px]">{activeShot?.name ?? 'Scene'}</span>
+                                </>
+                            ) : (
+                                <span className="text-foreground">All Shots</span>
+                            )}
+                        </button>
+                    </>
+                )}
             </div>
 
             <div className="flex items-center gap-2">

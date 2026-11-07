@@ -336,6 +336,8 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
                 totalDurationMs={totalDurationMs}
                 timelineZoom={timelineZoom}
                 onTimelineZoomChange={setTimelineZoom}
+                timelineView={timelineView}
+                onToggleTimelineView={() => setTimelineView(timelineView === 'scene' ? 'video' : 'scene')}
             />
 
             {/* 2. SCROLL-SYNCED TRACKS BODY (Includes Ruler + Tracks + Playhead + Skimmer) */}

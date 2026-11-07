@@ -88,22 +88,22 @@ export const createShotActions: ProjectStoreActionCreator<'addShot' | 'duplicate
 
     splitAtPlayhead: (globalTimeMs) => {
         const state = get();
-        // Check if there is an audio clip under the playhead
+        // Priority 1: Split video shot under the playhead if present
+        const activeShot = state.project.shots.find(
+            (s) => globalTimeMs >= s.startMs + 300 && globalTimeMs <= s.startMs + s.durationMs - 300
+        );
+        if (activeShot) {
+            const res = get().splitShotAtPlayhead(activeShot.id, globalTimeMs);
+            if (res) return true;
+        }
+
+        // Priority 2: Split audio clip under playhead if present
         const audioClips = state.project.audio?.clips || [];
         const activeClip = audioClips.find(
             (c) => globalTimeMs > c.startMs + 100 && globalTimeMs < c.startMs + c.durationMs - 100
         );
         if (activeClip) {
             const res = get().splitAudioClipAtPlayhead(activeClip.id, globalTimeMs);
-            if (res) return true;
-        }
-
-        // Otherwise find the active shot under playhead
-        const activeShot = state.project.shots.find(
-            (s) => globalTimeMs > s.startMs + 200 && globalTimeMs < s.startMs + s.durationMs - 200
-        );
-        if (activeShot) {
-            const res = get().splitShotAtPlayhead(activeShot.id, globalTimeMs);
             if (res) return true;
         }
 

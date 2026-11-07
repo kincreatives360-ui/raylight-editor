@@ -77,6 +77,7 @@ export interface Project {
   createdAt?: string;
   aspectRatio: AspectRatio;
   fps: 24 | 30 | 60;
+  bpm?: number;
   background: Background;
   defaultCamera?: {
     position: Vec3;

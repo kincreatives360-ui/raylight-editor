@@ -93,3 +93,55 @@ export function snapTime(
     }
     return { time: closest, snapped };
 }
+
+export type BeatDivision = 'bar' | 'beat' | 'half' | 'quarter';
+
+export const BEAT_DIVISION_MULTIPLIERS: Record<BeatDivision, number> = {
+    bar: 4,
+    beat: 1,
+    half: 0.5,
+    quarter: 0.25,
+};
+
+export const BEAT_DIVISION_LABELS: Record<BeatDivision, string> = {
+    bar: 'Bar',
+    beat: '1/1',
+    half: '1/2',
+    quarter: '1/4',
+};
+
+/**
+ * Returns grid step in milliseconds for a given BPM and division.
+ * 60,000 / BPM * divisionMultiplier (matches Raylight xw(bpm) * IGt[division])
+ */
+export function getBeatGridIntervalMs(bpm: number, division: BeatDivision = 'beat'): number {
+    if (!bpm || bpm <= 0) return 500;
+    const beatMs = 60000 / bpm;
+    return beatMs * (BEAT_DIVISION_MULTIPLIERS[division] ?? 1);
+}
+
+/**
+ * Snaps timeMs to the nearest rhythmic beat grid line if within visual threshold.
+ * Matches Raylight `lC = (timeMs, bpm, pxPerMs, division = 'beat', thresholdPx = 8)`
+ */
+export function snapToBeatGrid(
+    timeMs: number,
+    bpm: number,
+    pxPerMs: number,
+    division: BeatDivision = 'beat',
+    thresholdPx = 8
+): { time: number; snapped: boolean } {
+    if (!bpm || bpm <= 0 || pxPerMs <= 0) {
+        return { time: timeMs, snapped: false };
+    }
+    const gridMs = getBeatGridIntervalMs(bpm, division);
+    if (gridMs <= 0) return { time: timeMs, snapped: false };
+
+    const snappedTime = Math.max(0, Math.round(timeMs / gridMs) * gridMs);
+    const diffPx = Math.abs(snappedTime - timeMs) * pxPerMs;
+    if (diffPx <= thresholdPx) {
+        return { time: snappedTime, snapped: true };
+    }
+    return { time: timeMs, snapped: false };
+}
+

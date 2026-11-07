@@ -142,7 +142,7 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         return;
       }
 
-      // Escape: Close shortcuts modal or reset tools/selection
+      // Escape: Close shortcuts modal or reset tools/selection / step out to overview
       if (e.key === 'Escape') {
         if (commandMenuOpen) {
           setCommandMenuOpen(false);
@@ -152,11 +152,23 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
           setShortcutsModalOpen(false);
           return;
         }
+        const selState = useSelectionStore.getState();
+        const hasSelection =
+          selectedLayerIds.length > 0 ||
+          Boolean(selectedBlockId) ||
+          Boolean(selectedCameraBlockId) ||
+          Boolean(selectedLightBlockId);
+
         setIsCropping(false);
         setActiveTool('select');
         clearLayerSelection();
         setInspectorTab('project');
         setExportModalOpen(false);
+
+        // If nothing was selected and user was zoomed into scene tracks, step out to overview (matches Raylight zoomOutOfShot)
+        if (!hasSelection && selState.timelineView === 'scene') {
+          selState.setTimelineView('video');
+        }
         return;
       }
 
@@ -259,9 +271,20 @@ export function useAppKeyboardShortcuts(options: UseAppKeyboardShortcutsOptions)
         return;
       }
 
-      // Single-Key Tool Shortcuts (V, G, Y, H, T, I, R, O, L, Escape)
+      // Cmd/Ctrl + B: Split clip/shot at playhead (matches Raylight Mod+B and Framer)
+      if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && key === 'b') {
+        e.preventDefault();
+        splitAtPlayhead(usePlayheadStore.getState().currentTimeMs);
+        return;
+      }
+
+      // Single-Key Tool Shortcuts (V, G, Y, H, T, I, R, O, L, S, Escape)
       if (!e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey) {
         if (isInteractiveElement(el)) {
+          return;
+        }
+        if (key === 's') {
+          splitAtPlayhead(usePlayheadStore.getState().currentTimeMs);
           return;
         }
         if (key === 'v') {
