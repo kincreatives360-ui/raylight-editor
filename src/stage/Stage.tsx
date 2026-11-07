@@ -197,7 +197,9 @@ const StageComponent: React.FC<StageProps> = ({
         orbitDeg: number,
         tiltDeg: number,
         rollDeg: number = 0,
-        zoomVal?: number
+        zoomVal?: number,
+        targetXVal?: number,
+        targetYVal?: number
     ) => {
         stopOrbitAnimation();
         const startOrbit = radToDeg(frame.camera.rotation.y);
@@ -205,6 +207,10 @@ const StageComponent: React.FC<StageProps> = ({
         const startRoll = radToDeg(frame.camera.rotation.z);
         const startZoom = frame.camera.zoom;
         const targetZoom = zoomVal !== undefined ? zoomVal : startZoom;
+        const startTargetX = frame.camera.target.x;
+        const startTargetY = frame.camera.target.y;
+        const endTargetX = targetXVal !== undefined ? targetXVal : startTargetX;
+        const endTargetY = targetYVal !== undefined ? targetYVal : startTargetY;
 
         const startTime = performance.now();
         const duration = 320; // 320ms matching Raylight $ro
@@ -219,12 +225,16 @@ const StageComponent: React.FC<StageProps> = ({
             const currTilt = startTilt + (tiltDeg - startTilt) * eased;
             const currRoll = startRoll + (rollDeg - startRoll) * eased;
             const currZoom = Math.exp(Math.log(Math.max(0.01, startZoom)) + (Math.log(Math.max(0.01, targetZoom)) - Math.log(Math.max(0.01, startZoom))) * eased);
+            const currTargetX = startTargetX + (endTargetX - startTargetX) * eased;
+            const currTargetY = startTargetY + (endTargetY - startTargetY) * eased;
 
             updateActiveShotCamera({
                 orbit: Math.round(currOrbit * 10) / 10,
                 tilt: Math.round(currTilt * 10) / 10,
                 roll: Math.round(currRoll * 10) / 10,
                 zoom: Math.round(currZoom * 100) / 100,
+                targetX: Number(currTargetX.toFixed(4)),
+                targetY: Number(currTargetY.toFixed(4)),
             });
 
             if (rawT < 1) {
@@ -236,6 +246,8 @@ const StageComponent: React.FC<StageProps> = ({
                     tilt: tiltDeg,
                     roll: rollDeg,
                     zoom: targetZoom,
+                    targetX: endTargetX,
+                    targetY: endTargetY,
                 });
                 commitDragTransaction();
             }

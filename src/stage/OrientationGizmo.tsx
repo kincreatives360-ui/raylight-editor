@@ -9,7 +9,7 @@ import { CAMERA_ANGLE_VIEWS } from './cameraAngleViews';
 
 interface OrientationGizmoProps {
     cameraRotation: { x: number; y: number; z: number };
-    onSetOrientation: (orbitDeg: number, tiltDeg: number, rollDeg?: number, zoom?: number) => void;
+    onSetOrientation: (orbitDeg: number, tiltDeg: number, rollDeg?: number, zoom?: number, targetX?: number, targetY?: number) => void;
     onDragStart?: () => void;
     onDragOrientation?: (orbitDeg: number, tiltDeg: number, rollDeg?: number) => void;
     onDragEnd?: () => void;
@@ -305,28 +305,28 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                 <div className="grid grid-cols-2 gap-1">
                     <button
                         type="button"
-                        onClick={() => { onSetOrientation(0, 0, 0); setMenuOpen(false); }}
+                        onClick={() => { onSetOrientation(0, 0, 0, 1.7, 0, 0); setMenuOpen(false); }}
                         className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Front
                     </button>
                     <button
                         type="button"
-                        onClick={() => { onSetOrientation(0, -89, 0); setMenuOpen(false); }}
+                        onClick={() => { onSetOrientation(0, -89, 0, undefined, 0, 0); setMenuOpen(false); }}
                         className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Top
                     </button>
                     <button
                         type="button"
-                        onClick={() => { onSetOrientation(90, 0, 0); setMenuOpen(false); }}
+                        onClick={() => { onSetOrientation(90, 0, 0, undefined, 0, 0); setMenuOpen(false); }}
                         className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                     >
                         Right
                     </button>
                     <button
                         type="button"
-                        onClick={() => { onSetOrientation(45, 35.26, 0); setMenuOpen(false); }}
+                        onClick={() => { onSetOrientation(45, 35.26, 0, undefined, 0, 0); setMenuOpen(false); }}
                         className="px-2 py-1 rounded bg-sky-500/10 hover:bg-sky-500/20 text-[11px] text-sky-400 hover:text-sky-300 font-mono cursor-pointer transition text-left"
                     >
                         Iso
@@ -335,7 +335,7 @@ export const OrientationGizmo: React.FC<OrientationGizmoProps> = ({
                         <button
                             key={view.id}
                             type="button"
-                            onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll); setMenuOpen(false); }}
+                            onClick={() => { onSetOrientation(view.orbit, view.tilt, view.roll, view.dolly, view.panX ?? 0, view.panY ?? 0); setMenuOpen(false); }}
                             className="px-2 py-1 rounded bg-white/[0.05] hover:bg-white/10 text-[11px] text-muted-foreground hover:text-foreground font-mono cursor-pointer transition text-left"
                         >
                             {view.label}

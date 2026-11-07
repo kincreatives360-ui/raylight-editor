@@ -9,9 +9,8 @@ import type { EvaluatedCamera } from '../../engine/evaluateCamera';
 import type { Project } from '../../model/types';
 import { getBlurSettings } from '../../model/layerEffects';
 import { evaluateCameraPose, getLayerProjectedCorners, getLayerRenderLayout, getAspectRatio } from './cameraMath';
-import { SCREEN_PLANE_Z, getDeviceSpec } from '../../model/deviceFrame';
+import { SCREEN_PLANE_Z } from '../../model/deviceFrame';
 import { PhoneDeviceFrame } from './PhoneDeviceFrame';
-import { MacBookProFrame } from './MacBookProFrame';
 import { useLayerTexture } from './useLayerTexture';
 import { useLayerWarpGeometry } from './useLayerWarpGeometry';
 import { useLayerBackdropCapture } from './useLayerBackdropCapture';
@@ -284,19 +283,11 @@ export const ThreeLayerObject: React.FC<ThreeLayerObjectProps> = ({
                 )}
             </mesh>
             {deviceFrameSettings && deviceFrameMetrics && (
-                getDeviceSpec(deviceFrameSettings.deviceId).family === 'laptop' ? (
-                    <MacBookProFrame
-                        metrics={deviceFrameMetrics}
-                        settings={deviceFrameSettings}
-                        rotation={rot}
-                    />
-                ) : (
-                    <PhoneDeviceFrame
-                        metrics={deviceFrameMetrics}
-                        settings={deviceFrameSettings}
-                        rotation={rot}
-                    />
-                )
+                <PhoneDeviceFrame
+                    metrics={deviceFrameMetrics}
+                    settings={deviceFrameSettings}
+                    rotation={rot}
+                />
             )}
         </>
     );

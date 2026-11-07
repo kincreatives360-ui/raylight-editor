@@ -340,6 +340,7 @@ export const ViewportCanvas: React.FC<ViewportCanvasProps> = ({
                     }}
                     onCreated={({ gl }) => {
                         setMaxTextureSize(gl.capabilities.maxTextureSize);
+                        gl.localClippingEnabled = true;
                         gl.shadowMap.enabled = true;
                         gl.shadowMap.type = THREE.PCFSoftShadowMap;
                     }}

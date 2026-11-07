@@ -76,7 +76,6 @@ function AimedDirectionalLight({ config }: { config: ResolvedLighting['key'] | R
         intensity={config.intensity}
         color={config.color}
         castShadow={config.castShadow}
-        shadow-intensity={config.shadowIntensity}
         shadow-radius={config.shadowRadius}
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
@@ -115,7 +114,6 @@ function AimedSpotLight({ config }: { config: ResolvedSceneLight }) {
         angle={config.angle}
         penumbra={config.penumbra}
         castShadow={config.castShadow}
-        shadow-intensity={config.shadowIntensity}
         shadow-radius={config.shadowRadius}
         shadow-mapSize-width={1024}
         shadow-mapSize-height={1024}
@@ -208,7 +206,6 @@ function SceneLightEmitter({ source, sourceModel, showGizmo }: { source: Resolve
           distance={source.distance}
           decay={source.decay}
           castShadow={source.castShadow}
-          shadow-intensity={source.shadowIntensity}
           shadow-radius={source.shadowRadius}
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}

@@ -511,8 +511,8 @@ export function evaluateProjectAtTime(
             const prevX = prevRotPosX + prevGroupTransform.position.x;
             const prevY = prevRotPosY + prevGroupTransform.position.y;
             const prevZ = rawPrev.position.z + prevGroupTransform.position.z;
-            const prevRotZ = (rawPrev.rotation.z + prevGroupTransform.rotation.z) * (Math.PI / 180);
-            const curRotZ = evalLayer.rotation.z * (Math.PI / 180);
+            const prevRotZ = rawPrev.rotation.z + (prevGroupTransform.rotation.z * Math.PI) / 180;
+            const curRotZ = evalLayer.rotation.z;
             const prevScaleX = rawPrev.scale.x * prevGroupTransform.scale.x;
             const prevScaleY = rawPrev.scale.y * prevGroupTransform.scale.y;
 

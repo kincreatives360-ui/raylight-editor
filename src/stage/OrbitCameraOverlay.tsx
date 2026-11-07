@@ -39,7 +39,7 @@ export function OrbitCameraFrustum({ camera, observer, reference, width, height 
     </svg>;
 }
 
-export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZoom }: { pinned: boolean; zoom: number; onAngle: (orbit: number, tilt: number, roll: number, dolly?: number) => void; onPin: () => void; onBack: () => void; onZoom: (zoom: number) => void }) {
+export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZoom }: { pinned: boolean; zoom: number; onAngle: (orbit: number, tilt: number, roll: number, dolly?: number, panX?: number, panY?: number) => void; onPin: () => void; onBack: () => void; onZoom: (zoom: number) => void }) {
     const [menu, setMenu] = useState<'angle' | 'zoom' | null>(null);
     const root = useRef<HTMLDivElement>(null);
     useEffect(() => {
@@ -53,7 +53,7 @@ export function OrbitCameraControls({ pinned, zoom, onAngle, onPin, onBack, onZo
     return <div ref={root} aria-label="Orbit camera controls" onMouseDown={e => e.stopPropagation()} onWheel={e => e.stopPropagation()} className="absolute bottom-[72px] left-1/2 -translate-x-1/2 z-50 flex items-center rounded-2xl bg-[#242424] p-1 text-[#eeeeee] shadow-lg whitespace-nowrap">
         <div className="relative">
             <button className={button} aria-expanded={menu === 'angle'} aria-haspopup="menu" onClick={() => setMenu(menu === 'angle' ? null : 'angle')}><Crosshair size={16} />Angle<ChevronDown size={12} /></button>
-            {menu === 'angle' && <div role="menu" aria-label="Camera angle" className="absolute bottom-full left-0 mb-2 w-44 rounded-2xl bg-[#242424] p-2 shadow-xl">{CAMERA_ANGLE_VIEWS.map(view => <button role="menuitem" key={view.id} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:bg-white/10" onClick={() => { onAngle(view.orbit, view.tilt, view.roll, view.dolly); setMenu(null); }}>{view.label}</button>)}</div>}
+            {menu === 'angle' && <div role="menu" aria-label="Camera angle" className="absolute bottom-full left-0 mb-2 w-44 rounded-2xl bg-[#242424] p-2 shadow-xl">{CAMERA_ANGLE_VIEWS.map(view => <button role="menuitem" key={view.id} className="block w-full rounded-lg px-2 py-2 text-left text-sm hover:bg-white/10 focus-visible:bg-white/10" onClick={() => { onAngle(view.orbit, view.tilt, view.roll, view.dolly, view.panX ?? 0, view.panY ?? 0); setMenu(null); }}>{view.label}</button>)}</div>}
         </div>
         <button className={button} aria-pressed={pinned} onClick={onPin}><Pin size={16} fill={pinned ? 'currentColor' : 'none'} />Pin</button>
         <button className={button} onClick={onBack}><Camera size={16} />Back to camera</button>
