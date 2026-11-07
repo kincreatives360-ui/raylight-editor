@@ -10,7 +10,7 @@ export const LayerIcon = ({ layer, isSelected }: LayerIconProps) => {
     if (layer.kind === 'video') {
         return (
             <Video
-                className={`w-3.5 h-3.5 shrink-0 ${isSelected ? 'text-[#38bdf8]' : 'text-[#38bdf8]'}`}
+                className="w-3.5 h-3.5 shrink-0 text-[#38bdf8]"
             />
         );
     }

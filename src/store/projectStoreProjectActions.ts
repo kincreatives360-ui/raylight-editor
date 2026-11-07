@@ -1,7 +1,7 @@
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
 import { appendHistoryState } from './projectStoreConstants';
 
-export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'updateProject' | 'updateShot' | 'updateLayer'> = (set, get) => ({
+export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'updateProject' | 'updateShot' | 'updateLayer' | 'deleteAsset'> = (set, get) => ({
     setHydrated: (status) => set({ isHydrating: !status }),
 
     updateProject: (updater, options) =>
@@ -56,4 +56,24 @@ export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'up
         );
     },
 
+    deleteAsset: (assetId: string) => {
+        get().updateProject((proj) => {
+            const nextAssets = { ...proj.assets };
+            delete nextAssets[assetId];
+            const nextShots = proj.shots.map((shot) => ({
+                ...shot,
+                layers: shot.layers.filter((l) => (l as { assetId?: string }).assetId !== assetId),
+            }));
+            let nextBg = proj.background;
+            if (nextBg.kind === 'image' && nextBg.assetId === assetId) {
+                nextBg = { kind: 'color', color: '#000000' };
+            }
+            return {
+                ...proj,
+                assets: nextAssets,
+                shots: nextShots,
+                background: nextBg,
+            };
+        });
+    },
 });

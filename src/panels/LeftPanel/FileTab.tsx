@@ -111,6 +111,19 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
     };
     const normalizedSearch = searchQuery.trim().toLowerCase();
 
+    const filteredShots = useMemo(() => {
+        const validShots = project.shots.filter(
+            (shot) => !shot.isPlaceholder && !(isBlankProjectState(project) && shot === project.shots[0])
+        );
+        if (!normalizedSearch) return validShots;
+        return validShots.filter((shot) => {
+            const matchesName = shot.name.toLowerCase().includes(normalizedSearch);
+            const matchesLayer = shot.layers.some((l) => l.name.toLowerCase().includes(normalizedSearch));
+            const matchesGroup = shot.groups.some((g) => g.name.toLowerCase().includes(normalizedSearch));
+            return matchesName || matchesLayer || matchesGroup;
+        });
+    }, [project, normalizedSearch]);
+
     const renderLayerRow = (
         shot: Shot,
         layer: Layer,
@@ -153,6 +166,15 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
         indentLevel = 1
     ): React.ReactNode => {
         const childLayers = layersTopDown.filter((l) => l.groupId === group.id);
+        if (normalizedSearch) {
+            const groupMatches = group.name.toLowerCase().includes(normalizedSearch);
+            const hasMatchingChild = childLayers.some((l) =>
+                l.name.toLowerCase().includes(normalizedSearch)
+            );
+            if (!groupMatches && !hasMatchingChild) {
+                return null;
+            }
+        }
         const isGroupSelected =
             shot.id === activeShot?.id &&
             childLayers.length > 0 &&
@@ -263,7 +285,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                     </div>
                 </div>
 
-                {!group.collapsed && (
+                {(!group.collapsed || Boolean(normalizedSearch)) && (
                     <div>
                         {childLayers.map((lyr) =>
                             renderLayerRow(
@@ -297,7 +319,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                             }
                         }}
                     >
-                        {isBlankProjectState(project) && (
+                        {isBlankProjectState(project) && !normalizedSearch && (
                             <div className="rounded-lg border border-dashed border-white/10 p-3 text-center">
                                 <p className="mb-2 text-[11px] text-zinc-400">No shots yet</p>
                                 <button
@@ -315,9 +337,14 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                                 </button>
                             </div>
                         )}
-                        {project.shots.filter((shot) => !shot.isPlaceholder && !(isBlankProjectState(project) && shot === project.shots[0])).map((shot) => {
+                        {normalizedSearch && filteredShots.length === 0 && (
+                            <p className="px-3 py-6 text-center text-[11px] text-muted-foreground">
+                                No layers match your search.
+                            </p>
+                        )}
+                        {filteredShots.map((shot) => {
                             const isShotSelected = shot.id === activeShot?.id && inspectorTab === 'shot' && selectedLayerIds.length === 0;
-                            const isCollapsed = Boolean(collapsedShots[shot.id]);
+                            const isCollapsed = Boolean(collapsedShots[shot.id]) && !normalizedSearch;
                             const isEditingShot = editingId === shot.id;
 
                             const layersTopDown = [...shot.layers].sort(
@@ -445,7 +472,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                                                     false
                                                 )
                                             )}
-                                            {shot.layers.length === 0 && (
+                                            {shot.layers.length === 0 && !normalizedSearch && (
                                                 <div className="px-5 py-2 text-[10px] text-muted-foreground italic">
                                                     No layers in this shot
                                                 </div>

@@ -45,6 +45,7 @@ export interface ProjectStore {
         updater: (project: Project) => Project,
         options?: { skipHistory?: boolean }
     ) => void;
+    deleteAsset: (assetId: string) => void;
     updateShot: (
         shotId: string,
         updater: Partial<Shot> | ((shot: Shot) => Shot),

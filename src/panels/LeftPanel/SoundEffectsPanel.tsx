@@ -10,7 +10,6 @@ import type { AudioClip } from '../../model/types';
 import { Play, Pause, Plus, Upload, Volume2 } from 'lucide-react';
 
 interface SoundEffectsPanelProps {
-    assetCategory: 'sfx';
     audioLabel: string;
     onSelectAudioClick: () => void;
     selectedSfxCategory: string;
@@ -31,7 +30,6 @@ type SoundItem = {
 };
 
 export const SoundEffectsPanel: React.FC<SoundEffectsPanelProps> = ({
-    assetCategory,
     audioLabel,
     onSelectAudioClick,
     selectedSfxCategory,
@@ -80,14 +78,12 @@ export const SoundEffectsPanel: React.FC<SoundEffectsPanelProps> = ({
     }, [soundItems, soundSearchQuery, selectedSfxCategory]);
 
     return (
-        <>
-            {assetCategory === 'sfx' && (
-                        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
-                            <button
-                                type="button"
-                                onClick={onSelectAudioClick}
-                                className="w-full py-2 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue-hover text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-brand-blue/15"
-                            >
+        <div className="flex-1 flex flex-col min-h-0 gap-2.5">
+            <button
+                type="button"
+                onClick={onSelectAudioClick}
+                className="w-full py-2 px-3 rounded-xl bg-brand-blue hover:bg-brand-blue-hover text-white text-xs font-semibold flex items-center justify-center gap-2 cursor-pointer transition shadow-md shadow-brand-blue/15"
+            >
                                 <Upload className="w-3.5 h-3.5" />
                                 <span>Upload Audio Track</span>
                             </button>
@@ -223,7 +219,5 @@ export const SoundEffectsPanel: React.FC<SoundEffectsPanelProps> = ({
                                 )}
                             </div>
                         </div>
-                    )}
-        </>
     );
 };

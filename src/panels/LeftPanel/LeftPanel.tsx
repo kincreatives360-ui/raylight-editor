@@ -401,7 +401,11 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         aria-controls="left-panel-panel-assets"
                         aria-selected={activeTab === 'assets'}
                         tabIndex={activeTab === 'assets' ? 0 : -1}
-                        onClick={() => setActiveTab('assets')}
+                        onClick={() => {
+                            setActiveTab('assets');
+                            setSearchOpen(false);
+                            setSearchQuery('');
+                        }}
                         onKeyDown={(e) => {
                             if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                                 e.preventDefault();
@@ -418,23 +422,25 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     </button>
                 </div>
 
-                <IconButton
-                    unstyled
-                    tooltip={false}
-                    label="Search layers"
-                    icon={<>
-                        <Search className="w-3.5 h-3.5" />
-                    </>}
-                    onClick={() => {
-                        setSearchOpen((v) => !v);
-                        if (searchOpen) setSearchQuery('');
-                    }}
-                    className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-brand-blue' : 'text-muted-foreground hover:text-foreground'
-                    }`}
-                />
+                {activeTab === 'file' && (
+                    <IconButton
+                        unstyled
+                        tooltip={false}
+                        label="Search layers"
+                        icon={<>
+                            <Search className="w-3.5 h-3.5" />
+                        </>}
+                        onClick={() => {
+                            setSearchOpen((v) => !v);
+                            if (searchOpen) setSearchQuery('');
+                        }}
+                        className={`p-1 rounded hover:bg-white/5 cursor-pointer ${searchOpen ? 'text-brand-blue' : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    />
+                )}
             </div>
 
-            {searchOpen && (
+            {searchOpen && activeTab === 'file' && (
                 <SearchField
                     containerClassName="px-3 py-1.5 border-b border-subtle bg-panel flex items-center gap-1.5"
                     iconClassName="w-3 h-3 text-muted-foreground"
@@ -442,7 +448,14 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Find layer..."
+                    onKeyDown={(e) => {
+                        if (e.key === 'Escape') {
+                            e.preventDefault();
+                            setSearchOpen(false);
+                            setSearchQuery('');
+                        }
+                    }}
+                    placeholder="Search layers"
                     aria-label="Filter layers by name"
                     className="w-full bg-transparent text-[11px] text-foreground outline-none placeholder:text-muted-foreground"
                     onClear={() => setSearchQuery('')}
@@ -485,19 +498,18 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                     {/* SUBCATEGORY 1: UPLOADS */}
                     {assetCategory === 'uploads' && (
                         <UploadedAssetsPanel
-                            assetCategory={assetCategory}
+                            project={project}
                             activeShot={activeShot}
                             onUploadClick={onUploadClick}
                         />
                     )}
 
                     {/* SUBCATEGORY 3: SHADERS */}
-                    {assetCategory === 'shaders' && <ShaderPresetsPanel assetCategory={assetCategory} />}
+                    {assetCategory === 'shaders' && <ShaderPresetsPanel />}
 
                     {/* SUBCATEGORY 4: SOUND FX */}
                     {assetCategory === 'sfx' && (
                         <SoundEffectsPanel
-                            assetCategory={assetCategory}
                             audioLabel={audioLabel}
                             onSelectAudioClick={onSelectAudioClick}
                             selectedSfxCategory={selectedSfxCategory}
