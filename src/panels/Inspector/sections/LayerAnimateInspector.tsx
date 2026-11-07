@@ -10,6 +10,7 @@ import type { AnimationBlock, AnimationBlockProperty, Easing, Layer, Shot, Trans
 import { usePlayheadStore } from '../../../store/usePlayheadStore';
 import { useProjectStore } from '../../../store/useProjectStore';
 import { useSelectionStore } from '../../../store/useSelectionStore';
+import { getArtboardDimensions } from '../../../stage/stageUtils';
 import { EasingControl } from '../../../ui/EasingControl';
 import { FigmaSelect } from '../../../ui/FigmaSelect';
 import { IconButton, InspectorRow, Switch } from '../../../ui/primitives';
@@ -113,6 +114,10 @@ function BlockSettings({ block, shot, onChange }: {
     shot: Shot;
     onChange: (patch: Partial<AnimationBlock>) => void;
 }) {
+    const project = useProjectStore(state => state.project);
+    const artboard = getArtboardDimensions(project.aspectRatio);
+    const stageX = artboard.width;
+    const stageY = artboard.height;
     const settings = block.settings ?? {};
     const patchSettings = (patch: Partial<NonNullable<AnimationBlock['settings']>>) => onChange({ settings: { ...settings, ...patch } });
     const vec: Vec3 = typeof block.amount === 'number' ? { x: block.amount, y: 0, z: 0 } : block.amount;
@@ -120,7 +125,7 @@ function BlockSettings({ block, shot, onChange }: {
     const scalar = (label: string, unit: string, multiplier: number, min: number, max: number) => <ScrubInput label={label} value={amount * multiplier} min={min} max={max} step={multiplier === 1 ? .01 : 1} unit={unit} onChange={value => onChange({ amount: value / multiplier })}/>;
     const vector = (axes: ('x' | 'y' | 'z')[], rotation = false) => <AxisFields
         className="animate-pair"
-        fields={axes.map(axis => ({"key": axis, "label": axis.toUpperCase(), "value": rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? 1080 : 1920), "min": rotation ? -3600 : -10000, "max": rotation ? 3600 : 10000, "unit": rotation ? '°' : ' px', "onChange": value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? 1080 : 1920) } })}))}
+        fields={axes.map(axis => ({"key": axis, "label": axis.toUpperCase(), "value": rotation ? radToDeg(vec[axis]) : vec[axis] * (axis === 'y' ? stageY : stageX), "min": rotation ? -3600 : -10000, "max": rotation ? 3600 : 10000, "unit": rotation ? '°' : ' px', "onChange": value => onChange({ amount: { ...vec, [axis]: rotation ? degToRad(value) : value / (axis === 'y' ? stageY : stageX) } })}))}
     />;
     return <div className="animate-block-fields">
         {block.property === 'shimmer' ? <>
@@ -134,7 +139,7 @@ function BlockSettings({ block, shot, onChange }: {
                         : block.property === 'changeText' ? <Field label="Text"><textarea aria-label="Animation text" className="animate-text" rows={3} value={settings.text ?? ''} onChange={event => patchSettings({ text: event.target.value })}/></Field>
                             : block.property === 'morph' ? <p className="animate-note">Matches the target’s position, scale, and size.</p>
                                 : block.property === 'glow' ? <Field label="Glow"><div className="animate-pair"><ScrubInput label="Intensity" value={vec.x} min={-5} max={10} step={.1} onChange={x => onChange({ amount: { ...vec, x } })}/><ScrubInput label="Radius" value={vec.y * 100} min={-100} max={200} unit=" %" onChange={y => onChange({ amount: { ...vec, y: y / 100 } })}/></div></Field>
-                                    : <Field label={block.property === 'counter' ? 'Count by' : block.property === 'layerBlur' ? 'Blur' : block.property === 'wiggle' ? 'Distance' : 'Amount'}>{block.property === 'counter' ? scalar('Δ', '', 1, -1000000, 1000000) : block.property === 'layerBlur' ? scalar('Blur', ' px', 100, -100, 200) : block.property === 'wiggle' ? scalar('Offset', ' px', 1920, 0, 500) : block.property === 'cornerRadius' ? scalar('Radius', ' %', 100, 0, 200) : scalar('Amount', ' %', 100, -100, 1000)}</Field>}
+                                    : <Field label={block.property === 'counter' ? 'Count by' : block.property === 'layerBlur' ? 'Blur' : block.property === 'wiggle' ? 'Distance' : 'Amount'}>{block.property === 'counter' ? scalar('Δ', '', 1, -1000000, 1000000) : block.property === 'layerBlur' ? scalar('Blur', ' px', 100, -100, 200) : block.property === 'wiggle' ? scalar('Offset', ' px', stageX, 0, 500) : block.property === 'cornerRadius' ? scalar('Radius', ' %', 100, 0, 200) : scalar('Amount', ' %', 100, -100, 1000)}</Field>}
         <EasingField value={block.easing} onChange={easing => onChange({ easing })}/>
         <details className="animate-timing"><summary>Timing</summary><AnimationTimingFields
             className="animate-pair"

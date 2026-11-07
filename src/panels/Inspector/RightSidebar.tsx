@@ -21,12 +21,6 @@ import { LightInspector } from './sections/LightInspector';
 import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { ShotSettingsPanel } from './ShotSettingsPanel';
 
-
-
-
-
-
-
 interface RightSidebarProps {
     activeShot?: Shot;
     selectedLayer: Layer | undefined;
@@ -200,6 +194,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             mode={effectiveMainTab}
                             onChange={setMainTab}
                             ariaLabel="Object properties"
+                            animateLabel={(selectedLayer as any)?.kind === 'audio' ? 'automate' : undefined}
                         />
                     </div>
 
@@ -233,12 +228,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                             onOpenExportModal={onOpenExportModal}
                         />
                     ) : (
-
-                        <ProjectSettingsPanel
-                            onSwapImageClick={onSwapImageClick}
-                            onOpenShortcuts={onOpenShortcuts}
-                            onOpenExportModal={onOpenExportModal}
-                        />
+                        <ProjectSettingsPanel />
                     )}
                 </div>
             )}

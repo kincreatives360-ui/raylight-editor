@@ -16,18 +16,12 @@ interface ProjectSettingsPanelProps {
     backgroundOnly?: boolean;
     background?: Background;
     onBackgroundChange?: (background: Background) => void;
-    onSwapImageClick?: () => void;
-    onOpenShortcuts?: () => void;
-    onOpenExportModal?: () => void;
 }
 
 export const ProjectSettingsPanel: React.FC<ProjectSettingsPanelProps> = ({
     backgroundOnly = false,
     background,
     onBackgroundChange,
-    onSwapImageClick: _onSwapImageClick,
-    onOpenShortcuts: _onOpenShortcuts,
-    onOpenExportModal: _onOpenExportModal,
 }) => {
     const { project, updateProject } = useProjectStore();
     const fileInputRef = useRef<HTMLInputElement>(null);

@@ -49,7 +49,7 @@ export function LayerGeometrySections({ shot, layer, selectedLayerIds, aspectLoc
             <InspectorRow label="Position" stacked><div className="object-design-field-action">
                 <AxisFields
                     className="object-design-pair"
-                    fields={(['x', 'y'] as const).map((axis) => ({"key": axis, "label": axis.toUpperCase(), "value": Math.round(layer.position[axis] * (axis === 'x' ? 1920 : 1080)), "step": 1, "onChange": (value) => update((l) => ({ ...l, position: { ...l.position, [axis]: value / (axis === 'x' ? 1920 : 1080) } }))}))}
+                    fields={(['x', 'y'] as const).map((axis) => ({"key": axis, "label": axis.toUpperCase(), "value": Math.round(layer.position[axis] * (axis === 'x' ? stageW : stageH)), "step": 1, "onChange": (value) => update((l) => ({ ...l, position: { ...l.position, [axis]: value / (axis === 'x' ? stageW : stageH) } }))}))}
                 />
                 <IconButton label="Center Position (0, 0)" icon={<Crosshair />} onClick={() => update((l) => ({ ...l, position: { ...l.position, x: 0, y: 0 } }))} />
             </div></InspectorRow>

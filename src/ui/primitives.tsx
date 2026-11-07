@@ -434,6 +434,7 @@ export interface InspectorModeTabsProps {
     ariaLabel?: string;
     designTestId?: string;
     animateTestId?: string;
+    animateLabel?: string;
     fullWidth?: boolean;
     actions?: React.ReactNode;
     className?: string;
@@ -445,6 +446,7 @@ export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
     ariaLabel = 'Inspector mode',
     designTestId,
     animateTestId,
+    animateLabel,
     fullWidth = false,
     actions,
     className = 'flex items-center gap-1.5',
@@ -452,6 +454,7 @@ export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
     <div className={className} role="tablist" aria-label={ariaLabel}>
         {(['design', 'animate'] as const).map((tab) => {
             const isSelected = mode === tab;
+            const labelText = tab === 'animate' && animateLabel ? animateLabel : tab;
             return (
                 <button
                     key={tab}
@@ -485,7 +488,7 @@ export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
                             : 'text-[#8e8e93] hover:text-white'
                     }`}
                 >
-                    {tab}
+                    {labelText}
                 </button>
             );
         })}

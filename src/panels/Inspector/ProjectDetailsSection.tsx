@@ -58,6 +58,26 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
             className="space-y-1.5"
             labelTag="label"
             labelClassName="text-[11px] font-medium text-muted-foreground block"
+            label={<>Frame Rate</>}
+        >
+            <div className="relative">
+                <FigmaSelect
+                    value={String(project.fps ?? 30)}
+                    onChange={(e) => updateProject((p) => ({ ...p, fps: Number(e.target.value) }))}
+                    className="w-full h-8 px-3 pr-8 rounded-lg bg-surface border border-subtle text-[12px] text-foreground outline-none appearance-none cursor-pointer focus:border-brand-blue transition"
+                >
+                    <option value="24">24 fps (Cinema)</option>
+                    <option value="30">30 fps (Standard)</option>
+                    <option value="60">60 fps (Smooth)</option>
+                </FigmaSelect>
+            </div>
+        </InspectorRow>
+
+        <InspectorRow
+            unstyled
+            className="space-y-1.5"
+            labelTag="label"
+            labelClassName="text-[11px] font-medium text-muted-foreground block"
             label={<>Lens</>}
         >
             <ScrubInput
@@ -79,6 +99,34 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
                 }}
                 className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"
             />
+            <div className="flex items-center gap-1 pt-1 overflow-x-auto no-scrollbar">
+                {[24, 35, 50, 85, 135].map((focal) => {
+                    const active = (project.defaultCamera?.focalLength ?? 50) === focal;
+                    return (
+                        <button
+                            key={focal}
+                            type="button"
+                            onClick={() => {
+                                updateProject((p) => ({
+                                    ...p,
+                                    defaultCamera: {
+                                        position: p.defaultCamera?.position ?? { x: 0, y: 0, z: 2.65 },
+                                        rotation: p.defaultCamera?.rotation ?? { x: 0, y: 0, z: 0 },
+                                        focalLength: focal,
+                                    },
+                                }));
+                            }}
+                            className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition cursor-pointer ${
+                                active
+                                    ? 'bg-brand-blue text-white'
+                                    : 'bg-surface hover:bg-subtle text-muted-foreground hover:text-foreground border border-subtle'
+                            }`}
+                        >
+                            {focal}mm
+                        </button>
+                    );
+                })}
+            </div>
         </InspectorRow>
     </>
 );
