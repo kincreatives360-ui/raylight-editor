@@ -314,23 +314,35 @@ export function syncAudioPlayback(
         typeof gain.gain.setValueAtTime === 'function' &&
         typeof gain.gain.linearRampToValueAtTime === 'function'
       ) {
-        const fadeInSec = Math.max(0, (clip.fadeInMs ?? 0) / 1000);
-        const fadeOutSec = Math.max(0, (clip.fadeOutMs ?? 0) / 1000);
         const elapsedInClipSec = isFutureClip ? 0 : Math.max(0, (currentTimeMs - clipStart) / 1000);
+        let fadeInSec = Math.max(0, (clip.fadeInMs ?? 0) / 1000);
+        let fadeOutSec = Math.max(0, (clip.fadeOutMs ?? 0) / 1000);
+        const totalFadeSec = fadeInSec + fadeOutSec;
+        if (totalFadeSec > playDurationSec && totalFadeSec > 0) {
+          const scale = playDurationSec / totalFadeSec;
+          fadeInSec *= scale;
+          fadeOutSec *= scale;
+        }
+
+        const clipEndSec = startWhenSec + playDurationSec;
+        const rawFadeOutStartSec = clipEndSec - fadeOutSec;
 
         if (fadeInSec > 0 && elapsedInClipSec < fadeInSec) {
           const startGain = clip.volume * (elapsedInClipSec / fadeInSec);
           const remainingFadeInSec = Math.min(playDurationSec, fadeInSec - elapsedInClipSec);
           gain.gain.setValueAtTime(startGain, startWhenSec);
           gain.gain.linearRampToValueAtTime(clip.volume, startWhenSec + remainingFadeInSec);
-        } else {
+        } else if (fadeOutSec <= 0 || rawFadeOutStartSec > startWhenSec) {
           gain.gain.setValueAtTime(clip.volume, startWhenSec);
         }
 
         if (fadeOutSec > 0) {
-          const clipEndSec = startWhenSec + playDurationSec;
-          const fadeOutStartSec = Math.max(startWhenSec, clipEndSec - fadeOutSec);
-          gain.gain.setValueAtTime(clip.volume, fadeOutStartSec);
+          const fadeOutStartSec = Math.max(startWhenSec, rawFadeOutStartSec);
+          const fadeOutStartGain =
+            rawFadeOutStartSec < startWhenSec
+              ? clip.volume * (playDurationSec / fadeOutSec)
+              : clip.volume;
+          gain.gain.setValueAtTime(fadeOutStartGain, fadeOutStartSec);
           gain.gain.linearRampToValueAtTime(0, clipEndSec);
         }
       }

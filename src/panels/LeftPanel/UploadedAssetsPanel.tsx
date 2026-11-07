@@ -111,10 +111,15 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
                     }));
                     setInspectorTab('layer');
                     selectLayer(videoLayer.id);
+                    video.removeEventListener('error', onError);
+                    resolve();
+                };
+                const onError = () => {
+                    video.removeEventListener('loadedmetadata', onLoaded);
                     resolve();
                 };
                 video.addEventListener('loadedmetadata', onLoaded, { once: true });
-                video.addEventListener('error', onLoaded, { once: true });
+                video.addEventListener('error', onError, { once: true });
             });
             return;
         }
@@ -154,7 +159,11 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
         const files = Array.from(e.dataTransfer.files);
         if (files.length === 0) return;
         for (const file of files) {
-            await handleProcessFile(file);
+            try {
+                await handleProcessFile(file);
+            } catch {
+                // Continue processing subsequent files after a failure
+            }
         }
     };
 
@@ -291,7 +300,7 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
                 {filteredAssets.length === 0 && (
                     <div className="py-10 text-center text-xs text-disabled border border-dashed border-subtle rounded-xl p-4">
                         {assetList.length === 0
-                            ? 'No media yet. Upload an image, video, or audio file, or drag one here.'
+                            ? 'No media yet. Upload an image or video file, or drag one here.'
                             : 'No assets match your search.'}
                     </div>
                 )}

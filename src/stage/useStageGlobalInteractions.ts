@@ -59,9 +59,9 @@ export function useStageGlobalInteractions({
         const onKeyDown = (event: KeyboardEvent) => {
             const activeElement = document.activeElement as HTMLElement | null;
             if (isInteractiveElement(activeElement)) return;
+            if (event.defaultPrevented) return;
 
             if (event.code === 'Space') setIsSpaceHeld(true);
-            if (event.defaultPrevented) return;
             if (!event.metaKey && !event.ctrlKey && !event.shiftKey && (event.key === 'f' || event.key === 'F')) {
                 event.preventDefault();
                 frameSelectedLayersRef.current();

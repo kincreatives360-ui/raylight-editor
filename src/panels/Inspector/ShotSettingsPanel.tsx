@@ -65,6 +65,14 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                             updateShot(activeShot.id, (s) => ({
                                 ...s,
                                 durationMs: newDurationMs,
+                                ...(s.transition && s.transition.durationMs > newDurationMs
+                                    ? {
+                                          transition: {
+                                              ...s.transition,
+                                              durationMs: newDurationMs,
+                                          },
+                                      }
+                                    : {}),
                             }));
                         }}
                         className="h-8 px-3 rounded-lg bg-surface border border-subtle flex items-center justify-between text-[12px] text-foreground hover:border-brand-blue transition cursor-ew-resize"

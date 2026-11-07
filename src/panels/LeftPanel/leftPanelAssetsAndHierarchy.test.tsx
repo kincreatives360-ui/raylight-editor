@@ -6,8 +6,16 @@ import { useSelectionStore } from '../../store/useSelectionStore';
 import { UploadedAssetsPanel } from './UploadedAssetsPanel';
 import { FileTab } from './FileTab';
 import { LayerIcon } from './LayerIcon';
-import { DEFAULT_PROJECT } from '../../model/defaults';
-import type { AssetRecord, Layer } from '../../model/types';
+import { DEFAULT_PROJECT, createDefaultShot } from '../../model/defaults';
+import type { AssetRecord, Layer, Transitionish } from '../../model/types';
+
+const NONE_TRANSITION: Transitionish = {
+    type: 'none',
+    durationMs: 0,
+    delayMs: 0,
+    distance: 0,
+    easing: { kind: 'preset', name: 'linear' },
+};
 
 describe('Left Panel: Hierarchy & Asset Library', () => {
     beforeEach(() => {
@@ -16,7 +24,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
                 ...DEFAULT_PROJECT,
                 assets: {},
                 shots: [
-                    {
+                    createDefaultShot({
                         id: 'shot-1',
                         name: 'Intro Scene',
                         startMs: 0,
@@ -24,7 +32,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
                         layers: [],
                         groups: [],
                         cameraBlocks: [],
-                    },
+                    }),
                 ],
             },
             past: [],
@@ -34,7 +42,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
         });
         useSelectionStore.setState({
             selectedLayerIds: [],
-            activeShotId: 'shot-1',
+            selectedShotId: 'shot-1',
             inspectorTab: 'shot',
         });
     });
@@ -45,6 +53,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
             const mockAsset: AssetRecord = {
                 id: assetId,
                 name: 'hero-photo.png',
+                mimeType: 'image/png',
                 dataUrl: 'data:image/png;base64,mock',
                 width: 800,
                 height: 600,
@@ -83,8 +92,8 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
                                 scale: { x: 1, y: 1, z: 1 },
                                 opacity: 1,
                                 blendMode: 'normal',
-                                entrance: { type: 'none', durationMs: 0, easing: 'linear' },
-                                exit: { type: 'none', durationMs: 0, easing: 'linear' },
+                                entrance: { ...NONE_TRANSITION },
+                                exit: { ...NONE_TRANSITION },
                                 blocks: [],
                                 effects: {} as any,
                                 size: { width: 0.5, height: 0.5 },
@@ -105,7 +114,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
             const updated = useProjectStore.getState().project;
             expect(updated.assets[assetId]).toBeUndefined();
             expect(updated.shots[0].layers).toHaveLength(0);
-            expect(updated.background.kind).toBe('color');
+            expect(updated.background.kind).toBe('solid');
         });
     });
 
@@ -114,6 +123,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
             const asset1: AssetRecord = {
                 id: 'asset-1',
                 name: 'background-art.png',
+                mimeType: 'image/png',
                 dataUrl: 'data:image/png;base64,1',
                 width: 1920,
                 height: 1080,
@@ -140,7 +150,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
             const shot = useProjectStore.getState().project.shots[0];
             const html = renderToStaticMarkup(<UploadedAssetsPanel activeShot={shot} onUploadClick={() => {}} />);
 
-            expect(html).toContain('No media yet. Upload an image, video, or audio file, or drag one here.');
+            expect(html).toContain('No media yet. Upload an image or video file, or drag one here.');
         });
     });
 
@@ -155,11 +165,7 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
 
     describe('LayerIcon Rendering', () => {
         it('renders clean icons without redundant classes for video, image, and text', () => {
-            const videoLayer: Layer = {
-                id: 'l-vid',
-                name: 'clip.mp4',
-                kind: 'video',
-                assetId: 'a-vid',
+            const baseLayer = {
                 order: 0,
                 hidden: false,
                 locked: false,
@@ -169,17 +175,62 @@ describe('Left Panel: Hierarchy & Asset Library', () => {
                 rotation: { x: 0, y: 0, z: 0 },
                 scale: { x: 1, y: 1, z: 1 },
                 opacity: 1,
-                blendMode: 'normal',
-                entrance: { type: 'none', durationMs: 0, easing: 'linear' },
-                exit: { type: 'none', durationMs: 0, easing: 'linear' },
+                blendMode: 'normal' as const,
+                entrance: { ...NONE_TRANSITION },
+                exit: { ...NONE_TRANSITION },
                 blocks: [],
                 effects: {} as any,
+            };
+
+            const videoLayer: Layer = {
+                ...baseLayer,
+                id: 'l-vid',
+                name: 'clip.mp4',
+                kind: 'video',
+                assetId: 'a-vid',
                 size: { width: 0.5, height: 0.5 },
                 cornerRadius: 0,
             };
+            const imageLayer: Layer = {
+                ...baseLayer,
+                id: 'l-img',
+                name: 'photo.png',
+                kind: 'image',
+                assetId: 'a-img',
+                size: { width: 0.5, height: 0.5 },
+                cornerRadius: 0,
+            };
+            const textLayer: Layer = {
+                ...baseLayer,
+                id: 'l-txt',
+                name: 'Heading',
+                kind: 'text',
+                content: 'Hello',
+                maxWidth: 0.5,
+                font: {
+                    family: 'Inter',
+                    size: 48,
+                    weight: 600,
+                    color: '#ffffff',
+                    align: 'center',
+                    letterSpacing: 0,
+                },
+            };
 
-            const html = renderToStaticMarkup(<LayerIcon layer={videoLayer} isSelected={false} />);
-            expect(html).toContain('text-[#38bdf8]');
+            const videoUnselectedHtml = renderToStaticMarkup(<LayerIcon layer={videoLayer} isSelected={false} />);
+            const videoSelectedHtml = renderToStaticMarkup(<LayerIcon layer={videoLayer} isSelected={true} />);
+            expect(videoUnselectedHtml).toContain('w-3.5 h-3.5 shrink-0 text-[#38bdf8]');
+            expect(videoSelectedHtml).toBe(videoUnselectedHtml);
+
+            const imageUnselectedHtml = renderToStaticMarkup(<LayerIcon layer={imageLayer} isSelected={false} />);
+            const imageSelectedHtml = renderToStaticMarkup(<LayerIcon layer={imageLayer} isSelected={true} />);
+            expect(imageUnselectedHtml).toContain('text-[#0ea5e9]');
+            expect(imageSelectedHtml).toContain('text-[#38bdf8]');
+
+            const textUnselectedHtml = renderToStaticMarkup(<LayerIcon layer={textLayer} isSelected={false} />);
+            const textSelectedHtml = renderToStaticMarkup(<LayerIcon layer={textLayer} isSelected={true} />);
+            expect(textUnselectedHtml).toContain('text-[#ec4899]');
+            expect(textSelectedHtml).toContain('text-white');
         });
     });
 });

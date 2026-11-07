@@ -63,9 +63,12 @@ export const ProjectDetailsSection: React.FC<ProjectDetailsSectionProps> = ({ pr
             <div className="relative">
                 <FigmaSelect
                     value={String(project.fps ?? 30)}
-                    onChange={(e) => updateProject((p) => ({ ...p, fps: Number(e.target.value) }))}
+                    onChange={(e) => updateProject((p) => ({ ...p, fps: Number(e.target.value) as Project['fps'] }))}
                     className="w-full h-8 px-3 pr-8 rounded-lg bg-surface border border-subtle text-[12px] text-foreground outline-none appearance-none cursor-pointer focus:border-brand-blue transition"
                 >
+                    {project.fps != null && ![24, 30, 60].includes(project.fps) && (
+                        <option value={String(project.fps)}>{project.fps} fps</option>
+                    )}
                     <option value="24">24 fps (Cinema)</option>
                     <option value="30">30 fps (Standard)</option>
                     <option value="60">60 fps (Smooth)</option>

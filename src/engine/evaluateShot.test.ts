@@ -507,7 +507,7 @@ describe('evaluateProjectAtTime', () => {
     // Plus group center (50, 50) => final position should be (50, 150)
     expect(evalChild.position.x).toBeCloseTo(50, 2);
     expect(evalChild.position.y).toBeCloseTo(150, 2);
-    // Layer rotation compounds with group rotation
-    expect(evalChild.rotation.z).toBeCloseTo(90, 2);
+    // Layer rotation compounds with group rotation in radians
+    expect(evalChild.rotation.z).toBeCloseTo(Math.PI / 2, 4);
   });
 });

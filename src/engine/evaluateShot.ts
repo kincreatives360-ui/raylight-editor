@@ -204,7 +204,8 @@ export function isLayerEffectivelyLocked(
 export function computeGroupTransform(
     groupId: string | undefined,
     groups: Group[] | Map<string, Group> | undefined,
-    shotLocalTimeMs: number
+    shotLocalTimeMs: number,
+    childPosition: Vec3 = { x: 0, y: 0, z: 0 }
 ): {
     position: Vec3;
     rotation: Vec3;
@@ -213,7 +214,7 @@ export function computeGroupTransform(
 } {
     if (!groupId || !groups) {
         return {
-            position: { x: 0, y: 0, z: 0 },
+            position: { x: childPosition.x, y: childPosition.y, z: childPosition.z },
             rotation: { x: 0, y: 0, z: 0 },
             scale: { x: 1, y: 1, z: 1 },
             opacity: 1,
@@ -221,7 +222,7 @@ export function computeGroupTransform(
     }
     const groupById = groups instanceof Map ? groups : new Map(groups.map((g) => [g.id, g]));
     let currentId: string | undefined = groupId;
-    let posX = 0, posY = 0, posZ = 0;
+    let posX = childPosition.x, posY = childPosition.y, posZ = childPosition.z;
     let rotX = 0, rotY = 0, rotZ = 0;
     let scaleX = 1, scaleY = 1, scaleZ = 1;
     let opacity = 1;
@@ -271,9 +272,22 @@ export function computeGroupTransform(
             }
         }
 
-        posX += gPos.x;
-        posY += gPos.y;
-        posZ += gPos.z;
+        const scaledX = posX * gScale.x;
+        const scaledY = posY * gScale.y;
+        const scaledZ = posZ * gScale.z;
+        let rotPosX = scaledX;
+        let rotPosY = scaledY;
+        if (Math.abs(gRot.z) > 1e-6) {
+            const radZ = (gRot.z * Math.PI) / 180;
+            const cosZ = Math.cos(radZ);
+            const sinZ = Math.sin(radZ);
+            rotPosX = scaledX * cosZ - scaledY * sinZ;
+            rotPosY = scaledX * sinZ + scaledY * cosZ;
+        }
+
+        posX = rotPosX + gPos.x;
+        posY = rotPosY + gPos.y;
+        posZ = scaledZ + gPos.z;
         rotX += gRot.x;
         rotY += gRot.y;
         rotZ += gRot.z;
@@ -441,30 +455,19 @@ export function evaluateProjectAtTime(
             isHidden ? { ...layer, hidden: true } : layer,
             shotLocalTimeMs
         );
-        const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs);
-        const scaledX = rawEvalLayer.position.x * groupTransform.scale.x;
-        const scaledY = rawEvalLayer.position.y * groupTransform.scale.y;
-        let rotPosX = scaledX;
-        let rotPosY = scaledY;
-        if (Math.abs(groupTransform.rotation.z) > 1e-6) {
-            const radZ = (groupTransform.rotation.z * Math.PI) / 180;
-            const cosZ = Math.cos(radZ);
-            const sinZ = Math.sin(radZ);
-            rotPosX = scaledX * cosZ - scaledY * sinZ;
-            rotPosY = scaledX * sinZ + scaledY * cosZ;
-        }
+        const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs, rawEvalLayer.position);
 
         const evalLayer = {
             ...rawEvalLayer,
             position: {
-                x: Number((rotPosX + groupTransform.position.x).toFixed(4)),
-                y: Number((rotPosY + groupTransform.position.y).toFixed(4)),
-                z: Number((rawEvalLayer.position.z + groupTransform.position.z).toFixed(4)),
+                x: Number(groupTransform.position.x.toFixed(4)),
+                y: Number(groupTransform.position.y.toFixed(4)),
+                z: Number(groupTransform.position.z.toFixed(4)),
             },
             rotation: {
-                x: rawEvalLayer.rotation.x + groupTransform.rotation.x,
-                y: rawEvalLayer.rotation.y + groupTransform.rotation.y,
-                z: rawEvalLayer.rotation.z + groupTransform.rotation.z,
+                x: rawEvalLayer.rotation.x + (groupTransform.rotation.x * Math.PI) / 180,
+                y: rawEvalLayer.rotation.y + (groupTransform.rotation.y * Math.PI) / 180,
+                z: rawEvalLayer.rotation.z + (groupTransform.rotation.z * Math.PI) / 180,
             },
             scale: {
                 x: rawEvalLayer.scale.x * groupTransform.scale.x,
@@ -496,21 +499,10 @@ export function evaluateProjectAtTime(
                     totalBlurPx: Number(manualBlurPx.toFixed(2)),
                 };
             }
-            const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
-            const prevScaledX = rawPrev.position.x * prevGroupTransform.scale.x;
-            const prevScaledY = rawPrev.position.y * prevGroupTransform.scale.y;
-            let prevRotPosX = prevScaledX;
-            let prevRotPosY = prevScaledY;
-            if (Math.abs(prevGroupTransform.rotation.z) > 1e-6) {
-                const pRadZ = (prevGroupTransform.rotation.z * Math.PI) / 180;
-                const pCosZ = Math.cos(pRadZ);
-                const pSinZ = Math.sin(pRadZ);
-                prevRotPosX = prevScaledX * pCosZ - prevScaledY * pSinZ;
-                prevRotPosY = prevScaledX * pSinZ + prevScaledY * pCosZ;
-            }
-            const prevX = prevRotPosX + prevGroupTransform.position.x;
-            const prevY = prevRotPosY + prevGroupTransform.position.y;
-            const prevZ = rawPrev.position.z + prevGroupTransform.position.z;
+            const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime, rawPrev.position);
+            const prevX = prevGroupTransform.position.x;
+            const prevY = prevGroupTransform.position.y;
+            const prevZ = prevGroupTransform.position.z;
             const prevRotZ = rawPrev.rotation.z + (prevGroupTransform.rotation.z * Math.PI) / 180;
             const curRotZ = evalLayer.rotation.z;
             const prevScaleX = rawPrev.scale.x * prevGroupTransform.scale.x;

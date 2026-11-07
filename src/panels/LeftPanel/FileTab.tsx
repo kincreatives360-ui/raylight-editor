@@ -180,6 +180,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
             childLayers.length > 0 &&
             childLayers.every((l) => selectedLayerSet.has(l.id));
         const isEditing = editingId === group.id;
+        const isGroupExpanded = !group.collapsed || Boolean(normalizedSearch);
 
         return (
             <div
@@ -192,7 +193,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                     role="treeitem"
                     tabIndex={isGroupSelected ? 0 : -1}
                     aria-selected={isGroupSelected}
-                    aria-expanded={!group.collapsed}
+                    aria-expanded={isGroupExpanded}
                     aria-label={`${group.name} group`}
                     style={{ paddingLeft: `${8 + indentLevel * 12}px` }}
                     onClick={(e) => {
@@ -250,12 +251,12 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                         <IconButton
                             unstyled
                             tooltip={false}
-                            label={group.collapsed ? `Expand group ${group.name}` : `Collapse group ${group.name}`}
+                            label={isGroupExpanded ? `Collapse group ${group.name}` : `Expand group ${group.name}`}
                             icon={<>
-                                {group.collapsed ? (
-                                    <ChevronRight className="w-3 h-3 opacity-70" />
-                                ) : (
+                                {isGroupExpanded ? (
                                     <ChevronDown className="w-3 h-3 opacity-70" />
+                                ) : (
+                                    <ChevronRight className="w-3 h-3 opacity-70" />
                                 )}
                             </>}
                             onClick={(e) => {
@@ -285,7 +286,7 @@ export const FileTab: React.FC<FileTabProps> = ({ activeTab, activeShot, searchQ
                     </div>
                 </div>
 
-                {(!group.collapsed || Boolean(normalizedSearch)) && (
+                {isGroupExpanded && (
                     <div>
                         {childLayers.map((lyr) =>
                             renderLayerRow(

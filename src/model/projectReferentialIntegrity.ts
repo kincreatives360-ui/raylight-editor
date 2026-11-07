@@ -123,7 +123,13 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
       if (origId && origId !== uniqueId) lightSourceRemap.set(origId, uniqueId);
       return { ...src, id: uniqueId };
     });
-    const validLightSourceIds = new Set(repairedLightSources.map((s) => s.id));
+    const validLightSourceIds = new Set([
+      'sun-key',
+      'key',
+      'sun',
+      'room',
+      ...repairedLightSources.map((s) => s.id),
+    ]);
 
     const lightBlocks = (shot.lightBlocks || []).map((lb) => {
       let targetLightId = lb.targetLightId ? lightSourceRemap.get(lb.targetLightId) ?? lb.targetLightId : undefined;

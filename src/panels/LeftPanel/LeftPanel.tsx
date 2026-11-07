@@ -148,6 +148,12 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
         });
     }, [project.assets, updateProject]);
 
+    const activateAssetsTab = () => {
+        setActiveTab('assets');
+        setSearchOpen(false);
+        setSearchQuery('');
+    };
+
     return (
         <aside
             id="raylight-left-panel"
@@ -211,17 +217,19 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                             <Download className="w-3.5 h-3.5 text-brand-blue" />
                             <span>Export Project (.raylight.json)</span>
                         </MenuItem>
-                        <MenuItem
-                            unstyled
-                            onClick={() => {
-                                onImportProjectClick?.();
-                                setProjectMenuOpen(false);
-                            }}
-                            className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-muted-foreground hover:bg-subtle cursor-pointer"
-                        >
-                            <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
-                            <span>Import Project File...</span>
-                        </MenuItem>
+                        {onImportProjectClick && (
+                            <MenuItem
+                                unstyled
+                                onClick={() => {
+                                    onImportProjectClick();
+                                    setProjectMenuOpen(false);
+                                }}
+                                className="w-full px-2.5 py-1.5 rounded-lg flex items-center gap-2 text-left text-muted-foreground hover:bg-subtle cursor-pointer"
+                            >
+                                <FolderOpen className="w-3.5 h-3.5 text-amber-400" />
+                                <span>Import Project File...</span>
+                            </MenuItem>
+                        )}
                         <div className="my-1 border-t border-subtle" />
                         <MenuItem
                             unstyled
@@ -384,7 +392,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         onKeyDown={(e) => {
                             if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                                 e.preventDefault();
-                                setActiveTab('assets');
+                                activateAssetsTab();
                                 document.getElementById('left-panel-tab-assets')?.focus();
                             }
                         }}
@@ -401,11 +409,7 @@ export const LeftPanel: React.FC<LeftPanelProps> = React.memo(({
                         aria-controls="left-panel-panel-assets"
                         aria-selected={activeTab === 'assets'}
                         tabIndex={activeTab === 'assets' ? 0 : -1}
-                        onClick={() => {
-                            setActiveTab('assets');
-                            setSearchOpen(false);
-                            setSearchQuery('');
-                        }}
+                        onClick={activateAssetsTab}
                         onKeyDown={(e) => {
                             if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
                                 e.preventDefault();

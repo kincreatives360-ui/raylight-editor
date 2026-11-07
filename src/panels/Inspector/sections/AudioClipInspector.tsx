@@ -114,7 +114,7 @@ export const AudioClipInspector: React.FC<AudioClipInspectorProps> = ({
                                     : 'bg-surface border-subtle text-muted-foreground hover:text-foreground'
                             }`}
                         >
-                            {clip.muted ? 'Muted (M)' : 'Mute (M)'}
+                            {clip.muted ? 'Muted' : 'Mute'}
                         </button>
                         <button
                             type="button"
@@ -126,7 +126,7 @@ export const AudioClipInspector: React.FC<AudioClipInspectorProps> = ({
                                     : 'bg-surface border-subtle text-muted-foreground hover:text-foreground'
                             }`}
                         >
-                            {clip.solo ? 'Soloed (S)' : 'Solo (S)'}
+                            {clip.solo ? 'Soloed' : 'Solo'}
                         </button>
                     </div>
                 </div>

@@ -88,6 +88,16 @@ export const createShotActions: ProjectStoreActionCreator<'addShot' | 'duplicate
 
     splitAtPlayhead: (globalTimeMs) => {
         const state = get();
+        try {
+            const selectedAudioClipId = useSelectionStore.getState().selectedAudioClipId;
+            if (selectedAudioClipId) {
+                const res = get().splitAudioClipAtPlayhead(selectedAudioClipId, globalTimeMs);
+                if (res) return true;
+            }
+        } catch {
+            // Ignore in headless tests
+        }
+
         // Priority 1: Split video shot under the playhead if present
         const activeShot = state.project.shots.find(
             (s) => globalTimeMs >= s.startMs + 300 && globalTimeMs <= s.startMs + s.durationMs - 300

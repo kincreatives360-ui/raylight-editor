@@ -1,15 +1,17 @@
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
 import { appendHistoryState } from './projectStoreConstants';
+import { repairProjectReferentialIntegrity } from '../model/projectReferentialIntegrity';
 
 export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'updateProject' | 'updateShot' | 'updateLayer' | 'deleteAsset'> = (set, get) => ({
     setHydrated: (status) => set({ isHydrating: !status }),
 
     updateProject: (updater, options) =>
         set((state) => {
-            const isTransient = Boolean(options?.skipHistory || state.dragSnapshot !== null);
+            const isDragging = state.dragSnapshot !== null;
+            const isTransient = Boolean(options?.skipHistory || isDragging);
             const updated = {
                 ...updater(state.project),
-                updatedAt: isTransient ? state.project.updatedAt : new Date().toISOString(),
+                updatedAt: isDragging ? state.project.updatedAt : new Date().toISOString(),
             };
             const nextRevision = state.hydrationRevision + 1;
             // Hot internal mutations retain validation state.
@@ -66,14 +68,14 @@ export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'up
             }));
             let nextBg = proj.background;
             if (nextBg.kind === 'image' && nextBg.assetId === assetId) {
-                nextBg = { kind: 'color', color: '#000000' };
+                nextBg = { kind: 'solid', color: nextBg.color ?? '#000000' };
             }
-            return {
+            return repairProjectReferentialIntegrity({
                 ...proj,
                 assets: nextAssets,
                 shots: nextShots,
                 background: nextBg,
-            };
+            });
         });
     },
 });

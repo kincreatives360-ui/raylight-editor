@@ -164,7 +164,8 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     const shot = projectStore.addShot();
     const layer = projectStore.addLayerToShot(shot.id, 'shape');
 
-    useSelectionStore.getState().selectLayer(layer.id, shot.id);
+    useSelectionStore.getState().selectShot(shot.id);
+    useSelectionStore.getState().selectLayer(layer.id);
     expect(useSelectionStore.getState().selectedLayerIds).toEqual([layer.id]);
 
     // Now undo the layer addition
@@ -183,7 +184,8 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     useProjectStore.getState().addShot();
     const shot = useProjectStore.getState().project.shots[0];
     const layer = useProjectStore.getState().addLayerToShot(shot.id, 'text');
-    useSelectionStore.getState().selectLayer(layer.id, shot.id);
+    useSelectionStore.getState().selectShot(shot.id);
+    useSelectionStore.getState().selectLayer(layer.id);
     usePlayheadStore.getState().setCurrentTimeMs(2500);
 
     expect(useProjectStore.getState().past.length).toBeGreaterThan(0);
@@ -205,15 +207,23 @@ describe('Project Lifecycle & Shot Management Store Methods', () => {
     expect(useSelectionStore.getState().selectedShotId).toBe(state.project.shots[0].id);
   });
 
-  it('updateProject preserves updatedAt when skipHistory is true', () => {
+  it('updateProject refreshes updatedAt for one-shot skipHistory updates and stamps once on commitDragTransaction', () => {
     const store = useProjectStore.getState();
-    const initialUpdatedAt = store.project.updatedAt;
-
-    // Fast transient update (e.g. dragging / scrubbing)
-    store.updateProject((p) => ({ ...p, name: 'Transient Change' }), { skipHistory: true });
-
-    expect(useProjectStore.getState().project.name).toBe('Transient Change');
-    expect(useProjectStore.getState().project.updatedAt).toBe(initialUpdatedAt);
+    store.updateProject((p) => ({ ...p, updatedAt: '2020-01-01T00:00:00.000Z' }), { skipHistory: true });
+    // One-shot skipHistory outside drag refreshes updatedAt without adding to history
+    const oneShotUpdatedAt = useProjectStore.getState().project.updatedAt;
+    expect(oneShotUpdatedAt).not.toBe('2020-01-01T00:00:00.000Z');
     expect(useProjectStore.getState().past.length).toBe(0);
+
+    // Drag transaction preserves updatedAt during drag frames and stamps once on commit
+    store.beginDragTransaction();
+    const dragStartUpdatedAt = useProjectStore.getState().project.updatedAt;
+    store.updateProject((p) => ({ ...p, name: 'Transient Change' }), { skipHistory: true });
+    expect(useProjectStore.getState().project.name).toBe('Transient Change');
+    expect(useProjectStore.getState().project.updatedAt).toBe(dragStartUpdatedAt);
+
+    store.commitDragTransaction();
+    expect(useProjectStore.getState().past.length).toBe(1);
+    expect(useProjectStore.getState().project.updatedAt.length).toBeGreaterThan(0);
   });
 });

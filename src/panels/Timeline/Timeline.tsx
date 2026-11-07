@@ -311,8 +311,12 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
             startMs,
             durationMs,
             easing: { kind: 'preset', name: 'ease-out' },
-            fromValue: 0.5,
-            toValue: 1.0,
+            fromX: activeShot.light?.position?.x ?? -0.28,
+            fromY: activeShot.light?.position?.y ?? 0.36,
+            toX: activeShot.light?.position?.x ?? -0.28,
+            toY: activeShot.light?.position?.y ?? 0.36,
+            fromIntensity: 0.5,
+            toIntensity: 1.0,
             label: 'Intensity',
         };
         updateShot(activeShot.id, (s) => ({
@@ -325,7 +329,7 @@ export const Timeline: React.FC<TimelineProps> = React.memo(({
     return (
         <section
             id="raylight-timeline"
-            style={{ height: `${timelineHeightPx}px` }}
+            style={{ height: `${timelineHeightPx + (mixerOpen ? mixerHeightPx : 0)}px` }}
             className="raylight-timeline border-t border-subtle bg-app flex flex-col shrink-0 select-none relative"
         >
             {/* TOP VERTICAL RESIZE SPLITTER HANDLE (Drag up for more layer room, down to compact) */}

@@ -19,11 +19,16 @@ export const createHistoryActions: ProjectStoreActionCreator<'beginDragTransacti
             if (state.dragSnapshot === state.project) {
                 return { dragSnapshot: null };
             }
+            const committedProject = {
+                ...state.project,
+                updatedAt: new Date().toISOString(),
+            };
             return {
+                project: committedProject,
                 past: appendHistoryState(state.past, state.dragSnapshot),
                 future: [],
                 dragSnapshot: null,
-                validation: validateProject(state.project),
+                validation: validateProject(committedProject),
             };
         }),
 
