@@ -10,6 +10,7 @@ import {
 import type { Easing } from '../model/types';
 import { EasingPopover } from '../panels/Timeline/EasingPopover';
 import { FigmaSelect } from './FigmaSelect';
+import { NativeInspectorDisclosure } from './InspectorDisclosure';
 import { IconButton } from './primitives';
 import { ScrubInput } from './ScrubInput';
 
@@ -201,11 +202,11 @@ export const EasingControl: React.FC<EasingControlProps> = ({
       )}
 
       {showInlineTuning && value.kind === 'bezier' && (
-        <details className="rounded-[8px] bg-[#191919] px-2.5 py-2 text-[11px] text-[#a1a1aa]">
-          <summary className="cursor-pointer select-none">
-            Curve ({value.x1.toFixed(2)}, {value.y1.toFixed(2)}, {value.x2.toFixed(2)},{' '}
-            {value.y2.toFixed(2)})
-          </summary>
+        <NativeInspectorDisclosure
+          className="rounded-[8px] bg-muted/50 border border-border/50 px-2.5 py-2 text-[11px] text-muted-foreground"
+          summary={`Curve (${value.x1.toFixed(2)}, ${value.y1.toFixed(2)}, ${value.x2.toFixed(2)}, ${value.y2.toFixed(2)})`}
+          summaryProps={{ className: 'cursor-pointer select-none font-medium text-foreground hover:text-primary transition-colors' }}
+        >
           <div className="grid grid-cols-2 gap-1.5 pt-2">
             <ScrubInput
               label="X1"
@@ -276,7 +277,7 @@ export const EasingControl: React.FC<EasingControlProps> = ({
               }
             />
           </div>
-        </details>
+        </NativeInspectorDisclosure>
       )}
     </div>
   );

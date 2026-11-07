@@ -78,49 +78,37 @@ export const DisplaySettingsMenu: React.FC<DisplaySettingsMenuProps> = ({
           ref={surfaceRef}
           className={`absolute top-full mt-1.5 ${
             align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'
-          } w-48 rounded-xl bg-surface/95 backdrop-blur-xl border border-subtle shadow-2xl p-1 text-xs z-50`}
+          } w-48 rounded-xl bg-popover/95 backdrop-blur-xl border border-border shadow-2xl p-1 text-xs z-50`}
         >
-          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div data-slot="dropdown-menu-label" className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Panels
           </div>
           <MenuItem
-            unstyled
             onClick={toggleLeftPanel}
-            className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left text-foreground hover:bg-subtle cursor-pointer transition-colors"
-          >
-            <span>Show layers</span>
-            {effectiveLeftOpen && <Check className="w-3.5 h-3.5 text-brand-blue" />}
-          </MenuItem>
+            label="Show layers"
+            rightSlot={effectiveLeftOpen ? <Check className="w-3.5 h-3.5 text-primary" /> : null}
+          />
           <MenuItem
-            unstyled
             onClick={toggleRightSidebar}
-            className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left text-foreground hover:bg-subtle cursor-pointer transition-colors"
-          >
-            <span>Show sidebar</span>
-            {effectiveRightOpen && <Check className="w-3.5 h-3.5 text-brand-blue" />}
-          </MenuItem>
+            label="Show sidebar"
+            rightSlot={effectiveRightOpen ? <Check className="w-3.5 h-3.5 text-primary" /> : null}
+          />
           <MenuItem
-            unstyled
             onClick={toggleTimeline}
-            className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left text-foreground hover:bg-subtle cursor-pointer transition-colors"
-          >
-            <span>Show timeline</span>
-            {effectiveTimelineOpen && <Check className="w-3.5 h-3.5 text-brand-blue" />}
-          </MenuItem>
+            label="Show timeline"
+            rightSlot={effectiveTimelineOpen ? <Check className="w-3.5 h-3.5 text-primary" /> : null}
+          />
 
-          <div className="my-1 border-t border-subtle" />
+          <div data-slot="dropdown-menu-separator" className="my-1 border-t border-border" />
 
-          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
+          <div data-slot="dropdown-menu-label" className="px-2.5 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
             Guides
           </div>
           <MenuItem
-            unstyled
             onClick={onToggleSafeArea}
-            className="w-full px-2.5 py-1.5 rounded-lg flex items-center justify-between text-left text-foreground hover:bg-subtle cursor-pointer transition-colors"
-          >
-            <span>Safe zones (9:16)</span>
-            {showSafeArea && <Check className="w-3.5 h-3.5 text-brand-blue" />}
-          </MenuItem>
+            label="Safe zones (9:16)"
+            rightSlot={showSafeArea ? <Check className="w-3.5 h-3.5 text-primary" /> : null}
+          />
         </MenuSurface>
       )}
     </div>

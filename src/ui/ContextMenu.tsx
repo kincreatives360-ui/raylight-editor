@@ -86,14 +86,15 @@ export function ContextMenu({
                 top: `${clampedY}px`,
                 width: `${width}px`,
             }}
-            className={`fixed z-50 bg-[oklch(20%_0_0/95%)] backdrop-blur-xl border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] rounded-xl p-1 text-xs text-[#d4d4d8] flex flex-col gap-0.5 select-none ${className}`}
+            className={`fixed z-50 bg-popover/95 backdrop-blur-xl border border-border shadow-[0_16px_36px_rgba(0,0,0,0.65),inset_0_1px_0_rgba(255,255,255,0.08)] rounded-xl p-1 text-xs text-popover-foreground flex flex-col gap-0.5 select-none max-h-[calc(100vh-16px)] overflow-y-auto ${className}`}
         >
             {items.map((item, idx) => {
                 if (item.type === 'divider') {
                     return (
                         <div
                             key={item.id ?? `div-${idx}`}
-                            className="my-1 border-t border-white/10"
+                            data-slot="dropdown-menu-separator"
+                            className="my-1 border-t border-border"
                         />
                     );
                 }
@@ -102,7 +103,8 @@ export function ContextMenu({
                     return (
                         <div
                             key={item.id ?? `hdr-${idx}`}
-                            className="px-2.5 py-1 text-[11px] font-mono text-gray-400 uppercase tracking-wider truncate border-b border-white/10 mb-0.5"
+                            data-slot="dropdown-menu-label"
+                            className="px-2.5 py-1 text-[11px] font-mono text-muted-foreground uppercase tracking-wider truncate border-b border-border mb-0.5"
                         >
                             {item.label}
                         </div>
@@ -122,8 +124,16 @@ export function ContextMenu({
                         }}
                     >
                         <MenuItem
-                            unstyled
                             disabled={item.disabled}
+                            danger={item.danger}
+                            icon={item.icon}
+                            label={item.label}
+                            shortcut={!hasSubmenu ? item.shortcut : undefined}
+                            rightSlot={
+                                hasSubmenu ? (
+                                    <ChevronRight className="w-3 h-3 text-muted-foreground ml-auto pl-1" />
+                                ) : undefined
+                            }
                             onClick={() => {
                                 if (item.disabled) return;
                                 if (hasSubmenu) {
@@ -133,31 +143,6 @@ export function ContextMenu({
                                 item.onClick?.();
                                 onClose();
                             }}
-                            className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition text-left cursor-pointer group ${
-                                item.disabled
-                                    ? 'opacity-40 cursor-not-allowed text-gray-500'
-                                    : item.danger
-                                    ? 'hover:bg-rose-500/20 text-rose-300 hover:text-rose-200'
-                                    : 'hover:bg-white/10 text-gray-300 hover:text-white'
-                            }`}
-                            icon={item.icon}
-                            iconClassName={`w-3.5 h-3.5 ${
-                                item.disabled
-                                    ? 'text-gray-500'
-                                    : item.danger
-                                    ? 'text-rose-400'
-                                    : 'text-gray-400 group-hover:text-sky-300'
-                            }`}
-                            contentClassName="flex items-center gap-2 truncate"
-                            label={item.label}
-                            shortcut={
-                                hasSubmenu ? (
-                                    <ChevronRight className="w-3 h-3 text-gray-500 group-hover:text-gray-300" />
-                                ) : (
-                                    item.shortcut
-                                )
-                            }
-                            shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300 ml-auto pl-2"
                         />
 
                         {/* Nested Submenu */}
@@ -168,29 +153,21 @@ export function ContextMenu({
                                     top: '0px',
                                     width: '180px',
                                 }}
-                                className="absolute z-50 bg-[oklch(20%_0_0/98%)] backdrop-blur-xl border border-white/12 shadow-[0_16px_36px_rgba(0,0,0,0.65)] rounded-xl p-1 text-xs text-[#d4d4d8] flex flex-col gap-0.5 select-none"
+                                className="absolute z-50 bg-popover/98 backdrop-blur-xl border border-border shadow-[0_16px_36px_rgba(0,0,0,0.65)] rounded-xl p-1 text-xs text-popover-foreground flex flex-col gap-0.5 select-none"
                             >
                                 {item.children.map((sub) => (
                                     <MenuItem
                                         key={sub.id}
-                                        unstyled
                                         disabled={sub.disabled}
+                                        danger={sub.danger}
+                                        icon={sub.icon}
+                                        label={sub.label}
+                                        shortcut={sub.shortcut}
                                         onClick={() => {
                                             if (sub.disabled) return;
                                             sub.onClick?.();
                                             onClose();
                                         }}
-                                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg transition text-left cursor-pointer group ${
-                                            sub.disabled
-                                                ? 'opacity-40 cursor-not-allowed text-gray-500'
-                                                : 'hover:bg-white/10 text-gray-300 hover:text-white'
-                                        }`}
-                                        icon={sub.icon}
-                                        iconClassName="w-3.5 h-3.5 text-gray-400 group-hover:text-sky-300"
-                                        contentClassName="flex items-center gap-2 truncate"
-                                        label={sub.label}
-                                        shortcut={sub.shortcut}
-                                        shortcutClassName="text-[11px] font-mono text-gray-500 group-hover:text-gray-300 ml-auto pl-2"
                                     />
                                 ))}
                             </MenuSurface>

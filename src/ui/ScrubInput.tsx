@@ -337,11 +337,13 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
     const labelString = typeof label === 'string' ? label : undefined;
     const hasAccessibleName = Boolean(ariaLabel ?? labelString);
     const labelId = !hasAccessibleName ? generatedLabelId : undefined;
+    const dataSlot = unit === '%' ? 'scrub-percent' : 'scrub-number';
 
     return (
         <div
             ref={containerRef}
             role="spinbutton"
+            data-slot={dataSlot}
             tabIndex={isEditing ? -1 : 0}
             aria-label={ariaLabel ?? labelString}
             aria-labelledby={labelId}
@@ -361,11 +363,11 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
             style={{ touchAction: 'none' }}
             className={`h-7 px-2.5 rounded-md ${
                 isScrubbing
-                    ? 'bg-[var(--bg-muted)] border border-[var(--border-focus)] ring-1 ring-[var(--border-focus)]/40 shadow-sm'
-                    : 'bg-[var(--bg-subtle,#1c1c1f)] hover:bg-[var(--bg-muted,#242428)] border border-[var(--border-subtle,rgba(255,255,255,0.07))]'
-            } focus-visible:outline-none focus-visible:border-[var(--border-focus,#0088ff)] focus-visible:ring-1 focus-visible:ring-[var(--border-focus,#0088ff)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
+                    ? 'bg-[var(--bg-muted)] border border-[var(--primary)] ring-1 ring-[var(--primary)]/40 shadow-sm'
+                    : 'bg-[var(--bg-subtle)] hover:bg-[var(--bg-muted)] border border-[var(--border-subtle)]'
+            } focus-visible:outline-none focus-visible:border-[var(--primary)] focus-visible:ring-1 focus-visible:ring-[var(--primary)] flex items-center gap-2 cursor-ew-resize select-none transition-colors duration-100 ${className || ''}`}
         >
-            <span id={labelId} className="text-[11px] text-[var(--text-muted,#a1a1aa)] font-medium tracking-tight shrink-0 select-none">
+            <span id={labelId} className="text-[11px] text-[var(--text-muted)] font-medium tracking-tight shrink-0 select-none">
                 {label}
             </span>
 
@@ -389,10 +391,10 @@ export const ScrubInput: React.FC<ScrubInputProps> = ({
                             cancelTextInput();
                         }
                     }}
-                    className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] outline-none tracking-tight caret-[var(--accent-primary,#0088ff)]"
+                    className="w-full bg-transparent text-[11px] font-mono tabular-nums text-[var(--text-primary)] outline-none tracking-tight caret-[var(--primary)]"
                 />
             ) : (
-                <span className="text-[11px] font-mono tabular-nums text-[var(--text-primary,#f4f4f5)] truncate tracking-tight">
+                <span className="text-[11px] font-mono tabular-nums text-[var(--text-primary)] truncate tracking-tight">
                     {safeValue.toFixed(effectiveDecimals)}
                     {unit}
                 </span>

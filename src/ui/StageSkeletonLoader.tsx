@@ -21,7 +21,7 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
   }, [delayMs]);
 
   if (!shouldRender) {
-    return <div className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />;
+    return <div data-slot="skeleton" className="flex-1 bg-[var(--canvas-workspace,#080a10)]" />;
   }
 
   // Sizing: One dimension is relative to the workspace container, and the other is derived via aspectRatio.
@@ -54,21 +54,23 @@ export const StageSkeletonLoader: React.FC<StageSkeletonLoaderProps> = ({
   return (
     <div
       role="progressbar"
+      data-slot="skeleton"
       aria-label="Loading Stage Viewport"
       className="flex-1 w-full h-full bg-[var(--canvas-workspace,#080a10)] flex flex-col items-center justify-center relative overflow-hidden select-none"
     >
       {/* Stage Artboard Skeleton */}
       <div
+        data-slot="skeleton"
         style={aspectStyle}
-        className="rounded-lg border border-white/[0.08] bg-[#121217]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse motion-reduce:animate-none"
+        className="rounded-lg border border-border/40 bg-[var(--skeleton-base)]/60 shadow-2xl relative overflow-hidden flex flex-col items-center justify-center animate-pulse motion-reduce:animate-none"
       >
-        <div className="w-16 h-16 rounded-2xl bg-white/[0.04] border border-white/[0.06] mb-3" />
-        <div className="w-32 h-2.5 rounded bg-white/[0.05] mb-1.5" />
-        <div className="w-20 h-2 rounded bg-white/[0.03]" />
+        <div className="w-16 h-16 rounded-2xl bg-[var(--skeleton-pulse)]/20 border border-border/40 mb-3" />
+        <div className="w-32 h-2.5 rounded bg-[var(--skeleton-pulse)]/25 mb-1.5" />
+        <div className="w-20 h-2 rounded bg-[var(--skeleton-pulse)]/15" />
       </div>
 
       {/* Floating bottom toolbar skeleton */}
-      <div className="absolute bottom-3 z-10 w-96 h-10 rounded-xl bg-[#18181f]/80 border border-white/[0.06] animate-pulse motion-reduce:animate-none" />
+      <div data-slot="skeleton" className="absolute bottom-3 z-10 w-96 h-10 rounded-xl bg-popover/80 border border-border/40 animate-pulse motion-reduce:animate-none" />
     </div>
   );
 };

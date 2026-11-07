@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useId } from 'react';
 import { ScrubInput } from './ScrubInput';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 
@@ -12,6 +12,7 @@ export interface TooltipProps {
     position?: 'top' | 'bottom' | 'left' | 'right';
     delayMs?: number;
     className?: string;
+    hotkey?: string;
 }
 
 export const Tooltip: React.FC<TooltipProps> = ({
@@ -20,6 +21,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
     position = 'top',
     delayMs = 200,
     className = '',
+    hotkey,
 }) => {
     const [isVisible, setIsVisible] = useState(false);
     const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -55,6 +57,7 @@ export const Tooltip: React.FC<TooltipProps> = ({
 
     return (
         <div
+            data-slot="tooltip"
             className="relative inline-flex items-center justify-center"
             onMouseEnter={handleMouseEnter}
             onMouseLeave={handleMouseLeave}
@@ -65,9 +68,15 @@ export const Tooltip: React.FC<TooltipProps> = ({
             {isVisible && (
                 <div
                     role="tooltip"
-                    className={`absolute z-50 pointer-events-none whitespace-nowrap rounded-[var(--radius-xs)] border border-[var(--surface-border-strong)] bg-[var(--panel-active)] px-2 py-1 text-[11px] font-medium text-[var(--text-primary)] shadow-xl transition-opacity duration-150 ${positionClasses} ${className}`}
+                    data-slot="tooltip-content"
+                    className={`absolute z-50 pointer-events-none whitespace-nowrap rounded-[var(--radius-xs)] border border-border bg-popover px-2 py-1 text-[11px] font-medium text-popover-foreground shadow-xl transition-opacity duration-150 flex items-center gap-1.5 ${positionClasses} ${className}`}
                 >
-                    {content}
+                    <span>{content}</span>
+                    {hotkey && (
+                        <kbd className="pointer-events-none inline-flex h-4 items-center rounded border border-border bg-background px-1 font-mono text-[10px] font-medium text-muted-foreground">
+                            {hotkey}
+                        </kbd>
+                    )}
                 </div>
             )}
         </div>
@@ -82,6 +91,7 @@ export interface IconButtonProps extends React.ButtonHTMLAttributes<HTMLButtonEl
     icon: React.ReactNode;
     label: string; // Required per Section 11.9 accessible name spec
     tooltip?: string | false;
+    hotkey?: string;
     unstyled?: boolean;
     active?: boolean;
     variant?: 'ghost' | 'panel' | 'subtle';
@@ -94,6 +104,7 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
             icon,
             label,
             tooltip,
+            hotkey,
             unstyled = false,
             active = false,
             variant = 'ghost',
@@ -112,14 +123,14 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
 
         const variantClasses = {
             ghost: active
-                ? 'bg-[var(--accent)] text-white shadow-sm'
-                : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--panel-hover)]',
+                ? 'bg-primary text-primary-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted',
             panel: active
-                ? 'bg-[var(--accent)] text-white border border-[var(--accent-hover)]'
-                : 'bg-[var(--panel-raised)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--panel-hover)] border border-[var(--surface-border)]',
+                ? 'bg-primary text-primary-foreground border border-primary'
+                : 'bg-card text-muted-foreground hover:text-foreground hover:bg-muted border border-border',
             subtle: active
-                ? 'bg-[var(--accent-soft)] text-[var(--accent)] border border-[var(--accent)]'
-                : 'bg-[var(--panel-active)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--panel-hover)] border border-[var(--surface-border)]',
+                ? 'bg-primary/20 text-primary border border-primary/40'
+                : 'bg-muted/50 text-muted-foreground hover:text-foreground hover:bg-muted border border-border',
         }[variant];
 
         const buttonElement = (
@@ -127,16 +138,25 @@ export const IconButton = React.forwardRef<HTMLButtonElement, IconButtonProps>(
                 ref={ref}
                 type="button"
                 role="button"
+                data-slot="button"
+                data-variant={variant}
+                data-size={size}
                 aria-label={label}
                 disabled={disabled}
-                className={unstyled ? className : `inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${sizeClasses} ${variantClasses} ${className}`}
+                className={unstyled ? className : `inline-flex items-center justify-center rounded-[var(--radius-sm)] transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer select-none disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${sizeClasses} ${variantClasses} ${className}`}
                 {...props}
             >
                 {icon}
             </button>
         );
 
-        return tooltip === false ? buttonElement : <Tooltip content={tooltip || label}>{buttonElement}</Tooltip>;
+        return tooltip === false ? (
+            buttonElement
+        ) : (
+            <Tooltip content={tooltip || label} hotkey={hotkey}>
+                {buttonElement}
+            </Tooltip>
+        );
     }
 );
 IconButton.displayName = 'IconButton';
@@ -219,20 +239,36 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
 
     return (
         <div
-            className={`flex h-[var(--row-height)] items-center justify-between border-b border-[var(--surface-border)] px-3 text-[11px] font-medium text-[var(--text-primary)] select-none ${className}`}
+            data-slot="section-header"
+            className={`flex h-[var(--row-height)] items-center justify-between border-b border-border px-3 text-[11px] font-medium text-foreground select-none ${className}`}
         >
             <div
+                role={isCollapsible ? 'button' : undefined}
+                tabIndex={isCollapsible ? 0 : undefined}
+                aria-expanded={isCollapsible ? expanded : undefined}
                 onClick={onToggle}
-                className={`flex items-center gap-1.5 ${isCollapsible ? 'cursor-pointer hover:text-white transition-colors duration-100' : ''}`}
+                onKeyDown={
+                    isCollapsible
+                        ? (e) => {
+                              if (e.key === 'Enter' || e.key === ' ') {
+                                  e.preventDefault();
+                                  onToggle();
+                              }
+                          }
+                        : undefined
+                }
+                className={`flex items-center gap-1.5 rounded-xs focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                    isCollapsible ? 'cursor-pointer hover:text-foreground transition-colors duration-100' : ''
+                }`}
             >
                 {isCollapsible && (
-                    <span className="text-[var(--text-muted)]">
+                    <span className="text-muted-foreground">
                         {expanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />}
                     </span>
                 )}
-                {icon && <span className="text-[var(--text-secondary)]">{icon}</span>}
+                {icon && <span className="text-muted-foreground">{icon}</span>}
                 <span className="truncate">{title}</span>
-                {subtitle && <span className="text-[11px] text-[var(--text-muted)] font-mono tabular-nums">{subtitle}</span>}
+                {subtitle && <span className="text-[11px] text-muted-foreground font-mono tabular-nums">{subtitle}</span>}
             </div>
 
             {actions && <div className="flex items-center gap-1">{actions}</div>}
@@ -272,10 +308,10 @@ export const InspectorRow: React.FC<InspectorRowProps> = ({
     </div>;
     if (stacked) {
         return (
-            <div className={`flex flex-col gap-1 py-1 ${className}`}>
+            <div data-slot="inspector-row" className={`flex flex-col gap-1 py-1 ${className}`}>
                 {label && (
                     <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-[var(--text-secondary)] font-medium">
+                        <span className="text-[11px] text-muted-foreground font-medium">
                             {tooltip ? <Tooltip content={tooltip}>{<span>{label}</span>}</Tooltip> : label}
                         </span>
                         {actions && <div className="flex items-center gap-1">{actions}</div>}
@@ -287,9 +323,9 @@ export const InspectorRow: React.FC<InspectorRowProps> = ({
     }
 
     return (
-        <div className={`flex min-h-[var(--control-height)] items-center justify-between gap-2 py-1 text-[11px] ${className}`}>
+        <div data-slot="inspector-row" className={`flex min-h-[var(--control-height)] items-center justify-between gap-2 py-1 text-[11px] ${className}`}>
             {label && (
-                <div className="w-[72px] shrink-0 text-[11px] text-[var(--text-secondary)] font-medium truncate">
+                <div className="w-[72px] shrink-0 text-[11px] text-muted-foreground font-medium truncate">
                     {tooltip ? <Tooltip content={tooltip}>{<span>{label}</span>}</Tooltip> : label}
                 </div>
             )}
@@ -340,9 +376,10 @@ export function SegmentedControl<T extends string = string>({
 
     return (
         <div
+            data-slot="segmented-control"
             role={selectionMode === 'radio' ? 'radiogroup' : 'group'}
             aria-label={ariaLabel}
-            className={unstyled ? className : `inline-flex w-full items-center rounded-[var(--radius-sm)] border border-[var(--surface-border)] bg-[var(--panel-bg)] p-0.5 select-none ${heightClass} ${className}`}
+            className={unstyled ? className : `inline-flex w-full items-center rounded-[var(--radius-sm)] border border-border bg-sidebar p-0.5 select-none ${heightClass} ${className}`}
         >
             {options.map((opt) => {
                 const isSelected = opt.value === value;
@@ -357,10 +394,10 @@ export function SegmentedControl<T extends string = string>({
                         title={opt.title}
                         disabled={opt.disabled}
                         onClick={() => !opt.disabled && onChange(opt.value)}
-                        className={buttonClassName !== undefined ? (typeof buttonClassName === 'function' ? buttonClassName(opt, isSelected) : buttonClassName) : `flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--focus-ring)] ${
+                        className={buttonClassName !== undefined ? (typeof buttonClassName === 'function' ? buttonClassName(opt, isSelected) : buttonClassName) : `flex flex-1 items-center justify-center gap-1 rounded-[var(--radius-xs)] px-2 py-1 text-[11px] font-medium transition-[color,background-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
                             isSelected
-                                ? 'bg-[var(--panel-active)] text-white shadow-sm font-semibold'
-                                : 'text-[var(--text-secondary)] hover:text-white hover:bg-[var(--panel-hover)]'
+                                ? 'bg-sidebar-accent text-foreground shadow-xs font-semibold'
+                                : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                         }`}
                     >
                         {unstyled ? <>{opt.icon}{opt.label}</> : <>
@@ -406,18 +443,18 @@ export const Switch: React.FC<SwitchProps> = ({
     <button
         type="button"
         role="switch"
+        data-slot="switch"
+        data-state={checked ? 'checked' : 'unchecked'}
         aria-checked={checked}
         aria-label={ariaLabel}
         disabled={disabled}
         onClick={() => !disabled && onChange(!checked)}
-        className={`relative inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border transition-[background-color,border-color,transform] duration-150 enabled:active:scale-[0.97] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed ${
-            checked
-                ? 'bg-[#0088ff] border-[#0088ff]'
-                : 'bg-[#202020] border-[#333333]'
-        } ${className}`.trim()}
+        className={`relative peer inline-flex h-[18px] w-8 shrink-0 items-center rounded-full border border-transparent shadow-xs transition-all duration-150 outline-none focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1 enabled:active:scale-[0.97] cursor-pointer disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:bg-primary data-[state=checked]:border-primary data-[state=unchecked]:bg-input/80 data-[state=unchecked]:border-border ${className}`.trim()}
     >
         <span
-            className={`inline-block h-3.5 w-3.5 rounded-full bg-white shadow transition-transform duration-150 ${
+            data-slot="switch-thumb"
+            data-state={checked ? 'checked' : 'unchecked'}
+            className={`pointer-events-none inline-block h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-150 ${
                 checked ? 'translate-x-[15px]' : 'translate-x-[2px]'
             }`}
         />
@@ -450,48 +487,56 @@ export const InspectorModeTabs: React.FC<InspectorModeTabsProps> = ({
     fullWidth = false,
     actions,
     className = 'flex items-center gap-1.5',
-}) => (
-    <div className={className} role="tablist" aria-label={ariaLabel}>
-        {(['design', 'animate'] as const).map((tab) => {
-            const isSelected = mode === tab;
-            const labelText = tab === 'animate' && animateLabel ? animateLabel : tab;
-            return (
-                <button
-                    key={tab}
-                    type="button"
-                    role="tab"
-                    id={`inspector-tab-${tab}`}
-                    aria-controls={`inspector-panel-${tab}`}
-                    tabIndex={isSelected ? 0 : -1}
-                    aria-selected={isSelected}
-                    data-testid={tab === 'design' ? designTestId : animateTestId}
-                    onClick={() => onChange(tab)}
-                    onKeyDown={(e) => {
-                        if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
-                            e.preventDefault();
-                            const nextTab = tab === 'design' ? 'animate' : 'design';
-                            onChange(nextTab);
-                            document.getElementById(`inspector-tab-${nextTab}`)?.focus();
-                        } else if (e.key === 'Home') {
-                            e.preventDefault();
-                            onChange('design');
-                            document.getElementById('inspector-tab-design')?.focus();
-                        } else if (e.key === 'End') {
-                            e.preventDefault();
-                            onChange('animate');
-                            document.getElementById('inspector-tab-animate')?.focus();
-                        }
-                    }}
-                    className={`${fullWidth ? 'flex-1 text-center ' : ''}px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-[color,background-color,transform] duration-150 active:scale-[0.97] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[#0088ff] ${
-                        isSelected
-                            ? 'bg-[#222226] text-white shadow-xs border border-white/15'
-                            : 'text-[#8e8e93] hover:text-white'
-                    }`}
-                >
-                    {labelText}
-                </button>
-            );
-        })}
-        {actions}
-    </div>
-);
+}) => {
+    const tabGroupId = useId();
+
+    return (
+        <div className={className} role="tablist" data-slot="tabs" aria-label={ariaLabel}>
+            {(['design', 'animate'] as const).map((tab) => {
+                const isSelected = mode === tab;
+                const labelText = tab === 'animate' && animateLabel ? animateLabel : tab;
+                const tabId = `${tabGroupId}-tab-${tab}`;
+                const panelId = `${tabGroupId}-panel-${tab}`;
+                return (
+                    <button
+                        key={tab}
+                        type="button"
+                        role="tab"
+                        data-slot="tabs-trigger"
+                        data-state={isSelected ? 'active' : 'inactive'}
+                        id={tabId}
+                        aria-controls={panelId}
+                        tabIndex={isSelected ? 0 : -1}
+                        aria-selected={isSelected}
+                        data-testid={tab === 'design' ? designTestId : animateTestId}
+                        onClick={() => onChange(tab)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+                                e.preventDefault();
+                                const nextTab = tab === 'design' ? 'animate' : 'design';
+                                onChange(nextTab);
+                                document.getElementById(`${tabGroupId}-tab-${nextTab}`)?.focus();
+                            } else if (e.key === 'Home') {
+                                e.preventDefault();
+                                onChange('design');
+                                document.getElementById(`${tabGroupId}-tab-design`)?.focus();
+                            } else if (e.key === 'End') {
+                                e.preventDefault();
+                                onChange('animate');
+                                document.getElementById(`${tabGroupId}-tab-animate`)?.focus();
+                            }
+                        }}
+                        className={`${fullWidth ? 'flex-1 text-center ' : ''}px-2.5 py-1 rounded-md text-[11px] font-medium capitalize transition-[color,background-color,transform] duration-150 active:scale-[0.97] cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring ${
+                            isSelected
+                                ? 'bg-sidebar-accent text-foreground shadow-xs border border-white/10 font-semibold'
+                                : 'text-muted-foreground hover:text-foreground'
+                        }`}
+                    >
+                        {labelText}
+                    </button>
+                );
+            })}
+            {actions}
+        </div>
+    );
+};

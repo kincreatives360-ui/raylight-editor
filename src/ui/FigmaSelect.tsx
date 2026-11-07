@@ -46,9 +46,11 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         const height = Math.min(280, window.innerHeight - 24);
         const below = window.innerHeight - rect.bottom - 12;
         const above = rect.top - 12;
-        const placeBelow = below >= Math.min(height, options.length * 28 + 8) || below >= above;
+        const groupCount = new Set(options.map((option) => option.group).filter(Boolean)).size;
+        const estimatedHeight = (options.length + groupCount) * 28 + 8;
+        const placeBelow = below >= Math.min(height, estimatedHeight) || below >= above;
         const maxHeight = Math.max(64, Math.min(height, placeBelow ? below : above));
-        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, options.length * 28 + 8) - 4), width, maxHeight, transformOrigin: placeBelow ? 'top left' : 'bottom left' });
+        setPosition({ left: Math.max(8, Math.min(rect.left, window.innerWidth - width - 8)), top: placeBelow ? rect.bottom + 4 : Math.max(8, rect.top - Math.min(maxHeight, estimatedHeight) - 4), width, maxHeight, transformOrigin: placeBelow ? 'top left' : 'bottom left' });
         setActive(Math.max(0, options.findIndex((option) => option.value === selectedValue && !option.disabled)));
         setOpen(true);
     };
@@ -62,10 +64,10 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
         }
     };
     return <>
-        <button type="button" aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))} ref={trigger} role="combobox" id={id} title={title} disabled={disabled} aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined} className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()} onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
+        <button data-slot="select-trigger" type="button" aria-label={ariaLabel ?? (label || title || name || (typeof selected?.label === 'string' ? selected.label : 'Choose option'))} ref={trigger} role="combobox" id={id} title={title} disabled={disabled} aria-labelledby={labelledBy} aria-haspopup="listbox" aria-expanded={open} aria-controls={open ? menuId : undefined} className={`figma-select ${className}`} style={style} onClick={() => open ? close() : show()} onKeyDown={(event) => { if (['ArrowDown', 'ArrowUp', 'Enter', ' '].includes(event.key)) { event.preventDefault(); event.stopPropagation(); show(); } }}>
             <span className="min-w-0 flex-1 truncate text-left">{selected?.label ?? 'Choose option'}</span><ChevronDown aria-hidden="true" className="h-3 w-3 shrink-0 opacity-60" />
         </button>
-        {open && createPortal(<div ref={menu} id={menuId} role="listbox" tabIndex={-1} aria-label={ariaLabel ?? (label || title || 'Options')}
+        {open && createPortal(<div ref={menu} id={menuId} data-slot="select-content" role="listbox" tabIndex={-1} aria-label={ariaLabel ?? (label || title || 'Options')}
             aria-activedescendant={`${menuId}-${active}`} className="figma-select-menu" style={position}
             onKeyDown={(event) => {
                 event.stopPropagation();
@@ -80,8 +82,8 @@ export function FigmaSelect({ children, value, defaultValue, onChange, className
                 }
             }}>
             {options.map((option, index) => <React.Fragment key={`${option.value}-${index}`}>
-                {option.group && option.group !== options[index - 1]?.group && <div role="presentation" className="px-7 py-1.5 text-[10px] text-white/45">{option.group}</div>}
-                <div id={`${menuId}-${index}`} role="option" aria-selected={option.value === selectedValue} aria-disabled={option.disabled}
+                {option.group && option.group !== options[index - 1]?.group && <div data-slot="select-label" role="presentation" className="px-7 py-1.5 text-[10px] font-medium text-muted-foreground">{option.group}</div>}
+                <div id={`${menuId}-${index}`} data-slot="select-item" role="option" aria-selected={option.value === selectedValue} aria-disabled={option.disabled}
                     className={`figma-select-option ${index === active ? 'is-active' : ''}`} onPointerMove={() => !option.disabled && setActive(index)} onClick={() => choose(option)}>
                     <span className="flex w-4 shrink-0 items-center">{option.value === selectedValue && <Check className="h-3 w-3" />}</span><span className="truncate">{option.label}</span>
                 </div>

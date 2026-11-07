@@ -82,11 +82,13 @@ font-feature-settings: 'cv02' 1, 'cv03' 1, 'cv04' 1, 'cv11' 1, 'tnum' 1, 'zero' 
 ### Typographic Hierarchy & Role Classes
 | Class | Size | Weight | Tracking | Usage |
 | :--- | :--- | :--- | :--- | :--- |
-| `.text-title-lg` | `16px` | SemiBold (600) | `-0.015em` | Modal titles, export summary headings |
-| `.text-title-md` | `13px` | Medium (500) | `-0.01em` | Panel headers, dialog subheadings |
-| `.text-body-default` | `12px` | Regular (400) | `normal` | General tool descriptions and options |
-| `.text-label-caps` | `10px` | SemiBold (600) | `+0.05em` | Inspector section labels, uppercase badges |
-| `.text-metric-mono` | `11px` | Regular (400) | `-0.02em` | Scrub input values, timecodes, coordinates |
+| `.typeset-display` | `18px` | SemiBold (600) | `-0.025em` | Modal titles, export summary headings |
+| `.typeset-heading` | `13px` | SemiBold (600) | `-0.015em` | Panel headers, dialog subheadings |
+| `.typeset-section` | `11px` | SemiBold (600) | `+0.06em` (caps) | Inspector section labels, uppercase badges |
+| `.typeset-label` | `11px` | Medium (500) | `-0.005em` | Field and property labels |
+| `.typeset-body` | `12px` | Regular (400) | `-0.01em` | General tool descriptions and options |
+| `.typeset-data` | `11px` | Regular (400) | `-0.02em` (mono) | Scrub input values, timecodes, coordinates |
+| `.typeset-keycap` | `11px` | SemiBold (600) | `+0.02em` (mono) | Keyboard shortcut keycap badges |
 
 ### Impeccable Craft Rules
 1. **Zero Sub-10px Micro-Text:** All labels, badges, and controls are enforced at a minimum of 10px–11px, eliminating unreadable sub-10px text.

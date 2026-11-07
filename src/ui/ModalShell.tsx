@@ -85,6 +85,7 @@ export function ModalShell({
         <div
             role="dialog"
             aria-modal="true"
+            data-slot="dialog-overlay"
             {...backdropProps}
             onClick={(e) => {
                 backdropProps.onClick?.(e);
@@ -96,6 +97,7 @@ export function ModalShell({
         >
             <div
                 ref={surfaceRef}
+                data-slot="dialog-content"
                 tabIndex={-1}
                 {...surfaceProps}
                 className={`focus-visible:outline-none ${surfaceProps.className || ''}`}

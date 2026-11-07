@@ -30,6 +30,7 @@
 
   /* Raylight Core Theme Semantic Colors */
   --color-background: var(--background);
+  --color-background-dash: var(--background-dash);
   --color-canvas: var(--canvas);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -43,17 +44,43 @@
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
   --color-block: var(--block);
   --color-measure: var(--measure);
+  --color-measure-foreground: var(--measure-foreground);
+  --color-presence-foreground: var(--presence-foreground);
+  --color-safe-zone-ui: var(--safe-zone-ui);
+  --color-safe-zone-scrim: var(--safe-zone-scrim);
+  --color-media: var(--media);
+  --color-media-scrim: var(--media-scrim);
+  --color-media-foreground: var(--media-foreground);
+  --color-dropdown-hover: var(--dropdown-hover);
+  --color-dropdown-hover-foreground: var(--dropdown-hover-foreground);
 
   --color-sidebar: var(--sidebar);
+  --color-sidebar-dash: var(--sidebar-dash);
   --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
   --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-ring: var(--sidebar-ring);
+
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-info-yellow: oklch(82.47% 0.1685 89.96);
+  --color-info-green: oklch(70.29% 0.1267 158.89);
+  --color-asset-layer: var(--primary);
+  --color-text: var(--color-brand-pink);
 
   /* Canonical Studio Surfaces & Brand Blue */
   --color-app: var(--bg-app);
@@ -100,10 +127,12 @@
 
   /* Raylight Dark Core Palette */
   --background: oklch(17.76% 0 0);
+  --background-dash: oklch(17.35% 0.002 286.18);
   --canvas: oklch(26.487% 0.00187 286.038);
   --foreground: oklch(98.5% 0 0);
   --card: oklch(21% 0.006 285.885);
   --card-foreground: oklch(98.5% 0 0);
+  --card-spacing: calc(var(--spacing, 0.25rem) * 6);
   --popover: oklch(26% 0 0);
   --popover-foreground: oklch(98.5% 0 0);
   --primary: oklch(66.9% 0.184 248.81);
@@ -113,16 +142,34 @@
   --secondary-foreground: oklch(98.5% 0 0);
   --muted: oklch(27.4% 0.006 286.033);
   --muted-foreground: oklch(70.5% 0.015 286.067);
+  --accent: oklch(27.4% 0.006 286.033);
+  --accent-foreground: oklch(98.5% 0 0);
   --destructive: oklch(70.4% 0.191 22.216);
   --measure: oklch(68% 0.25 5.5);
   --measure-foreground: oklch(98.5% 0 0);
+  --presence-foreground: oklch(98.5% 0 0);
+  --safe-zone-ui: oklch(100% 0 0 / 0.85);
+  --safe-zone-scrim: oklch(0% 0 0 / 0.35);
+  --media: oklch(0% 0 0);
+  --media-scrim: oklch(0% 0 0);
+  --media-foreground: oklch(100% 0 0);
   --border: oklch(24.33% 0.004 264.49);
   --input: oklch(100% 0 0 / 0.15);
   --ring: oklch(44.914% 0.01461 285.754);
   --block: oklch(23.863% 0.00246 248.184);
+  --dropdown-hover: var(--primary);
+  --dropdown-hover-foreground: oklch(100% 0 0);
+
+  /* Charts */
+  --chart-1: oklch(87.1% 0.006 286.286);
+  --chart-2: oklch(68.3% 0 0);
+  --chart-3: oklch(44.2% 0.017 285.786);
+  --chart-4: oklch(37% 0.013 285.805);
+  --chart-5: oklch(27.4% 0.006 286.033);
 
   /* Sidebar Tokens */
   --sidebar: oklch(17.76% 0 0);
+  --sidebar-dash: oklch(17.76% 0 0);
   --sidebar-foreground: oklch(98.5% 0 0);
   --sidebar-primary: oklch(48.8% 0.243 264.376);
   --sidebar-primary-foreground: oklch(98.5% 0 0);
@@ -130,6 +177,36 @@
   --sidebar-accent-foreground: oklch(98.5% 0 0);
   --sidebar-border: oklch(100% 0 0 / 0.1);
   --sidebar-ring: oklch(68.3% 0 0);
+
+  /* Skeleton Loading Tokens */
+  --skeleton-edge: color-mix(in oklch, var(--foreground) 5%, transparent);
+  --skeleton-fill: color-mix(in oklch, var(--foreground) 6%, transparent);
+  --skeleton-sheen: color-mix(in oklch, var(--background) 85%, transparent);
+  --skeleton-top: color-mix(in oklch, var(--foreground) 3%, transparent);
+
+  /* Video Player Surface Scrims */
+  --sp-video-bg: oklch(0 0 0);
+  --sp-video-buffered: oklch(1 0 0 / 0.35);
+  --sp-video-chip: oklch(0 0 0 / 0.7);
+  --sp-video-fg: oklch(1 0 0);
+  --sp-video-fg-muted: oklch(1 0 0 / 0.7);
+  --sp-video-hover: oklch(1 0 0 / 0.15);
+  --sp-video-pill: oklch(0 0 0 / 0.35);
+  --sp-video-scrim: oklch(0 0 0 / 0.5);
+  --sp-video-track: oklch(1 0 0 / 0.25);
+  --sp-video-veil: oklch(0 0 0 / 0.75);
+
+  /* Aurora Palette Tokens */
+  --color-aurora-ink: #0a0810;
+  --color-aurora-navy: #1a2766;
+  --color-aurora-indigo: #2b2f8f;
+  --color-aurora-cobalt: #3864bd;
+  --color-aurora-teal: #1d4c6a;
+  --color-aurora-plum: #43205a;
+  --color-aurora-crimson: #9e2416;
+  --color-aurora-rust: #c4471c;
+  --color-aurora-amber: #eea23c;
+  --color-aurora-peach: #f1c08c;
 
   /* Button Shine & Shading (Apple-style specular highlight) */
   --button-shine: oklch(100% 0 0 / 0.9);
@@ -149,12 +226,14 @@
   --text-secondary: var(--muted-foreground);
   --text-muted: oklch(58% 0.01 286.067);
   --text-disabled: oklch(42% 0.006 286.033);
-  --accent: var(--primary);
-  --accent-hover: color-mix(in oklab, var(--primary) 85%, black);
+  --accent-primary: var(--primary);
+  --accent-primary-hover: color-mix(in oklab, var(--primary) 85%, black);
+  --accent-hover: color-mix(in oklch, var(--accent) 80%, white);
   --accent-soft: color-mix(in oklab, var(--primary) 15%, transparent);
   --focus-ring: var(--ring);
 
   /* Animation & Easing Constants */
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
   --spring-snappy: cubic-bezier(0.16, 1, 0.3, 1);
@@ -164,12 +243,12 @@
   --purple: var(--color-brand-purple);
 
   /* Geometry & Sizing */
-  --radius-xs: 3px;
-  --radius-sm: 5px;
-  --radius-md: 8px;
-  --radius-lg: 10px;
-  --radius-xl: 14px;
-  --radius: 0.625rem; /* 10px */
+  --radius-xs: 0.125rem; /* 2px */
+  --radius-sm: 0.375rem; /* 6px */
+  --radius-md: 0.5rem;   /* 8px */
+  --radius-lg: 0.625rem; /* 10px */
+  --radius-xl: 0.875rem; /* 14px */
+  --radius: 0.625rem;    /* 10px */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -211,11 +290,10 @@
 
   --border-subtle: var(--surface-border);
   --border-medium: var(--surface-border-strong);
-  --border-focus: var(--accent);
+  --border-focus: var(--primary);
 
   --text-subtle: #8a8a93;
 
-  --accent-primary: var(--accent);
   --accent-glow: var(--accent-soft);
   --accent-selection: #09355c;
   --accent-danger: var(--danger);
@@ -530,10 +608,10 @@ p, .typeset-body {
 .figma-select { display: inline-flex; align-items: center; justify-content: space-between; gap: 8px; min-width: 0; cursor: pointer; transition: background-color 150ms var(--ease-out), border-color 150ms var(--ease-out), transform 120ms var(--ease-out); }
 .figma-select:not(:disabled):active { transform: scale(0.98); }
 .figma-select:disabled { opacity: .45; cursor: not-allowed; }
-.figma-select:focus-visible { outline: 1px solid #0088ff; outline-offset: 1px; }
-.figma-select-menu { position: fixed; z-index: 10000; overflow-y: auto; padding: 4px; border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 10px; background: rgba(28, 28, 31, 0.84); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); color: #fff; box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08); font: 11px var(--font-sans); outline: none; animation: figma-popover-in 140ms var(--ease-out); }
-.figma-select-option { display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 6px; border-radius: 6px; cursor: pointer; transition: background-color 100ms ease; }
-.figma-select-option.is-active { background: #0088ff; }
+.figma-select:focus-visible { outline: 1px solid var(--border-focus); outline-offset: 1px; }
+.figma-select-menu { position: fixed; z-index: 10000; overflow-y: auto; padding: 4px; border: 1px solid var(--border-medium); border-radius: 10px; background: color-mix(in oklch, var(--popover) 90%, transparent); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); color: var(--foreground); box-shadow: 0 16px 36px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08); font: 11px var(--font-sans); outline: none; animation: figma-popover-in 140ms var(--ease-out); }
+.figma-select-option { display: flex; align-items: center; gap: 4px; min-height: 28px; padding: 4px 6px; border-radius: 6px; cursor: pointer; transition: background-color 100ms ease; color: var(--foreground); }
+.figma-select-option.is-active { background: var(--dropdown-hover); color: var(--dropdown-hover-foreground); }
 .figma-select-option[aria-disabled="true"] { opacity: .4; cursor: not-allowed; }
 .shot-settings-panel { background: #111; }
 .shot-settings-panel > .space-y-4 > .space-y-1\.5,
@@ -545,7 +623,6 @@ p, .typeset-body {
 .shot-settings-panel h3 { font-size: 12px; font-weight: 500; letter-spacing: normal; }
 .shot-settings-tabs button { flex: none; min-width: 70px; border: 0; box-shadow: none; padding: 6px 12px; }
 .shot-settings-tabs button[aria-selected="true"] { background: #222; }
-.shot-settings-panel [role="switch"] { width: 36px; height: 20px; }
 .shot-settings-panel [data-testid="shot-background-editor"] { padding-bottom: 8px; }
 
 /* Direct Tone Utility Classes for Timeline & Gizmos */
