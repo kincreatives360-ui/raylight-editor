@@ -6,7 +6,7 @@ import { getShaderColors } from '../model/backgroundPresets';
 import { applyCanvasSceneEffects } from './canvasSceneEffects';
 import { acquireCanvas, releaseCanvas } from './canvasPool';
 
-export {
+import {
   clearImageElementCache,
   clearVideoElementCache,
   getOrCreateImageElement,
@@ -16,17 +16,23 @@ export {
   syncAndSeekAllProjectVideos,
   type ImagePreloadSummary,
 } from './canvasMediaAssets';
-import {
+export {
+  clearImageElementCache,
+  clearVideoElementCache,
   getOrCreateImageElement,
   getOrCreateVideoElement,
-} from './canvasMediaAssets';
+  preloadProjectImages,
+  seekVideoElement,
+  syncAndSeekAllProjectVideos,
+  type ImagePreloadSummary,
+};
 
 export { sampleStops, sampleLayerGradient } from './canvasGradientRaster';
 
-export { hexToRgba } from './canvasColorUtils';
 import { hexToRgba } from './canvasColorUtils';
-export { createCanvasFillStyle } from './canvasFillStyle';
+export { hexToRgba };
 import { createCanvasFillStyle } from './canvasFillStyle';
+export { createCanvasFillStyle };
 
 export interface CoverCropCoordinates {
   sx: number;

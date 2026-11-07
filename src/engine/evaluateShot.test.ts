@@ -410,4 +410,104 @@ describe('evaluateProjectAtTime', () => {
     expect(frame.effects.state.depthOfField.aperture).toBe(4.0);
     expect(frame.effects.state.depthOfField.target).toEqual({ x: 5, y: -2, z: -3 });
   });
+
+  it('13. Group animation blocks persist final transformed values after completion', () => {
+    const layer = createDefaultShapeLayer({
+      id: 'layer-grouped',
+      groupId: 'group-anim',
+      position: { x: 10, y: 20, z: 0 },
+      opacity: 1,
+    });
+    const shot = createDefaultShot({
+      id: 'shot-group-anim',
+      startMs: 0,
+      durationMs: 3000,
+    });
+    shot.layers = [layer];
+    shot.groups = [
+      {
+        id: 'group-anim',
+        name: 'Animated Group',
+        collapsed: false,
+        position: { x: 0, y: 0, z: 0 },
+        rotation: { x: 0, y: 0, z: 0 },
+        scale: { x: 1, y: 1, z: 1 },
+        opacity: 1,
+        blocks: [
+          {
+            id: 'block-pos',
+            label: 'Move Group',
+            property: 'position',
+            startMs: 200,
+            durationMs: 800,
+            amount: { x: 100, y: 50, z: 0 },
+            easing: { kind: 'preset', name: 'linear' },
+            enabled: true,
+          },
+          {
+            id: 'block-op',
+            label: 'Fade Group',
+            property: 'opacity',
+            startMs: 200,
+            durationMs: 800,
+            amount: 0.4,
+            easing: { kind: 'preset', name: 'linear' },
+            enabled: true,
+          },
+        ],
+      },
+    ];
+
+    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
+
+    // At t=600ms (50% progress of block): pos offset = (50, 25), opacity = 1 * (0.5 + 0.4 * 0.5) = 0.7
+    const midFrame = evaluateProjectAtTime(project, 600);
+    const midLayer = midFrame.layers.find((l) => l.id === 'layer-grouped')!;
+    expect(midLayer.position.x).toBeCloseTo(60, 2);
+    expect(midLayer.position.y).toBeCloseTo(45, 2);
+    expect(midLayer.opacity).toBeCloseTo(0.7, 2);
+
+    // At t=2000ms (completed at 1000ms): must NOT snap back to 0, but hold final values!
+    const postFrame = evaluateProjectAtTime(project, 2000);
+    const postLayer = postFrame.layers.find((l) => l.id === 'layer-grouped')!;
+    expect(postLayer.position.x).toBeCloseTo(110, 2);
+    expect(postLayer.position.y).toBeCloseTo(70, 2);
+    expect(postLayer.opacity).toBeCloseTo(0.4, 2);
+  });
+
+  it('14. Group Z-rotation orbits child layer relative positions around group center', () => {
+    const layer = createDefaultShapeLayer({
+      id: 'layer-child',
+      groupId: 'group-rot',
+      position: { x: 100, y: 0, z: 0 },
+    });
+    const shot = createDefaultShot({
+      id: 'shot-rot',
+      startMs: 0,
+      durationMs: 2000,
+    });
+    shot.layers = [layer];
+    shot.groups = [
+      {
+        id: 'group-rot',
+        name: 'Rotating Group',
+        collapsed: false,
+        position: { x: 50, y: 50, z: 0 },
+        rotation: { x: 0, y: 0, z: 90 }, // 90 degrees around Z
+        scale: { x: 1, y: 1, z: 1 },
+        opacity: 1,
+      },
+    ];
+
+    const project: Project = { ...DEFAULT_PROJECT, shots: [shot] };
+    const frame = evaluateProjectAtTime(project, 500);
+    const evalChild = frame.layers.find((l) => l.id === 'layer-child')!;
+
+    // Layer relative pos (100, 0) rotated by 90 deg around (0,0) becomes (0, 100)
+    // Plus group center (50, 50) => final position should be (50, 150)
+    expect(evalChild.position.x).toBeCloseTo(50, 2);
+    expect(evalChild.position.y).toBeCloseTo(150, 2);
+    // Layer rotation compounds with group rotation
+    expect(evalChild.rotation.z).toBeCloseTo(90, 2);
+  });
 });

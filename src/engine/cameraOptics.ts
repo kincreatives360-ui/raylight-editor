@@ -1,8 +1,9 @@
 // src/engine/cameraOptics.ts
 import * as THREE from 'three';
+import { SENSOR_HEIGHT_MM } from './constants';
+export { SENSOR_HEIGHT_MM };
 
 export const DEFAULT_SCENE_SCALE = 250.0; // mm per 3D scene unit
-export const SENSOR_HEIGHT_MM = 24.0; // 35mm full frame sensor height
 export const BOKEH_SCALE_FACTOR = 0.05; // Base bokeh scale ratio relative to viewport height
 
 export interface BokehShapeConfig {

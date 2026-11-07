@@ -10,6 +10,7 @@ import {
     type EvaluatedEffects,
 } from './evaluateEffects';
 import { lerp } from './math';
+import { getArtboardDimensions } from '../stage/stageUtils';
 
 /** Deep clone SceneEffects to prevent mutation of original shot object. */
 function deepCloneEffects(effects: SceneEffects): SceneEffects {
@@ -238,18 +239,34 @@ export function computeGroupTransform(
 
         if (group.blocks && group.blocks.length > 0) {
             for (const b of group.blocks) {
-                if (b.enabled === false) continue;
-                if (shotLocalTimeMs < b.startMs || shotLocalTimeMs > b.startMs + b.durationMs) continue;
-                const p = evaluateEasing((shotLocalTimeMs - b.startMs) / Math.max(1, b.durationMs), b.easing);
+                if (b.enabled === false || shotLocalTimeMs < b.startMs) continue;
+                const rawP = b.durationMs > 0
+                    ? Math.max(0, Math.min(1, (shotLocalTimeMs - b.startMs) / b.durationMs))
+                    : 1;
+                const p = evaluateEasing(rawP, b.easing);
                 const amt = b.amount;
-                if (b.property === 'position' && typeof amt === 'object') {
-                    gPos = { x: gPos.x + amt.x * p, y: gPos.y + amt.y * p, z: gPos.z + amt.z * p };
-                } else if (b.property === 'rotation' && typeof amt === 'object') {
-                    gRot = { x: gRot.x + amt.x * p, y: gRot.y + amt.y * p, z: gRot.z + amt.z * p };
-                } else if (b.property === 'scale' && typeof amt === 'object') {
-                    gScale = { x: gScale.x * (1 + (amt.x - 1) * p), y: gScale.y * (1 + (amt.y - 1) * p), z: gScale.z * (1 + (amt.z - 1) * p) };
-                } else if (b.property === 'opacity' && typeof amt === 'number') {
-                    gOpacity *= (1 - p) + amt * p;
+                if (b.property === 'position') {
+                    const px = typeof amt === 'number' ? amt : (amt?.x ?? 0);
+                    const py = typeof amt === 'number' ? amt : (amt?.y ?? 0);
+                    const pz = typeof amt === 'number' ? 0 : (amt?.z ?? 0);
+                    gPos = { x: gPos.x + px * p, y: gPos.y + py * p, z: gPos.z + pz * p };
+                } else if (b.property === 'rotation') {
+                    const rx = typeof amt === 'number' ? 0 : (amt?.x ?? 0);
+                    const ry = typeof amt === 'number' ? 0 : (amt?.y ?? 0);
+                    const rz = typeof amt === 'number' ? amt : (amt?.z ?? 0);
+                    gRot = { x: gRot.x + rx * p, y: gRot.y + ry * p, z: gRot.z + rz * p };
+                } else if (b.property === 'scale') {
+                    const sx = typeof amt === 'number' ? amt : (amt?.x ?? 1);
+                    const sy = typeof amt === 'number' ? amt : (amt?.y ?? 1);
+                    const sz = typeof amt === 'number' ? amt : (amt?.z ?? 1);
+                    gScale = {
+                        x: gScale.x * (1 + (sx - 1) * p),
+                        y: gScale.y * (1 + (sy - 1) * p),
+                        z: gScale.z * (1 + (sz - 1) * p),
+                    };
+                } else if (b.property === 'opacity') {
+                    const targetOp = typeof amt === 'number' ? amt : 1;
+                    gOpacity = Math.max(0, Math.min(1, gOpacity * ((1 - p) + targetOp * p)));
                 }
             }
         }
@@ -425,11 +442,23 @@ export function evaluateProjectAtTime(
             shotLocalTimeMs
         );
         const groupTransform = computeGroupTransform(layer.groupId, groupById, shotLocalTimeMs);
+        const scaledX = rawEvalLayer.position.x * groupTransform.scale.x;
+        const scaledY = rawEvalLayer.position.y * groupTransform.scale.y;
+        let rotPosX = scaledX;
+        let rotPosY = scaledY;
+        if (Math.abs(groupTransform.rotation.z) > 1e-6) {
+            const radZ = (groupTransform.rotation.z * Math.PI) / 180;
+            const cosZ = Math.cos(radZ);
+            const sinZ = Math.sin(radZ);
+            rotPosX = scaledX * cosZ - scaledY * sinZ;
+            rotPosY = scaledX * sinZ + scaledY * cosZ;
+        }
+
         const evalLayer = {
             ...rawEvalLayer,
             position: {
-                x: Number((rawEvalLayer.position.x * groupTransform.scale.x + groupTransform.position.x).toFixed(4)),
-                y: Number((rawEvalLayer.position.y * groupTransform.scale.y + groupTransform.position.y).toFixed(4)),
+                x: Number((rotPosX + groupTransform.position.x).toFixed(4)),
+                y: Number((rotPosY + groupTransform.position.y).toFixed(4)),
                 z: Number((rawEvalLayer.position.z + groupTransform.position.z).toFixed(4)),
             },
             rotation: {
@@ -468,8 +497,19 @@ export function evaluateProjectAtTime(
                 };
             }
             const prevGroupTransform = computeGroupTransform(layer.groupId, groupById, prevShotLocalTime);
-            const prevX = rawPrev.position.x * prevGroupTransform.scale.x + prevGroupTransform.position.x;
-            const prevY = rawPrev.position.y * prevGroupTransform.scale.y + prevGroupTransform.position.y;
+            const prevScaledX = rawPrev.position.x * prevGroupTransform.scale.x;
+            const prevScaledY = rawPrev.position.y * prevGroupTransform.scale.y;
+            let prevRotPosX = prevScaledX;
+            let prevRotPosY = prevScaledY;
+            if (Math.abs(prevGroupTransform.rotation.z) > 1e-6) {
+                const pRadZ = (prevGroupTransform.rotation.z * Math.PI) / 180;
+                const pCosZ = Math.cos(pRadZ);
+                const pSinZ = Math.sin(pRadZ);
+                prevRotPosX = prevScaledX * pCosZ - prevScaledY * pSinZ;
+                prevRotPosY = prevScaledX * pSinZ + prevScaledY * pCosZ;
+            }
+            const prevX = prevRotPosX + prevGroupTransform.position.x;
+            const prevY = prevRotPosY + prevGroupTransform.position.y;
             const prevZ = rawPrev.position.z + prevGroupTransform.position.z;
             const prevRotZ = (rawPrev.rotation.z + prevGroupTransform.rotation.z) * (Math.PI / 180);
             const curRotZ = evalLayer.rotation.z * (Math.PI / 180);
@@ -523,8 +563,9 @@ export function evaluateProjectAtTime(
     if (effects.state.motionBlur?.enabled && shotLocalTimeMs > 0) {
         const prevFrameNumber = frameNumber > 0 ? frameNumber - 1 : 0;
         const prevCamera = evaluateShotCameraAtTime(activeShot, prevShotLocalTime, prevFrameNumber);
-        const camDx = -(camera.target.x - prevCamera.target.x) / 1920 + (camera.zoom - prevCamera.zoom) * 0.25;
-        const camDy = -(camera.target.y - prevCamera.target.y) / 1080 + (camera.rotation.x - prevCamera.rotation.x) * 0.25;
+        const artboard = getArtboardDimensions(project.aspectRatio);
+        const camDx = -(camera.target.x - prevCamera.target.x) / artboard.width + (camera.zoom - prevCamera.zoom) * 0.25;
+        const camDy = -(camera.target.y - prevCamera.target.y) / artboard.height + (camera.rotation.x - prevCamera.rotation.x) * 0.25;
         const mvX = Math.abs(camDx) > Math.abs(maxLayerMotionX) ? camDx : maxLayerMotionX;
         const mvY = Math.abs(camDy) > Math.abs(maxLayerMotionY) ? camDy : maxLayerMotionY;
         if (Math.hypot(mvX, mvY) > 0.0001) {
