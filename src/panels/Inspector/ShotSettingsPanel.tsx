@@ -9,7 +9,7 @@ import { ProjectSettingsPanel } from './ProjectSettingsPanel';
 import { SceneEffectsSection } from './sections/SceneEffectsSection';
 interface ShotSettingsPanelProps {
     activeShot: Shot;
-    onOpenExportModal?: () => void;
+    onOpenExportModal?: (initialScope?: 'entire' | 'shot') => void;
 }
 
 export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
@@ -204,7 +204,7 @@ export const ShotSettingsPanel: React.FC<ShotSettingsPanelProps> = ({
                             {onOpenExportModal && (
                                 <button
                                     type="button"
-                                    onClick={onOpenExportModal}
+                                    onClick={() => onOpenExportModal('shot')}
                                     className="w-full py-2 px-3 rounded-xl bg-muted hover:bg-subtle border border-subtle text-foreground font-medium text-[12px] transition cursor-pointer text-center"
                                 >
                                     Export shot

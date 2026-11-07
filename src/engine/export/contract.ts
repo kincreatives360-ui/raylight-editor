@@ -8,14 +8,17 @@
  */
 
 export type ExportFormat = 'mp4' | 'webm' | 'gif' | 'png' | 'png-seq';
-export type ExportResolution = '720p' | '1080p' | '4k';
+export type ExportResolution = '480p' | '720p' | '1080p' | '4k';
 export type ExportQuality = 'studio' | 'social' | 'web' | 'web-low';
 export type ExportScope = 'entire' | 'shot';
+export type ExportFps = 15 | 24 | 30 | 60;
+export type ExportImageFormat = 'png' | 'jpg';
+export type ExportImageDestination = 'file' | 'clipboard';
 
 export interface ExportSettings {
     format: ExportFormat;
     resolution: ExportResolution;
-    fps: 24 | 30 | 60;
+    fps: ExportFps;
     quality: ExportQuality;
     scope: ExportScope;
     selectedShotId?: string;
@@ -23,6 +26,20 @@ export interface ExportSettings {
     startMs?: number;
     /** Timeline position the export window ends at, in ms. */
     endMs?: number;
+    /** GIF export: use median-cut + Floyd-Steinberg dithering (default: true). */
+    gifHighQuality?: boolean;
+    /** GIF export: loop infinitely via NETSCAPE2.0 extension (default: true). */
+    gifLoop?: boolean;
+    /** Still image format when format === 'png' (default: 'png'). */
+    imageFormat?: ExportImageFormat;
+    /** Still image delivery destination when format === 'png' (default: 'file'). */
+    imageDestination?: ExportImageDestination;
+    /** Current playhead position in ms for still frame export. */
+    playheadTimeMs?: number;
+    /** Optional film-grain bitrate multiplier (1.0 to 2.5). */
+    bitrateFactor?: number;
+    /** Seeks the editor playhead so the stage renders each frame. */
+    onSeekFrame?: (timeMs: number) => Promise<void> | void;
 }
 
 export interface ExportProgress {

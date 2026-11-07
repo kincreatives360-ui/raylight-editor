@@ -58,7 +58,7 @@ export class IncrementalGifEncoder {
     private readonly width: number;
     private readonly height: number;
     private readonly palette: Palette | null;
-    constructor(width: number, height: number, palette?: Palette) {
+    constructor(width: number, height: number, palette?: Palette, options?: { loop?: boolean }) {
         this.width = width;
         this.height = height;
         this.palette = palette ?? null;
@@ -83,8 +83,10 @@ export class IncrementalGifEncoder {
                 header[at++] = (i&3)*85;
             }
         }
-        header[at++] = 0x21; header[at++] = 0xff; header[at++] = 11;
-        ascii('NETSCAPE2.0'); header[at++] = 3; header[at++] = 1; u16(0); header[at++] = 0;
+        if (options?.loop !== false) {
+            header[at++] = 0x21; header[at++] = 0xff; header[at++] = 11;
+            ascii('NETSCAPE2.0'); header[at++] = 3; header[at++] = 1; u16(0); header[at++] = 0;
+        }
         this.chunks.push(header.slice(0,at));
     }
 

@@ -12,7 +12,11 @@ import type { Project } from '../model/types';
 import { runOfflineExport } from './export/runOfflineExport';
 import { createStageFrameRenderer } from './export/stageFrameRenderer';
 import { downloadBlob, exportFileBaseName } from './export/download';
-import { throwIfAborted, type ExportProgress } from './export/contract';
+import {
+    throwIfAborted,
+    type ExportProgress,
+    type ExportSettings,
+} from './export/contract';
 import { exportCurrentFrameAsPng } from './export/pngStill';
 
 export type {
@@ -20,20 +24,13 @@ export type {
     ExportResolution,
     ExportQuality,
     ExportScope,
+    ExportFps,
+    ExportImageFormat,
+    ExportImageDestination,
     ExportProgress,
+    ExportSettings,
 } from './export/contract';
 export { exportCurrentFrameAsPng };
-
-export interface ExportSettings {
-    format: 'mp4' | 'webm' | 'gif' | 'png' | 'png-seq';
-    resolution: '720p' | '1080p' | '4k';
-    fps: 24 | 30 | 60;
-    quality: 'studio' | 'social' | 'web' | 'web-low';
-    scope: 'entire' | 'shot';
-    selectedShotId?: string;
-    /** Seeks the editor playhead so the stage renders each frame. */
-    onSeekFrame?: (timeMs: number) => Promise<void> | void;
-}
 
 function extensionFor(mimeType: string): string {
     if (mimeType === 'video/mp4') return 'mp4';
@@ -44,7 +41,7 @@ function extensionFor(mimeType: string): string {
 }
 
 /**
- * Runs a full export and delivers the file via browser download.
+ * Runs a full export and delivers the file via browser download (or clipboard for stills).
  * Throws ExportCancelledError on abort; never skips or substitutes frames.
  */
 export async function runVideoExportPipeline(
@@ -63,20 +60,45 @@ export async function runVideoExportPipeline(
     };
 
     if (settings.format === 'png') {
+        throwIfAborted(abortSignal);
         const targetShot =
             project.shots.find((shot) => shot.id === settings.selectedShotId) ||
             project.shots[0];
         const targetTimeMs =
-            settings.scope === 'shot' && targetShot ? targetShot.startMs : 0;
-        if (settings.onSeekFrame) {
-            await settings.onSeekFrame(targetTimeMs);
-        }
+            typeof settings.playheadTimeMs === 'number' && Number.isFinite(settings.playheadTimeMs)
+                ? Math.max(0, settings.playheadTimeMs)
+                : settings.scope === 'shot' && targetShot
+                    ? targetShot.startMs
+                    : 0;
+
+        onProgress({
+            frameIndex: 0,
+            totalFrames: 1,
+            percent: 25,
+            statusText: 'Rendering frame at playhead…',
+        });
+
         await exportCurrentFrameAsPng(
             project,
             project.name,
             targetTimeMs,
-            settings.resolution
+            settings.resolution,
+            {
+                format: settings.imageFormat ?? 'png',
+                destination: settings.imageDestination ?? 'file',
+                onSeekFrame: settings.onSeekFrame,
+            }
         );
+
+        onProgress({
+            frameIndex: 1,
+            totalFrames: 1,
+            percent: 100,
+            statusText:
+                settings.imageDestination === 'clipboard'
+                    ? 'Copied frame to clipboard!'
+                    : 'Export complete!',
+        });
         return;
     }
 
@@ -91,7 +113,15 @@ export async function runVideoExportPipeline(
     );
     throwIfAborted(abortSignal);
 
-    const filename = `${exportFileBaseName(project.name)}-${settings.resolution}-${settings.fps}fps.${extensionFor(result.mimeType)}`;
+    const effectiveFps =
+        settings.format === 'gif'
+            ? (settings.fps === 30 ? 30 : 15)
+            : settings.fps;
+    const effectiveResolution =
+        settings.format === 'gif' && settings.resolution === '4k'
+            ? '720p'
+            : settings.resolution;
+    const filename = `${exportFileBaseName(project.name)}-${effectiveResolution}-${effectiveFps}fps.${extensionFor(result.mimeType)}`;
     downloadBlob(result.blob, filename);
 
     onProgress({

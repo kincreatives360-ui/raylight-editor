@@ -27,7 +27,7 @@ interface RightSidebarProps {
     selectedLayer: Layer | undefined;
     selectedLayerIds: string[];
     onSwapImageClick: () => void;
-    onOpenExportModal: () => void;
+    onOpenExportModal: (initialScope?: 'entire' | 'shot') => void;
     onOpenShortcuts?: () => void;
     showSafeArea?: boolean;
     onToggleSafeArea?: () => void;
@@ -169,7 +169,7 @@ export const RightSidebar: React.FC<RightSidebarProps> = React.memo(({
                     />
 
                     <button
-                        onClick={onOpenExportModal}
+                        onClick={() => onOpenExportModal('entire')}
                         className="px-3.5 py-1.5 rounded-lg bg-brand-blue hover:bg-brand-blue-hover text-white font-medium text-[11px] cursor-pointer transition shadow-xs"
                     >
                         Export

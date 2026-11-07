@@ -7,7 +7,11 @@
  */
 import type { Project } from '../../model/types';
 import { preloadProjectImages } from '../canvasRenderer';
-import { getExportDimensions } from '../exportMetrics';
+import {
+    computeFilmGrainBitrateFactor,
+    getExportDimensions,
+    resolveExportWindow,
+} from '../exportMetrics';
 import type {
     ExportDeps,
     ExportProgress,
@@ -20,6 +24,8 @@ import { encodeGifOffline } from './gifExporter';
 import { encodePngSequenceOffline } from './pngSequence';
 import { prepareAudioMixPlan, renderAudioMix } from './audioMixdown';
 import { resolveVideoFormat, type ExportCapabilities } from './capabilities';
+
+export { resolveExportWindow };
 
 export interface OfflineExportRequest extends ExportSettings {
     selectedShotId?: string;
@@ -34,26 +40,6 @@ export interface OfflineExportDeps {
     capabilities?: ExportCapabilities;
 }
 
-/** Resolves the export window [startMs, endMs) from scope + selected shot. */
-export function resolveExportWindow(
-    project: Project,
-    settings: Pick<ExportSettings, 'scope' | 'selectedShotId'>
-): { startMs: number; endMs: number } {
-    const totalProjectMs = project.shots.reduce(
-        (max, shot) => Math.max(max, shot.startMs + shot.durationMs),
-        0
-    );
-    const targetShot =
-        project.shots.find((shot) => shot.id === settings.selectedShotId) ??
-        project.shots[0];
-    const startMs = settings.scope === 'shot' && targetShot ? targetShot.startMs : 0;
-    const endMs =
-        settings.scope === 'shot' && targetShot
-            ? targetShot.startMs + targetShot.durationMs
-            : totalProjectMs;
-    return { startMs, endMs: Math.max(startMs + 200, endMs) };
-}
-
 /** Prepares assets + audio, then encodes. Format engines never touch the project. */
 export async function runOfflineExport(
     project: Project,
@@ -64,7 +50,11 @@ export async function runOfflineExport(
         height: number
     ) => Promise<{ renderFrame: FrameRenderer; dispose: () => Promise<void> }>
 ): Promise<{ blob: Blob; mimeType: string; frameCount: number; durationMs: number }> {
-    const { width, height } = getExportDimensions(project.aspectRatio, request.resolution);
+    const effectiveResolution =
+        request.format === 'gif' && request.resolution === '4k'
+            ? '720p'
+            : request.resolution;
+    const { width, height } = getExportDimensions(project.aspectRatio, effectiveResolution);
     const { startMs, endMs } = resolveExportWindow(project, request);
 
     throwIfAborted(deps.signal);
@@ -93,7 +83,13 @@ export async function runOfflineExport(
                 offsetMs: clip.offsetMs,
                 volume: clip.volume,
                 muted: clip.muted,
-                dataUrl: clip.dataUrl ?? '',
+                solo: clip.solo,
+                fadeInMs: clip.fadeInMs,
+                fadeOutMs: clip.fadeOutMs,
+                dataUrl:
+                    clip.dataUrl ||
+                    (clip.assetId ? project.assets?.[clip.assetId]?.dataUrl : '') ||
+                    '',
             })),
             { masterVolume: project.audio.masterVolume },
             startMs,
@@ -119,8 +115,17 @@ export async function runOfflineExport(
 
         switch (request.format) {
             case 'gif': {
+                const gifFps = request.fps === 30 ? 30 : 15;
                 const result = await encodeGifOffline(
-                    { width, height, startMs, endMs },
+                    {
+                        width,
+                        height,
+                        startMs,
+                        endMs,
+                        fps: gifFps,
+                        highQuality: request.gifHighQuality ?? true,
+                        loop: request.gifLoop ?? true,
+                    },
                     exportDeps
                 );
                 return { ...result, mimeType: 'image/gif' };
@@ -142,6 +147,7 @@ export async function runOfflineExport(
                 if (fallbackNote) {
                     console.warn(`[Export] ${fallbackNote}`);
                 }
+                const { bitrateFactor } = computeFilmGrainBitrateFactor(project, startMs, endMs);
                 const result = await encodeVideoOffline(
                     {
                         format,
@@ -153,6 +159,7 @@ export async function runOfflineExport(
                         scope: request.scope,
                         startMs,
                         endMs,
+                        bitrateFactor: request.bitrateFactor ?? bitrateFactor,
                     },
                     exportDeps,
                     deps.muxerLayer ?? mediabunnyLayer

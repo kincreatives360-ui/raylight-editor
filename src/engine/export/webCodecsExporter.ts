@@ -15,6 +15,9 @@ import {
 } from './contract';
 import { exportDurationMs, totalFramesFor } from './frameMath';
 import { runFrameLoop } from './frameLoop';
+import { videoBitrateFor } from '../exportMetrics';
+
+export { videoBitrateFor };
 
 /** Session over one output file being muxed. */
 export interface MuxSession {
@@ -37,20 +40,6 @@ export interface MuxerLayer {
     }): Promise<MuxSession>;
     /** Whether this environment can encode the requested container at all. */
     isSupported(format: 'mp4' | 'webm', withAudio: boolean): Promise<boolean>;
-}
-
-/** Bitrate ladder mirroring the legacy quality presets, resolution-scaled. */
-export function videoBitrateFor(
-    quality: VideoExportRequest['quality'],
-    resolution: VideoExportRequest['resolution']
-): number {
-    const base =
-        quality === 'studio' ? 25_000_000
-        : quality === 'social' ? 12_000_000
-        : quality === 'web' ? 6_000_000
-        : 2_500_000;
-    const multiplier = resolution === '4k' ? 2.5 : 1;
-    return Math.round(base * multiplier);
 }
 
 /**
@@ -199,7 +188,7 @@ export async function encodeVideoOffline(
         width,
         height,
         fps,
-        videoBitrate: videoBitrateFor(request.quality, request.resolution),
+        videoBitrate: videoBitrateFor(request.quality, request.resolution, request.bitrateFactor ?? 1),
         hasAudio,
         audioSampleRate: deps.mixedAudio?.sampleRate ?? 48000,
         audioChannels: deps.mixedAudio?.numberOfChannels ?? 2,

@@ -1,8 +1,54 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Project } from '../model/types';
-import type { ExportSettings } from '../engine/exporter';
+import type { ExportScope, ExportSettings } from '../engine/exporter';
 import { getExportCapabilities } from '../engine/export/capabilities';
 import { usePlayheadStore } from '../store/usePlayheadStore';
+
+export const EXPORT_SETTINGS_STORAGE_KEY = 'raylight:export-settings-v2';
+
+function loadInitialExportSettings(projectFps: Project['fps']): ExportSettings {
+  const defaults: ExportSettings = {
+    format: 'mp4',
+    resolution: '1080p',
+    fps: projectFps === 24 || projectFps === 30 || projectFps === 60 ? projectFps : 60,
+    quality: 'social',
+    scope: 'entire',
+    gifHighQuality: true,
+    gifLoop: true,
+    imageFormat: 'png',
+    imageDestination: 'file',
+  };
+
+  if (typeof window === 'undefined' || !window.localStorage) {
+    return defaults;
+  }
+
+  try {
+    const raw = window.localStorage.getItem(EXPORT_SETTINGS_STORAGE_KEY);
+    if (!raw) return defaults;
+    const parsed = JSON.parse(raw) as Partial<ExportSettings>;
+    return {
+      ...defaults,
+      ...(parsed.format ? { format: parsed.format } : {}),
+      ...(parsed.resolution ? { resolution: parsed.resolution } : {}),
+      ...(parsed.fps === 15 || parsed.fps === 24 || parsed.fps === 30 || parsed.fps === 60
+        ? { fps: parsed.fps }
+        : {}),
+      ...(parsed.quality ? { quality: parsed.quality } : {}),
+      ...(parsed.scope === 'entire' || parsed.scope === 'shot' ? { scope: parsed.scope } : {}),
+      ...(typeof parsed.gifHighQuality === 'boolean' ? { gifHighQuality: parsed.gifHighQuality } : {}),
+      ...(typeof parsed.gifLoop === 'boolean' ? { gifLoop: parsed.gifLoop } : {}),
+      ...(parsed.imageFormat === 'png' || parsed.imageFormat === 'jpg'
+        ? { imageFormat: parsed.imageFormat }
+        : {}),
+      ...(parsed.imageDestination === 'file' || parsed.imageDestination === 'clipboard'
+        ? { imageDestination: parsed.imageDestination }
+        : {}),
+    };
+  } catch {
+    return defaults;
+  }
+}
 
 interface UseAppExportOptions {
   project: Project;
@@ -13,19 +59,38 @@ interface UseAppExportOptions {
 
 export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrentTimeMs }: UseAppExportOptions) {
   const [exportModalOpen, setExportModalOpen] = useState(false);
-  const [exportSettings, setExportSettings] = useState<ExportSettings>(() => ({
-    format: 'mp4',
-    resolution: '1080p',
-    fps: 60,
-    quality: 'social',
-    scope: 'entire',
-  }));
+  const [exportSettings, setExportSettings] = useState<ExportSettings>(() =>
+    loadInitialExportSettings(project.fps)
+  );
   const [exporting, setExporting] = useState(false);
   const [exportProgressText, setExportProgressText] = useState('');
   const [exportPercent, setExportPercent] = useState(0);
   const [exportError, setExportError] = useState('');
   const exportAbortRef = useRef<AbortController | null>(null);
   const exportCloseTimerRef = useRef<number | null>(null);
+  const prevProjectFpsRef = useRef(project.fps);
+
+  // Sync export FPS when project FPS changes in Project Settings.
+  useEffect(() => {
+    if (prevProjectFpsRef.current !== project.fps) {
+      prevProjectFpsRef.current = project.fps;
+      if (project.fps === 24 || project.fps === 30 || project.fps === 60) {
+        setExportSettings((prev) =>
+          prev.format === 'gif' ? prev : { ...prev, fps: project.fps }
+        );
+      }
+    }
+  }, [project.fps]);
+
+  // Persist user export settings to localStorage.
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.localStorage) return;
+    try {
+      window.localStorage.setItem(EXPORT_SETTINGS_STORAGE_KEY, JSON.stringify(exportSettings));
+    } catch {
+      // Ignore storage quota errors
+    }
+  }, [exportSettings]);
 
   // Fall back from MP4 when this browser cannot encode H.264 video.
   useEffect(() => {
@@ -56,7 +121,10 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
     };
   }, []);
 
-  const handleOpenExportModal = useCallback(() => {
+  const handleOpenExportModal = useCallback((initialScope?: ExportScope | unknown) => {
+    if (initialScope === 'entire' || initialScope === 'shot') {
+      setExportSettings((prev) => ({ ...prev, scope: initialScope }));
+    }
     setExportProgressText('');
     setExportError('');
     setExportModalOpen(true);
@@ -77,6 +145,7 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
       setExporting(true);
       setExportPercent(0);
 
+      const playheadTimeMs = usePlayheadStore.getState().currentTimeMs;
       const { runVideoExportPipeline } = await import('../engine/exporter');
       await runVideoExportPipeline(
         project,
@@ -87,6 +156,7 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
         {
           ...exportSettings,
           selectedShotId,
+          playheadTimeMs,
           onSeekFrame: async (seekTimeMs: number) => {
             setCurrentTimeMs(seekTimeMs);
           },
@@ -96,7 +166,11 @@ export function useAppExport({ project, selectedShotId, setIsPlaying, setCurrent
 
       if (!controller.signal.aborted) {
         setExportPercent(100);
-        setExportProgressText('Export Complete!');
+        setExportProgressText(
+          exportSettings.format === 'png' && exportSettings.imageDestination === 'clipboard'
+            ? 'Copied to Clipboard!'
+            : 'Export Complete!'
+        );
         exportCloseTimerRef.current = window.setTimeout(() => {
           setExportModalOpen(false);
           exportCloseTimerRef.current = null;

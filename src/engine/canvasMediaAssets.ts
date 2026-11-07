@@ -192,15 +192,25 @@ export interface ImagePreloadSummary {
 }
 
 export async function preloadProjectImages(project: Project): Promise<ImagePreloadSummary> {
+  const isImageAsset = (mimeType?: string, url?: string): boolean => {
+    if (mimeType) return mimeType.startsWith('image/');
+    if (!url) return false;
+    return !url.startsWith('data:video/') && !url.startsWith('data:audio/');
+  };
+
   const urls = new Set<string>();
   for (const a of Object.values(project.assets || {})) {
-    if (a?.dataUrl) urls.add(a.dataUrl);
+    if (a?.dataUrl && isImageAsset(a.mimeType, a.dataUrl)) {
+      urls.add(a.dataUrl);
+    }
   }
   if (project.background?.kind === 'image') {
     if (project.background.src) urls.add(project.background.src);
     if (project.background.assetId) {
       const bgAsset = project.assets?.[project.background.assetId];
-      if (bgAsset?.dataUrl) urls.add(bgAsset.dataUrl);
+      if (bgAsset?.dataUrl && isImageAsset(bgAsset.mimeType, bgAsset.dataUrl)) {
+        urls.add(bgAsset.dataUrl);
+      }
     }
   }
   if (project.shots) {
@@ -209,7 +219,9 @@ export async function preloadProjectImages(project: Project): Promise<ImagePrelo
         if (shot.background.src) urls.add(shot.background.src);
         if (shot.background.assetId) {
           const shotBgAsset = project.assets?.[shot.background.assetId];
-          if (shotBgAsset?.dataUrl) urls.add(shotBgAsset.dataUrl);
+          if (shotBgAsset?.dataUrl && isImageAsset(shotBgAsset.mimeType, shotBgAsset.dataUrl)) {
+            urls.add(shotBgAsset.dataUrl);
+          }
         }
       }
     }
@@ -217,6 +229,10 @@ export async function preloadProjectImages(project: Project): Promise<ImagePrelo
 
   const failedUrls: string[] = [];
   let loadedCount = 0;
+
+  if (typeof Image === 'undefined') {
+    return { loaded: 0, failed: 0, failedUrls };
+  }
 
   await Promise.all(
     Array.from(urls).map(

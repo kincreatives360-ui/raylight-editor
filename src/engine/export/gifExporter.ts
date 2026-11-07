@@ -12,7 +12,7 @@ import { buildPalette, type Palette } from './quantize';
 import { IncrementalGifEncoder, gifFrameDelayCentiseconds } from '../gifEncoder';
 
 export const GIF_FPS = 15;
-export const GIF_MAX_LONG_EDGE = 1280;
+export const GIF_MAX_LONG_EDGE = 1920;
 
 /** GIF frames sampled (evenly spaced) to build the global palette. */
 const PALETTE_SAMPLE_COUNT = 8;
@@ -43,13 +43,26 @@ async function drawToImageData(
     return ctx.getImageData(0, 0, width, height);
 }
 
+export interface GifExportRequest {
+    width: number;
+    height: number;
+    startMs: number;
+    endMs: number;
+    fps?: number;
+    highQuality?: boolean;
+    loop?: boolean;
+}
+
 export async function encodeGifOffline(
-    request: { width: number; height: number; startMs: number; endMs: number },
+    request: GifExportRequest,
     deps: ExportDeps
 ): Promise<{ blob: Blob; frameCount: number; durationMs: number }> {
     const { width, height } = gifDimensions(request.width, request.height);
+    const fps = request.fps === 30 ? 30 : GIF_FPS;
+    const highQuality = request.highQuality ?? true;
+    const loop = request.loop ?? true;
     const durationMs = exportDurationMs(request.startMs, request.endMs);
-    const totalFrames = Math.max(2, totalFramesFor(durationMs, GIF_FPS));
+    const totalFrames = Math.max(2, totalFramesFor(durationMs, fps));
 
     const canvas = document.createElement('canvas');
     canvas.width = width;
@@ -60,47 +73,52 @@ export async function encodeGifOffline(
     try {
         throwIfAborted(deps.signal);
 
-        // Pass 1: render a sparse sample of frames and build the palette.
-        const sampleFrames: ImageData[] = [];
-        const sampleIndices = new Set<number>();
-        for (let i = 0; i < PALETTE_SAMPLE_COUNT; i++) {
-            sampleIndices.add(
-                Math.round((i / Math.max(1, PALETTE_SAMPLE_COUNT - 1)) * (totalFrames - 1))
-            );
+        let palette: Palette | undefined;
+        if (highQuality) {
+            // Pass 1: render a sparse sample of frames and build the palette.
+            const sampleFrames: ImageData[] = [];
+            const sampleIndices = new Set<number>();
+            for (let i = 0; i < PALETTE_SAMPLE_COUNT; i++) {
+                sampleIndices.add(
+                    Math.round((i / Math.max(1, PALETTE_SAMPLE_COUNT - 1)) * (totalFrames - 1))
+                );
+            }
+            for (const frameIndex of sampleIndices) {
+                throwIfAborted(deps.signal);
+                const timeMs = request.startMs + (frameIndex / fps) * 1000;
+                const source = await deps.renderFrame(timeMs);
+                if (!source) throw new ExportFrameError(timeMs);
+                sampleFrames.push(await drawToImageData(source, ctx, width, height));
+                deps.onProgress?.({
+                    frameIndex: 0,
+                    totalFrames,
+                    percent: Math.round((sampleFrames.length / sampleIndices.size) * 10),
+                    statusText: 'Analyzing colors…',
+                });
+            }
+            palette = buildPalette(sampleFrames);
+            // Release sample pixels before the encode pass.
+            sampleFrames.length = 0;
         }
-        for (const frameIndex of sampleIndices) {
-            throwIfAborted(deps.signal);
-            const timeMs = request.startMs + (frameIndex / GIF_FPS) * 1000;
-            const source = await deps.renderFrame(timeMs);
-            if (!source) throw new ExportFrameError(timeMs);
-            sampleFrames.push(await drawToImageData(source, ctx, width, height));
-            deps.onProgress?.({
-                frameIndex: 0,
-                totalFrames,
-                percent: Math.round((sampleFrames.length / sampleIndices.size) * 10),
-                statusText: 'Analyzing colors…',
-            });
-        }
-        const palette: Palette = buildPalette(sampleFrames);
-        // Release sample pixels before the encode pass.
-        sampleFrames.length = 0;
 
-        // Pass 2: encode every frame against the content palette.
-        const encoder = new IncrementalGifEncoder(width, height, palette);
+        // Pass 2: encode every frame against the content palette (or fast RGB332 table).
+        const encoder = new IncrementalGifEncoder(width, height, palette, { loop });
+        const progressBase = highQuality ? 10 : 0;
+        const progressSpan = highQuality ? 86 : 96;
         await runFrameLoop({
             totalFrames,
-            fps: GIF_FPS,
+            fps,
             startMs: request.startMs,
             renderFrame: deps.renderFrame,
             signal: deps.signal,
             onFrame: async (_index, source) => {
                 const imageData = await drawToImageData(source, ctx, width, height);
-                encoder.addFrame(imageData, gifFrameDelayCentiseconds(_index, GIF_FPS), {
-                    dither: true,
+                encoder.addFrame(imageData, gifFrameDelayCentiseconds(_index, fps), {
+                    dither: highQuality,
                 });
             },
             onFrameCaptured: (index) => {
-                const percent = 10 + Math.round(((index + 1) / totalFrames) * 86);
+                const percent = progressBase + Math.round(((index + 1) / totalFrames) * progressSpan);
                 deps.onProgress?.({
                     frameIndex: index + 1,
                     totalFrames,
