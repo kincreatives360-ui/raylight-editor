@@ -46,21 +46,22 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
     }, [assetList, searchQuery]);
 
     const getAssetUsageCount = (assetId: string) => {
-        let count = 0;
+        let layers = 0;
+        let backgrounds = 0;
         if (project.background?.kind === 'image' && project.background.assetId === assetId) {
-            count++;
+            backgrounds++;
         }
         for (const shot of project.shots) {
             if (shot.background?.kind === 'image' && shot.background.assetId === assetId) {
-                count++;
+                backgrounds++;
             }
             for (const layer of shot.layers) {
                 if ((layer as { assetId?: string }).assetId === assetId) {
-                    count++;
+                    layers++;
                 }
             }
         }
-        return count;
+        return { layers, backgrounds, total: layers + backgrounds };
     };
 
     const handleProcessFile = async (file: File) => {
@@ -326,14 +327,26 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
                         <h3 className="text-sm font-semibold text-foreground">Delete from library</h3>
                         <p className="text-xs text-muted-foreground leading-relaxed">
                             {(() => {
-                                const usage = getAssetUsageCount(assetToDelete.id);
-                                return usage > 0
-                                    ? `"${assetToDelete.name}" is used by ${usage} ${
-                                          usage === 1 ? 'layer' : 'layers'
-                                      } in this project. Deleting removes ${
-                                          usage === 1 ? 'that layer' : 'those layers'
-                                      } and the file itself. This cannot be undone.`
-                                    : `"${assetToDelete.name}" will be permanently deleted from your library. This cannot be undone.`;
+                                const { layers, backgrounds, total } = getAssetUsageCount(assetToDelete.id);
+                                if (total === 0) {
+                                    return `"${assetToDelete.name}" will be permanently deleted from your library. This cannot be undone.`;
+                                }
+                                const parts: string[] = [];
+                                if (layers > 0) {
+                                    parts.push(`${layers} ${layers === 1 ? 'layer' : 'layers'}`);
+                                }
+                                if (backgrounds > 0) {
+                                    parts.push(`${backgrounds} ${backgrounds === 1 ? 'background' : 'backgrounds'}`);
+                                }
+                                const usageDesc = parts.join(' and ');
+                                const actions: string[] = [];
+                                if (layers > 0) {
+                                    actions.push(`removes ${layers === 1 ? 'that layer' : 'those layers'}`);
+                                }
+                                if (backgrounds > 0) {
+                                    actions.push(`replaces ${backgrounds === 1 ? 'its background' : 'those backgrounds'} with a solid color`);
+                                }
+                                return `"${assetToDelete.name}" is used by ${usageDesc} in this project. Deleting ${actions.join(' and ')}, and removes the file itself. This cannot be undone.`;
                             })()}
                         </p>
                     </div>

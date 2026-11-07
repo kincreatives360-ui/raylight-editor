@@ -250,7 +250,7 @@ export const SectionHeader: React.FC<SectionHeaderProps> = ({
                 onKeyDown={
                     isCollapsible
                         ? (e) => {
-                              if (e.key === 'Enter' || e.key === ' ') {
+                              if (e.target === e.currentTarget && (e.key === 'Enter' || e.key === ' ')) {
                                   e.preventDefault();
                                   onToggle();
                               }

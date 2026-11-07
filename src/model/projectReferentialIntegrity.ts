@@ -56,9 +56,12 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
   }));
 
   const assets: Project['assets'] = {};
+  const assetRemap = new Map<string, string>();
   for (const [key, asset] of Object.entries(project.assets || {})) {
     if (!asset) continue;
     const uniqueAssetId = ensureUniqueId(asset.id || key, 'asset');
+    if (asset.id && asset.id !== uniqueAssetId) assetRemap.set(asset.id, uniqueAssetId);
+    if (key !== uniqueAssetId) assetRemap.set(key, uniqueAssetId);
     assets[uniqueAssetId] = {
       ...asset,
       id: uniqueAssetId,
@@ -234,7 +237,8 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
 
       // If an image or video layer references an asset not yet in assets, supply a safe fallback stub
       if ((l.kind === 'image' || l.kind === 'video') && 'assetId' in l && l.assetId) {
-        const assetId = l.assetId;
+        const rawAssetId = l.assetId;
+        const assetId = assetRemap.get(rawAssetId) ?? rawAssetId;
         if (!assets[assetId]) {
           // Use schema default values instead of hardcoded
           const fallbackAsset = AssetRecordSchema.parse({
@@ -247,6 +251,7 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
           });
           assets[assetId] = fallbackAsset;
         }
+        (l as { assetId?: string }).assetId = assetId;
       }
 
       return {
@@ -301,10 +306,26 @@ export function repairProjectReferentialIntegrity(project: Project): Project {
     };
   });
 
-  const audioClips = (project.audio?.clips || []).map((c) => ({
-    ...c,
-    id: ensureUniqueId(c.id, 'audio'),
-  }));
+  const audioClips = (project.audio?.clips || []).map((c) => {
+    const uniqueAudioId = ensureUniqueId(c.id, 'audio');
+    const rawAssetId = c.assetId;
+    const mappedAssetId = rawAssetId ? (assetRemap.get(rawAssetId) ?? rawAssetId) : undefined;
+    if (mappedAssetId && !assets[mappedAssetId]) {
+      assets[mappedAssetId] = AssetRecordSchema.parse({
+        id: mappedAssetId,
+        name: c.name || 'Audio Asset',
+        mimeType: 'audio/mpeg',
+        dataUrl: c.dataUrl || '',
+        width: 0,
+        height: 0,
+      });
+    }
+    return {
+      ...c,
+      id: uniqueAudioId,
+      ...(mappedAssetId !== undefined ? { assetId: mappedAssetId } : {}),
+    };
+  });
 
   return {
     ...project,

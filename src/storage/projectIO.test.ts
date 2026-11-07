@@ -737,7 +737,7 @@ describe('Project IO Storage & File Operations', () => {
     loadOpfsSpy.mockRestore();
   });
 
-  it('17. deleteAsset cascades to shot.background overrides, audio clips, and OPFS deletion', () => {
+  it('17. deleteAsset cascades to shot.background overrides and audio clips without breaking undo via eager deletion', () => {
     const deleteOpfsSpy = vi.spyOn(opfsStorage, 'deleteMediaFromOPFS').mockResolvedValue(undefined);
 
     const testProject: Project = {
@@ -799,15 +799,83 @@ describe('Project IO Storage & File Operations', () => {
     let state = useProjectStore.getState().project;
     expect(state.assets['shot-bg-asset']).toBeUndefined();
     expect(state.shots[0].background?.kind).toBe('solid');
-    expect(deleteOpfsSpy).toHaveBeenCalledWith('shot-bg-asset');
+    // Eager deleteMediaFromOPFS is omitted to avoid breaking undo restoration
+    expect(deleteOpfsSpy).not.toHaveBeenCalled();
 
     useProjectStore.getState().deleteAsset('audio-asset-del');
     state = useProjectStore.getState().project;
     expect(state.assets['audio-asset-del']).toBeUndefined();
     expect(state.audio?.clips).toHaveLength(0);
-    expect(deleteOpfsSpy).toHaveBeenCalledWith('audio-asset-del');
+    expect(deleteOpfsSpy).not.toHaveBeenCalled();
 
     deleteOpfsSpy.mockRestore();
+  });
+
+  it('17b. validates project with audio asset (width/height 0) and clip round-trip, preserving assetId for restoreProjectAssetReferences and deleteAsset cascade', () => {
+    const rawProject = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-audio-validation',
+      assets: {
+        'audio-asset-test': {
+          id: 'audio-asset-test',
+          name: 'voiceover.mp3',
+          mimeType: 'audio/mpeg',
+          dataUrl: 'data:audio/mpeg;base64,12345',
+          width: 0,
+          height: 0,
+        },
+      },
+      audio: {
+        masterVolume: 1,
+        muted: false,
+        clips: [
+          {
+            id: 'clip-audio-test',
+            name: 'voiceover.mp3',
+            assetId: 'audio-asset-test',
+            startMs: 0,
+            durationMs: 5000,
+            offsetMs: 0,
+            volume: 1,
+            muted: false,
+          },
+        ],
+      },
+    };
+
+    // 1. validateProject accepts audio asset with width: 0, height: 0 and preserves clip assetId
+    const validated = validateProject(rawProject);
+    expect(validated.success).toBe(true);
+    if (!validated.success) return;
+
+    const validatedProject = validated.data;
+    expect(validatedProject.assets['audio-asset-test']).toBeDefined();
+    expect(validatedProject.assets['audio-asset-test'].width).toBe(0);
+    expect(validatedProject.assets['audio-asset-test'].height).toBe(0);
+    expect(validatedProject.audio?.clips[0].assetId).toBe('audio-asset-test');
+
+    // 2. restoreProjectAssetReferences re-links stripped clip dataUrl using clip.assetId
+    const strippedClip = {
+      ...validatedProject,
+      audio: {
+        ...validatedProject.audio!,
+        clips: [
+          {
+            ...validatedProject.audio!.clips[0],
+            dataUrl: '', // stripped for storage
+          },
+        ],
+      },
+    };
+    const restored = restoreProjectAssetReferences(strippedClip);
+    expect(restored.audio?.clips[0].dataUrl).toBe('data:audio/mpeg;base64,12345');
+
+    // 3. deleteAsset cascade cleans up the audio clip when asset is deleted
+    useProjectStore.getState().updateProject(() => validatedProject);
+    useProjectStore.getState().deleteAsset('audio-asset-test');
+    const afterDelete = useProjectStore.getState().project;
+    expect(afterDelete.assets['audio-asset-test']).toBeUndefined();
+    expect(afterDelete.audio?.clips).toHaveLength(0);
   });
 
   it('18. handleAppProjectImport resets playback, playhead, and selects the imported project first shot', async () => {

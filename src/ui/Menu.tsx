@@ -54,10 +54,14 @@ export function MenuItem({
     disabled,
     ...props
 }: MenuItemProps) {
-    const dangerClass = danger
+    const interactiveClass = danger
         ? 'text-destructive hover:bg-destructive/10 hover:text-destructive focus:bg-destructive/10 focus:text-destructive'
         : 'text-foreground hover:bg-dropdown-hover hover:text-dropdown-hover-foreground focus:bg-dropdown-hover focus:text-dropdown-hover-foreground';
-    const activeClass = active ? 'bg-primary text-primary-foreground' : dangerClass;
+    const activeClass = active
+        ? 'bg-primary text-primary-foreground'
+        : disabled
+        ? (danger ? 'text-destructive' : 'text-muted-foreground')
+        : interactiveClass;
     const disabledClass = disabled ? 'opacity-40 cursor-not-allowed text-muted-foreground' : 'cursor-pointer';
 
     return (

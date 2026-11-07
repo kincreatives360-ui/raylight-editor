@@ -40,8 +40,8 @@ Every text token meets or exceeds **WCAG AA** contrast requirements against the 
 | :--- | :--- | :---: | :--- |
 | `--text-primary` | `#f4f4f5` | **14.5:1** | Headlines, active values, button labels |
 | `--text-secondary` | `#d4d4d8` | **10.8:1** | Body descriptions, layer titles |
-| `--text-muted` | `#a1a1aa` | **4.6:1** | Property labels, badges, unselected tabs |
-| `--text-disabled` | `#71717a` | **2.8:1** | Disabled buttons and locked indicators |
+| `--text-muted` | `oklch(58% 0.01 286.067)` (~#7a7a80) | **4.4:1** | Property labels, badges, unselected tabs |
+| `--text-disabled` | `oklch(42% 0.006 286.033)` (~#4d4d50) | **2.2:1** | Disabled buttons and locked indicators (exempt from SC 1.4.3) |
 
 ### Brand & Semantic Accents
 * `--accent-primary` (`#0088ff`): Primary action buttons, active timeline playhead, and keyframing markers.

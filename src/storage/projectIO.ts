@@ -175,93 +175,103 @@ export function restoreProjectAssetReferences(project: Project): Project {
 
 export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
     const execute = async (): Promise<boolean> => {
-        const db = await openIndexedDb();
-        if (!db) return false;
-
         const lightweightProject = createLightweightProjectForStorage(project);
         const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
-        // Media absent from the in-memory document is NOT evidence of deletion.
-        // Never delete a blob simply because a metadata-only asset has an empty dataUrl.
-        await Promise.allSettled(
-            Object.entries(project.assets || {}).map(async ([id, asset]) => {
-                if (!asset) return;
-                if (asset.dataUrl && opfsSavedDataUrls.get(asset) !== asset.dataUrl) {
-                    try {
-                        // OPFS is a supplementary copy; IDB stores the full asset in the
-                        // same transaction as the project metadata below.
-                        const written = await saveMediaToOPFS(id, asset.dataUrl);
-                        if (written) opfsSavedDataUrls.set(asset, asset.dataUrl);
-                        if (!written && isOpfsSupported()) {
-                            console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
+        const db = await openIndexedDb();
+        if (!db) return false;
+
+        try {
+            // Media absent from the in-memory document is NOT evidence of deletion.
+            // Never delete a blob simply because a metadata-only asset has an empty dataUrl.
+            await Promise.allSettled(
+                Object.entries(project.assets || {}).map(async ([id, asset]) => {
+                    if (!asset) return;
+                    if (asset.dataUrl && opfsSavedDataUrls.get(asset) !== asset.dataUrl) {
+                        try {
+                            // OPFS is a supplementary copy; IDB stores the full asset in the
+                            // same transaction as the project metadata below.
+                            const written = await saveMediaToOPFS(id, asset.dataUrl);
+                            if (written) opfsSavedDataUrls.set(asset, asset.dataUrl);
+                            if (!written && isOpfsSupported()) {
+                                console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative`);
+                            }
+                        } catch (err) {
+                            console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative:`, err);
                         }
-                    } catch (err) {
-                        console.warn(`[Raylight Storage] OPFS backup failed for ${id}; IndexedDB remains authoritative:`, err);
                     }
-                }
-            })
-        );
+                })
+            );
 
-        // Prune unreferenced OPFS files on disk
-        await pruneOPFSAssets(currentAssetIds);
-
-        // 3. Persist to IndexedDB
-        return new Promise((resolve) => {
+            // Prune unreferenced OPFS files on disk (catch errors so they never skip IndexedDB write or leak db)
             try {
-                const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readwrite');
-                const projectStore = tx.objectStore(STORE_PROJECTS);
-                const assetStore = tx.objectStore(STORE_ASSETS);
+                await pruneOPFSAssets(currentAssetIds);
+            } catch (err) {
+                console.warn('[Raylight Storage] pruneOPFSAssets failed; preserving IndexedDB save:', err);
+            }
 
-                // Prune assets from assetStore that are no longer part of this project
-                const getAllKeysReq = assetStore.getAllKeys();
-                getAllKeysReq.onsuccess = () => {
-                    const keys = (getAllKeysReq.result as string[]) || [];
-                    for (const key of keys) {
-                        if (!currentAssetIds.has(key)) {
-                            assetStore.delete(key);
+            // 3. Persist to IndexedDB
+            return await new Promise<boolean>((resolve) => {
+                try {
+                    const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readwrite');
+                    const projectStore = tx.objectStore(STORE_PROJECTS);
+                    const assetStore = tx.objectStore(STORE_ASSETS);
+
+                    // Prune assets from assetStore that are no longer part of this project
+                    const getAllKeysReq = assetStore.getAllKeys();
+                    getAllKeysReq.onsuccess = () => {
+                        const keys = (getAllKeysReq.result as string[]) || [];
+                        for (const key of keys) {
+                            if (!currentAssetIds.has(key)) {
+                                assetStore.delete(key);
+                            }
+                        }
+                    };
+
+                    const assetsWritten: AssetRecord[] = [];
+                    for (const asset of Object.values(project.assets || {})) {
+                        if (asset) {
+                            if (asset.dataUrl && indexedDbSavedDataUrls.get(asset) !== asset.dataUrl) {
+                                assetStore.put(asset);
+                                assetsWritten.push(asset);
+                            }
                         }
                     }
-                };
 
-                const assetsWritten: AssetRecord[] = [];
-                for (const asset of Object.values(project.assets || {})) {
-                    if (asset) {
-                        if (asset.dataUrl && indexedDbSavedDataUrls.get(asset) !== asset.dataUrl) {
-                            assetStore.put(asset);
-                            assetsWritten.push(asset);
+                    const record = {
+                        id: 'current_project',
+                        project: {
+                            ...lightweightProject,
+                            updatedAt: new Date().toISOString(),
+                        },
+                    };
+
+                    projectStore.put(record);
+
+                    tx.oncomplete = () => {
+                        for (const asset of assetsWritten) {
+                            indexedDbSavedDataUrls.set(asset, asset.dataUrl);
                         }
-                    }
-                }
-
-                const record = {
-                    id: 'current_project',
-                    project: {
-                        ...lightweightProject,
-                        updatedAt: new Date().toISOString(),
-                    },
-                };
-
-                projectStore.put(record);
-
-                tx.oncomplete = () => {
-                    for (const asset of assetsWritten) {
-                        indexedDbSavedDataUrls.set(asset, asset.dataUrl);
-                    }
-                    db.close();
-                    resolve(true);
-                };
-                tx.onabort = () => { db.close(); resolve(false); };
-                tx.onerror = () => {
-                    console.warn('[Raylight Storage] IndexedDB transaction failed');
+                        db.close();
+                        resolve(true);
+                    };
+                    tx.onabort = () => { db.close(); resolve(false); };
+                    tx.onerror = () => {
+                        console.warn('[Raylight Storage] IndexedDB transaction failed');
+                        db.close();
+                        resolve(false);
+                    };
+                } catch (err) {
+                    console.warn('[Raylight Storage] executeSaveProject error:', err);
                     db.close();
                     resolve(false);
-                };
-            } catch (err) {
-                console.warn('[Raylight Storage] executeSaveProject error:', err);
-                db.close();
-                resolve(false);
-            }
-        });
+                }
+            });
+        } catch (err) {
+            console.warn('[Raylight Storage] executeSaveProject error before transaction:', err);
+            try { db.close(); } catch { /* ignore */ }
+            return false;
+        }
     };
 
     const next = saveQueue.then(execute, execute).catch((error: unknown) => {

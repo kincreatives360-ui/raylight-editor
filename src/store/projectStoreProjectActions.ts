@@ -1,7 +1,6 @@
 import type { ProjectStoreActionCreator } from './projectStoreTypes';
 import { appendHistoryState } from './projectStoreConstants';
 import { repairProjectReferentialIntegrity } from '../model/projectReferentialIntegrity';
-import { deleteMediaFromOPFS } from '../storage/opfsStorage';
 
 export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'updateProject' | 'updateShot' | 'updateLayer' | 'deleteAsset'> = (set, get) => ({
     setHydrated: (status) => set({ isHydrating: !status }),
@@ -60,7 +59,6 @@ export const createProjectActions: ProjectStoreActionCreator<'setHydrated' | 'up
     },
 
     deleteAsset: (assetId: string) => {
-        void deleteMediaFromOPFS(assetId);
         get().updateProject((proj) => {
             const nextAssets = { ...proj.assets };
             delete nextAssets[assetId];

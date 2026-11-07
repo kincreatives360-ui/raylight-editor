@@ -29,8 +29,8 @@ export const AssetRecordSchema = z.object({
   mimeType: z.string(),
   dataUrl: z.string().default(''),
   thumbUrl: z.string().optional(),
-  width: z.number(),
-  height: z.number(),
+  width: z.number().min(0),
+  height: z.number().min(0),
 });
 
 export const ProjectSchema = z.object({
