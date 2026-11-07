@@ -24,4 +24,9 @@ dist-ssr
 *.sw?
 .aistudio/
 # Local agent skills bundle (kept on disk, not tracked)
+.agent/
 .agents/
+skill/
+skills/
+**/skill/
+**/skills/
