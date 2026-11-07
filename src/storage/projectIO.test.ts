@@ -1,4 +1,5 @@
 // src/storage/projectIO.test.ts
+import type { ChangeEvent } from 'react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   saveProjectToBrowser,
@@ -9,11 +10,17 @@ import {
   loadProjectFromIndexedDB,
   getStorageStatus,
   subscribeStorageStatus,
+  createLightweightProjectForStorage,
+  restoreProjectAssetReferences,
 } from './projectIO';
 import { validateProject } from '../model/schema';
 import { DEFAULT_PROJECT, createDefaultShot, createDefaultImageLayer, createDefaultTextLayer } from '../model/defaults';
 import type { Project } from '../model/types';
 import * as opfsStorage from './opfsStorage';
+import { useProjectStore } from '../store/useProjectStore';
+import { useSelectionStore } from '../store/useSelectionStore';
+import { usePlayheadStore } from '../store/usePlayheadStore';
+import { handleAppProjectImport } from '../app/projectImport';
 
 describe('Project IO Storage & File Operations', () => {
   const AUTO_SAVE_KEY = 'raylight_studio_project_v1';
@@ -550,6 +557,294 @@ describe('Project IO Storage & File Operations', () => {
     // 5. Circular parentGroupId in group-2 was severed
     const g2 = repaired.shots[0].groups?.find((g: { id: string; parentGroupId?: string }) => g.id === 'group-2');
     expect(g2?.parentGroupId).toBeUndefined();
+  });
+
+  it('15. createLightweightProjectForStorage and restoreProjectAssetReferences strip and re-link audio.clips.dataUrl and background.src', () => {
+    const project: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-lightweight',
+      assets: {
+        'bg-asset': {
+          id: 'bg-asset',
+          name: 'bg.png',
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,bgDataUrl',
+          width: 1920,
+          height: 1080,
+        },
+        'shot-bg-asset': {
+          id: 'shot-bg-asset',
+          name: 'shot-bg.png',
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,shotBgDataUrl',
+          width: 1920,
+          height: 1080,
+        },
+        'audio-asset-1': {
+          id: 'audio-asset-1',
+          name: 'track.mp3',
+          mimeType: 'audio/mpeg',
+          dataUrl: 'data:audio/mpeg;base64,audioDataUrl',
+          width: 0,
+          height: 0,
+        },
+      },
+      background: {
+        kind: 'image',
+        assetId: 'bg-asset',
+        src: 'data:image/png;base64,bgDataUrl',
+        fit: 'cover',
+        opacity: 1,
+        vignette: 0,
+      },
+      shots: [
+        {
+          ...createDefaultShot(),
+          id: 'shot-bg-test',
+          background: {
+            kind: 'image',
+            assetId: 'shot-bg-asset',
+            src: 'data:image/png;base64,shotBgDataUrl',
+            fit: 'cover',
+            opacity: 1,
+            vignette: 0,
+          },
+        },
+      ],
+      audio: {
+        masterVolume: 1,
+        muted: false,
+        clips: [
+          {
+            id: 'clip-1',
+            name: 'track.mp3',
+            assetId: 'audio-asset-1',
+            dataUrl: 'data:audio/mpeg;base64,audioDataUrl',
+            startMs: 0,
+            durationMs: 3000,
+            volume: 1,
+            muted: false,
+          },
+        ],
+      },
+    };
+
+    const stripped = createLightweightProjectForStorage(project);
+    expect(stripped.assets['bg-asset'].dataUrl).toBe('');
+    expect(stripped.assets['shot-bg-asset'].dataUrl).toBe('');
+    expect(stripped.assets['audio-asset-1'].dataUrl).toBe('');
+    expect(stripped.background.kind === 'image' && stripped.background.src).toBe('');
+    expect(stripped.shots[0].background?.kind === 'image' && stripped.shots[0].background.src).toBe('');
+    expect(stripped.audio?.clips[0].dataUrl).toBe('');
+
+    const hydratedWithAssets: Project = {
+      ...stripped,
+      assets: project.assets,
+    };
+    const restored = restoreProjectAssetReferences(hydratedWithAssets);
+    expect(restored.background.kind === 'image' && restored.background.src).toBe('data:image/png;base64,bgDataUrl');
+    expect(restored.shots[0].background?.kind === 'image' && restored.shots[0].background.src).toBe('data:image/png;base64,shotBgDataUrl');
+    expect(restored.audio?.clips[0].dataUrl).toBe('data:audio/mpeg;base64,audioDataUrl');
+  });
+
+  it('16. loadProjectFromIndexedDB closes IDBDatabase connection and saveProjectToIndexedDB prunes OPFS assets', async () => {
+    const pruneOpfsSpy = vi.spyOn(opfsStorage, 'pruneOPFSAssets').mockResolvedValue(undefined);
+    const loadOpfsSpy = vi.spyOn(opfsStorage, 'loadMediaDataUrlFromOPFS').mockResolvedValue('data:image/png;base64,opfsLoaded');
+
+    const storedProject: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-idb-close',
+      assets: {
+        'asset-1': {
+          id: 'asset-1',
+          name: 'hero.png',
+          mimeType: 'image/png',
+          dataUrl: '',
+          width: 400,
+          height: 300,
+        },
+      },
+    };
+
+    const mockProjectStore = {
+      put: vi.fn(),
+      get: vi.fn(() => ({
+        result: { id: 'current_project', project: storedProject },
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    const mockAssetStore = {
+      put: vi.fn(),
+      delete: vi.fn(),
+      getAllKeys: vi.fn(() => ({
+        result: [],
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+      get: vi.fn(() => ({
+        result: storedProject.assets['asset-1'],
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    const mockTx = {
+      objectStore: vi.fn((name: string) => (name === 'projects' ? mockProjectStore : mockAssetStore)),
+      set oncomplete(cb: () => void) {
+        cb();
+      },
+      onerror: null,
+      onabort: null,
+    };
+
+    const mockDb = {
+      transaction: vi.fn(() => mockTx),
+      objectStoreNames: {
+        contains: () => true,
+      },
+      close: vi.fn(),
+    };
+
+    const mockIdb = {
+      open: vi.fn(() => ({
+        result: mockDb,
+        set onsuccess(cb: () => void) {
+          cb();
+        },
+      })),
+    };
+
+    (globalThis as unknown as { window: unknown }).window = {
+      localStorage: mockLocalStorage,
+      indexedDB: mockIdb,
+    };
+
+    await saveProjectToIndexedDB(storedProject);
+    expect(pruneOpfsSpy).toHaveBeenCalledWith(new Set(['asset-1']));
+    expect(mockDb.close).toHaveBeenCalledTimes(1);
+
+    const loaded = await loadProjectFromIndexedDB();
+    expect(loaded?.id).toBe('proj-idb-close');
+    expect(loaded?.assets['asset-1'].dataUrl).toBe('data:image/png;base64,opfsLoaded');
+    expect(mockDb.close).toHaveBeenCalledTimes(2);
+
+    pruneOpfsSpy.mockRestore();
+    loadOpfsSpy.mockRestore();
+  });
+
+  it('17. deleteAsset cascades to shot.background overrides, audio clips, and OPFS deletion', () => {
+    const deleteOpfsSpy = vi.spyOn(opfsStorage, 'deleteMediaFromOPFS').mockResolvedValue(undefined);
+
+    const testProject: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-cascade-delete',
+      assets: {
+        'shot-bg-asset': {
+          id: 'shot-bg-asset',
+          name: 'shot-bg.png',
+          mimeType: 'image/png',
+          dataUrl: 'data:image/png;base64,abc',
+          width: 800,
+          height: 600,
+        },
+        'audio-asset-del': {
+          id: 'audio-asset-del',
+          name: 'sfx.mp3',
+          mimeType: 'audio/mpeg',
+          dataUrl: 'data:audio/mpeg;base64,xyz',
+          width: 0,
+          height: 0,
+        },
+      },
+      shots: [
+        {
+          ...createDefaultShot(),
+          id: 'shot-with-bg',
+          background: {
+            kind: 'image',
+            assetId: 'shot-bg-asset',
+            src: 'data:image/png;base64,abc',
+            fit: 'cover',
+            opacity: 1,
+            vignette: 0,
+          },
+        },
+      ],
+      audio: {
+        masterVolume: 1,
+        muted: false,
+        clips: [
+          {
+            id: 'clip-del',
+            name: 'sfx.mp3',
+            assetId: 'audio-asset-del',
+            dataUrl: 'data:audio/mpeg;base64,xyz',
+            startMs: 0,
+            durationMs: 1500,
+            volume: 1,
+            muted: false,
+          },
+        ],
+      },
+    };
+
+    useProjectStore.getState().updateProject(() => testProject);
+    useProjectStore.getState().deleteAsset('shot-bg-asset');
+
+    let state = useProjectStore.getState().project;
+    expect(state.assets['shot-bg-asset']).toBeUndefined();
+    expect(state.shots[0].background?.kind).toBe('solid');
+    expect(deleteOpfsSpy).toHaveBeenCalledWith('shot-bg-asset');
+
+    useProjectStore.getState().deleteAsset('audio-asset-del');
+    state = useProjectStore.getState().project;
+    expect(state.assets['audio-asset-del']).toBeUndefined();
+    expect(state.audio?.clips).toHaveLength(0);
+    expect(deleteOpfsSpy).toHaveBeenCalledWith('audio-asset-del');
+
+    deleteOpfsSpy.mockRestore();
+  });
+
+  it('18. handleAppProjectImport resets playback, playhead, and selects the imported project first shot', async () => {
+    const importedProject: Project = {
+      ...DEFAULT_PROJECT,
+      id: 'proj-imported-reset',
+      name: 'Imported Reset Test',
+      shots: [
+        {
+          ...createDefaultShot(),
+          id: 'imported-shot-alpha',
+          name: 'Alpha Shot',
+        },
+      ],
+    };
+
+    usePlayheadStore.getState().setIsPlaying(true);
+    usePlayheadStore.getState().setCurrentTimeMs(4200);
+    useSelectionStore.getState().selectLayer('old-layer-id');
+
+    const file = new File([JSON.stringify(importedProject)], 'reset-test.json', {
+      type: 'application/json',
+    });
+    const onError = vi.fn();
+
+    await handleAppProjectImport(
+      { target: { files: [file], value: 'reset-test.json' } } as unknown as ChangeEvent<HTMLInputElement>,
+      useProjectStore.getState().updateProject,
+      onError
+    );
+
+    expect(onError).not.toHaveBeenCalled();
+    expect(useProjectStore.getState().project.id).toBe('proj-imported-reset');
+    expect(usePlayheadStore.getState().isPlaying).toBe(false);
+    expect(usePlayheadStore.getState().currentTimeMs).toBe(0);
+    expect(useSelectionStore.getState().selectedShotId).toBe('imported-shot-alpha');
+    expect(useSelectionStore.getState().selectedLayerIds).toEqual([]);
   });
 });
 

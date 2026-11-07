@@ -22,9 +22,19 @@ export function handleAppAudioUpload(
     const addClip = (durationMs: number) => {
       const clipDuration = Number.isFinite(durationMs) && durationMs > 0 ? durationMs : 10000;
       const clipEnd = currentPlayheadMs + clipDuration;
+      const assetId = `audio-asset-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+      const asset = {
+        id: assetId,
+        name: file.name,
+        mimeType: file.type || 'audio/mpeg',
+        dataUrl,
+        width: 0,
+        height: 0,
+      };
       const clip = {
         id: `audio-${Date.now()}`,
         name: file.name,
+        assetId,
         dataUrl,
         startMs: currentPlayheadMs,
         durationMs: clipDuration,
@@ -48,6 +58,7 @@ export function handleAppAudioUpload(
         return {
           ...project,
           shots: nextShots,
+          assets: { ...project.assets, [assetId]: asset },
           audio: {
             clips: [...(project.audio?.clips || []), clip],
             muted: project.audio?.muted || false,

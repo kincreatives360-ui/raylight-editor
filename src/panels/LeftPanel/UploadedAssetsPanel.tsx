@@ -34,7 +34,10 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
     const [isDragOver, setIsDragOver] = useState(false);
     const [assetToDelete, setAssetToDelete] = useState<AssetRecord | null>(null);
 
-    const assetList = useMemo(() => Object.values(project.assets), [project.assets]);
+    const assetList = useMemo(
+        () => Object.values(project.assets).filter((a) => !a.mimeType?.startsWith('audio/')),
+        [project.assets]
+    );
 
     const filteredAssets = useMemo(() => {
         const q = searchQuery.trim().toLowerCase();
@@ -44,7 +47,13 @@ export const UploadedAssetsPanel: React.FC<UploadedAssetsPanelProps> = ({
 
     const getAssetUsageCount = (assetId: string) => {
         let count = 0;
+        if (project.background?.kind === 'image' && project.background.assetId === assetId) {
+            count++;
+        }
         for (const shot of project.shots) {
+            if (shot.background?.kind === 'image' && shot.background.assetId === assetId) {
+                count++;
+            }
             for (const layer of shot.layers) {
                 if ((layer as { assetId?: string }).assetId === assetId) {
                     count++;

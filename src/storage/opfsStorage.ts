@@ -116,14 +116,25 @@ export async function loadMediaDataUrlFromOPFS(
 
     const buffer = await blob.arrayBuffer();
     const bytes = new Uint8Array(buffer);
-    let binary = '';
-    for (let i = 0; i < bytes.byteLength; i++) {
-      binary += String.fromCharCode(bytes[i]);
+    const nodeBuffer = (
+      globalThis as unknown as {
+        Buffer?: { from: (b: Uint8Array) => { toString: (e: string) => string } };
+      }
+    ).Buffer;
+    let base64 = '';
+    if (nodeBuffer && typeof btoa !== 'function') {
+      base64 = nodeBuffer.from(bytes).toString('base64');
+    } else if (typeof btoa === 'function') {
+      const CHUNK_SIZE = 8192;
+      let binary = '';
+      for (let i = 0; i < bytes.byteLength; i += CHUNK_SIZE) {
+        const slice = bytes.subarray(i, Math.min(i + CHUNK_SIZE, bytes.byteLength));
+        binary += String.fromCharCode(...slice);
+      }
+      base64 = btoa(binary);
+    } else if (nodeBuffer) {
+      base64 = nodeBuffer.from(bytes).toString('base64');
     }
-    const base64 = typeof btoa === 'function'
-      ? btoa(binary)
-      : (globalThis as unknown as { Buffer?: { from: (b: Uint8Array) => { toString: (e: string) => string } } })
-          .Buffer?.from(bytes).toString('base64') || '';
     return `data:${effectiveMime};base64,${base64}`;
   } catch {
     return null;

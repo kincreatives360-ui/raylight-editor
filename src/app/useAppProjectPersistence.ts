@@ -1,7 +1,12 @@
 import { useEffect } from 'react';
-import type { Project } from '../model/types';
+import { isBlankProjectState, type Project } from '../model/types';
+import { DEFAULT_PROJECT } from '../model/defaults';
 import { useProjectStore } from '../store/useProjectStore';
-import { loadProjectFromIndexedDB, saveProjectToBrowser } from '../storage/projectIO';
+import {
+  loadProjectFromIndexedDB,
+  restoreProjectAssetReferences,
+  saveProjectToBrowser,
+} from '../storage/projectIO';
 
 interface UseAppProjectPersistenceOptions {
   project: Project;
@@ -32,27 +37,47 @@ export function useAppProjectPersistence({
   useEffect(() => {
     void loadProjectFromIndexedDB()
       .then((indexedDbProject) => {
-        if (!indexedDbProject?.assets || Object.keys(indexedDbProject.assets).length === 0) return;
+        if (!indexedDbProject) return;
 
         updateProject(
           (currentProject) => {
+            const isCurrentDefaultBlank =
+              currentProject.id === DEFAULT_PROJECT.id &&
+              isBlankProjectState(currentProject) &&
+              Object.keys(currentProject.assets || {}).length === 0 &&
+              (currentProject.audio?.clips?.length ?? 0) === 0;
+
+            // If localStorage missed/failed on boot (leaving DEFAULT_PROJECT in memory),
+            // adopt the full project persisted in IndexedDB.
+            if (isCurrentDefaultBlank && indexedDbProject.id !== DEFAULT_PROJECT.id) {
+              return restoreProjectAssetReferences(indexedDbProject);
+            }
+
             if (indexedDbProject.id !== currentProject.id) return currentProject;
 
-            const restoredAssets = { ...currentProject.assets };
-            let hasNewData = false;
-            for (const [id, asset] of Object.entries(indexedDbProject.assets)) {
+            const idbTime = indexedDbProject.updatedAt ? Date.parse(indexedDbProject.updatedAt) : 0;
+            const curTime = currentProject.updatedAt ? Date.parse(currentProject.updatedAt) : 0;
+            const baseProject =
+              Number.isFinite(idbTime) && Number.isFinite(curTime) && idbTime > curTime
+                ? indexedDbProject
+                : currentProject;
+
+            const restoredAssets = { ...baseProject.assets };
+            let hasNewData = baseProject === indexedDbProject;
+
+            for (const [id, asset] of Object.entries(indexedDbProject.assets || {})) {
               if (asset.dataUrl && (!restoredAssets[id] || !restoredAssets[id].dataUrl)) {
                 if (!restoredAssets[id]) {
                   const isReferenced =
-                    (currentProject.background?.kind === 'image' && currentProject.background.assetId === id) ||
-                    currentProject.shots.some(
+                    (baseProject.background?.kind === 'image' && baseProject.background.assetId === id) ||
+                    baseProject.shots.some(
                       (shot) =>
                         (shot.background?.kind === 'image' && shot.background.assetId === id) ||
                         shot.layers.some(
                           (layer) => 'assetId' in layer && (layer as { assetId?: string }).assetId === id
                         )
                     ) ||
-                    (currentProject.audio?.clips?.some((clip) => clip.assetId === id) ?? false);
+                    (baseProject.audio?.clips?.some((clip) => clip.assetId === id) ?? false);
 
                   if (!isReferenced) continue;
                 }
@@ -61,8 +86,13 @@ export function useAppProjectPersistence({
                 hasNewData = true;
               }
             }
-            if (!hasNewData) return currentProject;
-            return { ...currentProject, assets: restoredAssets };
+
+            const hydrated = restoreProjectAssetReferences({
+              ...baseProject,
+              assets: restoredAssets,
+            });
+            if (!hasNewData && hydrated === baseProject) return currentProject;
+            return hydrated;
           },
           { skipHistory: true }
         );

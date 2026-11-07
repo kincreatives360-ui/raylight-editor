@@ -4,6 +4,7 @@ import type { Project, AssetRecord } from '../model/types';
 import { validateProject, type ValidationResult } from '../model/schema';
 import { DEFAULT_PROJECT, createDefaultShot, CURRENT_SCHEMA_VERSION } from '../model/defaults';
 import { generateId } from '../model/id';
+import { exportFileBaseName } from '../engine/export/download';
 import {
     saveMediaToOPFS,
     loadMediaBlobFromOPFS,
@@ -67,12 +68,117 @@ export function stripAssetDataUrls(assets: Record<string, AssetRecord> = {}): Re
   return lightweight;
 }
 
+/**
+ * Produces a lightweight copy of a Project suitable for metadata storage (localStorage
+ * fallback or IndexedDB STORE_PROJECTS), stripping inline base64 payloads from assets,
+ * asset-backed backgrounds, and asset-backed audio clips.
+ */
+export function createLightweightProjectForStorage(project: Project): Project {
+    const assets = project.assets || {};
+    const lightweightAssets = stripAssetDataUrls(assets);
+
+    const stripBg = (bg: Project['background'] | undefined): Project['background'] | undefined => {
+        if (!bg) return bg;
+        if (bg.kind === 'image' && bg.assetId && assets[bg.assetId] && bg.src) {
+            return { ...bg, src: '' };
+        }
+        return bg;
+    };
+
+    const nextBackground = stripBg(project.background) ?? project.background;
+    const nextShots = (project.shots || []).map((shot) =>
+        shot.background?.kind === 'image' && shot.background.assetId && assets[shot.background.assetId] && shot.background.src
+            ? { ...shot, background: stripBg(shot.background) }
+            : shot
+    );
+    const nextAudio = project.audio
+        ? {
+            ...project.audio,
+            clips: (project.audio.clips || []).map((clip) =>
+                clip.assetId && assets[clip.assetId] && clip.dataUrl
+                    ? { ...clip, dataUrl: '' }
+                    : clip
+            ),
+        }
+        : project.audio;
+
+    return {
+        ...project,
+        assets: lightweightAssets,
+        background: nextBackground,
+        shots: nextShots,
+        audio: nextAudio,
+    };
+}
+
+/**
+ * Re-links stripped `background.src` and `audio.clips[i].dataUrl` from `project.assets[assetId].dataUrl`.
+ */
+export function restoreProjectAssetReferences(project: Project): Project {
+    const assets = project.assets || {};
+
+    let nextBg = project.background;
+    if (
+        nextBg?.kind === 'image' &&
+        nextBg.assetId &&
+        !nextBg.src &&
+        assets[nextBg.assetId]?.dataUrl
+    ) {
+        nextBg = { ...nextBg, src: assets[nextBg.assetId].dataUrl };
+    }
+
+    let shotsChanged = false;
+    const nextShots = (project.shots || []).map((shot) => {
+        if (
+            shot.background?.kind === 'image' &&
+            shot.background.assetId &&
+            !shot.background.src &&
+            assets[shot.background.assetId]?.dataUrl
+        ) {
+            shotsChanged = true;
+            return {
+                ...shot,
+                background: {
+                    ...shot.background,
+                    src: assets[shot.background.assetId].dataUrl,
+                },
+            };
+        }
+        return shot;
+    });
+
+    let audioChanged = false;
+    const nextAudio = project.audio
+        ? {
+            ...project.audio,
+            clips: (project.audio.clips || []).map((clip) => {
+                if (clip.assetId && !clip.dataUrl && assets[clip.assetId]?.dataUrl) {
+                    audioChanged = true;
+                    return { ...clip, dataUrl: assets[clip.assetId].dataUrl };
+                }
+                return clip;
+            }),
+        }
+        : project.audio;
+
+    if (nextBg === project.background && !shotsChanged && !audioChanged) {
+        return project;
+    }
+
+    return {
+        ...project,
+        background: nextBg,
+        shots: shotsChanged ? nextShots : project.shots,
+        audio: audioChanged ? nextAudio : project.audio,
+    };
+}
+
 export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
     const execute = async (): Promise<boolean> => {
         const db = await openIndexedDb();
         if (!db) return false;
 
-        const lightweightAssets = stripAssetDataUrls(project.assets);
+        const lightweightProject = createLightweightProjectForStorage(project);
         const currentAssetIds = new Set(Object.keys(project.assets || {}));
 
         // Media absent from the in-memory document is NOT evidence of deletion.
@@ -95,6 +201,9 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 }
             })
         );
+
+        // Prune unreferenced OPFS files on disk
+        await pruneOPFSAssets(currentAssetIds);
 
         // 3. Persist to IndexedDB
         return new Promise((resolve) => {
@@ -127,8 +236,7 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 const record = {
                     id: 'current_project',
                     project: {
-                        ...project,
-                        assets: lightweightAssets,
+                        ...lightweightProject,
                         updatedAt: new Date().toISOString(),
                     },
                 };
@@ -150,6 +258,7 @@ export function saveProjectToIndexedDB(project: Project): Promise<boolean> {
                 };
             } catch (err) {
                 console.warn('[Raylight Storage] executeSaveProject error:', err);
+                db.close();
                 resolve(false);
             }
         });
@@ -171,8 +280,23 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
     if (!db) return null;
 
     return new Promise((resolve) => {
+        let settled = false;
+        const finalize = (project: Project | null) => {
+            if (settled) return;
+            settled = true;
+            try {
+                db.close();
+            } catch {
+                // ignore close errors
+            }
+            resolve(project);
+        };
+
         try {
             const tx = db.transaction([STORE_PROJECTS, STORE_ASSETS], 'readonly');
+            tx.onabort = () => finalize(null);
+            tx.onerror = () => finalize(null);
+
             const projectStore = tx.objectStore(STORE_PROJECTS);
             const assetStore = tx.objectStore(STORE_ASSETS);
 
@@ -180,7 +304,7 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
             getReq.onsuccess = () => {
                 const result = getReq.result;
                 if (!result || !result.project) {
-                    resolve(null);
+                    finalize(null);
                     return;
                 }
 
@@ -188,18 +312,19 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                 const neededIds = Object.keys(baseProject.assets || {});
                 if (neededIds.length === 0) {
                     const validated = validateProject(baseProject);
-                    resolve(validated.success ? validated.data : null);
+                    finalize(
+                        validated.success
+                            ? ensureProjectStructure(restoreProjectAssetReferences(validated.data))
+                            : null
+                    );
                     return;
                 }
 
                 // Fetch only the assets that belong to this project
                 const assetMap: Record<string, AssetRecord> = {};
                 let pending = neededIds.length;
-                let settled = false;
 
                 const finish = () => {
-                    if (settled) return;
-                    settled = true;
                     const validated = validateProject({
                         ...baseProject,
                         assets: {
@@ -207,25 +332,32 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                             ...assetMap,
                         },
                     });
-                    resolve(validated.success ? validated.data : null);
+                    finalize(
+                        validated.success
+                            ? ensureProjectStructure(restoreProjectAssetReferences(validated.data))
+                            : null
+                    );
                 };
 
                 for (const id of neededIds) {
                     const req = assetStore.get(id);
                     req.onsuccess = async () => {
                         try {
-                            if (req.result) {
-                                assetMap[id] = req.result as AssetRecord;
+                            const idbAsset = req.result as AssetRecord | undefined;
+                            if (idbAsset?.dataUrl) {
+                                assetMap[id] = idbAsset;
                             } else {
                                 const diskDataUrl = await loadMediaDataUrlFromOPFS(
                                     id,
-                                    baseProject.assets[id]?.mimeType
+                                    (idbAsset ?? baseProject.assets[id])?.mimeType
                                 );
                                 if (diskDataUrl) {
                                     assetMap[id] = {
-                                        ...baseProject.assets[id],
+                                        ...(idbAsset ?? baseProject.assets[id]),
                                         dataUrl: diskDataUrl,
                                     };
+                                } else if (idbAsset) {
+                                    assetMap[id] = idbAsset;
                                 }
                             }
                         } finally {
@@ -252,10 +384,10 @@ export async function loadProjectFromIndexedDB(): Promise<Project | null> {
                     };
                 }
             };
-            getReq.onerror = () => resolve(null);
+            getReq.onerror = () => finalize(null);
         } catch (err) {
             console.warn('[Raylight Storage] loadProjectFromIndexedDB error:', err);
-            resolve(null);
+            finalize(null);
         }
     });
 }
@@ -286,6 +418,12 @@ export function subscribeStorageStatus(listener: StatusListener): () => void {
     return () => statusListeners.delete(listener);
 }
 
+export function useStorageStatus(): StorageStatusState {
+    const [state, setState] = useState<StorageStatusState>(currentStorageState);
+    useEffect(() => subscribeStorageStatus(setState), []);
+    return state;
+}
+
 function updateStorageStatus(status: StoragePersistenceStatus, message: string) {
     currentStorageState = {
         status,
@@ -293,12 +431,6 @@ function updateStorageStatus(status: StoragePersistenceStatus, message: string) 
         lastSavedAt: status === 'saved' || status === 'warning' ? new Date() : currentStorageState.lastSavedAt,
     };
     statusListeners.forEach((fn) => fn(currentStorageState));
-}
-
-export function useStorageStatus(): StorageStatusState {
-    const [state, setState] = useState<StorageStatusState>(getStorageStatus);
-    useEffect(() => subscribeStorageStatus(setState), []);
-    return state;
 }
 
 // Save project recipe to browser storage (LocalStorage + IndexedDB dual write)
@@ -319,8 +451,7 @@ export function saveProjectToBrowser(project: Project): void {
         // If localStorage throws QuotaExceededError, fallback to saving without heavy asset base64s
         try {
             const fallbackPayload = JSON.stringify({
-                ...project,
-                assets: stripAssetDataUrls(project.assets),
+                ...createLightweightProjectForStorage(project),
                 updatedAt: new Date().toISOString(),
             });
             localStorage.setItem(AUTO_SAVE_KEY, fallbackPayload);
@@ -361,11 +492,9 @@ export function loadProjectFromBrowser(): Project | null {
         const parsed = JSON.parse(raw);
         const result = validateProject(parsed);
         if (result.success) {
-            const project = result.data;
-
-            // Normalize project structure before migration checks to ensure
-            // required arrays exist and have safe defaults
-            const normalizedProject = normalizeProjectStructure(project);
+            const normalizedProject = ensureProjectStructure(
+                restoreProjectAssetReferences(result.data)
+            );
 
             // Migrate older blank projects that still contain the previous default
             // background. Do not overwrite the background of projects with layers.
@@ -388,9 +517,7 @@ export function loadProjectFromBrowser(): Project | null {
                 return DEFAULT_PROJECT;
             }
 
-            // Ensure the project has all required structural properties
-            // that the app's components assume exist
-            return ensureProjectStructure(normalizedProject);
+            return normalizedProject;
         }
     } catch (err) {
         console.error('Failed to load project from browser storage:', err);
@@ -399,34 +526,11 @@ export function loadProjectFromBrowser(): Project | null {
 }
 
 /**
- * Lightweight structure normalization to ensure required arrays exist
- * before migration checks. Does not fill in full defaults - that's done
- * by ensureProjectStructure after migration checks.
- */
-function normalizeProjectStructure(project: Project): Project {
-    try {
-        const shots = Array.isArray(project.shots) && project.shots.length > 0
-            ? project.shots
-            : [createDefaultShot({ id: 'shot-1', name: 'Shot 1', isPlaceholder: true, startMs: 0, durationMs: 4000, lane: 0, layers: [] })];
-
-        return {
-            ...project,
-            shots,
-            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
-            audio: project.audio || { clips: [], muted: false, masterVolume: 1.0 },
-            background: project.background || { kind: 'solid', color: '#0c0e17' },
-        };
-    } catch {
-        return DEFAULT_PROJECT;
-    }
-}
-
-/**
  * Ensures a validated project has all structural properties that the app assumes exist.
  * This is a safety net for projects that pass Zod validation but are missing
  * nested properties that components directly access.
  */
-function ensureProjectStructure(project: Project): Project {
+export function ensureProjectStructure(project: Project): Project {
     try {
         // Ensure shots array exists and has at least one shot
         const shots = Array.isArray(project.shots) && project.shots.length > 0
@@ -463,10 +567,8 @@ function ensureProjectStructure(project: Project): Project {
             };
         });
 
-        // Ensure assets object exists
         const assets = project.assets && typeof project.assets === 'object' ? project.assets : {};
 
-        // Ensure audio object exists with all required fields
         const audio = project.audio
             ? {
                 clips: Array.isArray(project.audio.clips) ? project.audio.clips : [],
@@ -475,7 +577,6 @@ function ensureProjectStructure(project: Project): Project {
             }
             : { clips: [], muted: false, masterVolume: 1.0 };
 
-        // Ensure project background exists
         const background = project.background || { kind: 'solid', color: '#0c0e17' };
 
         return {
@@ -489,12 +590,11 @@ function ensureProjectStructure(project: Project): Project {
             aspectRatio: project.aspectRatio || '16:9',
             fps: typeof project.fps === 'number' && project.fps > 0 ? project.fps : 60,
             background,
-            assets: project.assets && typeof project.assets === 'object' ? project.assets : {},
+            assets,
             audio,
             shots: safeShots,
         };
     } catch {
-        // If anything goes wrong, return a fresh default project
         return DEFAULT_PROJECT;
     }
 }
@@ -502,8 +602,8 @@ function ensureProjectStructure(project: Project): Project {
 // Trigger browser download of .raylight.json project recipe file
 export function exportProjectToFile(project: Project): void {
     if (typeof document === 'undefined') return;
-    const cleanName = project.name.toLowerCase().replace(/[^a-z0-9]+/g, '-');
-    const filename = `${cleanName || 'raylight-project'}.raylight.json`;
+    const cleanName = exportFileBaseName(project.name || '');
+    const filename = `${cleanName === 'raylight' && !project.name?.trim() ? 'raylight-project' : cleanName}.raylight.json`;
     const jsonString = JSON.stringify(project, null, 2);
     const blob = new Blob([jsonString], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -524,7 +624,14 @@ export async function importProjectFromFile(
     try {
         const text = await file.text();
         const parsed = JSON.parse(text);
-        return validateProject(parsed);
+        const validated = validateProject(parsed);
+        if (validated.success) {
+            const normalized = ensureProjectStructure(
+                restoreProjectAssetReferences(validated.data)
+            );
+            return { success: true, data: normalized, project: normalized };
+        }
+        return validated;
     } catch (err) {
         return {
             success: false,
